@@ -95,7 +95,8 @@ done
 
 ### Step 2 ####################################################################
 echo "Reducing template@frame@role PMI scores to single template scores..."
-# TODO call combine-mutual-information.py
+# TODO Need to capture the dependencies of the previous set of jobs.
+# Call combine-mutual-information.py
 # Crucial questions that I'd like answered:
 # - exp vs max
 # - score vs rank
@@ -104,6 +105,31 @@ echo "Reducing template@frame@role PMI scores to single template scores..."
 # exp+rank                1 0 0 0 1
 # max+score               0 1 0 1 0
 # max+rank                1 0 0 0 1
+for C_EXP in 0 1; do
+for C_MAX in 0 1; do
+for C_BOTH in 0 1; do
+if [[ `echo "$C_EXP + $C_MAX + $C_BOTH" | bc` == 0 ]]; then
+  continue
+fi
+for C_ABS in 0 1; do
+for C_RBC in 0 1; do
+if [[ `echo "$C_ABS + $C_RBC" | bc` == 0 ]]; then
+  continue
+fi
+qsub -l 'h_rt=72:00:00,num_proc=2,mem_free=18G' \
+  compress-cat $WD/templates/ig-files/shard-*-of-${NUM_SHARDS}.txt.gz \
+  | PYTHONPATH=scripts/having-a-laugh python \
+    scripts/precompute-features/combine-mutual-information.py $C_EXP $C_MAX $C_BOTH $C_ABS $C_RBC  \
+  | PYTHONPATH=scripts/having-a-laugh python \
+    scripts/precompute-features/combine-mutual-information.py $C_EXP $C_MAX $C_BOTH $C_ABS $C_RBC  \
+  | sort -rg -k2 \
+  >$WD/templates/best-features-${C_EXP}${C_MAX}${C_BOTH}${C_ABS}${C_RBC}.txt
+done
+done
+done
+done
+done
+
 
 
 ### Step 3 ####################################################################
@@ -113,36 +139,46 @@ echo "Computing IG for product features heuristically chosen from template IG sc
 # TODO This is probably broken!
 DEPS=`grep -oP '(?<=Your job )(\d+)' $TEMP | tr '\n' ',' | perl -pe 's/(.*),/\1\n/'`
 
-OUTPUT=$WD/templates/ig-files/shard-${I}-of-${NUM_SHARDS}.txt.gz
-
 # TODO Get this from output of step 2...
-TEMPLATE_IG_FILE=$WORKING_DIR/ig/templates/full-ig.txt
-
-PROD_IG_WD=$WORKING_DIR/ig/products
+C_EXP=1
+C_MAX=0
+C_BOTH=0
+C_ABS=1
+C_RBC=0
+C_STRING="${C_EXP}${C_MAX}${C_BOTH}${C_ABS}${C_RBC}"
+TEMPLATE_IG_FILE=$WD/templates/best-features-${C_STRING}.txt    # input
+PROD_IG_WD=$WD/products/$C_STRING # output
 mkdir -p $PROD_IG_WD/ig-files
 mkdir -p $PROD_IG_WD/sge-logs
 NUM_SHARDS=500
 FEATS_PER_SHARD=500
-for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
+for I in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
+  OUTPUT=$PROD_IG_WD/ig-files/shard-${I}-of-${NUM_SHARDS}.txt.gz
+  SHARD="$I/$NUM_SHARDS"
   qsub -hold_jid $DEPS -N prod-ig-$i -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
-      $i \
-      $NUM_SHARDS \
-      $FEATS_PER_SHARD \
-      $TEMPLATE_IG_FILE \
-      $WORKING_DIR/coherent-shards-filtered/features \
+      $FEATS \
       "glob:**/*" \
-      $WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF \
+      $BIALPH \
+      $OUTPUT \
+      $ENTROPY_METHOD \
+      $LABEL_TYPE \
+      $IS_PROPBANK \
+      $ROLE_DICT \
       $TEST_SET_SENT_IDS \
-      $PROD_IG_WD/ig-files/shard-${i}-of-${NUM_SHARDS}.txt \
+      $NUM_ROLES \
+      $SHARD \
       $JAR_STABLE \
-      $NUM_ROLES
+      $MEM \
+      $FEATS_PER_SHARD \
+      $TEMPLATE_IG_FILE
 done
 
 
 ### Step 4 ####################################################################
 echo "Reducing template@frame@role PMI scores to single feature scores..."
 # TODO
+OUTPUT=$PROD_IG_WD/ig-files/shard-${I}-of-${NUM_SHARDS}.txt.gz
 
 
 ### Step 5 ####################################################################

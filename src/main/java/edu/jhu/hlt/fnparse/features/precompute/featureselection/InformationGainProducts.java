@@ -527,7 +527,8 @@ public class InformationGainProducts {
 
         /** @see InformationGain#main for format */
         String[] toks = line.split("\t");
-        int template = Integer.parseInt(toks[0]);
+        //int template = Integer.parseInt(toks[0]);
+        int template = Integer.parseInt(toks[5]);
 
         String templateString = bialph.lookupTemplate(template);
         if (templateString == null) {
@@ -542,7 +543,8 @@ public class InformationGainProducts {
 //        double hy = Double.parseDouble(toks[4]);
 
         // What we sort on
-        double fom = ig / (1 + hx);
+        //double fom = ig / (1 + hx);
+        double fom = ig - 0.1 * hx;
 
         if (DEBUG_TEMPLATE != null && !DEBUG_TEMPLATE.equals(templateString))
           Log.info("skipping " + templateString + " because DEBUG_TEMPLATE is set");
@@ -788,12 +790,15 @@ public class InformationGainProducts {
 
     // Load the features and compute the IG for the chosen products
     File templateAlph = config.getExistingFile("templateAlph");
-    boolean templateAlphIsBialph = config.getBoolean("templateAlphIsBialph");
+    //boolean templateAlphIsBialph = config.getBoolean("templateAlphIsBialph");
+    LineMode lm = LineMode.valueOf(config.getString("templateAlphLineMode", LineMode.ALPH.name()));
 
     // Read in the bialph (for things like template cardinality)
     Log.info("reading templateAlph=" + templateAlph.getPath()
-        + " templateAlphIsBialph=" + templateAlphIsBialph);
-    BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph ? LineMode.BIALPH : LineMode.ALPH);
+        //+ " templateAlphIsBialph=" + templateAlphIsBialph
+        + " templateAlphLineMode=" + lm);
+    //BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph ? LineMode.BIALPH : LineMode.ALPH);
+    BiAlph bialph = new BiAlph(templateAlph, lm);
 
     // Find the top K unigrams.
     // Splitting the features by order and then assigning resources according to
@@ -801,7 +806,8 @@ public class InformationGainProducts {
     // over the same number of features from all orders) is a hedge against the
     // feature scoring heuristic being bad.
     boolean showSkipCard = config.getBoolean("showSkipCard", false);
-    Shard shard = ShardUtils.getShard(config);
+    //Shard shard = ShardUtils.getShard(config);
+    Shard shard = config.getShard();
     List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1, showSkipCard), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2, showSkipCard), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3, showSkipCard), InformationGainProducts::stringArrayHash, shard);
