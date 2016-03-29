@@ -715,7 +715,12 @@ public class InformationGainProducts {
 
     // BiAlph gives int<->string for templates
     File bf = config.getExistingFile("bialph");
-    BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
+    BiAlph bialph;
+    if (bf.getName().contains(".jser")) {
+      bialph = (BiAlph) FileUtil.deserialize(bf);
+    } else {
+      bialph = new BiAlph(bf, LineMode.ALPH);
+    }
 
     // What shard of the template@frame@role to take?
     Shard shard = config.getShard();
@@ -868,10 +873,13 @@ public class InformationGainProducts {
 
     // Load the features and compute the IG for the chosen products
     File templateAlph = config.getExistingFile("templateAlph");
-    LineMode lm = LineMode.valueOf(config.getString("templateAlphLineMode", LineMode.ALPH.name()));
-    Log.info("reading templateAlph=" + templateAlph.getPath()
-        + " templateAlphLineMode=" + lm);
-    BiAlph bialph = new BiAlph(templateAlph, lm);
+    BiAlph bialph;
+    if (templateAlph.getName().contains(".jser")) {
+      bialph = (BiAlph) FileUtil.deserialize(templateAlph);
+    } else {
+      LineMode lm = LineMode.valueOf(config.getString("templateAlphLineMode", LineMode.ALPH.name()));
+      bialph = new BiAlph(templateAlph, lm);
+    }
 
     // Find the top K unigrams.
     // Splitting the features by order and then assigning resources according to
