@@ -134,6 +134,7 @@ public class InformationGainProducts {
    * (only needs to be called once).
    */
   public void init(BiAlph bialph, int numRoles) {
+    Log.info("initializing... numRoles=" + numRoles);
     assert !initialized;
     assert relevantTemplates == null;
     assert template2cardinality == null;
@@ -173,6 +174,7 @@ public class InformationGainProducts {
       // Lookup cardinality for template[relevantTemplates[i]] (comes from a file)
       template2cardinality[t] = bialph.cardinalityOfNewTemplate(t) + 1;
     }
+    Log.info("done");
   }
 
   private void addFeature(TemplateIG tig) {
@@ -810,7 +812,10 @@ public class InformationGainProducts {
         }
       }
     }
-    Log.info("featuresInput.size=" + features.size() + " features@frame@role.size=" + featureRefinements.size() + " shard=" + frameShard);
+    Log.info("featuresInput.size=" + features.size()
+        + " features@frame@role.size=" + featureRefinements.size()
+        + " shard=" + frameShard
+        + " " + Describe.memoryUsage());
     return featureRefinements;
   }
 

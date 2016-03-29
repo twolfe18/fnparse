@@ -9,8 +9,6 @@ import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGain.MI;
 import edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGain.MIFixed;
 import edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGain.MISummary;
-import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.prim.map.LongIntEntry;
 import edu.jhu.prim.map.LongIntHashMap;
