@@ -30,6 +30,7 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
@@ -721,7 +722,8 @@ public class InformationGainProducts {
       String templateName = bialph.lookupTemplate(t);
       features.add(new String[] {templateName});
     }
-    List<FeatureName> templates = productFeaturesWithFrameRole(features, bialph, role2name, shard);
+    Refinement mode = Refinement.FRAME_ROLE;
+    List<FeatureName> templates = productFeaturesWithFrameRole(features, bialph, role2name, shard, mode);
 
     Log.info("after taking the " + shard + " shard,"
         + " numTemplates=" + templates.size());
@@ -757,6 +759,13 @@ public class InformationGainProducts {
     return role2name;
   }
 
+  /** Specifies how to turn a single features (String[]) into many refinements */
+  public enum Refinement {
+    NONE,         // no refinements, one TemplateIG per feature:String[]
+    FRAME,        // one TemplateIG for every frame in the FrameIndex chosen
+    FRAME_ROLE,   // one TemplateIG for every (f,k)
+  }
+
   /**
    * @param features
    * @param bialph
@@ -769,7 +778,8 @@ public class InformationGainProducts {
       List<String[]> features,
       BiAlph bialph,
       Map<String, Integer> role2name,
-      Shard frameShard) {
+      Shard frameShard,
+      Refinement mode) {
     ExperimentProperties config = ExperimentProperties.getInstance();
     boolean pb = config.getBoolean("propbank");
     FrameIndex fi = pb ? FrameIndex.getPropbank() : FrameIndex.getFrameNet();
@@ -777,16 +787,23 @@ public class InformationGainProducts {
     Function<FeatureFile.Line, int[]> getY = InformationGain.getGetY(config);
 
     TimeMarker tm = new TimeMarker();
+    Average.Uniform kPerF = new Average.Uniform();
     List<FeatureName> featureRefinements = new ArrayList<>();
     for (int j = 0; j < features.size(); j++) {
       String[] feature = features.get(j);
+
+      if (mode == Refinement.NONE) {
+        featureRefinements.add(new FeatureName(feature, getY));
+        continue;
+      }
+
       for (Frame ff : fi.allFrames()) {
         String frame = "f=" + ff.getName();
         int frameIdx = role2name.get(frame);
 
         // A shard will get all roles for a given template@frame
         if (frameShard != null) {
-          long[] ha = new long[feature.length];
+          long[] ha = new long[feature.length+1];
           ha[0] = frameIdx;
           for (int i = 0; i < feature.length; i++)
             ha[i+1] = feature[i].length();
@@ -803,17 +820,28 @@ public class InformationGainProducts {
               + Describe.memoryUsage());
         }
 
-        int K = ff.numRoles();
-        for (int k = 0; k < K; k++) {
-          String role = "r=" + ff.getRole(k);
-          int roleIdx = role2name.get(role);
+        if (mode == Refinement.FRAME) {
+          int roleIdx = -1;
           FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, roleIdx);
           featureRefinements.add(new FeatureName(feature, filteredGetY));
+        } else {
+          assert mode == Refinement.FRAME_ROLE;
+          int K = ff.numRoles();
+          kPerF.add(K);
+          for (int k = 0; k < K; k++) {
+            String role = "r=" + ff.getRole(k);
+            int roleIdx = role2name.get(role);
+            FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, roleIdx);
+            featureRefinements.add(new FeatureName(feature, filteredGetY));
+          }
         }
       }
     }
+    int F = fi.allFrames().size();
     Log.info("featuresInput.size=" + features.size()
         + " features@frame@role.size=" + featureRefinements.size()
+        + " numFrames=" + F
+        + " kPerF=" + kPerF.getAverage() + " (n=" + kPerF.getNumObservations() + ")"
         + " shard=" + frameShard
         + " " + Describe.memoryUsage());
     return featureRefinements;
@@ -867,8 +895,9 @@ public class InformationGainProducts {
 
     // List of features => list of feature@frame@role
     Map<String, Integer> role2name = readRole2Name(config);
-    Shard frameShard = null;  // take all
-    List<FeatureName> feats = productFeaturesWithFrameRole(products, bialph, role2name, frameShard);
+    Shard frameShard = null;  // take all, sharding has already occurred on the features
+    Refinement mode = Refinement.valueOf(config.getString("refinementMode", Refinement.FRAME.name()));
+    List<FeatureName> feats = productFeaturesWithFrameRole(products, bialph, role2name, frameShard, mode);
 
     computeIG(feats, bialph, config);
   }
