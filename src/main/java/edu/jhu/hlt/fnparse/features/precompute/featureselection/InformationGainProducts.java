@@ -26,8 +26,8 @@ import java.util.function.Function;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
-import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -697,15 +697,39 @@ public class InformationGainProducts {
    */
   public static void igReplacement() throws IOException {
     ExperimentProperties config = ExperimentProperties.getInstance();
-    TimeMarker tm = new TimeMarker();
     Log.info("computing IG/MI for every template (unigram feature)");
 
-    Function<FeatureFile.Line, int[]> getY = InformationGain.getGetY(config);
-
-    boolean pb = config.getBoolean("propbank");
-    FrameIndex fi = pb ? FrameIndex.getPropbank() : FrameIndex.getFrameNet();
-
     // Read in mapping between frame/role ints and their names (e.g. "f=framenet/Commerce_buy"
+    Map<String, Integer> role2name = readRole2Name(config);
+
+    // BiAlph gives int<->string for templates
+    File bf = config.getExistingFile("bialph");
+    BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
+
+    // What shard of the template@frame@role to take?
+    Shard shard = config.getShard();
+
+    // Build a list of unigram features (templates),
+    // Each with a @frame@role refinement
+    List<String[]> features = new ArrayList<>();
+    int[] t2c = bialph.makeTemplate2Cardinality();
+    for (int t = 0; t < t2c.length; t++) {
+      if (t2c[t] == 0)
+        continue;
+      String templateName = bialph.lookupTemplate(t);
+      features.add(new String[] {templateName});
+    }
+    List<FeatureName> templates = productFeaturesWithFrameRole(features, bialph, role2name, shard);
+
+    Log.info("after taking the " + shard + " shard,"
+        + " numTemplates=" + templates.size());
+
+    computeIG(templates, bialph, config);
+  }
+
+  public static Map<String, Integer> readRole2Name(ExperimentProperties config) throws IOException {
+    // Read in mapping between frame/role ints and their names (e.g. "f=framenet/Commerce_buy"
+    boolean pb = config.getBoolean("propbank");
     Map<String, Integer> role2name = new HashMap<>();
     File f = config.getFile("roleNames");
     Log.info("reading role names from " + f.getPath());
@@ -728,35 +752,51 @@ public class InformationGainProducts {
         }
       }
     }
+    return role2name;
+  }
 
-    // BiAlph gives int<->string for templates
-    File bf = config.getExistingFile("bialph");
-    BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
+  /**
+   * @param features
+   * @param bialph
+   * @param role2name
+   * @param frameShard is what fraction of all @frame@role FeatureNames to take,
+   * if null then take all of them.
+   * @return
+   */
+  public static List<FeatureName> productFeaturesWithFrameRole(
+      List<String[]> features,
+      BiAlph bialph,
+      Map<String, Integer> role2name,
+      Shard frameShard) {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    boolean pb = config.getBoolean("propbank");
+    FrameIndex fi = pb ? FrameIndex.getPropbank() : FrameIndex.getFrameNet();
 
-    // What shard of the template@frame@role to take?
-    Shard shard = config.getShard();
+    Function<FeatureFile.Line, int[]> getY = InformationGain.getGetY(config);
 
-    // Build a list of unigram features (templates),
-    // Each with a @frame@role refinement
-    List<FeatureName> templates = new ArrayList<>();
-    int[] t2c = bialph.makeTemplate2Cardinality();
-    for (int t = 0; t < t2c.length; t++) {
-      if (t2c[t] == 0)
-        continue;
-      String templateName = bialph.lookupTemplate(t);
+    TimeMarker tm = new TimeMarker();
+    List<FeatureName> featureRefinements = new ArrayList<>();
+    for (int j = 0; j < features.size(); j++) {
+      String[] feature = features.get(j);
       for (Frame ff : fi.allFrames()) {
         String frame = "f=" + ff.getName();
         int frameIdx = role2name.get(frame);
 
         // A shard will get all roles for a given template@frame
-        long h = Hash.mix64(t, frameIdx);
-        if (Math.floorMod(h, shard.getNumShards()) != shard.getShard())
-          continue;
+        if (frameShard != null) {
+          long[] ha = new long[feature.length];
+          ha[0] = frameIdx;
+          for (int i = 0; i < feature.length; i++)
+            ha[i+1] = feature[i].length();
+          long h = Hash.mix64(ha);
+          if (Math.floorMod(h, frameShard.getNumShards()) != frameShard.getShard())
+            continue;
+        }
 
         if (tm.enoughTimePassed(15)) {
-          Log.info("added " + t + " of " + t2c.length
-              + " templates, "
-              + templates.size() + " features so far, in "
+          Log.info("added "
+              + featureRefinements.size() + " refinements, "
+              + j + " of " + features.size() + " features so far, in "
               + tm.secondsSinceFirstMark() + " seconds, "
               + Describe.memoryUsage());
         }
@@ -766,15 +806,12 @@ public class InformationGainProducts {
           String role = "r=" + ff.getRole(k);
           int roleIdx = role2name.get(role);
           FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, roleIdx);
-          templates.add(new FeatureName(new String[] { templateName }, filteredGetY));
+          featureRefinements.add(new FeatureName(feature, filteredGetY));
         }
       }
     }
-
-    Log.info("after taking the " + shard + " shard,"
-        + " numTemplates=" + templates.size());
-
-    computeIG(templates, bialph, config);
+    Log.info("featuresInput.size=" + features.size() + " features@frame@role.size=" + featureRefinements.size() + " shard=" + frameShard);
+    return featureRefinements;
   }
 
   /**
@@ -786,18 +823,11 @@ public class InformationGainProducts {
     ExperimentProperties config = ExperimentProperties.getInstance();
     Log.info("computing IG/MI for some product features");
 
-    Function<FeatureFile.Line, int[]> getY = InformationGain.getGetY(config);
-
     // Load the features and compute the IG for the chosen products
     File templateAlph = config.getExistingFile("templateAlph");
-    //boolean templateAlphIsBialph = config.getBoolean("templateAlphIsBialph");
     LineMode lm = LineMode.valueOf(config.getString("templateAlphLineMode", LineMode.ALPH.name()));
-
-    // Read in the bialph (for things like template cardinality)
     Log.info("reading templateAlph=" + templateAlph.getPath()
-        //+ " templateAlphIsBialph=" + templateAlphIsBialph
         + " templateAlphLineMode=" + lm);
-    //BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph ? LineMode.BIALPH : LineMode.ALPH);
     BiAlph bialph = new BiAlph(templateAlph, lm);
 
     // Find the top K unigrams.
@@ -806,13 +836,12 @@ public class InformationGainProducts {
     // over the same number of features from all orders) is a hedge against the
     // feature scoring heuristic being bad.
     boolean showSkipCard = config.getBoolean("showSkipCard", false);
-    //Shard shard = ShardUtils.getShard(config);
     Shard shard = config.getShard();
     List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1, showSkipCard), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2, showSkipCard), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3, showSkipCard), InformationGainProducts::stringArrayHash, shard);
     double gain = config.getDouble("gain", 1.5);
-    int maxProducts = config.getInt("numProducts", 100);
+    int maxProducts = config.getInt("numProducts", 200);
     assert maxProducts > 0;
     int n1 = count(1, gain, 3, maxProducts);
     int n2 = count(2, gain, 3, maxProducts);
@@ -822,12 +851,6 @@ public class InformationGainProducts {
         take(prod2, n2),
         take(prod3, n3));
 
-    // For now we'll ignore frame(role) restrictions and just do selection on the average
-    // TODO make refinements for each feature, @feature@role
-    List<FeatureName> feats = new ArrayList<>();
-    for (String[] pr : products)
-      feats.add(new FeatureName(pr, getY));
-
     Log.info("computing IG for the top " + products.size() + " product features,"
         + " gain=" + gain + " n1=" + n1 + " n2=" + n2 + " n3=" + n3);
     for (int i = 0; i < 10 && i < prod1.size(); i++)
@@ -836,6 +859,11 @@ public class InformationGainProducts {
       Log.info("product[2," + i + "]=" + Arrays.toString(prod2.get(i)));
     for (int i = 0; i < 10 && i < prod3.size(); i++)
       Log.info("product[3," + i + "]=" + Arrays.toString(prod3.get(i)));
+
+    // List of features => list of feature@frame@role
+    Map<String, Integer> role2name = readRole2Name(config);
+    Shard frameShard = null;  // take all
+    List<FeatureName> feats = productFeaturesWithFrameRole(products, bialph, role2name, frameShard);
 
     computeIG(feats, bialph, config);
   }
