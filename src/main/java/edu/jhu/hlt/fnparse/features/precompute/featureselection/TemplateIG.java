@@ -1,8 +1,10 @@
 package edu.jhu.hlt.fnparse.features.precompute.featureselection;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 import java.util.function.Function;
 
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
@@ -29,7 +31,7 @@ public class TemplateIG implements Serializable {
   // handle m > Integer.MAX_INT, and thus you have to be careful with filtering
   // features, but I get very different entropy/MI estimates with and without
   // feature hashing.
-  public static boolean USE_HASHING = false;
+  public static final boolean USE_HASHING = false;
 
   private EntropyMethod entropyMethod = EntropyMethod.BUB;
 
@@ -69,6 +71,60 @@ public class TemplateIG implements Serializable {
   double alpha_x;
 
   private BubEntropyEstimatorAdapter bubEst;
+
+
+  /**
+   * If this class keeps track of c(y,x) where y is a D dimensional multinomial,
+   * this performs the transform in D binomials.
+   *
+   * This is useful if you want to use this code to compute PMIs and another
+   * external tool compute MI=E[PMI]; exploding produces TemplateIGs which store
+   * PMIs.
+   */
+  public List<TemplateIG> explode() {
+    List<TemplateIG> out = new ArrayList<>();
+    int cySum = cy.getSum();
+    int nY = cy.getNumExplicitEntries();
+    for (int y = 0; y < nY; y++) {
+      int c = cy.get(y);
+      if (c == 0)
+        continue;
+
+      // I'm going to assume that getY is currently an @frame FrameRoleFilter
+      Function<FeatureFile.Line, int[]> refinedGetY;
+      if (getY instanceof FrameRoleFilter) {
+        FrameRoleFilter gy = (FrameRoleFilter) getY;
+        assert !gy.hasRoleRestriction() : "there should be nothing to refine if you have restricted to a single role already";
+        int role = y;
+        refinedGetY = new FrameRoleFilter(gy.getWrapped(), gy.getAddOne(), gy.getFrame(), role);
+      } else {
+        throw new RuntimeException("implement me");
+      }
+      int index = this.index; //new ProductIndex(y, numY).destructiveProd(this.index).getProdFeatureSafe();
+      String name = this.name;// + "@" + y;
+      TemplateIG yig = new TemplateIG(index, name, 2, entropyMethod, refinedGetY);
+      yig.updates = updates;
+      yig.observations = observations;
+      yig.observationsWithSomeX = observationsWithSomeX;
+      yig.igCache = null;
+      yig.cy.add(0, cySum - c);
+      yig.cy.add(1, c);
+      Iterator<LongIntEntry> itr = cx.iterator();
+      while (itr.hasNext()) {
+        LongIntEntry e = itr.next();
+        long x = e.index();
+        ProductIndex xpi = new ProductIndex(x, 1);
+        int ci_x = e.get();
+        int ci_yx = cyx.get(index(y, numY, xpi));
+        yig.cyx.add(index(0, 2, xpi), ci_x-ci_yx);
+        yig.cyx.add(index(1, 2, xpi), ci_yx);
+        yig.cx.add(index(xpi), ci_x);
+      }
+      out.add(yig);
+    }
+    return out;
+  }
+
 
   public TemplateIG(int index, int numY, EntropyMethod em, Function<FeatureFile.Line, int[]> getY) {
     this(index, "template-" + index, numY, em, getY);
@@ -114,13 +170,6 @@ public class TemplateIG implements Serializable {
     return name;
   }
 
-  public static Integer[] conv(int[] a) {
-    Integer[] aa = new Integer[a.length];
-    for (int i = 0; i < aa.length; i++)
-      aa[i] = a[i];
-    return aa;
-  }
-
   public void update(FeatureFile.Line hasY, ProductIndex[] x) {
     int[] y = getY.apply(hasY);
     if (y != null) {
@@ -138,16 +187,32 @@ public class TemplateIG implements Serializable {
       throw new IllegalStateException("you set numY=" + numY + " and we just saw yy=" + yy);
     for (ProductIndex xpi : x) {
       cy.add(yy, 1);
-      if (USE_HASHING) {
-        cyx.add(xpi.prod(yy, numY).getProdFeatureModulo(HASHING_DIM), 1);
-        cx.add(xpi.getProdFeatureModulo(HASHING_DIM), 1);
-      } else {
-        cyx.add(xpi.prod(yy, numY).getProdFeature(), 1);
-        cx.add(xpi.getProdFeature(), 1);
-      }
+//      if (USE_HASHING) {
+//        cyx.add(xpi.prod(yy, numY).getProdFeatureModulo(HASHING_DIM), 1);
+//        cx.add(xpi.getProdFeatureModulo(HASHING_DIM), 1);
+//      } else {
+//        cyx.add(xpi.prod(yy, numY).getProdFeature(), 1);
+//        cx.add(xpi.getProdFeature(), 1);
+//      }
+      cyx.add(index(yy, numY, xpi), 1);
+      cx.add(index(xpi), 1);
       updates++;
     }
     igCache = null;
+  }
+
+  private static long index(ProductIndex xpi) {
+    if (USE_HASHING)
+      return xpi.getProdFeatureModulo(HASHING_DIM);
+    else
+      return xpi.getProdFeature();
+  }
+  private static long index(int y, int numY, ProductIndex xpi) {
+    ProductIndex xypi = xpi.prod(y, numY);
+    if (USE_HASHING)
+      return xypi.getProdFeatureModulo(HASHING_DIM);
+    else
+      return xypi.getProdFeature();
   }
 
   /**

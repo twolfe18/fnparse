@@ -28,6 +28,14 @@ public class FrameRoleFilter implements Function<FeatureFile.Line, int[]> {
     this.role = role;
   }
 
+  public boolean getAddOne() {
+    return addOne;
+  }
+
+  public Function<FeatureFile.Line, int[]> getWrapped() {
+    return wrapped;
+  }
+
   public int getFrame() {
     return frame;
   }
