@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Average;
@@ -730,7 +731,7 @@ public class InformationGainProducts {
       features.add(new String[] {templateName});
     }
     Refinement mode = Refinement.FRAME_ROLE;
-    List<FeatureName> templates = productFeaturesWithFrameRole(features, bialph, role2name, shard, mode);
+    List<FeatureName> templates = productFeaturesWithFrameRole(features, role2name, shard, mode);
 
     Log.info("after taking the " + shard + " shard,"
         + " numTemplates=" + templates.size());
@@ -739,6 +740,7 @@ public class InformationGainProducts {
     computeIG(templates, bialph, config);
   }
 
+  /** Reads the frame/role/label dictionary written out by {@link FeaturePrecomputation} */
   public static Map<String, Integer> readRole2Name(ExperimentProperties config) throws IOException {
     // Read in mapping between frame/role ints and their names (e.g. "f=framenet/Commerce_buy"
     boolean pb = config.getBoolean("propbank");
@@ -784,10 +786,11 @@ public class InformationGainProducts {
    */
   public static List<FeatureName> productFeaturesWithFrameRole(
       List<String[]> features,
-      BiAlph bialph,
       Map<String, Integer> role2name,
       Shard frameShard,
       Refinement mode) {
+    Log.info("taking product with " + features.size() + " features,"
+        + " mode=" + mode + " frameShard=" + frameShard);
     ExperimentProperties config = ExperimentProperties.getInstance();
     boolean pb = config.getBoolean("propbank");
     FrameIndex fi = pb ? FrameIndex.getPropbank() : FrameIndex.getFrameNet();
@@ -829,8 +832,7 @@ public class InformationGainProducts {
         }
 
         if (mode == Refinement.FRAME) {
-          int roleIdx = -1;
-          FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, roleIdx);
+          FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx);
           refinements.add(new FeatureName(feature, filteredGetY));
         } else {
           assert mode == Refinement.FRAME_ROLE;
@@ -905,7 +907,7 @@ public class InformationGainProducts {
     Map<String, Integer> role2name = readRole2Name(config);
     Shard frameShard = null;  // take all, sharding has already occurred on the features
     Refinement mode = Refinement.valueOf(config.getString("refinementMode", Refinement.FRAME.name()));
-    List<FeatureName> feats = productFeaturesWithFrameRole(products, bialph, role2name, frameShard, mode);
+    List<FeatureName> feats = productFeaturesWithFrameRole(products, role2name, frameShard, mode);
 
     config.putIfAbsent("explode", "true");
     computeIG(feats, bialph, config);

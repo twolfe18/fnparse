@@ -17,7 +17,10 @@ import edu.jhu.hlt.tutils.TimeMarker;
  * Implements the in-memory data structure mapping:
  *   (oldIntTemplate, oldIntFeature) => (newIntTemplate, newIntFeature)
  *
- * Reads the file format created by {@link BiAlphMerger} (6 column tsv).
+ * Since this class only stores strings for templates and not features,
+ * this can relatively easily fit in memory, event with 10M+ features.
+ *
+ * Reads the file format created by {@link BiAlphMerger} (6 column TSV).
  *
  * @author travis
  */
@@ -178,8 +181,7 @@ public class BiAlph implements Serializable {
   }
 
   /**
-   * @param fIsBiAlph if true f is interpretted as a bialph (6 col tsv),
-   * otherwise f is interpretted as an alph (4 col tsv).
+   * Read a bialph out of a file.
    */
   public void set(File f, LineMode lineMode) {
     Log.info("loading bialph from " + f.getPath() + " lineMode=" + lineMode);
@@ -256,5 +258,23 @@ public class BiAlph implements Serializable {
     if (oldFeatureIndex >= oldInt2NewIntFeatures[oldTemplateIndex].length)
       return -1;
     return oldInt2NewIntFeatures[oldTemplateIndex][oldFeatureIndex];
+  }
+
+
+  public static void main(String[] args) {
+    if (args.length == 0) {
+      System.err.println("usage: <command> <args>");
+      System.err.println("       jser <inputBialph> <inputBialphLineMode> <outputJserBialph>");
+      return;
+    }
+    if ("jser".equalsIgnoreCase(args[0])) {
+      File f = new File(args[1]);
+      LineMode m = LineMode.valueOf(args[2]);
+      File out = new File(args[3]);
+      BiAlph b = new BiAlph(f, m);
+      FileUtil.serialize(b, out);
+    } else {
+      System.err.println("unknown command: " + args[0]);
+    }
   }
 }

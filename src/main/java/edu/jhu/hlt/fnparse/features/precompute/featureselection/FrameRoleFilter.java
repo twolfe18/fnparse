@@ -15,6 +15,7 @@ public class FrameRoleFilter implements Function<FeatureFile.Line, int[]> {
   private Function<FeatureFile.Line, int[]> wrapped;
 
   public FrameRoleFilter(Function<FeatureFile.Line, int[]> wrapped, boolean addOne, int frame) {
+    assert frame >= 0;
     this.wrapped = wrapped;
     this.addOne = addOne;
     this.frame = frame;
@@ -22,6 +23,8 @@ public class FrameRoleFilter implements Function<FeatureFile.Line, int[]> {
   }
 
   public FrameRoleFilter(Function<FeatureFile.Line, int[]> wrapped, boolean addOne, int frame, int role) {
+    assert frame >= 0;
+    assert role >= 0;
     this.wrapped = wrapped;
     this.addOne = addOne;
     this.frame = frame;
