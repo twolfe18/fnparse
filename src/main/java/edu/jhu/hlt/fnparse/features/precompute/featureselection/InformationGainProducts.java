@@ -920,6 +920,11 @@ public class InformationGainProducts {
       BiAlph bialph,
       ExperimentProperties config) throws IOException {
 
+    if (products.isEmpty()) {
+      Log.warn("products.size=0, exiting early!");
+      return;
+    }
+
     final File output = config.getFile("output");
     Log.info("output=" + output.getPath());
 
