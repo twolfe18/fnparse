@@ -410,9 +410,14 @@ public class InformationGainProducts {
    * Write out the results in format:
    *   line = FOM <tab> mi <tab> hx <tab> order <tab> featureInts <tab> featureStrings
    * where featureInts is delimited by "*"
+   *
+   * @param explode says if you should call {@link TemplateIG#explode()} on
+   * on every output. This is useful if you want to output PMIs instead of MI
+   * for the entire {@link TemplateIG}.
+   * @see scripts/precompute-features/combine-mutual-information.py
    */
-  public void writeOutProducts(File output, int limit) {
-    Log.info("writing output to " + output.getPath());
+  public void writeOutProducts(File output, int limit, boolean explode) {
+    Log.info("writing output to " + output.getPath() + " limit=" + limit + " explode=" + explode);
     List<TemplateIG> templates = getTemplatesSorted(TemplateIG.BY_NMI_DECREASING);
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       if (templates.size() == 0) {
@@ -420,67 +425,69 @@ public class InformationGainProducts {
         Log.warn("no templates!");
       }
       for (int j = 0; j < templates.size() && (limit <= 0 || j < limit); j++) {
-        TemplateIG t = templates.get(j);
+        TemplateIG template = templates.get(j);
+        List<TemplateIG> ts = explode ? template.explode() : Arrays.asList(template);
+        for (TemplateIG t : ts) {
+          StringBuilder sb = new StringBuilder();
 
-        StringBuilder sb = new StringBuilder();
+          // FOM
+          sb.append(String.valueOf(t.heuristicScore()));
 
-        // FOM
-        sb.append(String.valueOf(t.heuristicScore()));
+          // mi
+          //        sb.append("\t" + t.ig().miSmoothed.mi());
+          sb.append("\t" + t.ig().mi());
 
-        // mi
-//        sb.append("\t" + t.ig().miSmoothed.mi());
-        sb.append("\t" + t.ig().mi());
+          // hx
+          sb.append("\t" + t.hx());
 
-        // hx
-        sb.append("\t" + t.hx());
+          // selectivity
+          sb.append("\t" + t.ig().selectivity);
 
-        // selectivity
-        sb.append("\t" + t.ig().selectivity);
+          // order
+          int[] pieces = getTemplatesForFeature(t.getIndex());
+          sb.append("\t" + pieces.length + "\t");
 
-        // order
-        int[] pieces = getTemplatesForFeature(t.getIndex());
-        sb.append("\t" + pieces.length + "\t");
+          // featureInts
+          for (int i = 0; i < pieces.length; i++) {
+            if (i > 0) sb.append('*');
+            sb.append(String.valueOf(pieces[i]));
+          }
 
-        // featureInts
-        for (int i = 0; i < pieces.length; i++) {
-          if (i > 0) sb.append('*');
-          sb.append(String.valueOf(pieces[i]));
+          // featureStrings
+          sb.append('\t');
+          for (int i = 0; i < pieces.length; i++) {
+            if (i > 0) sb.append('*');
+            sb.append(lastBialph.lookupTemplate(pieces[i]));
+          }
+
+          // How many updates we've seen. If no filtering is done, this will just
+          // be the number of lines in the feature files. If however, we create
+          // TemplateIGs with filters, then it will reflect the relative frequency
+          // of the filter passing.
+          sb.append("\t" + t.numObservations());
+
+          // frame,framerole restrictions
+          sb.append('\t');
+          if (t.featureName.getY instanceof FrameRoleFilter) {
+            FrameRoleFilter frf = (FrameRoleFilter) t.featureName.getY;
+            sb.append("f=" + frf.getFrame());
+            if (frf.hasRoleRestriction())
+              sb.append(",r=" + frf.getRole());
+          } else {
+            sb.append("noRestrict");
+          }
+
+          w.write(sb.toString());
+          w.newLine();
         }
-
-        // featureStrings
-        sb.append('\t');
-        for (int i = 0; i < pieces.length; i++) {
-          if (i > 0) sb.append('*');
-          sb.append(lastBialph.lookupTemplate(pieces[i]));
-        }
-
-        // How many updates we've seen. If no filtering is done, this will just
-        // be the number of lines in the feature files. If however, we create
-        // TemplateIGs with filters, then it will reflect the relative frequency
-        // of the filter passing.
-        sb.append("\t" + t.numObservations());
-
-        // frame,framerole restrictions
-        sb.append('\t');
-        if (t.featureName.getY instanceof FrameRoleFilter) {
-          FrameRoleFilter frf = (FrameRoleFilter) t.featureName.getY;
-          sb.append("f=" + frf.getFrame());
-          if (frf.hasRoleRestriction())
-            sb.append(",r=" + frf.getRole());
-        } else {
-          sb.append("noRestrict");
-        }
-
-        w.write(sb.toString());
-        w.newLine();
       }
       w.flush();
     } catch (IOException e) {
       e.printStackTrace();
     }
   }
-  public void writeOutProducts(File output) {
-    writeOutProducts(output, 0);
+  public void writeOutProducts(File output, boolean explode) {
+    writeOutProducts(output, 0, explode);
   }
 
   @SafeVarargs
@@ -728,6 +735,7 @@ public class InformationGainProducts {
     Log.info("after taking the " + shard + " shard,"
         + " numTemplates=" + templates.size());
 
+    config.putIfAbsent("explode", "false");
     computeIG(templates, bialph, config);
   }
 
@@ -788,12 +796,12 @@ public class InformationGainProducts {
 
     TimeMarker tm = new TimeMarker();
     Average.Uniform kPerF = new Average.Uniform();
-    List<FeatureName> featureRefinements = new ArrayList<>();
+    List<FeatureName> refinements = new ArrayList<>();
     for (int j = 0; j < features.size(); j++) {
       String[] feature = features.get(j);
 
       if (mode == Refinement.NONE) {
-        featureRefinements.add(new FeatureName(feature, getY));
+        refinements.add(new FeatureName(feature, getY));
         continue;
       }
 
@@ -814,7 +822,7 @@ public class InformationGainProducts {
 
         if (tm.enoughTimePassed(15)) {
           Log.info("added "
-              + featureRefinements.size() + " refinements, "
+              + refinements.size() + " refinements, "
               + j + " of " + features.size() + " features so far, in "
               + tm.secondsSinceFirstMark() + " seconds, "
               + Describe.memoryUsage());
@@ -823,7 +831,7 @@ public class InformationGainProducts {
         if (mode == Refinement.FRAME) {
           int roleIdx = -1;
           FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, roleIdx);
-          featureRefinements.add(new FeatureName(feature, filteredGetY));
+          refinements.add(new FeatureName(feature, filteredGetY));
         } else {
           assert mode == Refinement.FRAME_ROLE;
           int K = ff.numRoles();
@@ -832,19 +840,19 @@ public class InformationGainProducts {
             String role = "r=" + ff.getRole(k);
             int roleIdx = role2name.get(role);
             FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, roleIdx);
-            featureRefinements.add(new FeatureName(feature, filteredGetY));
+            refinements.add(new FeatureName(feature, filteredGetY));
           }
         }
       }
     }
     int F = fi.allFrames().size();
-    Log.info("featuresInput.size=" + features.size()
-        + " features@frame@role.size=" + featureRefinements.size()
+    Log.info("features.size=" + features.size()
+        + " refinements.size=" + refinements.size()
         + " numFrames=" + F
         + " kPerF=" + kPerF.getAverage() + " (n=" + kPerF.getNumObservations() + ")"
         + " shard=" + frameShard
         + " " + Describe.memoryUsage());
-    return featureRefinements;
+    return refinements;
   }
 
   /**
@@ -899,6 +907,7 @@ public class InformationGainProducts {
     Refinement mode = Refinement.valueOf(config.getString("refinementMode", Refinement.FRAME.name()));
     List<FeatureName> feats = productFeaturesWithFrameRole(products, bialph, role2name, frameShard, mode);
 
+    config.putIfAbsent("explode", "true");
     computeIG(feats, bialph, config);
   }
 
@@ -914,9 +923,13 @@ public class InformationGainProducts {
     final File output = config.getFile("output");
     Log.info("output=" + output.getPath());
 
+    boolean explode = config.getBoolean("explode");
+    Log.info("explode=" + explode);
+
     final EntropyMethod em = EntropyMethod.valueOf(config.getString("entropyMethod"));
     Log.info("using " + em + " to compute entropy");
 
+    // If 0, don't write out any intermediate results
     final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 64);
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
@@ -947,8 +960,8 @@ public class InformationGainProducts {
           Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
           igp.update(path.toFile());
 
-          if (igp.getNumUpdates() % writeTopProductsEveryK == 0)
-            igp.writeOutProducts(output);
+          if (writeTopProductsEveryK > 0 && igp.getNumUpdates() % writeTopProductsEveryK == 0)
+            igp.writeOutProducts(output, explode);
         }
         return FileVisitResult.CONTINUE;
       }
@@ -959,8 +972,7 @@ public class InformationGainProducts {
     });
 
     // Write out final results
-    igp.writeOutProducts(output);
-    //      igp.writeOutProducts(new File("/dev/stdout"), config.getInt("topK", 30));
+    igp.writeOutProducts(output, explode);
 
     if (bubEst != null) {
       Log.info("closing matlab/bub connection");
