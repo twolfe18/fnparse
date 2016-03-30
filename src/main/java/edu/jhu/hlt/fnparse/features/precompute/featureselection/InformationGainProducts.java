@@ -4,13 +4,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileSystems;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.PathMatcher;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -500,15 +493,17 @@ public class InformationGainProducts {
    * for the entire {@link TemplateIG}.
    * @see scripts/precompute-features/combine-mutual-information.py
    */
-  public void writeOutProducts(File output, int limit, boolean explode) {
-    Log.info("writing output to " + output.getPath() + " limit=" + limit + " explode=" + explode);
+  public void writeOutProducts(File output, Refinement mode) {
+    boolean explode = mode == Refinement.FRAME || mode == Refinement.FRAME_ROLE;
+    Log.info("writing output to " + output.getPath()
+        + " refinementMode=" + mode +  " explode=" + explode);
     List<TemplateIG> templates = getTemplatesSorted(TemplateIG.BY_NMI_DECREASING);
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       if (templates.size() == 0) {
         w.write("<no templates>\n");
         Log.warn("no templates!");
       }
-      for (int j = 0; j < templates.size() && (limit <= 0 || j < limit); j++) {
+      for (int j = 0; j < templates.size(); j++) {
         TemplateIG template = templates.get(j);
         List<TemplateIG> ts = explode ? template.explode() : Arrays.asList(template);
         for (TemplateIG t : ts) {
@@ -557,8 +552,11 @@ public class InformationGainProducts {
             sb.append("f=" + frf.getFrame());
             if (frf.hasRoleRestriction())
               sb.append(",r=" + frf.getRole());
+          } else if (t.featureName.getY instanceof NullLabelGetY) {
+            NullLabelGetY n = (NullLabelGetY) t.featureName.getY;
+            sb.append(n.name);
           } else {
-            sb.append("noRestrict");
+            sb.append("NA");
           }
 
           w.write(sb.toString());
@@ -569,9 +567,6 @@ public class InformationGainProducts {
     } catch (IOException e) {
       e.printStackTrace();
     }
-  }
-  public void writeOutProducts(File output, boolean explode) {
-    writeOutProducts(output, 0, explode);
   }
 
   @SafeVarargs
@@ -649,7 +644,7 @@ public class InformationGainProducts {
 
     // Generating all products can blow up in time/space, specially when order>2
     // This prunes the set of products being generated to only take the topK.
-    int thresh = (int) Math.pow(templateIGs.size() * 25000, 1d / order);
+    int thresh = (int) Math.pow(templateIGs.size() * 50000, 1d / order);
     if (templateIGs.size() > thresh) {
       Log.info("pruning from " + templateIGs.size() + " => " + thresh);
       templateIGs = templateIGs.subList(0, thresh);
@@ -818,14 +813,15 @@ public class InformationGainProducts {
       String templateName = bialph.lookupTemplate(t);
       features.add(new String[] {templateName});
     }
-    Refinement mode = Refinement.FRAME_ROLE;
-    List<FeatureName> templates = productFeaturesWithFrameRole(features, role2name, shard, mode);
+    Refinement refinementMode = Refinement.FRAME_ROLE;
+    List<FeatureName> templates = productFeaturesWithFrameRole(features, role2name, shard, refinementMode);
 
     Log.info("after taking the " + shard + " shard,"
         + " numTemplates=" + templates.size());
 
     config.putIfAbsent("explode", "false");
-    computeIG(templates, bialph, config);
+//    computeIG(templates, bialph, config);
+    computeIG(templates, refinementMode, bialph, config);
   }
 
   /** Reads the frame/role/label dictionary written out by {@link FeaturePrecomputation} */
@@ -867,6 +863,7 @@ public class InformationGainProducts {
     NONE,         // no refinements, one TemplateIG per feature:String[]
     FRAME,        // one TemplateIG for every frame in the FrameIndex chosen
     FRAME_ROLE,   // one TemplateIG for every (f,k)
+    NULL_LABEL,   // Y is redefined from labelMode to be label==valid, see NullLabelGetY
   }
 
   /**
@@ -897,7 +894,10 @@ public class InformationGainProducts {
     for (int j = 0; j < features.size(); j++) {
       String[] feature = features.get(j);
 
-      if (mode == Refinement.NONE) {
+      if (mode == Refinement.NULL_LABEL) {
+        refinements.add(new FeatureName(feature, new NullLabelGetY("nullLabel", getY)));
+        continue;
+      } else if (mode == Refinement.NONE) {
         refinements.add(new FeatureName(feature, getY));
         continue;
       }
@@ -1005,11 +1005,10 @@ public class InformationGainProducts {
     // List of features => list of feature@frame@role
     Map<String, Integer> role2name = readRole2Name(config);
     Shard frameShard = null;  // take all, sharding has already occurred on the features
-    Refinement mode = Refinement.valueOf(config.getString("refinementMode", Refinement.FRAME.name()));
-    List<FeatureName> feats = productFeaturesWithFrameRole(products, role2name, frameShard, mode);
+    Refinement refinementMode = Refinement.valueOf(config.getString("refinementMode"));//, Refinement.FRAME.name()));
+    List<FeatureName> feats = productFeaturesWithFrameRole(products, role2name, frameShard, refinementMode);
 
-    config.putIfAbsent("explode", "true");
-    computeIG(feats, bialph, config);
+    computeIG(feats, refinementMode, bialph, config);
   }
 
   /**
@@ -1018,8 +1017,11 @@ public class InformationGainProducts {
    */
   public static void computeIG(
       List<FeatureName> products,
+      Refinement refinementMode,
       BiAlph bialph,
       ExperimentProperties config) throws IOException {
+
+    Log.info("refinementMode=" + refinementMode);
 
     if (products.isEmpty()) {
       Log.warn("products.size=0, exiting early!");
@@ -1029,9 +1031,6 @@ public class InformationGainProducts {
     final File output = config.getFile("output");
     Log.info("output=" + output.getPath());
 
-    boolean explode = config.getBoolean("explode");
-    Log.info("explode=" + explode);
-
     final EntropyMethod em = EntropyMethod.valueOf(config.getString("entropyMethod"));
     Log.info("using " + em + " to compute entropy");
 
@@ -1039,8 +1038,8 @@ public class InformationGainProducts {
     final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 64);
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
-    final File featuresParent = config.getExistingDir("featuresParent");
-    final String featuresGlob = config.getString("featuresGlob", "glob:**/*");
+//    final File featuresParent = config.getExistingDir("featuresParent");
+//    final String featuresGlob = config.getString("featuresGlob", "glob:**/*");
 
     BubEntropyEstimatorAdapter bubEst = null;
     if (em == EntropyMethod.BUB) {
@@ -1058,25 +1057,22 @@ public class InformationGainProducts {
     igp.init(bialph, numRoles);
 
     // Scan each of the input files
-    PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
-    Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
-      @Override
-      public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-        if (pm.matches(path)) {
-          igp.update(path.toFile());
-          if (writeTopProductsEveryK > 0 && igp.getNumUpdates() % writeTopProductsEveryK == 0)
-            igp.writeOutProducts(output, explode);
-        }
-        return FileVisitResult.CONTINUE;
-      }
-      @Override
-      public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-        return FileVisitResult.CONTINUE;
-      }
-    });
+    List<File> featureFiles = config.getFileGlob("features");
+    // You can use dataShard=0/10 to take 1/10th of the data
+    Shard dataShard = config.getShard("data");
+    if (dataShard.getNumShards() > 1) {
+      Log.info("filtering " + featureFiles.size() + " files according to dataShard=" + dataShard);
+      featureFiles = ShardUtils.shardByIndex(featureFiles, dataShard);
+    }
+    Log.info("iterating over " + featureFiles.size() + " feature files");
+    for (File f : featureFiles) {
+      igp.update(f);
+      if (writeTopProductsEveryK > 0 && igp.getNumUpdates() % writeTopProductsEveryK == 0)
+        igp.writeOutProducts(output, refinementMode);
+    }
 
     // Write out final results
-    igp.writeOutProducts(output, explode);
+    igp.writeOutProducts(output, refinementMode);
 
     if (bubEst != null) {
       Log.info("closing matlab/bub connection");

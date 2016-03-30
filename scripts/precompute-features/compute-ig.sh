@@ -10,31 +10,20 @@ set -eu
 echo "starting at `date` on $HOSTNAME"
 echo "args: $@"
 
-#if [[ $# != 7 ]]; then
-#  echo "please provide:"
-#  echo "1) a feature file parent directory"
-#  echo "2) a feature file glob"
-#  echo "3) an output file to put template IG estimates in"
-#  echo "4) a jar file"
-#  echo "5) a set of test set sentence ids to ignore"
-#  echo "6) number of roles expected"
-#  echo "7) how many GB of memory to give to the JVM (e.g. \"20\", NOT \"20G\")"
-#  exit 1
-#fi
-
 FEATS_PARENT=$1
 FEATS_GLOB=$2
 BIALPH=$3             # names of features in FEATS_*
 OUTPUT_IG_FILE=$4
 ENTROPY_METHOD=$5     # BUB, MAP, or MLE
 LABEL_TYPE=$6         # frames or roles
-IS_PROPBANK=$7
-ROLE_NAMES=$8         # e.g. $WORKING_DIR/raw-shards/job-0-of-256/role-names.txt.bz2
-IGNORE_SENT_IDS=$9
-NUM_ROLES=${10}
-SHARD=${11}
-JAR=${12}
-XMX=${13}
+REFINEMENT_MODE=$7    # probably NULL_LABEL or FRAME
+IS_PROPBANK=$8
+ROLE_NAMES=$9         # e.g. $WORKING_DIR/raw-shards/job-0-of-256/role-names.txt.bz2
+IGNORE_SENT_IDS=${10}
+NUM_ROLES=${11}
+SHARD=${12}
+JAR=${13}
+XMX=${14}
 
 # Must be set in environment
 #FNPARSE_DATA=/export/projects/twolfe/fnparse-data/
@@ -50,7 +39,6 @@ java -Xmx${XMX}G -cp $JAR \
   -DfeaturesGlob=$FEATS_GLOB \
   -Dbialph=$BIALPH \
   -Dshard=$SHARD \
-  -DtopK=99999 \
   -DnumRoles=$NUM_ROLES \
   -DoutputFeatures=$OUTPUT_IG_FILE \
   -Doutput=$OUTPUT_IG_FILE \
@@ -59,6 +47,7 @@ java -Xmx${XMX}G -cp $JAR \
   -Dpropbank=$IS_PROPBANK \
   -DentropyMethod=$ENTROPY_METHOD \
   -DlabelType=$LABEL_TYPE \
+  -DrefinementMode=$REFINEMENT_MODE \
   -Dunigrams=true \
   -DroleNames=$ROLE_NAMES \
   -Ddata.framenet.root=$FNPARSE_DATA \
