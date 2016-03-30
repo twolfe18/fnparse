@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.features.precompute.featureselection;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
@@ -82,6 +83,17 @@ public class TemplateIG implements Serializable {
    * PMIs.
    */
   public List<TemplateIG> explode() {
+
+    if (getY instanceof NullLabelGetY) {
+      // NullLabelGetY already does the exploding for you
+      return Arrays.asList(this);
+    }
+
+    if (!getY.getClass().getName().contains("jhu")) {
+      // Refinement.NONE
+      return Arrays.asList(this);
+    }
+
     List<TemplateIG> out = new ArrayList<>();
     int cySum = cy.getSum();
     int nY = cy.getNumExplicitEntries();

@@ -1151,6 +1151,8 @@ public class CachedFeatures implements Serializable {
 
       // Note that these features don't need to be producted with k due to the
       // fact that we have separate weights for those.
+      // NOTE: There is a memoizing version of flatten, but I is not needed here
+      // as every feature:int[] should be unique, and there should be no benefit for memoizing.
       InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
 
       if (DEDUP_FEATS && buf.size() > 1) {

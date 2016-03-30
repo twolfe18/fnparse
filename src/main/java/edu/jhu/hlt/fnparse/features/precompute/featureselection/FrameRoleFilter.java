@@ -14,6 +14,11 @@ public class FrameRoleFilter implements Function<FeatureFile.Line, int[]> {
   private boolean addOne;
   private Function<FeatureFile.Line, int[]> wrapped;
 
+  @Override
+  public String toString() {
+    return "<FrameRoleFilter f=" + frame + " r=" + role + " addOne=" + addOne + ">";
+  }
+
   public FrameRoleFilter(Function<FeatureFile.Line, int[]> wrapped, boolean addOne, int frame) {
     assert frame >= 0;
     this.wrapped = wrapped;

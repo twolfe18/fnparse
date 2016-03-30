@@ -15,12 +15,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
+import edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGainProducts;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
@@ -60,7 +63,10 @@ public class FeatureFile {
     private boolean sorted;
     private String line;
     private String[] tokenized;
-    private List<Feature> features;
+    private List<Feature> features;     // just template values, not (product) features
+
+    /** Allows memoization of {@link InformationGainProducts#flatten(Line, int, int[], int, ProductIndex, int[], List)} */
+    public Map<HashableIntArray, List<ProductIndex>> flattenCache;
 
     public Line(String line, boolean sorted) {
       features = new ArrayList<>();

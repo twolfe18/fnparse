@@ -4,13 +4,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileSystems;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.PathMatcher;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -34,6 +27,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
@@ -59,6 +53,9 @@ import edu.jhu.prim.tuple.Pair;
 public class InformationGainProducts {
   public static final boolean DEBUG = false;
   public static final boolean FLATTEN_DEBUG = false;
+
+  // Leave off: see note in flattenMaybeMemoize
+  public static final boolean FLATTEN_MEMOIZE = false;
 
   public static String DEBUG_TEMPLATE = null;//"head1ParentBc1000/99";
 
@@ -180,6 +177,7 @@ public class InformationGainProducts {
   }
 
   private void addFeature(TemplateIG tig) {
+//    Log.info(tig.featureName.toString());
     FeatureName fn = tig.featureName;
     List<TemplateIG> addTo;
     if (fn.getY instanceof FrameRoleFilter) {
@@ -233,18 +231,42 @@ public class InformationGainProducts {
     return numUpdates;
   }
 
+  /*
+   * TODO(optimization): if we have foo@frame1, foo@frame2, foo@frame3, etc,
+   * we are calling flatten with foo.int_templates many times!
+   */
   private void updateMany(List<TemplateIG> updates, FeatureFile.Line ffl, List<ProductIndex> prodBuf) {
     if (updates == null)
       return;
     for (TemplateIG u : updates) {
       int[] templates = u.featureName.templateInt;
       assert templates != null;
+
       prodBuf.clear();
       flatten(ffl, 0, templates, 0, ProductIndex.NIL, template2cardinality, prodBuf);
+//      prodBuf = flattenMaybeMemoize(ffl, templates, template2cardinality);
+
       for (ProductIndex pi : prodBuf)
         u.update(ffl, new ProductIndex[] {pi});
     }
   }
+
+//  // For debugging
+//  private static String[] inverseRole2Name;
+//  private static void buildInverseRole2Name(Map<String, Integer> role2name) {
+//    int m = 0;
+//    for (int i : role2name.values())
+//      if (i > m)
+//        m = i;
+//    inverseRole2Name = new String[m + 1];
+//    for (Entry<String, Integer> x : role2name.entrySet()) {
+//      int i = x.getValue();
+//      if (inverseRole2Name[i] != null)
+//        inverseRole2Name[i] += ", " + x.getKey();
+//      else
+//        inverseRole2Name[i] = x.getKey();
+//    }
+//  }
 
   public void observeLine(String line) {
     boolean sorted = true;
@@ -262,14 +284,55 @@ public class InformationGainProducts {
     int[] frames = ffl.getFrames(InformationGain.ADD_ONE);
     int[] roles = ffl.getRoles(InformationGain.ADD_ONE);
 
+    assert frames.length > 0;
+    assert roles.length > 0;
+
     for (int frame : frames) {
       updateMany(featuresFrameRestricted.get(frame), ffl, prods);
-      for (int role : roles) {
-        IntPair key = new IntPair(frame, role);
-        updateMany(featuresFrameRoleRestricted.get(key), ffl, prods);
+      if (!featuresFrameRoleRestricted.isEmpty()) {
+        for (int role : roles) {
+          IntPair key = new IntPair(frame, role);
+          updateMany(featuresFrameRoleRestricted.get(key), ffl, prods);
+        }
       }
     }
     updateMany(featuresUnrestricted, ffl, prods);
+  }
+
+  /**
+   * @deprecated
+   * Use this as a non-helper version of flatten, but the memoization should be
+   * turned off. In IGP, though I do create many (t,f1), (t,f2), (t,f3)...
+   * where t is a templates:int[] and fX is a FrameRoleFilter, we don't have to
+   * worry about calling flatten with t many times due to the fact that for any
+   * given line at most one frame appears (and thus at most one fX fires), so
+   * we will not end up re-extracting.
+   *
+   * Do not modify the returned value, as it may be in a cache!
+   */
+  public static List<ProductIndex> flattenMaybeMemoize(
+      FeatureFile.Line data,
+      int[] templates,
+      int[] template2cardinality) {
+    if (!FLATTEN_MEMOIZE) {
+      List<ProductIndex> buffer = new ArrayList<>();
+      flatten(data, 0, templates, 0, ProductIndex.NIL, template2cardinality, buffer);
+      return buffer;
+    }
+    if (data.flattenCache == null)
+      data.flattenCache = new HashMap<>();
+    HashableIntArray key = new HashableIntArray(templates);
+    List<ProductIndex> m = data.flattenCache.get(key);
+//    Log.info("extracting " + Arrays.toString(templates));
+    if (m == null) {
+//      Log.info("MISS!");
+      m = new ArrayList<>();
+      flatten(data, 0, templates, 0, ProductIndex.NIL, template2cardinality, m);
+      data.flattenCache.put(key, m);
+    } else {
+//      Log.info("HIT!");
+    }
+    return m;
   }
 
   /**
@@ -430,15 +493,17 @@ public class InformationGainProducts {
    * for the entire {@link TemplateIG}.
    * @see scripts/precompute-features/combine-mutual-information.py
    */
-  public void writeOutProducts(File output, int limit, boolean explode) {
-    Log.info("writing output to " + output.getPath() + " limit=" + limit + " explode=" + explode);
+  public void writeOutProducts(File output, Refinement mode) {
+    boolean explode = mode == Refinement.FRAME || mode == Refinement.FRAME_ROLE;
+    Log.info("writing output to " + output.getPath()
+        + " refinementMode=" + mode +  " explode=" + explode);
     List<TemplateIG> templates = getTemplatesSorted(TemplateIG.BY_NMI_DECREASING);
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       if (templates.size() == 0) {
         w.write("<no templates>\n");
         Log.warn("no templates!");
       }
-      for (int j = 0; j < templates.size() && (limit <= 0 || j < limit); j++) {
+      for (int j = 0; j < templates.size(); j++) {
         TemplateIG template = templates.get(j);
         List<TemplateIG> ts = explode ? template.explode() : Arrays.asList(template);
         for (TemplateIG t : ts) {
@@ -487,8 +552,11 @@ public class InformationGainProducts {
             sb.append("f=" + frf.getFrame());
             if (frf.hasRoleRestriction())
               sb.append(",r=" + frf.getRole());
+          } else if (t.featureName.getY instanceof NullLabelGetY) {
+            NullLabelGetY n = (NullLabelGetY) t.featureName.getY;
+            sb.append(n.name);
           } else {
-            sb.append("noRestrict");
+            sb.append("NA");
           }
 
           w.write(sb.toString());
@@ -499,9 +567,6 @@ public class InformationGainProducts {
     } catch (IOException e) {
       e.printStackTrace();
     }
-  }
-  public void writeOutProducts(File output, boolean explode) {
-    writeOutProducts(output, 0, explode);
   }
 
   @SafeVarargs
@@ -579,7 +644,7 @@ public class InformationGainProducts {
 
     // Generating all products can blow up in time/space, specially when order>2
     // This prunes the set of products being generated to only take the topK.
-    int thresh = (int) Math.pow(templateIGs.size() * 25000, 1d / order);
+    int thresh = (int) Math.pow(templateIGs.size() * 50000, 1d / order);
     if (templateIGs.size() > thresh) {
       Log.info("pruning from " + templateIGs.size() + " => " + thresh);
       templateIGs = templateIGs.subList(0, thresh);
@@ -748,14 +813,15 @@ public class InformationGainProducts {
       String templateName = bialph.lookupTemplate(t);
       features.add(new String[] {templateName});
     }
-    Refinement mode = Refinement.FRAME_ROLE;
-    List<FeatureName> templates = productFeaturesWithFrameRole(features, role2name, shard, mode);
+    Refinement refinementMode = Refinement.FRAME_ROLE;
+    List<FeatureName> templates = productFeaturesWithFrameRole(features, role2name, shard, refinementMode);
 
     Log.info("after taking the " + shard + " shard,"
         + " numTemplates=" + templates.size());
 
     config.putIfAbsent("explode", "false");
-    computeIG(templates, bialph, config);
+//    computeIG(templates, bialph, config);
+    computeIG(templates, refinementMode, bialph, config);
   }
 
   /** Reads the frame/role/label dictionary written out by {@link FeaturePrecomputation} */
@@ -769,6 +835,10 @@ public class InformationGainProducts {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] tok = line.split("\t");
         int c = Integer.parseInt(tok[0]);
+
+        if (InformationGain.ADD_ONE)
+          c++;
+
         assert tok.length == 2;
         Object old = role2name.put(tok[1], c);
         assert old == null;
@@ -784,6 +854,7 @@ public class InformationGainProducts {
         }
       }
     }
+//    buildInverseRole2Name(role2name);
     return role2name;
   }
 
@@ -792,6 +863,7 @@ public class InformationGainProducts {
     NONE,         // no refinements, one TemplateIG per feature:String[]
     FRAME,        // one TemplateIG for every frame in the FrameIndex chosen
     FRAME_ROLE,   // one TemplateIG for every (f,k)
+    NULL_LABEL,   // Y is redefined from labelMode to be label==valid, see NullLabelGetY
   }
 
   /**
@@ -817,11 +889,15 @@ public class InformationGainProducts {
 
     TimeMarker tm = new TimeMarker();
     Average.Uniform kPerF = new Average.Uniform();
+    kPerF.add(1); // avoid div by zero, slightly biases average
     List<FeatureName> refinements = new ArrayList<>();
     for (int j = 0; j < features.size(); j++) {
       String[] feature = features.get(j);
 
-      if (mode == Refinement.NONE) {
+      if (mode == Refinement.NULL_LABEL) {
+        refinements.add(new FeatureName(feature, new NullLabelGetY("nullLabel", getY)));
+        continue;
+      } else if (mode == Refinement.NONE) {
         refinements.add(new FeatureName(feature, getY));
         continue;
       }
@@ -851,7 +927,9 @@ public class InformationGainProducts {
 
         if (mode == Refinement.FRAME) {
           FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx);
-          refinements.add(new FeatureName(feature, filteredGetY));
+          FeatureName fn = new FeatureName(feature, filteredGetY);
+//          Log.info("creating " + fn);
+          refinements.add(fn);
         } else {
           assert mode == Refinement.FRAME_ROLE;
           int K = ff.numRoles();
@@ -927,11 +1005,10 @@ public class InformationGainProducts {
     // List of features => list of feature@frame@role
     Map<String, Integer> role2name = readRole2Name(config);
     Shard frameShard = null;  // take all, sharding has already occurred on the features
-    Refinement mode = Refinement.valueOf(config.getString("refinementMode", Refinement.FRAME.name()));
-    List<FeatureName> feats = productFeaturesWithFrameRole(products, role2name, frameShard, mode);
+    Refinement refinementMode = Refinement.valueOf(config.getString("refinementMode"));//, Refinement.FRAME.name()));
+    List<FeatureName> feats = productFeaturesWithFrameRole(products, role2name, frameShard, refinementMode);
 
-    config.putIfAbsent("explode", "true");
-    computeIG(feats, bialph, config);
+    computeIG(feats, refinementMode, bialph, config);
   }
 
   /**
@@ -940,8 +1017,11 @@ public class InformationGainProducts {
    */
   public static void computeIG(
       List<FeatureName> products,
+      Refinement refinementMode,
       BiAlph bialph,
       ExperimentProperties config) throws IOException {
+
+    Log.info("refinementMode=" + refinementMode);
 
     if (products.isEmpty()) {
       Log.warn("products.size=0, exiting early!");
@@ -951,9 +1031,6 @@ public class InformationGainProducts {
     final File output = config.getFile("output");
     Log.info("output=" + output.getPath());
 
-    boolean explode = config.getBoolean("explode");
-    Log.info("explode=" + explode);
-
     final EntropyMethod em = EntropyMethod.valueOf(config.getString("entropyMethod"));
     Log.info("using " + em + " to compute entropy");
 
@@ -961,8 +1038,8 @@ public class InformationGainProducts {
     final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 64);
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
-    final File featuresParent = config.getExistingDir("featuresParent");
-    final String featuresGlob = config.getString("featuresGlob");
+//    final File featuresParent = config.getExistingDir("featuresParent");
+//    final String featuresGlob = config.getString("featuresGlob", "glob:**/*");
 
     BubEntropyEstimatorAdapter bubEst = null;
     if (em == EntropyMethod.BUB) {
@@ -980,25 +1057,22 @@ public class InformationGainProducts {
     igp.init(bialph, numRoles);
 
     // Scan each of the input files
-    PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
-    Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
-      @Override
-      public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-        if (pm.matches(path)) {
-          igp.update(path.toFile());
-          if (writeTopProductsEveryK > 0 && igp.getNumUpdates() % writeTopProductsEveryK == 0)
-            igp.writeOutProducts(output, explode);
-        }
-        return FileVisitResult.CONTINUE;
-      }
-      @Override
-      public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-        return FileVisitResult.CONTINUE;
-      }
-    });
+    List<File> featureFiles = config.getFileGlob("features");
+    // You can use dataShard=0/10 to take 1/10th of the data
+    Shard dataShard = config.getShard("data");
+    if (dataShard.getNumShards() > 1) {
+      Log.info("filtering " + featureFiles.size() + " files according to dataShard=" + dataShard);
+      featureFiles = ShardUtils.shardByIndex(featureFiles, dataShard);
+    }
+    Log.info("iterating over " + featureFiles.size() + " feature files");
+    for (File f : featureFiles) {
+      igp.update(f);
+      if (writeTopProductsEveryK > 0 && igp.getNumUpdates() % writeTopProductsEveryK == 0)
+        igp.writeOutProducts(output, refinementMode);
+    }
 
     // Write out final results
-    igp.writeOutProducts(output, explode);
+    igp.writeOutProducts(output, refinementMode);
 
     if (bubEst != null) {
       Log.info("closing matlab/bub connection");

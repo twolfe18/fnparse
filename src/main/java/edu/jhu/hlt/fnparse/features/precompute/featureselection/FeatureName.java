@@ -28,4 +28,9 @@ public class FeatureName {
       templateInt[i] = b.mapTemplate(templateStr[i]);
     Arrays.sort(templateInt);
   }
+
+  @Override
+  public String toString() {
+    return String.format("<FeatureName templates=%s %s>", Arrays.toString(templateInt), getY.toString());
+  }
 }

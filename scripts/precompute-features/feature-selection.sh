@@ -103,16 +103,32 @@ mkdir -p $WD/templates/sge-logs
 MEM=6
 NUM_SHARDS=500
 for I in `seq $NUM_SHARDS | awk '{print $i-1}'`; do
-  OUTPUT=$WD/templates/ig-files/shard-${I}-of-${NUM_SHARDS}.txt.gz
   SHARD="$I/$NUM_SHARDS"
   qsub -o $WD/templates/sge-logs \
     ./scripts/precompute-features/compute-ig.sh \
       $FEATS \
       "glob:**/*" \
       $BIALPH \
-      $OUTPUT \
+      $WD/templates/ig-files/pos-shard-${I}-of-${NUM_SHARDS}.txt.gz \
       $ENTROPY_METHOD \
       $LABEL_TYPE \
+      "FRAME" \
+      $IS_PROPBANK \
+      $ROLE_DICT \
+      $TEST_SET_SENT_IDS \
+      $NUM_ROLES \
+      $SHARD \
+      $JAR_STABLE \
+      $MEM
+  qsub -o $WD/templates/sge-logs \
+    ./scripts/precompute-features/compute-ig.sh \
+      $FEATS \
+      "glob:**/*" \
+      $BIALPH \
+      $WD/templates/ig-files/neg-shard-${I}-of-${NUM_SHARDS}.txt.gz \
+      $ENTROPY_METHOD \
+      $LABEL_TYPE \
+      "NULL_LABEL" \
       $IS_PROPBANK \
       $ROLE_DICT \
       $TEST_SET_SENT_IDS \
@@ -150,6 +166,11 @@ for C_RBC in 0 1; do
 if [[ `echo "$C_ABS + $C_RBC" | bc` == 0 ]]; then
   continue
 fi
+
+# TODO Now that I have positive and negative features,
+# am I just going to keep these as separate pipelines the
+# whole way through?
+
 qsub -l 'h_rt=72:00:00,num_proc=2,mem_free=18G' \
   compress-cat $WD/templates/ig-files/shard-*-of-${NUM_SHARDS}.txt.gz \
   | PYTHONPATH=scripts/having-a-laugh python \
@@ -189,17 +210,34 @@ MEM_SGE=`echo "$MEM+2" | bc`
 NUM_SHARDS=500
 FEATS_PER_SHARD=100
 for I in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
-  OUTPUT=$PROD_IG_WD/ig-files/shard-${I}-of-${NUM_SHARDS}.txt.gz
   SHARD="$I/$NUM_SHARDS"
-  #qsub -hold_jid $DEPS -N prod-ig-$i -o $PROD_IG_WD/sge-logs
   qsub -l "mem_free=$MEM_SGE" -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
       $FEATS \
       "glob:**/*" \
       $BIALPH \
-      $OUTPUT \
+      $PROD_IG_WD/ig-files/pos-shard-${I}-of-${NUM_SHARDS}.txt.gz \
       $ENTROPY_METHOD \
       $LABEL_TYPE \
+      "FRAME" \
+      $IS_PROPBANK \
+      $ROLE_DICT \
+      $TEST_SET_SENT_IDS \
+      $NUM_ROLES \
+      $SHARD \
+      $JAR_STABLE \
+      $MEM \
+      $FEATS_PER_SHARD \
+      $TEMPLATE_IG_FILE
+  qsub -l "mem_free=$MEM_SGE" -o $PROD_IG_WD/sge-logs \
+    ./scripts/precompute-features/compute-ig-products.sh \
+      $FEATS \
+      "glob:**/*" \
+      $BIALPH \
+      $PROD_IG_WD/ig-files/neg-shard-${I}-of-${NUM_SHARDS}.txt.gz \
+      $ENTROPY_METHOD \
+      $LABEL_TYPE \
+      "NULL_LABEL" \
       $IS_PROPBANK \
       $ROLE_DICT \
       $TEST_SET_SENT_IDS \
