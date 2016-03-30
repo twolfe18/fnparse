@@ -23,9 +23,7 @@ fi
 #       ig-files/
 #       sge-logs/
 #     templates/
-#       full
-#       split10
-#       split10-filter10
+#       ig-files/
 #       sge-logs/
 #     feature-sets/
 #       16-1280.fs
@@ -64,10 +62,42 @@ fi
 echo "computed there are $NUM_ROLES from looking at $ROLE_DICT"
 
 
+### Step 0 ####################################################################
+# Loading a giant bialph (which may even be bzip2'd) is slow and the resulting
+# loaded representation is small (only has strings for template names).
+# Do this once ahead of time and use java serialization for subsequent loads.
+BIALPH_BIG=$WORKING_DIR/coherent-shards/alphabet.txt$SUF
+BIALPH=$WORKING_DIR/coherent-shards/alphabet.jser.gz
+if [[ ! -f $BIALPH_BIG ]]; then
+  echo "bialph doesn't exist: $BIALPH_BIG"
+  exit 2
+fi
+if [[ -f $BIALPH ]]; then
+  echo "using pre-compiled jser bialph: $BIALPH"
+else
+  echo "making small jser bialph:"
+  echo "$BIALPH_BIG  ==>  $BIALPH"
+  time java -Xmx5G -ea -cp $JAR_STABLE \
+    edu.jhu.hlt.fnparse.features.precompute.BiAlph \
+      jser $BIALPH_BIG ALPH $BIALPH
+
+  du -h $BIALPH_BIG $BIALPH
+
+  echo "Done compiling jser bialph: $BIALPH"
+  echo "Exiting now in case that is all you wanted to do."
+  echo "To launch all the experiments, please re-run this same command"
+  exit 0
+fi
+
+
+
 ### Step 1 ####################################################################
 echo "Computing IG for single templates @frame@role..."
 FEATS=$WORKING_DIR/coherent-shards/features
-BIALPH=$WORKING_DIR/coherent-shards/alphabet.txt$SUF
+if [[ ! -d $FEATS ]]; then
+  echo "feats dir doesn't exist: $FEATS"
+  exit 1
+fi
 mkdir -p $WD/templates/ig-files
 mkdir -p $WD/templates/sge-logs
 MEM=6
@@ -91,6 +121,10 @@ for I in `seq $NUM_SHARDS | awk '{print $i-1}'`; do
       $JAR_STABLE \
       $MEM
 done
+
+
+# Exit early for debugging (only want to run first step)
+exit 0
 
 
 ### Step 2 ####################################################################
@@ -150,12 +184,15 @@ TEMPLATE_IG_FILE=$WD/templates/best-features-${C_STRING}.txt    # input
 PROD_IG_WD=$WD/products/$C_STRING # output
 mkdir -p $PROD_IG_WD/ig-files
 mkdir -p $PROD_IG_WD/sge-logs
+MEM=16
+MEM_SGE=`echo "$MEM+2" | bc`
 NUM_SHARDS=500
-FEATS_PER_SHARD=500
+FEATS_PER_SHARD=100
 for I in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
   OUTPUT=$PROD_IG_WD/ig-files/shard-${I}-of-${NUM_SHARDS}.txt.gz
   SHARD="$I/$NUM_SHARDS"
-  qsub -hold_jid $DEPS -N prod-ig-$i -o $PROD_IG_WD/sge-logs \
+  #qsub -hold_jid $DEPS -N prod-ig-$i -o $PROD_IG_WD/sge-logs
+  qsub -l "mem_free=$MEM_SGE" -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
       $FEATS \
       "glob:**/*" \
