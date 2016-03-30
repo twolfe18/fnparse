@@ -34,6 +34,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
@@ -59,6 +60,9 @@ import edu.jhu.prim.tuple.Pair;
 public class InformationGainProducts {
   public static final boolean DEBUG = false;
   public static final boolean FLATTEN_DEBUG = false;
+
+  // Leave off: see note in flattenMaybeMemoize
+  public static final boolean FLATTEN_MEMOIZE = false;
 
   public static String DEBUG_TEMPLATE = null;//"head1ParentBc1000/99";
 
@@ -180,6 +184,7 @@ public class InformationGainProducts {
   }
 
   private void addFeature(TemplateIG tig) {
+//    Log.info(tig.featureName.toString());
     FeatureName fn = tig.featureName;
     List<TemplateIG> addTo;
     if (fn.getY instanceof FrameRoleFilter) {
@@ -243,8 +248,11 @@ public class InformationGainProducts {
     for (TemplateIG u : updates) {
       int[] templates = u.featureName.templateInt;
       assert templates != null;
+
       prodBuf.clear();
       flatten(ffl, 0, templates, 0, ProductIndex.NIL, template2cardinality, prodBuf);
+//      prodBuf = flattenMaybeMemoize(ffl, templates, template2cardinality);
+
       for (ProductIndex pi : prodBuf)
         u.update(ffl, new ProductIndex[] {pi});
     }
@@ -288,14 +296,50 @@ public class InformationGainProducts {
 
     for (int frame : frames) {
       updateMany(featuresFrameRestricted.get(frame), ffl, prods);
-      if (featuresFrameRoleRestricted.isEmpty())
-        continue;
-      for (int role : roles) {
-        IntPair key = new IntPair(frame, role);
-        updateMany(featuresFrameRoleRestricted.get(key), ffl, prods);
+      if (!featuresFrameRoleRestricted.isEmpty()) {
+        for (int role : roles) {
+          IntPair key = new IntPair(frame, role);
+          updateMany(featuresFrameRoleRestricted.get(key), ffl, prods);
+        }
       }
     }
     updateMany(featuresUnrestricted, ffl, prods);
+  }
+
+  /**
+   * @deprecated
+   * Use this as a non-helper version of flatten, but the memoization should be
+   * turned off. In IGP, though I do create many (t,f1), (t,f2), (t,f3)...
+   * where t is a templates:int[] and fX is a FrameRoleFilter, we don't have to
+   * worry about calling flatten with t many times due to the fact that for any
+   * given line at most one frame appears (and thus at most one fX fires), so
+   * we will not end up re-extracting.
+   *
+   * Do not modify the returned value, as it may be in a cache!
+   */
+  public static List<ProductIndex> flattenMaybeMemoize(
+      FeatureFile.Line data,
+      int[] templates,
+      int[] template2cardinality) {
+    if (!FLATTEN_MEMOIZE) {
+      List<ProductIndex> buffer = new ArrayList<>();
+      flatten(data, 0, templates, 0, ProductIndex.NIL, template2cardinality, buffer);
+      return buffer;
+    }
+    if (data.flattenCache == null)
+      data.flattenCache = new HashMap<>();
+    HashableIntArray key = new HashableIntArray(templates);
+    List<ProductIndex> m = data.flattenCache.get(key);
+//    Log.info("extracting " + Arrays.toString(templates));
+    if (m == null) {
+//      Log.info("MISS!");
+      m = new ArrayList<>();
+      flatten(data, 0, templates, 0, ProductIndex.NIL, template2cardinality, m);
+      data.flattenCache.put(key, m);
+    } else {
+//      Log.info("HIT!");
+    }
+    return m;
   }
 
   /**
@@ -883,7 +927,9 @@ public class InformationGainProducts {
 
         if (mode == Refinement.FRAME) {
           FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx);
-          refinements.add(new FeatureName(feature, filteredGetY));
+          FeatureName fn = new FeatureName(feature, filteredGetY);
+//          Log.info("creating " + fn);
+          refinements.add(fn);
         } else {
           assert mode == Refinement.FRAME_ROLE;
           int K = ff.numRoles();
