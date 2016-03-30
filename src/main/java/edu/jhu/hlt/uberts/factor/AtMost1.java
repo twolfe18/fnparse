@@ -35,10 +35,8 @@ public class AtMost1 {
     // And are adjacent to this node:
     private Function<GraphTraversalTrace, HypNode> getBoundNode;
 
-    public RelNode1(Relation twoArgRelation, Function<GraphTraversalTrace, HypNode> getBoundNode) {
-      if (twoArgRelation.getNumArgs() != 2)
-        throw new IllegalArgumentException();
-      this.relationMatch = twoArgRelation;
+    public RelNode1(Relation relation, Function<GraphTraversalTrace, HypNode> getBoundNode) {
+      this.relationMatch = relation;
       this.getBoundNode = getBoundNode;
     }
 

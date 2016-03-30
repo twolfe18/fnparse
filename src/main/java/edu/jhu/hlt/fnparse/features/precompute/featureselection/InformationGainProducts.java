@@ -208,7 +208,13 @@ public class InformationGainProducts {
   private int numUpdates = 0;
   public void update(File features) throws IOException {
     TimeMarker tm = new TimeMarker();
-    Log.info("reading features=" + features.getPath() + " with numFeatures=" + getAllFeatures().size());
+    Log.info("reading features=" + features.getPath()
+        + " with numFeatures=" + getAllFeatures().size()
+        + " numUpdates=" + numUpdates
+        + " featuresUnrestricted.size=" + featuresUnrestricted.size()
+        + " featuresFrameRestricted.size=" + featuresFrameRestricted.size()
+        + " featuresFrameRoleRestricted.size=" + featuresFrameRoleRestricted.size()
+        + " numUpdates=" + numUpdates);
     int lines = 0;
     try (BufferedReader r = FileUtil.getReader(features)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
@@ -377,6 +383,11 @@ public class InformationGainProducts {
     for (List<TemplateIG> l : featuresFrameRoleRestricted.values())
       all.addAll(l);
     all.addAll(featuresUnrestricted);
+    Log.info("all.size=" + all.size()
+      + " featuresUnrestricted.size=" + featuresUnrestricted.size()
+      + " featuresFrameRestricted.size=" + featuresFrameRestricted.size()
+      + " featuresFrameRoleRestricted.size=" + featuresFrameRoleRestricted.size()
+      + " numUpdates=" + numUpdates);
     return all;
   }
 
@@ -384,9 +395,11 @@ public class InformationGainProducts {
     TimeMarker tm = new TimeMarker();
     List<TemplateIG> all = getAllFeatures();
     List<TemplateIG> out = new ArrayList<>();
-    for (TemplateIG t : all)
+    for (TemplateIG t : all) {
       if (t.totalCount() > 0)
         out.add(t);
+    }
+    Log.info("all.size=" + all.size() + " out.size=" + out.size());
     int done = 0;
     for (TemplateIG t : out) {
       t.ig();
@@ -972,9 +985,7 @@ public class InformationGainProducts {
       @Override
       public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
         if (pm.matches(path)) {
-          Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
           igp.update(path.toFile());
-
           if (writeTopProductsEveryK > 0 && igp.getNumUpdates() % writeTopProductsEveryK == 0)
             igp.writeOutProducts(output, explode);
         }
