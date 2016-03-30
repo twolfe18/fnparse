@@ -56,6 +56,7 @@ java -Xmx${XMX}G -cp $JAR \
   -Ddata.ontonotes5=$FNPARSE_DATA/LDC2013T19/data/files/data/english/annotations \
   -Ddata.propbank.conll=$FNPARSE_DATA/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
   -Ddata.propbank.frames=$FNPARSE_DATA/ontonotes-release-5.0-fixed-frames/frames \
+  -DwriteTopProductsEveryK=1 \
   edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGainProducts
 
 echo "ret code: $?"

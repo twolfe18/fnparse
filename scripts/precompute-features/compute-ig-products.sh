@@ -46,6 +46,7 @@ java -Xmx${XMX}G -cp $JAR \
   -DlabelType=$LABEL_TYPE \
   -DrefinementMode=$REFINEMENT_MODE \
   -Dunigrams=false \
+  -DroleNames=$ROLE_NAMES \
   -Dshard=$SHARD \
   -DnumProducts=$FEATS_PER_SHARD \
   -DfeaturesParent=$FEATS_PARENT \
@@ -57,6 +58,13 @@ java -Xmx${XMX}G -cp $JAR \
   -DignoreSentenceIds=$IGNORE_SENT_IDS \
   -DbubFuncParentDir=/export/projects/twolfe/fnparse-data/matlab-code \
   -DnumRoles=$NUM_ROLES \
+  -Ddata.framenet.root=$FNPARSE_DATA \
+  -Ddata.wordnet=$FNPARSE_DATA/wordnet/dict \
+  -Ddata.embeddings=$FNPARSE_DATA/embeddings \
+  -Ddata.ontonotes5=$FNPARSE_DATA/LDC2013T19/data/files/data/english/annotations \
+  -Ddata.propbank.conll=$FNPARSE_DATA/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
+  -Ddata.propbank.frames=$FNPARSE_DATA/ontonotes-release-5.0-fixed-frames/frames \
+  -DwriteTopProductsEveryK=1 \
   edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGainProducts
 
 echo "ret code: $?"
