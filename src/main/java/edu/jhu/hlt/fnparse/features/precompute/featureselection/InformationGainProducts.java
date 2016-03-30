@@ -233,6 +233,10 @@ public class InformationGainProducts {
     return numUpdates;
   }
 
+  /*
+   * TODO(optimization): if we have foo@frame1, foo@frame2, foo@frame3, etc,
+   * we are calling flatten with foo.int_templates many times!
+   */
   private void updateMany(List<TemplateIG> updates, FeatureFile.Line ffl, List<ProductIndex> prodBuf) {
     if (updates == null)
       return;
@@ -245,6 +249,23 @@ public class InformationGainProducts {
         u.update(ffl, new ProductIndex[] {pi});
     }
   }
+
+//  // For debugging
+//  private static String[] inverseRole2Name;
+//  private static void buildInverseRole2Name(Map<String, Integer> role2name) {
+//    int m = 0;
+//    for (int i : role2name.values())
+//      if (i > m)
+//        m = i;
+//    inverseRole2Name = new String[m + 1];
+//    for (Entry<String, Integer> x : role2name.entrySet()) {
+//      int i = x.getValue();
+//      if (inverseRole2Name[i] != null)
+//        inverseRole2Name[i] += ", " + x.getKey();
+//      else
+//        inverseRole2Name[i] = x.getKey();
+//    }
+//  }
 
   public void observeLine(String line) {
     boolean sorted = true;
@@ -262,8 +283,13 @@ public class InformationGainProducts {
     int[] frames = ffl.getFrames(InformationGain.ADD_ONE);
     int[] roles = ffl.getRoles(InformationGain.ADD_ONE);
 
+    assert frames.length > 0;
+    assert roles.length > 0;
+
     for (int frame : frames) {
       updateMany(featuresFrameRestricted.get(frame), ffl, prods);
+      if (featuresFrameRoleRestricted.isEmpty())
+        continue;
       for (int role : roles) {
         IntPair key = new IntPair(frame, role);
         updateMany(featuresFrameRoleRestricted.get(key), ffl, prods);
@@ -769,6 +795,10 @@ public class InformationGainProducts {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] tok = line.split("\t");
         int c = Integer.parseInt(tok[0]);
+
+        if (InformationGain.ADD_ONE)
+          c++;
+
         assert tok.length == 2;
         Object old = role2name.put(tok[1], c);
         assert old == null;
@@ -784,6 +814,7 @@ public class InformationGainProducts {
         }
       }
     }
+//    buildInverseRole2Name(role2name);
     return role2name;
   }
 
@@ -817,6 +848,7 @@ public class InformationGainProducts {
 
     TimeMarker tm = new TimeMarker();
     Average.Uniform kPerF = new Average.Uniform();
+    kPerF.add(1); // avoid div by zero, slightly biases average
     List<FeatureName> refinements = new ArrayList<>();
     for (int j = 0; j < features.size(); j++) {
       String[] feature = features.get(j);
@@ -962,7 +994,7 @@ public class InformationGainProducts {
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
     final File featuresParent = config.getExistingDir("featuresParent");
-    final String featuresGlob = config.getString("featuresGlob");
+    final String featuresGlob = config.getString("featuresGlob", "glob:**/*");
 
     BubEntropyEstimatorAdapter bubEst = null;
     if (em == EntropyMethod.BUB) {
