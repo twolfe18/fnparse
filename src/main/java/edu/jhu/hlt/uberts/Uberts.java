@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -126,16 +125,30 @@ public class Uberts {
 
   /**
    * Use this rather than calling the {@link HypNode} constructor so that nodes
-   * are gauranteed to be unique.
+   * are guaranteed to be unique.
    */
-  public HypNode lookupNode(NodeType nt, Object value) {
+  public HypNode lookupNode(NodeType nt, Object value, boolean addIfNotPresent) {
     Pair<NodeType, Object> key = new Pair<>(nt, value);
     HypNode v = nodes.get(key);
-    if (v == null) {
-      v = new HypNode(nt, value);
-      nodes.put(key, v);
+    if (v == null && addIfNotPresent) {
+//      if (addIfNotPresent) {
+        v = new HypNode(nt, value);
+        nodes.put(key, v);
+//      } else {
+//        throw new RuntimeException("not found: " + nt + ", " + value);
+//      }
     }
     return v;
+  }
+
+  /**
+   * Prefer lookupNode if you can. Throws exception if this node exists.
+   */
+  public void putNode(HypNode n) {
+    Pair<NodeType, Object> key = new Pair<>(n.getNodeType(), n.getValue());
+    HypNode old = nodes.put(key, n);
+    if (old != null)
+      throw new RuntimeException("duplicate: " + key);
   }
 
   /**
@@ -201,7 +214,6 @@ public class Uberts {
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
     Log.info(e.toString());
     assert nodesContains(e);
-//    Adjoints score = new Adjoints.Constant(rand.nextGaussian());
     agenda.add(e, score);
   }
 
@@ -241,7 +253,7 @@ public class Uberts {
     NodeType headType = getWitnessNodeType(r);
 //    HypNode head = lookupNode(headType, factCounter++);
     Object encoded = r.encodeTail(tail);
-    HypNode head = lookupNode(headType, encoded);
+    HypNode head = lookupNode(headType, encoded, true);
     return new HypEdge(r, head, tail);
   }
 

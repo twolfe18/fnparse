@@ -2,15 +2,15 @@ package edu.jhu.hlt.uberts.ner;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-import org.apache.commons.math3.analysis.solvers.MullerSolver;
-
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Document;
 import edu.jhu.hlt.tutils.Document.TokenItr;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -18,6 +18,7 @@ import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
+import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
@@ -46,7 +47,50 @@ public class SimpleNer {
    * (6) capitalization pattern in the window c
    * (7) conjunction of c and y_{i−1}."
    */
+  public int[] features(int tokenIndex) {
+    int[] f = new int[10];
 
+    State s = u.getState();
+
+    String nerPrevTag = null;
+    HypNode prev = u.lookupNode(this.tokenIndex, tokenIndex-1, false);
+    if (prev != null) {
+      HypEdge nerPrev = s.match1(ner3, prev);
+      nerPrevTag = (String) nerPrev.getTail(1).getValue();
+      nerPrevTag = ((String) nerPrev.getTail(2).getValue()) + "-" + nerPrevTag;
+      f[0] = nerPrevTag.hashCode();
+    }
+
+    String nerPrevPrevTag = null;
+    HypNode prevPrev = u.lookupNode(this.tokenIndex, tokenIndex-2, false);
+    if (prevPrev != null) {
+      HypEdge nerPrevPrev = s.match1(ner3, prevPrev);
+      nerPrevPrevTag = (String) nerPrevPrev.getTail(1).getValue();
+      nerPrevPrevTag = ((String) nerPrevPrev.getTail(2).getValue()) + "-" + nerPrevPrevTag;
+      f[1] = nerPrevPrevTag.hashCode();
+    }
+
+    if (nerPrevTag != null && nerPrevPrevTag != null)
+      f[2] = (nerPrevTag + "_" + nerPrevPrevTag).hashCode();
+
+    Document d = u.getDoc();
+    f[3] = d.getWord(tokenIndex);
+
+    // TODO more features
+
+    return f;
+  }
+
+  public static class IdxHypNode extends HypNode {
+    private int index;
+    public IdxHypNode(NodeType type, Object value, int index) {
+      super(type, value);
+      this.index = index;
+    }
+    public int getIndex() {
+      return index;
+    }
+  }
 
   // Given
   private NodeType tokenIndex;
@@ -54,13 +98,13 @@ public class SimpleNer {
   // New
   private NodeType nerTag;
   private NodeType biolu;
-  private HypNode[] nerTagValues;
-  private HypNode[] bioluValues;
-  private HypNode O_biolu;
+  private IdxHypNode[] nerTagValues;
+  private IdxHypNode[] bioluValues;
+  private IdxHypNode O_biolu;
   private Relation ner3;
 
   // Params
-  private AveragedPerceptronWeights theta;
+  private AveragedPerceptronWeights[][] theta;    // indexed by [tag][biolu]
 
   // Misc
   private Uberts u;
@@ -80,26 +124,36 @@ public class SimpleNer {
     ner3 = u.addEdgeType(new Relation("ner3", tokenIndex, nerTag, biolu));
 
     // CoNLL 2003 tags for now
-    nerTagValues = new HypNode[] {
-        u.lookupNode(nerTag, "PER"),
-        u.lookupNode(nerTag, "ORG"),
-        u.lookupNode(nerTag, "LOC"),
-        u.lookupNode(nerTag, "MISC"),
+    nerTagValues = new IdxHypNode[] {
+        new IdxHypNode(nerTag, "PER", 0),
+        new IdxHypNode(nerTag, "ORG", 1),
+        new IdxHypNode(nerTag, "LOC", 2),
+        new IdxHypNode(nerTag, "MISC", 3),
     };
+    bioluValues = new IdxHypNode[] {
+        new IdxHypNode(biolu, "B", 0),
+        new IdxHypNode(biolu, "I", 1),
+        O_biolu = new IdxHypNode(biolu, "O", 2),
+        new IdxHypNode(biolu, "L", 3),
+        new IdxHypNode(biolu, "U", 4),
+    };
+    for (IdxHypNode n : nerTagValues)
+      u.putNode(n);
+    for (IdxHypNode n : bioluValues)
+      u.putNode(n);
 
-    bioluValues = new HypNode[] {
-        u.lookupNode(biolu, "B"),
-        u.lookupNode(biolu, "I"),
-        O_biolu = u.lookupNode(biolu, "O"),
-        u.lookupNode(biolu, "L"),
-        u.lookupNode(biolu, "U"),
-    };
+    int T = nerTagValues.length;
+    int B = bioluValues.length;
+    int D = 1 << 18;    // dimension of weights
+    this.theta = new AveragedPerceptronWeights[T][B];
+    for (int t = 0; t < T; t++)
+      for (int b = 0; b < B; b++)
+        this.theta[t][b] = new AveragedPerceptronWeights(D, 0);
 
     // ner3(i,t,b) => ner3(i+1,t',b') forall t',b'
     TKey[] newNerLabel = new TKey[] {
         new TKey(ner3),
     };
-
     u.addTransitionGenerator(newNerLabel, new TransitionGenerator() {
       @Override
       public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
@@ -112,11 +166,18 @@ public class SimpleNer {
           return Collections.emptyList();
         }
         List<Pair<HypEdge, Adjoints>> newHyps = new ArrayList<>();
-        HypNode ipp = u.lookupNode(tokenIndex, i+1);
-        for (HypNode t : nerTagValues) {
-          for (HypNode b : bioluValues) {    // TODO Check previous tag to see what tags are allowable
+        HypNode ipp = u.lookupNode(tokenIndex, i+1, true);
+        for (IdxHypNode t : nerTagValues) {
+          for (IdxHypNode b : bioluValues) {    // TODO Check previous tag to see what tags are allowable
             HypEdge newE = u.makeEdge(ner3, ipp, t, b);
-            Adjoints score = new Adjoints.Constant(u.getRandom().nextGaussian()); // TODO
+            AveragedPerceptronWeights w = theta[t.getIndex()][b.getIndex()];
+            int[] f = features(i+1);
+            boolean reindex = true;
+            Adjoints score = w.score(f, reindex);
+
+            // Get these scores above 0 to get them selected
+            score = Adjoints.sum(score, Adjoints.Constant.ONE);
+
             newHyps.add(new Pair<>(newE, score));
           }
         }
@@ -139,9 +200,15 @@ public class SimpleNer {
       MultiAlphabet a = d.getAlphabet();
       for (TokenItr tok = d.getTokenItr(0); tok.isValid(); tok.forwards()) {
         assert tok.getNerG() >= 0;
-        HypNode i = u.lookupNode(tokenIndex, tok.getIndex());
-        HypNode t = u.lookupNode(nerTag, a.ner(tok.getNerG()));
-        HypNode b = O_biolu;  // TODO
+        String nerTagBiolu = a.ner(tok.getNerG());
+        String[] ntb = nerTagBiolu.split("-");
+        assert (ntb.length == 1 && ntb[0].equals("O"))
+            || ntb.length == 2 : "should be <biolu>-<tag>: " + nerTagBiolu + ", " + Arrays.toString(ntb);
+        HypNode i = u.lookupNode(tokenIndex, tok.getIndex(), true);
+        HypNode b = u.lookupNode(biolu, ntb[0], false);
+        HypNode t = b == O_biolu
+            ? nerTagValues[0]
+            : u.lookupNode(nerTag, ntb[1], false);
         HypEdge goldEdge = u.makeEdge(ner3, i, t, b);
         u.addLabel(goldEdge);
       }
@@ -160,9 +227,10 @@ public class SimpleNer {
    * Builds a tag for tokenIndex=-1 to kick things off L2R.
    */
   public HypEdge makeRootEdge() {
-    HypNode i = u.lookupNode(tokenIndex, -1);
-    HypNode t = u.lookupNode(nerTag, nerTagValues[0]);
-    return u.makeEdge(ner3, i, t, O_biolu);
+    HypNode i = u.lookupNode(tokenIndex, -1, true);
+    HypNode t = nerTagValues[0];
+    HypEdge e = u.makeEdge(ner3, i, t, O_biolu);
+    return e;
   }
 
   public static Document getTestDocument() {
@@ -179,7 +247,7 @@ public class SimpleNer {
   }
 
   public static void main(String[] args) {
-//    ExperimentProperties config = ExperimentProperties.init(args);
+    ExperimentProperties.init(args);
     Random rand = new Random(9001);
     Uberts u = new Uberts(rand);
     u.setDocument(getTestDocument());

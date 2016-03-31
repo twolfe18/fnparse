@@ -165,13 +165,13 @@ public class Srl {
             continue;
 
           // srl1(s)
-          HypNode sn = u.lookupNode(Srl.this.args, s);
+          HypNode sn = u.lookupNode(Srl.this.args, s, true);
 
           // srl2(t,s)
           HypNode tn = ev2E.getHead();
 
           // srl3(t,s,k)
-          HypNode kn = u.lookupNode(Srl.this.roles, frame.getRole(k));
+          HypNode kn = u.lookupNode(Srl.this.roles, frame.getRole(k), true);
 
           HypEdge srl3E = u.makeEdge(srl3, tn, sn, kn);
           Adjoints a = Adjoints.Constant.ONE;

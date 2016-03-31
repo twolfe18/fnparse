@@ -90,8 +90,7 @@ public class HypEdge {
 //      sb.append(tail[i].getValue() + ":" + tail[i].getNodeType().getName());
       sb.append(tail[i].getValue());
     }
-//    sb.append(", head=" + head.getValue() + ":" + head.getNodeType().getName());
-    sb.append(", head=" + head.getValue());
+//    sb.append(", head=" + head.getValue());
     sb.append(")");
     return sb.toString();
   }

@@ -45,12 +45,12 @@ public class UbertsTest {
 //    sent = new String[] {"<s>", "short", "sentence"};
     for (int i = 0; i < sent.length; i++) {
       HypNode[] tail = new HypNode[] {
-          u.lookupNode(tokenIndex, i),
-          u.lookupNode(word, sent[i].intern()),
+          u.lookupNode(tokenIndex, i, true),
+          u.lookupNode(word, sent[i].intern(), true),
       };
       HypEdge e = u.makeEdge("word", tail);
       u.addEdgeToState(e);
-      tokens.add(u.lookupNode(tokenIndex, i));
+      tokens.add(u.lookupNode(tokenIndex, i, true));
     }
     Log.info("sent.length=" + sent.length);
 
@@ -60,7 +60,7 @@ public class UbertsTest {
     for (String p : Arrays.asList("N", "V", "OTHER"))
 //    for (String p : Arrays.asList("N", "V"))
 //    for (String p : Arrays.asList("N"))
-      posTags.add(u.lookupNode(posTag, p.intern()));
+      posTags.add(u.lookupNode(posTag, p.intern(), true));
   }
 
   public void posTestSetup() {
@@ -96,8 +96,8 @@ public class UbertsTest {
   public void posTestKickoff() {
     // This should kick off pos(i,*) => pos(i+1,*)
     HypNode[] tail = new HypNode[] {
-        u.lookupNode(tokenIndex, 0),
-        u.lookupNode(posTag, "<s>"),
+        u.lookupNode(tokenIndex, 0, true),
+        u.lookupNode(posTag, "<s>", true),
     };
     u.addEdgeToState(u.makeEdge("pos", tail));
 
@@ -146,13 +146,13 @@ public class UbertsTest {
         int i = (Integer) lhsValues.getBoundNode(2).getValue();
         if (i == sent.length)
           return Collections.emptyList();
-        HypNode end = u.lookupNode(tokenIndex, i+1);
+        HypNode end = u.lookupNode(tokenIndex, i+1, true);
         List<Pair<HypEdge, Adjoints>> el = new ArrayList<>();
         for (String nerType : Arrays.asList("PER", "GPE", "ORG", "LOC", "MISC")) {
-          HypNode PER = u.lookupNode(nerTag, nerType);
+          HypNode PER = u.lookupNode(nerTag, nerType, true);
           int j0 = Math.max(0, (i - maxEntWidth) + 1);
           for (int j = j0; j <= i; j++) {
-            HypNode start = u.lookupNode(tokenIndex, j);
+            HypNode start = u.lookupNode(tokenIndex, j, true);
             HypNode[] tail = new HypNode[] {start, end, PER};
             HypEdge e = u.makeEdge("ner", tail);
             double r = u.getRandom().nextGaussian();
@@ -190,8 +190,8 @@ public class UbertsTest {
     // Setup all the POS tags to be N
     for (int i = 1; i < sent.length; i++) {
       HypNode[] tail = new HypNode[] {
-          u.lookupNode(tokenIndex, i),
-          u.lookupNode(posTag, "N"),
+          u.lookupNode(tokenIndex, i, true),
+          u.lookupNode(posTag, "N", true),
       };
       u.addEdgeToState(u.makeEdge("pos", tail));
     }
@@ -219,7 +219,7 @@ public class UbertsTest {
   public void corefSetup() {
     TNode cn = u.getGraphFragments().lookup(new TKey[] {
         new TKey(u.getEdgeType("ner")),
-        new TKey(u.lookupNode(nerTag, "PER")),
+        new TKey(u.lookupNode(nerTag, "PER", true)),
         new TKey(u.getEdgeType("ner")),
         new TKey(u.getWitnessNodeType("ner")),
     }, true);
@@ -253,10 +253,10 @@ public class UbertsTest {
           return Collections.emptyList();
 
         HypEdge e = u.makeEdge("coref",
-            u.lookupNode(tokenIndex, i),
-            u.lookupNode(tokenIndex, j),
-            u.lookupNode(tokenIndex, k),
-            u.lookupNode(tokenIndex, l));
+            u.lookupNode(tokenIndex, i, true),
+            u.lookupNode(tokenIndex, j, true),
+            u.lookupNode(tokenIndex, k, true),
+            u.lookupNode(tokenIndex, l, true));
         double r = u.getRandom().nextGaussian();
         Adjoints a = new Adjoints.Constant(r);
         return Arrays.asList(new Pair<>(e, a));

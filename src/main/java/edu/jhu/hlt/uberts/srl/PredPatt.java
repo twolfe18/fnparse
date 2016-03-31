@@ -123,8 +123,8 @@ public class PredPatt {
             if (!Target.SPANS_ARE_INCLUSIVE)
               e++;
             HypEdge ed = u.makeEdge(event1,
-                u.lookupNode(tokenIndex, s),
-                u.lookupNode(tokenIndex, e));
+                u.lookupNode(tokenIndex, s, true),
+                u.lookupNode(tokenIndex, e, true));
 //            Adjoints score = new Adjoints.Constant(1d / Math.sqrt(position));
             Adjoints score = Adjoints.Constant.ONE;
             edges.add(new Pair<>(ed, score));

@@ -106,8 +106,16 @@ public class State {
     fineView.put(key, new LL<>(e, es));
   }
 
+  /** May return null */
   public LL<HypEdge> match(Relation rel, HypNode arg) {
     return fineView.get(new Arg(rel, arg));
+  }
+
+  /** May return null */
+  public HypEdge match1(Relation rel, HypNode arg) {
+    LL<HypEdge> es = match(rel, arg);
+    assert es != null && es.next == null;
+    return es.item;
   }
 
   public List<HypEdge> neighbors(HypNode n) {

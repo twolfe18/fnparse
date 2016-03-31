@@ -107,8 +107,8 @@ public class FrameIdTests {
 
     // Kick off the cascade of new edges
     for (int i = 0; i < 10; i++) {
-      HypNode idx = u.lookupNode(tokenIndex, i);
-      HypNode tag = u.lookupNode(posTag, "tag" + (i%3));
+      HypNode idx = u.lookupNode(tokenIndex, i, true);
+      HypNode tag = u.lookupNode(posTag, "tag" + (i%3), true);
       HypEdge e = u.makeEdge(posRel, idx, tag);
       Log.info("adding on " + e);
       u.addEdgeToState(e);
