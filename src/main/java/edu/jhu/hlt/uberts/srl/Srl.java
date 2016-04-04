@@ -56,7 +56,6 @@ public class Srl {
 //    this.args = u.getWitnessNodeType(srl1);
 //    this.srl2 = u.addEdgeType(new Relation("srl2", preds, args));
 //    this.srl3 = u.addEdgeType(new Relation("srl3", u.getWitnessNodeType(srl2), roles));
-    this.srl2 = u.addEdgeType(r)
 
     setupTransitions();
     setupHardFactors();

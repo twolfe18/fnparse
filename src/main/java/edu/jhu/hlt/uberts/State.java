@@ -53,6 +53,10 @@ public class State {
     this.fineView = new HashMap<>();
   }
 
+  public int getNumNodes() {
+    return primaryView.size();
+  }
+
   public void dbgShowEdges() {
     System.out.println("State with " + primaryView.size() + " nodes:");
 //    for (Map.Entry<HypNode, LL<HypEdge>> x : adjacencyView1.entrySet()) {

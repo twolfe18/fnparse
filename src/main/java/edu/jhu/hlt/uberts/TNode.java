@@ -211,13 +211,19 @@ public class TNode {
   }
 
   public static void match(Uberts u, HypEdge newEdge, TNode trie) {
-    if (DEBUG)
-      System.out.println("START MATCH: after " + newEdge + " was popped, numNodes=" + trie.getNumNodes());
+    if (DEBUG) {
+      System.out.println("START MATCH: after " + newEdge
+          + " was added, numTrieNodes=" + trie.getNumNodes()
+          + " numStateNodes=" + u.getState().getNumNodes());
+    }
     HNode cur = new HNode(newEdge.getHead());
     GraphTraversalTrace gtt = new GraphTraversalTrace();
     match(u, cur, gtt, trie);
-    if (DEBUG)
-      System.out.println("END MATCH: after " + newEdge + " was popped");
+    if (DEBUG) {
+      System.out.println("END MATCH: after " + newEdge
+          + " was added, numTrieNodes=" + trie.getNumNodes()
+          + " numStateNodes=" + u.getState().getNumNodes());
+    }
   }
 
   private String dbgChildKeys() {

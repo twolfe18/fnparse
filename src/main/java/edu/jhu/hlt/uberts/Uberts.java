@@ -103,14 +103,18 @@ public class Uberts {
    * @param oracle says whether only edges which are in the gold label set should
    * be added to state (others are just popped off the agenda and discarded).
    */
-  public void dbgRunInference(boolean oracle) {
-    for (int i = 0; agenda.size() > 0; i++) {
+  public void dbgRunInference(boolean oracle, int actionLimit) {
+    Log.info("starting...");
+    int applied = 0;
+    for (int i = 0; agenda.size() > 0
+        && (actionLimit <= 0 || applied < actionLimit); i++) {
       Log.info("choosing the best action, i=" + i + " size=" + agenda.size() + " cap=" + agenda.capacity());
       agenda.dbgShowScores();
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge best = p.get1();
-      Log.info("best=" + best);
-      if (oracle && goldEdges.contains(new HashableHypEdge(best))) {
+      boolean gold = goldEdges.contains(new HashableHypEdge(best));
+      Log.info("best=" + best + " gold=" + gold);
+      if (oracle && gold) {
         Log.info("oracle=true, non-gold edge, skipping");
         continue;
       }
@@ -120,12 +124,13 @@ public class Uberts {
         break;
       }
       addEdgeToState(best);
+      applied++;
     }
     Log.info("done adding positive-scoring HypEdges");
     state.dbgShowEdges();
   }
   public void dbgRunInference() {
-    dbgRunInference(false);
+    dbgRunInference(false, 0);
   }
 
   public Random getRandom() {
@@ -141,6 +146,13 @@ public class Uberts {
     return trie;
   }
 
+  private static String stripComment(String line) {
+    int c = line.indexOf('#');
+    if (c >= 0)
+      return line.substring(0, c);
+    return line;
+  }
+
   /**
    * read in data like:
    * "def word2 <tokenIndx> <word>", "x word2 0 John", "y pos2 0 NNP", etc
@@ -152,6 +164,9 @@ public class Uberts {
   public void readRelData(BufferedReader r) throws IOException  {
     String relName;
     for (String line = r.readLine(); line != null; line = r.readLine()) {
+      line = stripComment(line);
+      if (line.isEmpty())
+        continue;
       String[] toks = line.split("\\s+");
       String command = toks[0];
       switch (command) {
@@ -226,6 +241,7 @@ public class Uberts {
     if (nt == null) {
       if (!allowNewNodeType)
         throw new RuntimeException("there is no NodeType called " + name);
+      Log.info("adding NodeType for the first time: " + name);
       nt = new NodeType(name);
       nodeTypes.put(name, nt);
     }
@@ -240,6 +256,12 @@ public class Uberts {
     n.getValue().gf = gf;
   }
 
+  public void addTransitionGenerator(List<TKey> lhs, TransitionGenerator tg) {
+    TKey[] lhsA = new TKey[lhs.size()];
+    for (int i = 0; i < lhsA.length; i++)
+      lhsA[i] = lhs.get(i);
+    addTransitionGenerator(lhsA, tg);
+  }
   public void addTransitionGenerator(TKey[] lhs, TransitionGenerator tg) {
     TNode n = trie.lookup(lhs, true);
     n.getValue().u = this;
@@ -291,7 +313,8 @@ public class Uberts {
   }
   public Relation getEdgeType(String name) {
     Relation r = relations.get(name);
-    assert r != null : "no relation called " + name;
+    if (r == null)
+      throw new IllegalArgumentException("no relation named: " + name);
     return r;
   }
 
