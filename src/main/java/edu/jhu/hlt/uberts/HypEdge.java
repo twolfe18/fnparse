@@ -1,6 +1,7 @@
 package edu.jhu.hlt.uberts;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
@@ -38,7 +39,7 @@ public class HypEdge {
     if (TYPE_CHECK) {
       int n = tail.length;
       if (n != relation.getNumArgs())
-        throw new IllegalArgumentException();
+        throw new IllegalArgumentException("tail=" + Arrays.toString(tail) + " rel.numArgs=" + relation.getNumArgs() + " rel.name=" + relation.getName());
       for (int i = 0; i < n; i++)
         if (edgeType.getTypeForArg(i) != tail[i].getNodeType())
           throw new IllegalArgumentException();

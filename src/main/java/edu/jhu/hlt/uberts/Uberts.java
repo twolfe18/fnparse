@@ -1,7 +1,10 @@
 package edu.jhu.hlt.uberts;
 
+import java.io.BufferedReader;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
@@ -43,10 +46,13 @@ public class Uberts {
   // Ancillary data for features which don't look at the State graph.
   // New data backend (used to be fnparse.Sentence and FNParse)
   // TODO Update TemplateContext and everything in BasicFeatureTemplates.
+  /** @deprecated Switch to a pure State/graph-based representation! */
   private edu.jhu.hlt.tutils.Document doc;
+  /** @deprecated Switch to a pure State/graph-based representation! */
   public edu.jhu.hlt.tutils.Document getDoc() {
     return doc;
   }
+  /** @deprecated Switch to a pure State/graph-based representation! */
   public void setDocument(edu.jhu.hlt.tutils.Document doc) {
     this.doc = doc;
   }
@@ -93,21 +99,33 @@ public class Uberts {
   /**
    * Pops items off the agenda until score is below 0, then stops. Right now this
    * is a debug method since it prints stuff and inference is not finalized.
+   *
+   * @param oracle says whether only edges which are in the gold label set should
+   * be added to state (others are just popped off the agenda and discarded).
    */
-  public void dbgRunInference() {
+  public void dbgRunInference(boolean oracle) {
     for (int i = 0; agenda.size() > 0; i++) {
       Log.info("choosing the best action, i=" + i + " size=" + agenda.size() + " cap=" + agenda.capacity());
       agenda.dbgShowScores();
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge best = p.get1();
-      double score = p.get2().forwards();
-      if (score <= 0)
-        break;
       Log.info("best=" + best);
+      if (oracle && goldEdges.contains(new HashableHypEdge(best))) {
+        Log.info("oracle=true, non-gold edge, skipping");
+        continue;
+      }
+      double score = p.get2().forwards();
+      if (score <= 0) {
+        Log.info("score<0, exiting");
+        break;
+      }
       addEdgeToState(best);
     }
     Log.info("done adding positive-scoring HypEdges");
     state.dbgShowEdges();
+  }
+  public void dbgRunInference() {
+    dbgRunInference(false);
   }
 
   public Random getRandom() {
@@ -124,6 +142,57 @@ public class Uberts {
   }
 
   /**
+   * read in data like:
+   * "def word2 <tokenIndx> <word>", "x word2 0 John", "y pos2 0 NNP", etc
+   * and setup state/labels accordingly.
+   *
+   * TODO write some wrappers for edu.jhu.hlt.uberts.io to support things like
+   * in-memory versions of rel data files.
+   */
+  public void readRelData(BufferedReader r) throws IOException  {
+    String relName;
+    for (String line = r.readLine(); line != null; line = r.readLine()) {
+      String[] toks = line.split("\\s+");
+      String command = toks[0];
+      switch (command) {
+      case "def":
+        relName = toks[1];
+        NodeType[] argTypes = new NodeType[toks.length - 2];
+        for (int i = 0; i < argTypes.length; i++) {
+          String argType = toks[i + 2];
+          if (argType.charAt(0) == '<') {
+            int n = argType.length();
+            assert argType.charAt(n-1) == '>';
+            argType = argType.substring(1, n-1);
+          }
+          argTypes[i] = this.lookupNodeType(argType, true);
+        }
+        this.addEdgeType(new Relation(relName, argTypes));
+        break;
+      case "x":
+      case "y":
+        relName = toks[1];
+        Relation rel = this.getEdgeType(relName);
+        HypNode[] args = new HypNode[toks.length-2];
+        for (int i = 0; i < args.length; i++) {
+          // TODO Consider this:
+          // How should we deserialize String => ???
+          Object val = toks[i+2];
+          args[i] = this.lookupNode(rel.getTypeForArg(i), val, true);
+        }
+        HypEdge e = this.makeEdge(rel, args);
+        if (command.equals("x"))
+          this.addEdgeToState(e);
+        else
+          this.addLabel(e);
+        break;
+      default:
+        throw new RuntimeException("unknown-command: " + command);
+      }
+    }
+  }
+
+  /**
    * Use this rather than calling the {@link HypNode} constructor so that nodes
    * are guaranteed to be unique.
    */
@@ -131,12 +200,8 @@ public class Uberts {
     Pair<NodeType, Object> key = new Pair<>(nt, value);
     HypNode v = nodes.get(key);
     if (v == null && addIfNotPresent) {
-//      if (addIfNotPresent) {
-        v = new HypNode(nt, value);
-        nodes.put(key, v);
-//      } else {
-//        throw new RuntimeException("not found: " + nt + ", " + value);
-//      }
+      v = new HypNode(nt, value);
+      nodes.put(key, v);
     }
     return v;
   }
@@ -156,6 +221,7 @@ public class Uberts {
    * types are gauranteed to be unique.
    */
   public NodeType lookupNodeType(String name, boolean allowNewNodeType) {
+    Log.info("name=" + name + " allowNewNodeType=" + allowNewNodeType);
     NodeType nt = nodeTypes.get(name);
     if (nt == null) {
       if (!allowNewNodeType)
@@ -256,5 +322,6 @@ public class Uberts {
     HypNode head = lookupNode(headType, encoded, true);
     return new HypEdge(r, head, tail);
   }
+
 
 }
