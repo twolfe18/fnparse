@@ -1,5 +1,8 @@
 package edu.jhu.hlt.uberts;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,32 +68,53 @@ public class State {
 
   public void dbgShowEdges() {
     System.out.println("State with " + primaryView.size() + " nodes:");
-//    for (Map.Entry<HypNode, LL<HypEdge>> x : adjacencyView1.entrySet()) {
-//      System.out.println(x.getKey());
-//      for (LL<HypEdge> cur = x.getValue(); cur != null; cur = cur.next)
-//        System.out.println("\t" + cur.item);
-//    }
+    try (BufferedWriter w = new BufferedWriter(new OutputStreamWriter(System.out))) {
+      writeEdges(w);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    System.out.println();
+  }
+
+  /**
+   * Writes out {@link HypEdge}s in the same format as {@link
+   * Uberts#readRelData(java.io.BufferedReader)}, only using "yhat" for the
+   * first column. Does not write out relation definitions.
+   */
+  public void writeEdges(BufferedWriter w) throws IOException {
+    writeEdges(w, Collections.emptySet());
+  }
+  public void writeEdges(BufferedWriter w, Set<Relation> skip) throws IOException {
     Set<HypEdge> es = new HashSet<>();
     List<HypEdge> el = new ArrayList<>();
     for (LL<HypEdge>[] ll : primaryView.values()) {
       for (int i = 0; i < ll.length; i++) {
         LL<HypEdge> l = ll[i];
         for (LL<HypEdge> cur = l; cur != null; cur = cur.next) {
-          if (es.add(cur.item))
-            el.add(cur.item);
+          HypEdge e = cur.item;
+          if (skip != null && skip.contains(e.getRelation()))
+            continue;
+          if (es.add(e))
+            el.add(e);
         }
       }
     }
     try {
-//      Collections.sort(el, HypEdge.BY_RELATION);
       Collections.sort(el, HypEdge.BY_RELATION_THEN_TAIL);
     } catch (ClassCastException cce) {
       Log.warn("couldn't sort HypEdges because: " + cce.getMessage());
     }
     for (HypEdge e : el) {
-      System.out.println(e);
+      Relation r = e.getRelation();
+      w.write("yhat ");
+      w.write(r.getName());
+      int n = r.getNumArgs();
+      for (int i = 0; i < n; i++) {
+        w.write(' ');
+        w.write(e.getTail(i).getValue().toString());
+      }
+      w.newLine();
     }
-    System.out.println();
   }
 
   public void add(HypEdge e) {
@@ -112,6 +136,7 @@ public class State {
     }
   }
 
+  @SuppressWarnings("unchecked")
   private void add(int argPos, HypNode n, HypEdge e) {
     LL<HypEdge>[] es = primaryView.get(n);
     if (es == null) {
