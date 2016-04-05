@@ -7,9 +7,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.uberts.HNode;
+import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
@@ -47,8 +50,8 @@ public class SrlPipeline {
       prev = cur;
     }
 
-    HypNode dbg = u.lookupNode(tokenIndex, "4", false);
-    Log.info("A: neighbors(" + dbg + ")=" + u.getState().neighbors(new HNode(dbg)));
+//    HypNode dbg = u.lookupNode(tokenIndex, "4", false);
+//    Log.info("A: neighbors(" + dbg + ")=" + u.getState().neighbors(new HNode(dbg)));
 
     // Read in the defs file which defines (and creates w.r.t. Uberts) the
     // relations which will appear in the values file.
@@ -61,12 +64,14 @@ public class SrlPipeline {
 
     // TODO: Relations which need to be populated
     // frameTriage2(lemma,frame)
-    NodeType lemma = u.lookupNodeType("lemma", false);
-    NodeType frame = u.lookupNodeType("frame", false);
-    Relation frameTriage2 = u.addEdgeType(new Relation("frameTriage2", lemma, frame));
+    buildFrameTriageRelation(u);
+//    NodeType lemma = u.lookupNodeType("lemma", false);
+//    NodeType frame = u.lookupNodeType("frame", false);
+//    Relation frameTriage2 = u.addEdgeType(new Relation("frameTriage2", lemma, frame));
     // role(frame,role)
-    NodeType roleNT = u.lookupNodeType("roleLabel", false);
-    Relation role = u.addEdgeType(new Relation("role", frame, roleNT));
+    buildRoleRelation(u);
+//    NodeType roleNT = u.lookupNodeType("roleLabel", false);
+//    Relation role = u.addEdgeType(new Relation("role", frame, roleNT));
 
 
     // All single-word targets are possible
@@ -77,8 +82,12 @@ public class SrlPipeline {
 
     // Args can be any constituent in the stanford parse
     addRule("csyn3-stanford(i,j,lhs) => srl1(i,j)");
+
     addRule("srl1(i,j) & event1(a,b) => srl2(a,b,i,j)");
+    addRule("event1(a,b) & srl1(i,j) => srl2(a,b,i,j)");
+
     addRule("srl2(a,b,i,j) & event2(a,b,f) & role(f,k) => srl3(a,b,f,i,j,k)");
+    addRule("event2(a,b,f) & srl2(a,b,i,j) & role(f,k) => srl3(a,b,f,i,j,k)");
 
 
     // Read in the x,y data
@@ -88,7 +97,52 @@ public class SrlPipeline {
     }
     System.out.println();
 
-    Log.info("B: neighbors(" + dbg + ")=" + u.getState().neighbors(new HNode(dbg)));
+//    Log.info("B: neighbors(" + dbg + ")=" + u.getState().neighbors(new HNode(dbg)));
+  }
+
+  public static void buildFrameTriageRelation(Uberts u) {
+    NodeType lemma = u.lookupNodeType("lemma", false);
+    NodeType frame = u.lookupNodeType("frame", false);
+    Relation frameTriage2 = u.addEdgeType(new Relation("frameTriage2", lemma, frame));
+
+    FrameIndex fi;
+//    ExperimentProperties config = ExperimentProperties.getInstance();
+//    if (config.getBoolean("propbank", true))
+    fi = FrameIndex.getPropbank();
+//    else
+//      fi = FrameIndex.getFrameNet();
+ 
+    for (Frame f : fi.allFrames()) {
+      String lemmaStr = f.getName().split("\\W+")[1];
+      HypNode lemmaNode = u.lookupNode(lemma, lemmaStr, true);
+      HypNode frameNode = u.lookupNode(frame, f.getName(), true);
+      HypEdge e = u.makeEdge(frameTriage2, lemmaNode, frameNode);
+      u.addEdgeToState(e);
+    }
+  }
+
+  public static void buildRoleRelation(Uberts u) {
+    NodeType frame = u.lookupNodeType("frame", false);
+    NodeType roleNT = u.lookupNodeType("roleLabel", false);
+    Relation role = u.addEdgeType(new Relation("role", frame, roleNT));
+
+    FrameIndex fi;
+//    ExperimentProperties config = ExperimentProperties.getInstance();
+//    if (config.getBoolean("propbank", true))
+    fi = FrameIndex.getPropbank();
+//    else
+//      fi = FrameIndex.getFrameNet();
+
+    for (Frame f : fi.allFrames()) {
+      int K = f.numRoles();
+      HypNode fNode = u.lookupNode(frame, f.getName(), true);
+      for (int k = 0; k < K; k++) {
+        String ks = f.getRole(k);
+        HypNode kNode = u.lookupNode(roleNT, ks, true);
+        HypEdge e = u.makeEdge(role, fNode, kNode);
+        u.addEdgeToState(e);
+      }
+    }
   }
 
   private void addRule(String rule) {
@@ -133,9 +187,11 @@ public class SrlPipeline {
   }
 
   public static void main(String[] args) throws IOException {
+    ExperimentProperties.init(args);
+
 //    File relFile = new File("data/srl-reldata/srl-FNFUTXT1228670.rel");
-    TNode.DEBUG = true;
-    State.DEBUG = true;
+//    TNode.DEBUG = true;
+//    State.DEBUG = true;
     String base = "data/srl-reldata/srl-FNFUTXT1228670";
     File defsFile = new File(base + ".defs");
     File valuesFile = new File(base + ".values");
@@ -143,12 +199,13 @@ public class SrlPipeline {
     Uberts u = new Uberts(rand);
     SrlPipeline srl = new SrlPipeline(u, defsFile, valuesFile);
 
-    u.getState().dbgShowEdges();
+//    u.getState().dbgShowEdges();
 
-    u.getAgenda().dbgShowScores();
+//    u.getAgenda().dbgShowScores();
 
     boolean oracle = false;
-    int maxActions = 3;
+    int maxActions = 0;
     u.dbgRunInference(oracle, maxActions);
+    Log.info("done");
   }
 }

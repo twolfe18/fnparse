@@ -70,41 +70,61 @@ public class TNode {
     private NodeType nodeType;
     private Object nodeValue;
     private Relation relationType;
+
+    /**
+     * A requirement on the edge that you cross to arrive at the next node/relation.
+     * Every edge is between a HypNode and a HypEdge.
+     * This values is used to ensure that HypEdge.getTail(argPos) == HypNode.
+     * Enforcing the requirement switches whether you're leaving or arriving at
+     * a HypEdge/Relation node.
+     */
+    private final int argPos;
+
     private int mode;
     private int hc;
 
-    public TKey(HypNode n) {  // Sugar
-      this(n.getNodeType(), n.getValue());
+    public TKey(int argPos, HypNode n) {  // Sugar
+      this(argPos, n.getNodeType(), n.getValue());
     }
-    public TKey(NodeType nodeType, Object nodeValue) {
+    public TKey(int argPos, NodeType nodeType, Object nodeValue) {
+      if (argPos < 0)
+        throw new IllegalArgumentException("argPos=" + argPos);
       assert nodeType != null && nodeValue != null;
+      this.argPos = argPos;
       this.nodeType = nodeType;
       this.nodeValue = nodeValue;
       this.relationType = null;
       this.mode = NODE_VALUE;
-      this.hc = 3 * Hash.mix(nodeType.hashCode(), nodeValue.hashCode()) + 0;
+      this.hc = 3 * Hash.mix(nodeType.hashCode(), nodeValue.hashCode(), argPos) + 0;
     }
 
-    public TKey(NodeType nodeType) {
+    public TKey(int argPos, NodeType nodeType) {
+      if (argPos < 0)
+        throw new IllegalArgumentException("argPos=" + argPos);
       assert nodeType != null;
+      this.argPos = argPos;
       this.nodeType = nodeType;
       this.nodeValue = null;
       this.relationType = null;
       this.mode = NODE_TYPE;
-      this.hc = 3 * nodeType.hashCode() + 1;
+      this.hc = 3 * Hash.mix(nodeType.hashCode(), argPos) + 1;
     }
 
-    public TKey(Relation relation) {
+    public TKey(int argPos, Relation relation) {
+      if (argPos < 0)
+        throw new IllegalArgumentException("argPos=" + argPos);
       assert relation != null;
+      this.argPos = argPos;
       this.nodeType = null;
       this.nodeValue = null;
       this.relationType = relation;
       this.mode = RELATION;
-      this.hc = 3 * relation.hashCode() + 2;
+      this.hc = 3 * Hash.mix(relation.hashCode(), argPos) + 2;
     }
 
     private TKey() {    // only for GOTO_PARENT
       this.hc = Integer.MAX_VALUE;
+      this.argPos = -2;
       this.mode = -1;
     }
 
@@ -117,7 +137,7 @@ public class TNode {
     public boolean equals(Object other) {
       if (other instanceof TKey) {
         TKey tk = (TKey) other;
-        if (mode != tk.mode)
+        if (mode != tk.mode || argPos != tk.argPos)
           return false;
         switch (mode) {
         case RELATION:
@@ -137,7 +157,7 @@ public class TNode {
     public String toString() {
       if (this == GOTO_PARENT)
         return "(TKey GOTO_PARENT)";
-      return "(TKey nt=" + nodeType + " nv=" + nodeValue + " rel=" + relationType + ")";
+      return "(TKey nt=" + nodeType + " nv=" + nodeValue + " rel=" + relationType + " argPos=" + argPos + ")";
     }
   }
 
@@ -217,6 +237,7 @@ public class TNode {
           + " numStateNodes=" + u.getState().getNumNodes());
     }
     HNode cur = new HNode(newEdge.getHead());
+//    HNode cur = new HNode(newEdge);
     GraphTraversalTrace gtt = new GraphTraversalTrace();
     match(u, cur, gtt, trie);
     if (DEBUG) {
@@ -256,47 +277,60 @@ public class TNode {
       traversal.stack.push(r);
     }
 
-    for (HNode n : state.neighbors(cur)) {
+    int edges = 0;
+    for (StateEdge p : state.neighbors2(cur)) {
+      /*
+       * I'm getting, e.g. StateEdge = (HEAD_ARG_POS, pos2)
+       * And my trie doesn't contain any argPos=HEAD_ARG_POS entries,
+       * 
+       * h = pos(4,VBZ)
+       * h --argPos=HEAD--> pos:Relation --argPos=0--> 4:tokenIndex
+       */
+      edges++;
+      HNode n = p.getTarget();
       if (traversal.visited.contains(n)) {
         if (DEBUG)
           System.out.println("skipping visited node: " + n);
         continue;
       }
-      if (DEBUG)
-        System.out.println("trying to go to " + n);
       TKey key;
       if (n.isLeft()) {
         HypNode node = n.getLeft();
         // Match both value and type
-        key = new TKey(node.getNodeType(), node.getValue());
+        key = new TKey(p.argPos, node.getNodeType(), node.getValue());
         tryMatch(key, u, n, traversal, trie);
         // Match just type
-        key = new TKey(node.getNodeType());
+        key = new TKey(p.argPos, node.getNodeType());
         tryMatch(key, u, n, traversal, trie);
       } else {
         HypEdge edge = n.getRight();
-        key = new TKey(edge.getRelation());
+        key = new TKey(p.argPos, edge.getRelation());
         tryMatch(key, u, n, traversal, trie);
       }
     }
+    if (DEBUG)
+      System.out.println("checked " + edges + " edges adjacent to " + cur);
   }
   /**
    * @param keyConstructedFromState should not have a name set!
    */
   private static void tryMatch(TKey keyConstructedFromState, Uberts u, HNode n, GraphTraversalTrace traversal, TNode trie) {
-      // This is the intersection of:
-      // 1) unvisited neighbors (DFS style)
-      // 2) allowed DFS strings in the trie
-      TNode childTrie = trie.getChild(keyConstructedFromState);
-      if (childTrie != null) {
-        traversal.stack.push(n);
-        traversal.visited.add(n);
-        traversal.boundVals.add(n);
-        match(u, n, traversal, childTrie);
-        traversal.stack.pop();
-        traversal.visited.remove(n);
-        traversal.boundVals.remove(traversal.boundVals.size() - 1);
-      }
+    if (DEBUG) {
+      System.out.println("keyFromState=" + keyConstructedFromState);
+    }
+    // This is the intersection of:
+    // 1) unvisited neighbors (DFS style)
+    // 2) allowed DFS strings in the trie
+    TNode childTrie = trie.getChild(keyConstructedFromState);
+    if (childTrie != null) {
+      traversal.stack.push(n);
+      traversal.visited.add(n);
+      traversal.boundVals.add(n);
+      match(u, n, traversal, childTrie);
+      traversal.stack.pop();
+      traversal.visited.remove(n);
+      traversal.boundVals.remove(traversal.boundVals.size() - 1);
+    }
   }
 
   /**

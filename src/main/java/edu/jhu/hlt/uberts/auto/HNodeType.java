@@ -21,26 +21,30 @@ import edu.jhu.hlt.uberts.TNode.TKey;
  */
 public class HNodeType extends Either<NodeType, Relation> {
   private TKey tkey;
+  private int argPos;
 
-  protected HNodeType(NodeType left, Relation right) {
+  protected HNodeType(int argPos, NodeType left, Relation right) {
     super(left, right);
-    tkey = null;
+    if (argPos < 0)
+      throw new IllegalArgumentException("argPos=" + argPos);
+    this.argPos = argPos;
+    this.tkey = null;
   }
 
-  public HNodeType(NodeType left) {
-    this(left, null);
+  public HNodeType(int argPos, NodeType left) {
+    this(argPos, left, null);
   }
 
-  public HNodeType(Relation right) {
-    this(null, right);
+  public HNodeType(int argPos, Relation right) {
+    this(argPos, null, right);
   }
 
   public TKey getTKey() {
     if (tkey == null) {
       if (isLeft())
-        tkey = new TKey(getLeft());
+        tkey = new TKey(argPos, getLeft());
       else
-        tkey = new TKey(getRight());
+        tkey = new TKey(argPos, getRight());
     }
     return tkey;
   }

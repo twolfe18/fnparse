@@ -29,6 +29,8 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class Uberts {
 
+  public static boolean DEBUG = false;
+
   private State state;
   private Agenda agenda;
   private TNode trie;     // stores graph fragments used to match TransitionGenerators and GlobalFactors
@@ -108,7 +110,7 @@ public class Uberts {
     int applied = 0;
     for (int i = 0; agenda.size() > 0
         && (actionLimit <= 0 || applied < actionLimit); i++) {
-      Log.info("choosing the best action, i=" + i + " size=" + agenda.size() + " cap=" + agenda.capacity());
+//      Log.info("choosing the best action, i=" + i + " size=" + agenda.size() + " cap=" + agenda.capacity());
       agenda.dbgShowScores();
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge best = p.get1();
@@ -236,12 +238,14 @@ public class Uberts {
    * types are gauranteed to be unique.
    */
   public NodeType lookupNodeType(String name, boolean allowNewNodeType) {
-    Log.info("name=" + name + " allowNewNodeType=" + allowNewNodeType);
+    if (DEBUG)
+      Log.info("name=" + name + " allowNewNodeType=" + allowNewNodeType);
     NodeType nt = nodeTypes.get(name);
     if (nt == null) {
       if (!allowNewNodeType)
         throw new RuntimeException("there is no NodeType called " + name);
-      Log.info("adding NodeType for the first time: " + name);
+      if (DEBUG)
+        Log.info("adding NodeType for the first time: " + name);
       nt = new NodeType(name);
       nodeTypes.put(name, nt);
     }
@@ -282,7 +286,8 @@ public class Uberts {
     int n = e.getNumTails();
     for (int i = 0; i < n; i++) {
       if (!nodesContains(e.getTail(i))) {
-        Log.info("missing: tail[" + i + "]=" + e.getTail(i));
+        if (DEBUG)
+          Log.info("missing: tail[" + i + "]=" + e.getTail(i));
         return false;
       }
     }
@@ -290,7 +295,8 @@ public class Uberts {
   }
 
   public void addEdgeToState(HypEdge e) {
-    Log.info(e.toString());
+    if (DEBUG)
+      Log.info(e.toString());
     assert nodesContains(e);
     state.add(e);
     TNode.match(this, e, trie);
@@ -300,7 +306,8 @@ public class Uberts {
     addEdgeToAgenda(p.get1(), p.get2());
   }
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
-    Log.info(e.toString());
+    if (DEBUG)
+      Log.info(e.toString());
     assert nodesContains(e);
     agenda.add(e, score);
   }

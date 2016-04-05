@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import dk.ange.octave.util.StringUtil;
 import edu.jhu.hlt.tutils.ArgMin;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.StringUtils;
@@ -19,6 +18,7 @@ import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
+import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.TNode;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
@@ -66,7 +66,7 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class TransitionGeneratorForwardsParser {
 
-  /** @deprecated only used for finding the index of a common var name */
+//  /** @deprecated only Edge used for finding the index of a common var name */
   static class Edge {
     Term ta, tb;      // end points
     int ca, cb;       // indices of common arg in ta/tb.argNames
@@ -139,27 +139,29 @@ public class TransitionGeneratorForwardsParser {
     // ti = ner3(i,t,b)
     // tj = succ(i,j)
     // commonVar = i
-    HNodeType var = lookupHNT(new Edge(commonVar, ti, tj).argType());
-    HNodeType ri = lookupHNT(ti.rel);
-    HNodeType rj = lookupHNT(tj.rel);
-    addBothDir(ri, var);
-    addBothDir(var, rj);
+    Edge e = new Edge(commonVar, ti, tj);
+    HNodeType vi = lookupHNT(e.ca, e.argType());
+    HNodeType ri = lookupHNT(e.ca, ti.rel);
+    HNodeType vj = lookupHNT(e.cb, e.argType());
+    HNodeType rj = lookupHNT(e.cb, tj.rel);
+    addBothDir(ri, vi);
+    addBothDir(vj, rj);
   }
 
-  private HNodeType lookupHNT(NodeType nt) {
-    String key = "nt/" + nt.getName();
+  private HNodeType lookupHNT(int argPos, NodeType nt) {
+    String key = "nt/" + argPos + "/" + nt.getName();
     HNodeType val = uniqHNT.get(key);
     if (val == null) {
-      val = new HNodeType(nt);
+      val = new HNodeType(argPos, nt);
       uniqHNT.put(key, val);
     }
     return val;
   }
-  private HNodeType lookupHNT(Relation r) {
-    String key = "rel/" + r.getName();
+  private HNodeType lookupHNT(int argPos, Relation r) {
+    String key = "rel/" + argPos + "/" + r.getName();
     HNodeType val = uniqHNT.get(key);
     if (val == null) {
-      val = new HNodeType(r);
+      val = new HNodeType(argPos, r);
       uniqHNT.put(key, val);
     }
     return val;
@@ -256,7 +258,7 @@ public class TransitionGeneratorForwardsParser {
     LHS pat = new LHS(r);
     Set<Relation> done = new HashSet<>();
     Deque<HNodeType> stack = new ArrayDeque<>();
-    stack.push(lookupHNT(r.lhs[0].rel));
+    stack.push(lookupHNT(State.HEAD_ARG_POS, r.lhs[0].rel));
     done.add(r.lhs[0].rel);
     pat.add(stack.peek());
     while (done.size() < r.lhs.length) {
@@ -343,6 +345,7 @@ succ(i,j)  biolu(ti,bi,tj,bj)
   public Pair<List<TKey>, TransitionGenerator> parse2(Rule r, Uberts u) {
     LHS lhs = parse(r);
     TransitionGenerator tg = new TG(lhs, u);
+    Log.info("pat:\n\t" + StringUtils.join("\n\t", lhs.getPath()));
     return new Pair<>(lhs.getPath(), tg);
   }
 

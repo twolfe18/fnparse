@@ -22,16 +22,20 @@ import edu.jhu.hlt.tutils.hash.Hash;
 public class State {
 
   public static boolean DEBUG = false;
+  public static final int MAX_ARGS = 12;    // how many args allowed for a Relation
+  public static final int HEAD_ARG_POS = MAX_ARGS - 1;
 
   /** Another way to index into edges: lookup by (relation,argument) */
   public static class Arg {
     public final Relation rel;
     public final HypNode arg;
+    public final int argPos;
     public final int hc;
-    public Arg(Relation rel, HypNode arg) {
+    public Arg(int argPos, Relation rel, HypNode arg) {
+      this.argPos = argPos;
       this.rel = rel;
       this.arg = arg;
-      this.hc = Hash.mix(rel.hashCode(), arg.hashCode());
+      this.hc = Hash.mix(argPos, rel.hashCode(), arg.hashCode());
     }
     @Override
     public int hashCode() { return hc; }
@@ -39,13 +43,15 @@ public class State {
     public boolean equals(Object other) {
       if (other instanceof Arg) {
         Arg a = (Arg) other;
-        return rel == a.rel && arg == a.arg;
+        return argPos == a.argPos && rel == a.rel && arg == a.arg;
       }
       return false;
     }
   }
 
-  private Map<HypNode, LL<HypEdge>> primaryView;
+////  private Map<HypNode, LL<HypEdge>> primaryView;
+//  private Map<Pair<HypNode, Integer>, LL<HypEdge>> primaryView;
+  private Map<HypNode, LL<HypEdge>[]> primaryView;
   private Map<Arg, LL<HypEdge>> fineView;
 
   public State() {
@@ -66,10 +72,13 @@ public class State {
 //    }
     Set<HypEdge> es = new HashSet<>();
     List<HypEdge> el = new ArrayList<>();
-    for (LL<HypEdge> l : primaryView.values()) {
-      for (LL<HypEdge> cur = l; cur != null; cur = cur.next) {
-        if (es.add(cur.item))
-          el.add(cur.item);
+    for (LL<HypEdge>[] ll : primaryView.values()) {
+      for (int i = 0; i < ll.length; i++) {
+        LL<HypEdge> l = ll[i];
+        for (LL<HypEdge> cur = l; cur != null; cur = cur.next) {
+          if (es.add(cur.item))
+            el.add(cur.item);
+        }
       }
     }
     try {
@@ -85,56 +94,92 @@ public class State {
   }
 
   public void add(HypEdge e) {
-    add(e.getHead(), e);
+    add(HEAD_ARG_POS, e.getHead(), e);
     int n = e.getNumTails();
     for (int i = 0; i < n; i++)
-      add(e.getTail(i), e);
+      add(i, e.getTail(i), e);
 
     if (DEBUG) {
       Log.info("just added to State: " + e);
-      Log.info("Adjacent" + e.getHead() + "\t" + neighbors(e.getHead()));
+      for (int i = 0; i < n; i++) {
+        Log.info("Adjacent(HEAD=-1," + e.getHead() + ")\t" + neighbors(HEAD_ARG_POS, e.getHead()));
+      }
       for (int i = 0; i < e.getNumTails(); i++) {
         HypNode x = e.getTail(i);
-        Log.info("Adjacent" + x + "\t" + neighbors(x));
+        Log.info("Adjacent(" + i + ", " + x + "\t" + neighbors(i, x));
       }
       System.out.println();
     }
   }
 
-  private void add(HypNode n, HypEdge e) {
-    LL<HypEdge> es = primaryView.get(n);
-    primaryView.put(n, new LL<>(e, es));
+  private void add(int argPos, HypNode n, HypEdge e) {
+    LL<HypEdge>[] es = primaryView.get(n);
+    if (es == null) {
+      es = new LL[MAX_ARGS];
+      primaryView.put(n, es);
+    }
+    es[argPos] = new LL<>(e, es[argPos]);
 
-    Arg key = new Arg(e.getRelation(), n);
-    es = fineView.get(key);
-    fineView.put(key, new LL<>(e, es));
+    Arg key2 = new Arg(argPos, e.getRelation(), n);
+    LL<HypEdge> es2 = fineView.get(key2);
+    fineView.put(key2, new LL<>(e, es2));
   }
 
   /** May return null */
-  public LL<HypEdge> match(Relation rel, HypNode arg) {
-    return fineView.get(new Arg(rel, arg));
+  public LL<HypEdge> match(int argPos, Relation rel, HypNode arg) {
+    return fineView.get(new Arg(argPos, rel, arg));
   }
 
   /** May return null */
-  public HypEdge match1(Relation rel, HypNode arg) {
-    LL<HypEdge> es = match(rel, arg);
+  public HypEdge match1(int argPos, Relation rel, HypNode arg) {
+    LL<HypEdge> es = match(argPos, rel, arg);
     assert es != null && es.next == null;
     return es.item;
   }
 
-  public List<HypEdge> neighbors(HypNode n) {
+  public List<HypEdge> neighbors(int argPos, HypNode n) {
     List<HypEdge> el = new ArrayList<>();
-    for (LL<HypEdge> cur = primaryView.get(n); cur != null; cur = cur.next)
-      el.add(cur.item);
+    LL<HypEdge>[] allPos = primaryView.get(n);
+    for (int i = 0; i < allPos.length; i++)
+      for (LL<HypEdge> cur = allPos[i]; cur != null; cur = cur.next)
+        el.add(cur.item);
     return el;
   }
 
+  /**
+   * Returns neighbors along with the argument index that hold between a HypNode
+   * and a HypEdge (it may be that this:HypNode,neighbors:[HypEdge] or that
+   * this:HypEdge,neighbors:[HypNode], but you can always talk about what position
+   * some HypNode is w.r.t. a HypEdge (i.e. an edge)).
+   */
+  public List<StateEdge> neighbors2(HNode node) {
+    List<StateEdge> a = new ArrayList<>();
+    if (node.isLeft()) {
+      HypNode n = node.getLeft();
+      LL<HypEdge>[] allArgs = primaryView.get(n);
+      for (int i = 0; i < allArgs.length; i++)
+        for (LL<HypEdge> cur = allArgs[i]; cur != null; cur = cur.next)
+          a.add(new StateEdge(n, cur.item, i, true));
+    } else {
+      HypEdge e = node.getRight();
+      a.add(new StateEdge(e.getHead(), e, HEAD_ARG_POS, false));
+      for (int i = 0; i < e.getNumTails(); i++)
+        a.add(new StateEdge(e.getTail(i), e, i, false));
+    }
+    return a;
+  }
+
+  /**
+   * @deprecated Loses argPos information!
+   */
   public List<HNode> neighbors(HNode node) {
     List<HNode> a = new ArrayList<>();
     if (node.isLeft()) {
       HypNode n = node.getLeft();
-      for (LL<HypEdge> cur = primaryView.get(n); cur != null; cur = cur.next)
-        a.add(new HNode(cur.item));
+      LL<HypEdge>[] allArgs = primaryView.get(n);
+      for (int i = 0; i < allArgs.length; i++)
+        for (LL<HypEdge> cur = allArgs[i]; cur != null; cur = cur.next)
+          a.add(new HNode(cur.item));
     } else {
       HypEdge e = node.getRight();
       for (HypNode n : e.getNeighbors())
