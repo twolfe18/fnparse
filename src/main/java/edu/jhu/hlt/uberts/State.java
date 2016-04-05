@@ -35,6 +35,10 @@ public class State {
     public final int argPos;
     public final int hc;
     public Arg(int argPos, Relation rel, HypNode arg) {
+      if (rel == null)
+        throw new IllegalArgumentException();
+      if (arg == null)
+        throw new IllegalArgumentException();
       this.argPos = argPos;
       this.rel = rel;
       this.arg = arg;
@@ -52,8 +56,6 @@ public class State {
     }
   }
 
-////  private Map<HypNode, LL<HypEdge>> primaryView;
-//  private Map<Pair<HypNode, Integer>, LL<HypEdge>> primaryView;
   private Map<HypNode, LL<HypEdge>[]> primaryView;
   private Map<Arg, LL<HypEdge>> fineView;
 

@@ -5,6 +5,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -14,6 +15,7 @@ import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
@@ -24,7 +26,8 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser;
-import edu.jhu.hlt.uberts.transition.TransitionGenerator;
+import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
+import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -90,6 +93,7 @@ public class SrlPipeline {
     System.out.println();
   }
 
+  // TODO Make a rel file with this as contents
   public void buildFrameTriageRelation(Uberts u) {
     NodeType lemma = u.lookupNodeType("lemma", false);
     NodeType frame = u.lookupNodeType("frame", false);
@@ -105,6 +109,7 @@ public class SrlPipeline {
     }
   }
 
+  // TODO Make a rel file with this as contents
   public void buildRoleRelation(Uberts u) {
     NodeType frame = u.lookupNodeType("frame", false);
     NodeType roleNT = u.lookupNodeType("roleLabel", false);
@@ -132,7 +137,11 @@ public class SrlPipeline {
 
     // Add to Uberts as a TransitionGenerator
     TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
-    Pair<List<TKey>, TransitionGenerator> tg = tgfp.parse2(r, u);
+    Pair<List<TKey>, TG> tg = tgfp.parse2(r, u);
+
+    List<Relation> relevant = Arrays.asList(r.rhs.rel);
+    tg.get2().feats = new FeatureExtractionFactor.Simple(relevant, u);
+
     u.addTransitionGenerator(tg.get1(), tg.get2());
   }
 
@@ -191,7 +200,7 @@ public class SrlPipeline {
 //    u.getAgenda().dbgShowScores();
 
     boolean oracle = false;
-    int maxActions = 0;
+    int maxActions = 10;
     u.dbgRunInference(oracle, maxActions);
 
     Log.info("writing edges to " + output.getPath());

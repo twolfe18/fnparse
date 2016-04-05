@@ -1,6 +1,7 @@
 package edu.jhu.hlt.uberts;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -8,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
@@ -120,7 +122,9 @@ public class Uberts {
         Log.info("oracle=true, non-gold edge, skipping");
         continue;
       }
-      double score = p.get2().forwards();
+      Adjoints sc = p.get2();
+      Log.info("score: " + sc);
+      double score = sc.forwards();
       if (score <= 0) {
         Log.info("score<0, exiting");
         break;
@@ -153,6 +157,14 @@ public class Uberts {
     if (c >= 0)
       return line.substring(0, c);
     return line;
+  }
+
+  public void readRelData(File f) throws IOException {
+    if (!f.isFile())
+      throw new IllegalArgumentException("not a file: " + f.getPath());
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      readRelData(r);
+    }
   }
 
   /**

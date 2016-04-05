@@ -23,6 +23,7 @@ import edu.jhu.hlt.uberts.TNode;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 
@@ -270,32 +271,6 @@ public class TransitionGeneratorForwardsParser {
         Log.info("cur=" + cur);
         Log.info("adjacent=" + neighbors);
       }
-      // I want to properly handle the case of
-      /*
-
-WRONG:
-     ner(i,t,b)
-     /        \
- succ(i,j)   biolu(ti,bi,tj,bj)
-
-
-CURRENT: (won't work b/c we can only cross i once)
-     ner(i,t,b)
-     /        \
-    i          i
-   /            \
-succ(i,j)   biolu(ti,bi,tj,bj)
-
-CORRECT (almost, I'm an idiot, biolu doesn't have an i arg):
-     ner(i,t,b)
-         /
-        i
-       / \
-      /   \
-     /     \
-succ(i,j)  biolu(ti,bi,tj,bj)
-
-       */
 
       HNodeType next = null;
       if (neighbors != null) {
@@ -342,9 +317,9 @@ succ(i,j)  biolu(ti,bi,tj,bj)
     return pat;
   }
 
-  public Pair<List<TKey>, TransitionGenerator> parse2(Rule r, Uberts u) {
+  public Pair<List<TKey>, TG> parse2(Rule r, Uberts u) {
     LHS lhs = parse(r);
-    TransitionGenerator tg = new TG(lhs, u);
+    TG tg = new TG(lhs, u);
     Log.info("pat:\n\t" + StringUtils.join("\n\t", lhs.getPath()));
     return new Pair<>(lhs.getPath(), tg);
   }
@@ -353,9 +328,11 @@ succ(i,j)  biolu(ti,bi,tj,bj)
    * Extract the values matched on the lhs (from GraphTraversalTrace) to
    * produce a new HypEdge.
    */
-  static class TG implements TransitionGenerator {
+  public static class TG implements TransitionGenerator {
     private LHS match;
     private Uberts u;
+
+    public FeatureExtractionFactor feats = null;
 
     public TG(LHS match, Uberts u) {
       this.match = match;
@@ -395,27 +372,6 @@ succ(i,j)  biolu(ti,bi,tj,bj)
             rhsVals[rhsIdx] = val;
             numRhsBound++;
           }
-          /*
-           * Here is a problem:
-           *
-           * rule=pos2(i,t) & succTok(i,j) => event1(i,j)
-           * pat=  # how we see the state graph: NO NOTION OF ARG POSITION!
-                (TKey nt=null nv=null rel=(Relation pos2))
-                (TKey nt=tokenIndex nv=null rel=null)
-                (TKey nt=null nv=null rel=(Relation succTok))
-           *
-           * pos2(i,t) 0th arg maps to the 0 of the rhs term: event1(i,j)
-           * succTok(i,j) 0th arg maps to the 0 of the rhs term: event1(i,j)
-           *
-           * The trie does know:
-           * pos2 --ARG0--> i --ARG0-> succTok
-           * pos2 --ARG0--> i --ARG1-> succTok
-           *
-           * Because the trie doesn't know about variable names, only NodeType!
-           *
-           * In the trie, I need to either add ARG_POS labels on the edge or make
-           * nodes (TNode) aware of argument position.
-           */
           assert rhsVals[rhsIdx] == val : "rhsVals[" + rhsIdx + "]=" + rhsVals[rhsIdx] + " newVal=" + val;
         }
       }
@@ -430,7 +386,10 @@ succ(i,j)  biolu(ti,bi,tj,bj)
       }
 
       HypEdge e = u.makeEdge(rule.rhs.rel, rhsNodes);
-      Adjoints sc = Adjoints.Constant.ONE;  // TODO
+      Adjoints sc = Adjoints.Constant.ONE;
+      if (feats != null) {
+        sc = Adjoints.cacheIfNeeded(feats.score(e, u));
+      }
       Pair<HypEdge, Adjoints> p = new Pair<>(e, sc);
       return Arrays.asList(p);
     }
