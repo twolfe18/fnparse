@@ -107,14 +107,7 @@ public class State {
       Log.warn("couldn't sort HypEdges because: " + cce.getMessage());
     }
     for (HypEdge e : el) {
-      Relation r = e.getRelation();
-      w.write("yhat ");
-      w.write(r.getName());
-      int n = r.getNumArgs();
-      for (int i = 0; i < n; i++) {
-        w.write(' ');
-        w.write(e.getTail(i).getValue().toString());
-      }
+      w.write(e.getRelFileString("yhat"));
       w.newLine();
     }
   }
@@ -127,12 +120,10 @@ public class State {
 
     if (DEBUG) {
       Log.info("just added to State: " + e);
-      for (int i = 0; i < n; i++) {
-        Log.info("Adjacent(HEAD=-1," + e.getHead() + ")\t" + neighbors(HEAD_ARG_POS, e.getHead()));
-      }
+      Log.info("Adjacent(HEAD=" + HEAD_ARG_POS + "," + e.getHead() + ")\t" + neighbors(HEAD_ARG_POS, e.getHead()));
       for (int i = 0; i < e.getNumTails(); i++) {
         HypNode x = e.getTail(i);
-        Log.info("Adjacent(" + i + ", " + x + "\t" + neighbors(i, x));
+        Log.info("tail[" + i + "]=" + x + "  adjacent=" + neighbors(i, x));
       }
       System.out.println();
     }

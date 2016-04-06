@@ -1,7 +1,14 @@
 package edu.jhu.hlt.uberts.auto;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.uberts.Uberts;
 
 /**
  * e.g. event2(t,f) & srl2(t,s) & role(f,k) => srl3(t,f,s,k)
@@ -69,4 +76,35 @@ public class Rule {
     return sb.toString();
   }
 
+  public static Rule parseRule(String rule, Uberts u) {
+    String[] lr = rule.split("=>");
+    assert lr.length == 2;
+    String lhs = lr[0].trim();
+    String[] lhsTermStrs = lhs.split("&");
+    Term[] lhsTerms = new Term[lhsTermStrs.length];
+    for (int i = 0; i < lhsTerms.length; i++)
+      lhsTerms[i] = Term.parseTerm(lhsTermStrs[i].trim(), u);
+    String rhs = lr[1].trim();
+    Term rhsTerm = Term.parseTerm(rhs, u);
+    return new Rule(lhsTerms, rhsTerm);
+  }
+
+  public static List<Rule> parseRules(File f, Uberts u) throws IOException {
+    Log.info("reading transition grammar rules from " + f.getPath());
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      return parseRules(r, u);
+    }
+  }
+
+  public static List<Rule> parseRules(BufferedReader r, Uberts u) throws IOException {
+    List<Rule> rules = new ArrayList<>();
+    for (String line = r.readLine(); line != null; line = r.readLine()) {
+      line = Uberts.stripComment(line);
+      if (line.isEmpty())
+        continue;
+      Rule rule = parseRule(line, u);
+      rules.add(rule);
+    }
+    return rules;
+  }
 }

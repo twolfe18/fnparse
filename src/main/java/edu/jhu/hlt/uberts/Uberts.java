@@ -3,6 +3,7 @@ package edu.jhu.hlt.uberts;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -113,27 +114,27 @@ public class Uberts {
     for (int i = 0; agenda.size() > 0
         && (actionLimit <= 0 || applied < actionLimit); i++) {
 //      Log.info("choosing the best action, i=" + i + " size=" + agenda.size() + " cap=" + agenda.capacity());
-      agenda.dbgShowScores();
+//      agenda.dbgShowScores();
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge best = p.get1();
       boolean gold = goldEdges.contains(new HashableHypEdge(best));
-      Log.info("best=" + best + " gold=" + gold);
+//      Log.info("best=" + best + " gold=" + gold);
       if (oracle && gold) {
-        Log.info("oracle=true, non-gold edge, skipping");
+//        Log.info("oracle=true, non-gold edge, skipping");
         continue;
       }
-      Adjoints sc = p.get2();
-      Log.info("score: " + sc);
-      double score = sc.forwards();
-      if (score <= 0) {
-        Log.info("score<0, exiting");
-        break;
-      }
+//      Adjoints sc = p.get2();
+//      Log.info("score: " + sc);
+//      double score = sc.forwards();
+//      if (score <= 0) {
+//        Log.info("score<0, exiting");
+//        break;
+//      }
       addEdgeToState(best);
       applied++;
     }
     Log.info("done adding positive-scoring HypEdges");
-    state.dbgShowEdges();
+//    state.dbgShowEdges();
   }
   public void dbgRunInference() {
     dbgRunInference(false, 0);
@@ -152,18 +153,19 @@ public class Uberts {
     return trie;
   }
 
-  private static String stripComment(String line) {
+  public static String stripComment(String line) {
     int c = line.indexOf('#');
     if (c >= 0)
       return line.substring(0, c);
     return line;
   }
 
-  public void readRelData(File f) throws IOException {
+  public List<Relation> readRelData(File f) throws IOException {
     if (!f.isFile())
       throw new IllegalArgumentException("not a file: " + f.getPath());
+    Log.info("reading rel data from: " + f.getPath());
     try (BufferedReader r = FileUtil.getReader(f)) {
-      readRelData(r);
+      return readRelData(r);
     }
   }
 
@@ -174,9 +176,12 @@ public class Uberts {
    *
    * TODO write some wrappers for edu.jhu.hlt.uberts.io to support things like
    * in-memory versions of rel data files.
+   *
+   * @return a list of new {@link Relation}s defined in this file/reader.
    */
-  public void readRelData(BufferedReader r) throws IOException  {
+  public List<Relation> readRelData(BufferedReader r) throws IOException  {
     String relName;
+    List<Relation> defs = new ArrayList<>();
     for (String line = r.readLine(); line != null; line = r.readLine()) {
       line = stripComment(line);
       if (line.isEmpty())
@@ -196,8 +201,11 @@ public class Uberts {
           }
           argTypes[i] = this.lookupNodeType(argType, true);
         }
-        this.addEdgeType(new Relation(relName, argTypes));
+        Relation rr = new Relation(relName, argTypes);
+        defs.add(rr);
+        this.addEdgeType(rr);
         break;
+      case "schema":
       case "x":
       case "y":
         relName = toks[1];
@@ -210,7 +218,7 @@ public class Uberts {
           args[i] = this.lookupNode(rel.getTypeForArg(i), val, true);
         }
         HypEdge e = this.makeEdge(rel, args);
-        if (command.equals("x"))
+        if (command.equals("x") || command.equals("schema"))
           this.addEdgeToState(e);
         else
           this.addLabel(e);
@@ -219,6 +227,7 @@ public class Uberts {
         throw new RuntimeException("unknown-command: " + command);
       }
     }
+    return defs;
   }
 
   /**

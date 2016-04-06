@@ -119,8 +119,13 @@ public class FeatletIndex {
       for (int i = 1; i < r.getNumArgs(); i++) {
         NodeType prev = r.getTypeForArg(i-1);
         NodeType cur = r.getTypeForArg(i);
-        if (prev == tokenIndex && cur == tokenIndex)
+        if (prev == tokenIndex && cur == tokenIndex) {
           spanArgs.add(new IntPair(i-1, i));
+          i++;  // lets say you had (i,j,k,l)
+          // we don't want (i,j), (j,k), and (k,l)
+          // we want non-overlapping pairs of tokenIndex.
+          // TODO This heuristic is lousy, figure out how to improve.
+        }
       }
 
       for (IntPair ij : spanArgs) {

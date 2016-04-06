@@ -46,6 +46,22 @@ public class HypEdge {
     }
   }
 
+  /**
+   * Produces a string like "x word2 0 John" representing this edge. Produces
+   * tail values by calling toString, so be wary of more complex types.
+   * @param dataType e.g. "x"
+   */
+  public String getRelFileString(String dataType) {
+    StringBuilder sb = new StringBuilder(dataType);
+    sb.append(' ');
+    sb.append(relation.getName());
+    for (int i = 0; i < tail.length; i++) {
+      sb.append(' ');
+      sb.append(tail[i].getValue().toString());
+    }
+    return sb.toString();
+  }
+
   public Relation getRelation() {
     return relation;
   }

@@ -103,20 +103,20 @@ public class Agenda {
   }
 
   public void remove(HypEdge e) {
-    if (DEBUG) {
-      Log.info("before remove " + e);
-      dbgShowScores();
-      System.out.println();
-    }
+//    if (DEBUG) {
+//      Log.info("before remove " + e);
+//      dbgShowScores();
+//      System.out.println();
+//    }
 
     int i = e2i.get(e);
     removeAt(i);
 
-    if (DEBUG) {
-      Log.info("after remove " + e);
-      dbgShowScores();
-      System.out.println();
-    }
+//    if (DEBUG) {
+//      Log.info("after remove " + e);
+//      dbgShowScores();
+//      System.out.println();
+//    }
   }
 
   private void removeAt(int i) {
@@ -141,12 +141,15 @@ public class Agenda {
     if (i == top)
       return true;
     int parent = (i - 1) >>> 1;
-    if (DEBUG)
-      Log.info("i=" + i + " parent=" + parent + " top=" + top);
+//    if (DEBUG)
+//      Log.info("i=" + i + " parent=" + parent + " top=" + top);
     return heap2[parent].forwards() >= heap2[i].forwards();
   }
 
   public void add(HypEdge edge, Adjoints score) {
+    if (DEBUG) {
+      Log.info("adding " + edge + " with score " + score);
+    }
     if (edge == null)
       throw new IllegalArgumentException();
     if (score == null)
@@ -275,8 +278,8 @@ public class Agenda {
    * to items are over-written and from items are assigned to null.
    */
   private void moveAndFree(int from, int to) {
-    if (DEBUG)
-      Log.info("from=" + from + " to=" + to);
+//    if (DEBUG)
+//      Log.info("from=" + from + " to=" + to);
     if (from == to) {
       free(from);
       return;
@@ -305,13 +308,13 @@ public class Agenda {
   private void n2eiSet(int i, HypEdge e, boolean b) {
     if (e == null)
       throw new IllegalArgumentException();
-    if (DEBUG)
-      Log.info("setting " + e.getHead() + " (heapIndex, " + i + ") to " + b);
+//    if (DEBUG)
+//      Log.info("setting " + e.getHead() + " (heapIndex, " + i + ") to " + b);
     n2eiGetOrInit(e.getHead()).set(i, b);
     int n = e.getNumTails();
     for (int j = 0; j < n; j++) {
-      if (DEBUG)
-        Log.info("setting " + e.getTail(j) + " (heapIndex, " + i + ") to " + b);
+//      if (DEBUG)
+//        Log.info("setting " + e.getTail(j) + " (heapIndex, " + i + ") to " + b);
       n2eiGetOrInit(e.getTail(j)).set(i, b);
     }
   }

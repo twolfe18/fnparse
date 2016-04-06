@@ -34,6 +34,22 @@ public class Relation {
   }
 
   /**
+   * Returns the definition string for this relation, e.g.
+   * "def word2 <tokenIndex> <word>".
+   */
+  public String getDefinitionString() {
+    StringBuilder sb = new StringBuilder("def ");
+    sb.append(name);
+    for (int i = 0; i < domain.length; i++) {
+      sb.append(' ');
+      sb.append('<');
+      sb.append(domain[i].getName());
+      sb.append('>');
+    }
+    return sb.toString();
+  }
+
+  /**
    * Create an Object which has an equals/hashCode implementation that mimics
    * what {@link Arrays#equals(Object)} would do. This value is used as the
    * value given to the head:HypNode in a HypEdge. This allows instances of

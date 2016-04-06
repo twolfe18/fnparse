@@ -329,6 +329,8 @@ public class TransitionGeneratorForwardsParser {
    * produce a new HypEdge.
    */
   public static class TG implements TransitionGenerator {
+    public static boolean VERBOSE = false;
+
     private LHS match;
     private Uberts u;
 
@@ -348,13 +350,16 @@ public class TransitionGeneratorForwardsParser {
       // go through lhs, for every arg, project in to rhs with Rule.lhs2rhs
       int numRhsBound = 0;
       Rule rule = match.getRule();
-      Log.info("rule=" + rule);
-      Log.info("pat=\n\t" + StringUtils.join("\n\t", match.pat));
+      if (VERBOSE) {
+        Log.info("rule=" + rule);
+        Log.info("pat=\n\t" + StringUtils.join("\n\t", match.pat));
+      }
       Object[] rhsVals = new Object[rule.rhs.getNumArgs()];
       for (int ti = 0; ti < rule.lhs.length; ti++) {
         for (int ai = 0; ai < rule.lhs2rhs[ti].length; ai++) {
           int rhsIdx = rule.lhs2rhs[ti][ai];
-          Log.info(rule.lhs[ti] + " " + ai + "th arg maps to the " + rhsIdx + " of the rhs term: " + rule.rhs);
+          if (VERBOSE)
+            Log.info(rule.lhs[ti] + " " + ai + "th arg maps to the " + rhsIdx + " of the rhs term: " + rule.rhs);
           if (rhsIdx < 0) {
             // This argument is not bound on the RHS
             continue;
@@ -365,7 +370,8 @@ public class TransitionGeneratorForwardsParser {
           HypEdge e = match.getBoundValue(r, lhsValues);
           assert e.getRelation() == r;
           Object val = e.getTail(ai).getValue();
-          Log.info("extracted val=" + val + " from " + e);
+          if (VERBOSE)
+            Log.info("extracted val=" + val + " from " + e);
 
           // Apply these values as RHS args
           if (rhsVals[rhsIdx] == null) {

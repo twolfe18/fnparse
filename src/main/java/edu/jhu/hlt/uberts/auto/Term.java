@@ -3,6 +3,7 @@ package edu.jhu.hlt.uberts.auto;
 import java.util.Arrays;
 
 import edu.jhu.hlt.uberts.Relation;
+import edu.jhu.hlt.uberts.Uberts;
 
 /**
  * e.g. srl2(t,s)
@@ -43,5 +44,18 @@ public class Term {
     }
     sb.append(')');
     return sb.toString();
+  }
+
+  public static Term parseTerm(String term, Uberts u) {
+    int lrb = term.indexOf('(');
+    int rrb = term.indexOf(')');
+    assert lrb > 0 && rrb == term.length()-1;
+    String relName = term.substring(0, lrb);
+    Relation rel = u.getEdgeType(relName);
+    String args = term.substring(lrb + 1, rrb);
+    String[] argNames = args.split(",");
+    for (int i = 0; i < argNames.length; i++)
+      argNames[i] = argNames[i].trim();
+    return new Term(rel, argNames);
   }
 }
