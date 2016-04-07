@@ -394,7 +394,8 @@ public class TransitionGeneratorForwardsParser {
       HypEdge e = u.makeEdge(rule.rhs.rel, rhsNodes);
       Adjoints sc = Adjoints.Constant.ONE;
       if (feats != null) {
-        sc = Adjoints.cacheIfNeeded(feats.score(e, u));
+//        sc = Adjoints.cacheIfNeeded(feats.score(e, u));
+        sc = feats.score(e, u);
       }
       Pair<HypEdge, Adjoints> p = new Pair<>(e, sc);
       return Arrays.asList(p);

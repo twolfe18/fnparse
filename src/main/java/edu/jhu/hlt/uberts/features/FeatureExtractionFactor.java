@@ -35,68 +35,76 @@ public abstract class FeatureExtractionFactor<T> {
     }
   }
 
+  public static class WeightAdjoints<T> implements Adjoints {
+    private List<T> fx;
+    private Map<T, Weight<T>> theta;
+
+    public WeightAdjoints(List<T> features, Map<T, Weight<T>> weights) {
+      this.fx = features;
+      this.theta = weights;
+    }
+
+    public List<T> getFeatures() {
+      return fx;
+    }
+
+    @Override
+    public double forwards() {
+      double s = 0;
+      for (T index : fx) {
+        Weight<T> w = theta.get(index);
+        if (w != null)
+          s += w.theta;
+      }
+      return s;
+    }
+
+    @Override
+    public void backwards(double dErr_dForwards) {
+      for (T index : fx) {
+        Weight<T> w = theta.get(index);
+        if (w == null) {
+          w = new Weight<>(index);
+          theta.put(index, w);
+        }
+        w.increment(-dErr_dForwards);
+      }
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append("(Adj");
+      for (T index : fx) {
+        Weight<T> w = theta.get(index);
+        if (w == null)
+          w = new Weight<>(index);
+        sb.append(' ');
+        sb.append(w.toString());
+        if (sb.length() > 200) {
+          sb.append("...");
+          break;
+        }
+      }
+      sb.append(')');
+      return sb.toString();
+    }
+  }
+
   private Map<Relation, Map<T, Weight<T>>> theta = new HashMap<>();
 
   /**
    * Returns a non-caching Adjoints.
    */
   public Adjoints score(HypEdge yhat, Uberts x) {
-
     // Look up weight vector based on Relation of the given edge
     Map<T, Weight<T>> t = theta.get(yhat.getRelation());
     if (t == null) {
       t = new HashMap<>();
       theta.put(yhat.getRelation(), t);
     }
-    final Map<T, Weight<T>> tt = t;
-
-    // Extract features
     List<T> feats = features(yhat, x);
-
-    // Build an Adjoints
-    return new Adjoints() {
-      private List<T> fx = feats;
-      private Map<T, Weight<T>> theta = tt;
-      @Override
-      public double forwards() {
-        double s = 0;
-        for (T index : fx) {
-          Weight<T> w = theta.get(index);
-          if (w != null)
-            s += w.theta;
-        }
-        return s;
-      }
-      @Override
-      public void backwards(double dErr_dForwards) {
-        for (T index : fx) {
-          Weight<T> w = theta.get(index);
-          if (w == null) {
-            w = new Weight<>(index);
-            theta.put(index, w);
-          }
-          w.increment(-dErr_dForwards);
-        }
-      }
-      @Override
-      public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("(Adj");
-        for (T index : fx) {
-          Weight<T> w = theta.get(index);
-          if (w == null)
-            w = new Weight<>(index);
-          sb.append(' ');
-          sb.append(w.toString());
-          if (sb.length() > 200) {
-            sb.append("...");
-            break;
-          }
-        }
-        sb.append(')');
-        return sb.toString();
-      }
-    };
+    return new WeightAdjoints<>(feats, t);
   }
 
 

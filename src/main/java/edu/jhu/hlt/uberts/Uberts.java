@@ -16,6 +16,8 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
+import edu.jhu.hlt.uberts.io.RelationFileIterator;
+import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 
@@ -65,6 +67,9 @@ public class Uberts {
   // Supervision (set of gold HypEdges)
   // Modules may add to this set as they register TransitionGenerators for example.
   private HashSet<HashableHypEdge> goldEdges;
+  /**
+   * Sets the set of gold edges to null (appears as if no labels were ever provided).
+   */
   public void clearLabels() {
     goldEdges = null;
   }
@@ -89,6 +94,12 @@ public class Uberts {
       return +1;
     return -1;
   }
+  /**
+   * Sets the set of gold edges to the empty set.
+   */
+  public void initLabels() {
+    goldEdges = new HashSet<>();
+  }
 
 
   public Uberts(Random rand) {
@@ -99,6 +110,19 @@ public class Uberts {
     this.trie = new TNode(null, null);
     this.nodes = new HashMap<>();
     this.nodeTypes = new HashMap<>();
+  }
+
+  // TODO This is an ugly hack, fixme.
+  public Relation addSuccTok(int n) {
+    NodeType tokenIndex = lookupNodeType("tokenIndex", true);
+    Relation succTok = addEdgeType(new Relation("succTok", tokenIndex, tokenIndex));
+    HypNode prev = lookupNode(tokenIndex, String.valueOf(-1), true);
+    for (int i = 0; i < 100; i++) {   // TODO figure out a better way to handle this...
+      HypNode cur = lookupNode(tokenIndex, String.valueOf(i), true);
+      addEdgeToState(makeEdge(succTok, prev, cur));
+      prev = cur;
+    }
+    return succTok;
   }
 
   /**
@@ -140,6 +164,31 @@ public class Uberts {
     dbgRunInference(false, 0);
   }
 
+  public static class Step {
+    public final HypEdge edge;
+    public final Adjoints score;
+    public final boolean gold;
+    public Step(HypEdge e, Adjoints score, boolean gold) {
+      this.edge = e;
+      this.score = score;
+      this.gold = gold;
+    }
+  }
+
+  /** Will add gold edges into the state */
+  public List<Step> recordOracleTrajectory() {
+    if (goldEdges == null)
+      throw new IllegalStateException("you must add labels, goldEdges==null");
+    List<Step> traj = new ArrayList<>();
+    while (agenda.size() > 0) {
+      Pair<HypEdge, Adjoints> p = agenda.popBoth();
+      HypEdge edge = p.get1();
+      boolean gold = goldEdges.contains(new HashableHypEdge(edge));
+      traj.add(new Step(edge, p.get2(), gold));
+    }
+    return traj;
+  }
+
   public Random getRandom() {
     return rand;
   }
@@ -174,8 +223,7 @@ public class Uberts {
    * "def word2 <tokenIndx> <word>", "x word2 0 John", "y pos2 0 NNP", etc
    * and setup state/labels accordingly.
    *
-   * TODO write some wrappers for edu.jhu.hlt.uberts.io to support things like
-   * in-memory versions of rel data files.
+   * TODO Use {@link RelationFileIterator} or at least {@link RelLine}
    *
    * @return a list of new {@link Relation}s defined in this file/reader.
    */
@@ -218,10 +266,12 @@ public class Uberts {
           args[i] = this.lookupNode(rel.getTypeForArg(i), val, true);
         }
         HypEdge e = this.makeEdge(rel, args);
-        if (command.equals("x") || command.equals("schema"))
-          this.addEdgeToState(e);
-        else
+        if (command.equals("schema"))
+          e = new HypEdge.Schema(e);
+        if (command.equals("y"))
           this.addLabel(e);
+        else
+          this.addEdgeToState(e);
         break;
       default:
         throw new RuntimeException("unknown-command: " + command);
@@ -336,7 +386,8 @@ public class Uberts {
   /** returns its argument */
   public Relation addEdgeType(Relation r) {
     Relation old = relations.put(r.getName(), r);
-    assert old == null;
+    if (old != null)
+      throw new IllegalStateException("already existed: " + r);
     return r;
   }
   public Relation getEdgeType(String name) {
@@ -346,11 +397,6 @@ public class Uberts {
     return r;
   }
 
-  // TODO Add methods which add TransitionGenerators and GlobalFactors without
-  // having to directly mutate the trie:TNode
-
-  // TODO a version that can parse input like "pos(i,*) => pos(i+1,*)"
-
   public NodeType getWitnessNodeType(String relationName) {
     return getWitnessNodeType(getEdgeType(relationName));
   }
@@ -359,20 +405,26 @@ public class Uberts {
     return lookupNodeType(wntName, true);
   }
 
-  // NOT TRUE: Every edge gets its own fact id
-  // See Relation.encode for how head HypNodes get their values and why.
-//  private int factCounter = 0;
+  public HypEdge makeEdge(RelLine line) {
+    Relation r = getEdgeType(line.tokens[1]);
+    assert r.getNumArgs() == line.tokens.length-2;
+    HypNode[] tail = new HypNode[r.getNumArgs()];
+    for (int i = 0; i < tail.length; i++) {
+      NodeType nt = r.getTypeForArg(i);
+      Object value = line.tokens[i+2];
+      tail[i] = this.lookupNode(nt, value, true);
+    }
+    return makeEdge(r, tail);
+  }
   public HypEdge makeEdge(String relationName, HypNode... tail) {
     Relation r = getEdgeType(relationName);
     return makeEdge(r, tail);
   }
   public HypEdge makeEdge(Relation r, HypNode... tail) {
     NodeType headType = getWitnessNodeType(r);
-//    HypNode head = lookupNode(headType, factCounter++);
     Object encoded = r.encodeTail(tail);
     HypNode head = lookupNode(headType, encoded, true);
     return new HypEdge(r, head, tail);
   }
-
 
 }

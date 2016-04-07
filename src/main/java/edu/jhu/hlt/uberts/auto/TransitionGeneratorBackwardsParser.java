@@ -1,38 +1,39 @@
 package edu.jhu.hlt.uberts.auto;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
+import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
-import edu.jhu.hlt.uberts.srl.FNParseToRelations;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
+import edu.jhu.hlt.uberts.io.RelationFileIterator;
+import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 
 /**
- * I think the proper way is to go fully declarative, remove all imperative
- * code from my model specification.
- *
- * {@link FNParseToRelations} currently shows a way to over-generate what is
- * needed, in the near future we can get by as long as it can output
- * "y srl4(t,f,k,s) ..." lines. The transition grammar will be used to derive
- * all of the nodes that could be used to prove that (backwards chaining).
- *
- * I'm assuming that {@link Uberts#readRelData(java.io.BufferedReader)} is also
- * doing the job of adding the data (creating the NodeTypes and Relations is
- * only really importance insofar as it helps accomplish the primary goal: add
- * the data).
- *
  * The purpose of this class is to parse a transition grammar so that it can
- * expand y edges into edges which are "good" w.r.t. a transition grammar.
- * I say "good" and not "necessary", since I'm going to take ALL edges which
- * could lie in a derivation of a final edge (there may be more than one).
+ * expand "necessary" y edges (the ones you get credit for in evaluation) into a
+ * larger set which are "good" w.r.t. a transition grammar. An edge deemed
+ * "good" is an edge used in the derivation of a "necessary" edge. There may be
+ * ways of deriving "necessary" edges without adding "good" edges, since I'm
+ * going to take ALL edges which could lie in a derivation of a final edge
+ * (there may be more than one).
  * e.g. you could have the two rules in your grammar:
  *   srl3a(t,f,k) & srl2(t,s) => srl4(t,f,s,k)
  *   srl3b(t,f,s) & role(f,k) => srl4(t,f,s,k)
@@ -51,6 +52,7 @@ public class TransitionGeneratorBackwardsParser {
   private boolean verbose = false;
 
   public void add(Rule r) {
+    Log.info("adding " + r);
     Relation key = r.rhs.rel;
     List<Rule> vals = howToMake.get(key);
     if (vals == null) {
@@ -102,7 +104,7 @@ public class TransitionGeneratorBackwardsParser {
     }
   }
 
-  public static void main(String[] args) {
+  public static void demo() {
     // e.g. event2(t,f) & srl2(t,s) & role(f,k) => srl3(t,f,s,k)
     NodeType spanNT = new NodeType("span");
     NodeType frameNT = new NodeType("frame");
@@ -132,5 +134,61 @@ public class TransitionGeneratorBackwardsParser {
     System.out.println("fact: " + srl3Fact);
     for (HypEdge e : assumed)
       System.out.println("gen: " + e);
+  }
+
+  public static void main(String[] args) throws IOException {
+    ExperimentProperties config = ExperimentProperties.init(args);
+
+    Uberts u = new Uberts(new Random(9001));
+
+    // TODO
+    u.addSuccTok(1000);
+
+    File defFile = config.getExistingFile("defs");
+    u.readRelData(defFile);
+
+    TransitionGeneratorBackwardsParser tgp = new TransitionGeneratorBackwardsParser();
+    File grammarFile = config.getExistingFile("grammar");
+    for (Rule r : Rule.parseRules(grammarFile, u))
+      tgp.add(r);
+
+    TimeMarker tm = new TimeMarker();
+    Counts<String> counts = new Counts<>();
+
+    File outfile = config.getFile("output");
+    File multiRefVals = config.getExistingFile("instances");
+    try (RelationFileIterator itr = new RelationFileIterator(multiRefVals);
+        ManyDocRelationFileIterator m = new ManyDocRelationFileIterator(itr);
+        BufferedWriter w = FileUtil.getWriter(outfile)) {
+      while (m.hasNext()) {
+        RelDoc d = m.next();
+        counts.increment("docs");
+
+        // Expand every fact (recursively)
+        // NOTE: Ensure that you call size() even loop iteration!
+        for (int i = 0; i < d.items.size(); i++) {
+          counts.increment("facts-input");
+          RelLine rel = d.items.get(i);
+          HypEdge fact = u.makeEdge(rel);
+          for (HypEdge assume : tgp.expand(fact)) {
+            counts.increment("facts-derived");
+            d.items.add(assume.getRelLine("y", "derived"));
+          }
+        }
+
+        // Write out expanded facts
+        for (RelLine line : d.items) {
+          w.write(line.toLine());
+          w.newLine();
+          counts.increment("facts-written");
+        }
+
+        if (tm.enoughTimePassed(15)) {
+          w.flush();
+          Log.info("in " + tm.secondsSinceFirstMark() + " seconds: " + counts);
+        }
+      }
+    }
+    Log.info("done, " + counts);
   }
 }

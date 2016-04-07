@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 
 /**
  * A hyper-edge in a hyper-graph where the tail represents the columns in a
@@ -26,6 +27,20 @@ public class HypEdge {
 
   // Check tail node types match relation type
   public static boolean TYPE_CHECK = true;
+
+  /**
+   * These edges are persistent in the state, e.g.
+   *   def role2 <frame> <role>
+   *   role2(framenet/Commerce_buy, Buyer)
+   */
+  public static class Schema extends HypEdge {
+    public Schema(Relation edgeType, HypNode head, HypNode[] tail) {
+      super(edgeType, head, tail);
+    }
+    public Schema(HypEdge copy) {
+      super(copy.relation, copy.head, copy.tail);
+    }
+  }
 
   private Relation relation;    // e.g. 'srl2'
   private HypNode head;         // this node is the witness of the fact
@@ -52,14 +67,19 @@ public class HypEdge {
    * @param dataType e.g. "x"
    */
   public String getRelFileString(String dataType) {
-    StringBuilder sb = new StringBuilder(dataType);
-    sb.append(' ');
-    sb.append(relation.getName());
-    for (int i = 0; i < tail.length; i++) {
-      sb.append(' ');
-      sb.append(tail[i].getValue().toString());
-    }
-    return sb.toString();
+    return getRelLine(dataType).toLine();
+  }
+
+  public RelLine getRelLine(String datatype) {
+    return getRelLine(datatype, null);
+  }
+  public RelLine getRelLine(String datatype, String comment) {
+    String[] tokens = new String[tail.length + 2];
+    tokens[0] = datatype;
+    tokens[1] = relation.getName();
+    for (int i = 0; i < tail.length; i++)
+      tokens[i + 2] = tail[i].getValue().toString();
+    return new RelLine(tokens, comment);
   }
 
   public Relation getRelation() {

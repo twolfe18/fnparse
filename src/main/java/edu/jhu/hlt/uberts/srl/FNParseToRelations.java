@@ -13,11 +13,17 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.StringLabeledDirectedGraph;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
+import edu.jhu.util.Alphabet;
 
 /**
  * Take {@link FNParse}s and write out the relations used by uberts/srl.
@@ -25,6 +31,9 @@ import edu.jhu.hlt.tutils.Span;
  * @author travis
  */
 public class FNParseToRelations {
+
+  // If true, will convert things like srl3 instances to [srl1, srl2, srl3] instances
+  public boolean outputDerivedLabels = false;
 
   private void write(Sentence s, BufferedWriter w) throws IOException {
     int n = s.size();
@@ -35,12 +44,34 @@ public class FNParseToRelations {
       w.newLine();
       w.write("x lemma2 " + i + " " + s.getLemma(i));
       w.newLine();
-//      w.write("x shape2 " + i + " " + s.getShape(i));
-//      w.newLine();
     }
     write(s.getBasicDeps(false), "basic", n, w);
-    write(s.getCollapsedDeps(false), "col", n, w);
-    write(s.getStanfordParse(false), "stanford", w);
+//    write(s.getCollapsedDeps(false), "col", n, w);
+    write(s.getCollapsedDeps2(false), "col", w);
+    write(s.getCollapsedDeps2(false), "colcc", w);
+    write(s.getStanfordParse(false), "stanford", w, true);
+    write(s.getGoldParse(false), "gold", w, false);
+  }
+
+  private void write(StringLabeledDirectedGraph deps, String name, BufferedWriter w) throws IOException {
+    if (deps == null) {
+      Log.warn("skipping deps since they're not present: " + name);
+      return;
+    }
+    String tn = "dsyn3-" + name;
+    LabeledDirectedGraph depsI = deps.get();
+    int n = depsI.getNumEdges();
+    for (int i = 0; i < n; i++) {
+      long e = depsI.getEdge(i);
+      int g = LabeledDirectedGraph.unpackGov(e);
+      if (g >= n) // LabeledDirectedGraph doesn't do negative indices, so root=length(sentence)
+        g = -1;   // In output we use -1 as root.
+      int d = LabeledDirectedGraph.unpackDep(e);
+      int lab = LabeledDirectedGraph.unpackEdge(e);
+      String l = deps.getEdge(lab);
+      w.write("x " + tn + " " + g + " " + d + " " + l);
+      w.newLine();
+    }
   }
 
   private void write(DependencyParse deps, String name, int n, BufferedWriter w) throws IOException {
@@ -57,21 +88,32 @@ public class FNParseToRelations {
     }
   }
 
-  private void write(ConstituencyParse cons, String name, BufferedWriter w) throws IOException {
+  private void write(ConstituencyParse cons, String name, BufferedWriter w, boolean skipLeaf) throws IOException {
     if (cons == null) {
       Log.warn("skipping cons since they're not present: " + name);
       return;
     }
     String tn = "csyn3-" + name;
     for (Node n : cons.getAllConstituents()) {
-      if (n.isLeaf()) {
-        Log.info("skipping what should be LEXICAL leaf cons: " + n.getTag());
+      if (n.isLeaf() && skipLeaf) {
+//        Log.info("skipping what should be LEXICAL leaf cons: " + n.getTag());
+        continue;
+      }
+      if (!n.hasSpan()) {
+        Log.warn("for some reason " + n.getTag() + " in " + cons.getSentenceId() + " doesn't have a span!");
         continue;
       }
       Span s = n.getSpan();
       String t = n.getTag();
       w.write("x " + tn + " " + s.start + " " + s.end + " " + t);
       w.newLine();
+    }
+  }
+
+  public void definitions(File f) throws IOException {
+    Log.info("writing definitions to " + f.getPath());
+    try (BufferedWriter w = FileUtil.getWriter(f)) {
+      definitions(w);
     }
   }
 
@@ -86,16 +128,24 @@ public class FNParseToRelations {
     w.newLine();
     w.write("def dsyn3-col <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
     w.newLine();
+    w.write("def dsyn3-colcc <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
+    w.newLine();
     w.write("def csyn3-stanford <tokenIndex> <tokenIndex> <cfgLabel> # start token (inclusive), end token (exclusive), cfg label");
     w.newLine();
-    w.write("def event1 <tokenIndex> <tokenIndex> # start token (inclusive), end token (exclusive)");
+    w.write("def csyn3-gold <tokenIndex> <tokenIndex> <cfgLabel> # start token (inclusive), end token (exclusive), cfg label");
     w.newLine();
+    if (outputDerivedLabels) {
+      w.write("def event1 <tokenIndex> <tokenIndex> # start token (inclusive), end token (exclusive)");
+      w.newLine();
+    }
     w.write("def event2 <tokenIndex> <tokenIndex> <frame> # start token (inclusive), end token (exclusive), frame");
     w.newLine();
-    w.write("def srl1 <tokenIndex> <tokenIndex> # arg start tok (inc), arg end tok (exc)");
-    w.newLine();
-    w.write("def srl2 <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # pred start tok (inc), pred end tok (exc), arg start tok (inc), arg end tok (exc)");
-    w.newLine();
+    if (outputDerivedLabels) {
+      w.write("def srl1 <tokenIndex> <tokenIndex> # arg start tok (inc), arg end tok (exc)");
+      w.newLine();
+      w.write("def srl2 <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # pred start tok (inc), pred end tok (exc), arg start tok (inc), arg end tok (exc)");
+      w.newLine();
+    }
     w.write("def srl3 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <roleLabel> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
     w.newLine();
   }
@@ -131,8 +181,10 @@ public class FNParseToRelations {
   private void write(Span t, String f, BufferedWriter w) throws IOException {
 //    String ts = t.start + ")" + t.end;
     String ts = t.start + " " + t.end;
-    w.write("y event1 " + ts);
-    w.newLine();
+    if (outputDerivedLabels) {
+      w.write("y event1 " + ts);
+      w.newLine();
+    }
     w.write("y event2 " + ts + " " + f);
     w.newLine();
   }
@@ -142,16 +194,20 @@ public class FNParseToRelations {
 //    String ss = s.start + ")" + s.end;
     String ts = t.start + " " + t.end;
     String ss = s.start + " " + s.end;
-    w.write("y srl1 " + ss);
-    w.newLine();
-    w.write("y srl2 " + ts + " " + ss);
-    w.newLine();
+    if (outputDerivedLabels) {
+      w.write("y srl1 " + ss);
+      w.newLine();
+      w.write("y srl2 " + ts + " " + ss);
+      w.newLine();
+    }
     w.write("y srl3 " + ts + " " + f + " " + ss + " " + k);
     w.newLine();
   }
 
-  public static void main(String[] args) throws IOException {
-    ExperimentProperties.init(args);
+  /**
+   * Write relation definitions and xy values to a single file, for one FNParse.
+   */
+  public static void singleDocExample() throws IOException {
     // Just extract a single FNParse relation set for debugging
     Iterator<FNParse> itr = FileFrameInstanceProvider.fn15trainFIP.getParsedSentences();
     itr.next();
@@ -159,8 +215,9 @@ public class FNParseToRelations {
 
     ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
     Sentence s = y.getSentence();
-    s.setStanfordParse(csw.getCParse(s));
-    s.setBasicDeps(csw.getBasicDParse(s));
+    csw.addAllParses(s, new Alphabet<>(), true);
+//    s.setStanfordParse(csw.getCParse(s));
+//    s.setBasicDeps(csw.getBasicDParse(s));
     s.lemmatize();
 
     File output = new File("data/srl-reldata/srl-" + y.getId() + ".rel");
@@ -169,5 +226,43 @@ public class FNParseToRelations {
       fn2r.definitions(w);
       fn2r.write(y, w);
     }
+  }
+
+  /**
+   * Write all of FN or PB to a single file which can be read by {@link ManyDocRelationFileIterator}.
+   */
+  public static void main(String[] args) throws IOException {
+    ExperimentProperties config = ExperimentProperties.init(args);
+
+    String dataset = config.getString("dataset");
+    boolean addParses = config.getBoolean("addParses", true);
+    Iterable<FNParse> l = FeaturePrecomputation.getData(dataset, addParses);
+
+    FNParseToRelations fn2r = new FNParseToRelations();
+    fn2r.definitions(config.getFile("outputDefs"));
+
+    TimeMarker tm = new TimeMarker();
+    File outputVals = config.getFile("outputVals");
+    Log.info("writing values to " + outputVals.getPath());
+    int docs = 0;
+    try (BufferedWriter w = FileUtil.getWriter(outputVals)) {
+      int done = 0;
+      for (FNParse y : l) {
+        Sentence s = y.getSentence();
+        s.lemmatize();
+        docs++;
+        w.write("startdoc " + y.getId() + " # " + dataset);
+        w.newLine();
+        fn2r.write(y, w);
+        done++;
+        if (tm.enoughTimePassed(15)) {
+          w.flush();
+          Log.info("wrote out " + done + " parses in "
+              + tm.secondsSinceFirstMark()
+              + " seconds");
+        }
+      }
+    }
+    Log.info("done, wrote " + docs + " docs");
   }
 }

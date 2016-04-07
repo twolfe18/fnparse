@@ -38,6 +38,15 @@ public class Agenda {
     this.e2i = new HashMap<>();
   }
 
+  public void clear() {
+    this.top = 0;
+    int initSize = 16;
+    this.heap1 = new HypEdge[initSize];
+    this.heap2 = new Adjoints[initSize];
+    this.n2ei = new HashMap<>();
+    this.e2i = new HashMap<>();
+  }
+
   /**
    * Removes node->[edge index] entries in n2ei where the node is orphaned (no
    * edges are adjacent because they have been removed).

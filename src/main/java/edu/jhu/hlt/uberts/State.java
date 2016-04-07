@@ -64,6 +64,27 @@ public class State {
     this.fineView = new HashMap<>();
   }
 
+  public void clear() {
+    primaryView.clear();
+    fineView.clear();
+  }
+  public void clearNonSchema() {
+    // Find the Schema edges
+    List<HypEdge.Schema> se = new ArrayList<>();
+    for (LL<HypEdge> le : fineView.values()) {
+      for (LL<HypEdge> cur = le; cur != null; cur = cur.next) {
+        HypEdge e = cur.item;
+        if (e instanceof HypEdge.Schema)
+          se.add((HypEdge.Schema) e);
+      }
+    }
+    // Remove everything
+    clear();
+    // Add back the schema edges
+    for (HypEdge.Schema e : se)
+      add(e);
+  }
+
   public int getNumNodes() {
     return primaryView.size();
   }
