@@ -37,27 +37,27 @@ public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
     this.addToCache = addToCache;
   }
 
-  @Override
-  public DependencyParse getBasicDParse(Sentence s) {
-    DependencyParse deps = null;
-    if (bdParseCache != null && (deps = bdParseCache.get(s.getId())) != null)
-      return deps;
-    deps = super.getBasicDParse(s);
-    if (this.addToCache)
-      bdParseCache.put(s.getId(), deps);
-    return deps;
-  }
+//  @Override
+//  public DependencyParse getBasicDParse(Sentence s) {
+//    DependencyParse deps = null;
+//    if (bdParseCache != null && (deps = bdParseCache.get(s.getId())) != null)
+//      return deps;
+//    deps = super.getBasicDParse(s);
+//    if (this.addToCache)
+//      bdParseCache.put(s.getId(), deps);
+//    return deps;
+//  }
 
-  @Override
-  public ConstituencyParse getCParse(Sentence s) {
-    ConstituencyParse cons = null;
-    if (cParseCache != null && (cons = cParseCache.get(s.getId())) != null)
-      return cons;
-    cons = super.getCParse(s);
-    if (this.addToCache)
-      cParseCache.put(s.getId(), cons);
-    return cons;
-  }
+//  @Override
+//  public ConstituencyParse getCParse(Sentence s) {
+//    ConstituencyParse cons = null;
+//    if (cParseCache != null && (cons = cParseCache.get(s.getId())) != null)
+//      return cons;
+//    cons = super.getCParse(s);
+//    if (this.addToCache)
+//      cParseCache.put(s.getId(), cons);
+//    return cons;
+//  }
 
   public void load() {
     if (bdParseCacheFile.isFile()) {
@@ -112,9 +112,10 @@ public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
           continue;
         n++;
         t.start();
-        parser.getBasicDParse(p.getSentence());
-        parser.getCParse(p.getSentence());
+//        parser.getBasicDParse(p.getSentence());
+//        parser.getCParse(p.getSentence());
         t.stop();
+        throw new RuntimeException("reimplement me");
       }
     }
     LOG.info("parsed " + n + " sentences, about to save");

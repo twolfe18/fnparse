@@ -231,6 +231,7 @@ public class ConstituencyParse implements Serializable {
     this.nodes = new HashMap<>();
     this.usingTutils = true;
     helper(parse);
+    buildPointers();
   }
   private void helper(edu.jhu.hlt.tutils.Document.Constituent node) {
     addConstituent(node);

@@ -9,6 +9,7 @@ import java.util.List;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
@@ -49,11 +50,19 @@ public class Sentence implements HasId, Serializable {
 
   private String[] shapes;
 
+  /**
+   * @deprecated real collapsed dependences are not trees (may have more than
+   * one parent), and cannot be represented by this type. This is at best a copy
+   * of the basic parse (see {@link PropbankReader}).
+   */
   private DependencyParse collapsedDeps;
   private DependencyParse basicDeps;
   private ConstituencyParse stanfordParse;
   private ConstituencyParse goldParse;
   private boolean hideSyntax = false;
+
+  private StringLabeledDirectedGraph colDeps2;
+  private StringLabeledDirectedGraph colCCDeps2;
 
   /**
    * Helps map back into concrete.Communications.
@@ -177,6 +186,7 @@ public class Sentence implements HasId, Serializable {
   }
 
   public void stripSyntaxDown() {
+    assert false : "update this method for new parses";
     if (collapsedDeps != null)
       collapsedDeps.stripEdgeLabels();
     if (basicDeps != null)
@@ -384,17 +394,43 @@ public class Sentence implements HasId, Serializable {
     this.hideSyntax = hidden;
   }
 
+  /** @deprecated */
   public DependencyParse getCollapsedDeps() {
     return getCollapsedDeps(true);
   }
+  /** @deprecated */
   public DependencyParse getCollapsedDeps(boolean askPermission) {
     if (askPermission && hideSyntax)
       return null;
     return collapsedDeps;
   }
-
+  /** @deprecated */
   public void setCollapsedDeps(DependencyParse collapedDeps) {
     this.collapsedDeps = collapedDeps;
+  }
+
+  public StringLabeledDirectedGraph getCollapsedDeps2() {
+    return getCollapsedDeps2(true);
+  }
+  public StringLabeledDirectedGraph getCollapsedDeps2(boolean askPermission) {
+    if (askPermission && hideSyntax)
+      return null;
+    return colDeps2;
+  }
+  public void setCollapsedDeps2(StringLabeledDirectedGraph deps) {
+    this.colDeps2 = deps;
+  }
+
+  public StringLabeledDirectedGraph getCollapsedCCDeps2() {
+    return getCollapsedCCDeps2(true);
+  }
+  public StringLabeledDirectedGraph getCollapsedCCDeps2(boolean askPermission) {
+    if (askPermission && hideSyntax)
+      return null;
+    return colCCDeps2;
+  }
+  public void setCollapsedCCDeps2(StringLabeledDirectedGraph deps) {
+    this.colCCDeps2 = deps;
   }
 
   public DependencyParse getBasicDeps() {

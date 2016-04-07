@@ -128,7 +128,9 @@ public class SemaforEval implements TaggedEvalFunc {
       if (deps == null) {
         Log.info("resorting to parser for basic dependency parse on " + s.getId());
         ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
-        deps = parser.getBasicDParse(s);
+//        deps = parser.getBasicDParse(s);
+        parser.addAllParses(s, null, true);
+        deps = s.getBasicDeps(false);
       }
       assert deps != null;
       for (int i = 0; i < n; i++) {   // dep label

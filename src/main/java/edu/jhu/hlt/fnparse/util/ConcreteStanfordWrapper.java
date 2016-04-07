@@ -3,9 +3,7 @@ package edu.jhu.hlt.fnparse.util;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.apache.log4j.Logger;
@@ -29,15 +27,14 @@ import edu.jhu.hlt.concrete.stanford.PipelineLanguage;
 import edu.jhu.hlt.concrete.stanford.StanfordPostNERCommunication;
 import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory;
 import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory.AnalyticUUIDGenerator;
-import edu.jhu.hlt.fnparse.data.DataUtil;
-import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.StringLabeledDirectedGraph;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.Timer;
+import edu.jhu.util.Alphabet;
 
 /**
  * Calls concrete-stanford and wraps the results in fnparse data structures.
@@ -152,6 +149,7 @@ public class ConcreteStanfordWrapper {
       //getAnno().annotateWithStanfordNlp(communication);
       StanfordPostNERCommunication spc = getAnno().annotate(communication);
       communication = spc.getRoot();
+      communication.setId(s.getId());
       parseTimer.stop();
       return communication;
     } catch (Exception e) {
@@ -162,10 +160,11 @@ public class ConcreteStanfordWrapper {
     }
   }
 
-  public DependencyParse getBasicDParse(Sentence s) {
-    Communication communication = parse(s);
-    if (communication == null)
-      return dummyDParse(s);
+//  public DependencyParse getBasicDParse(Sentence s) {
+//    Communication communication = parse(s);
+//    if (communication == null)
+//      return dummyDParse(s);
+  public static DependencyParse getBasicDParse(Communication communication) {
     Section section = communication.getSectionList().get(0);
     edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
     Tokenization tokenization = sentence.getTokenization();
@@ -176,7 +175,7 @@ public class ConcreteStanfordWrapper {
         .findFirst();
     if (!maybeDeps.isPresent())
       throw new RuntimeException("couldn't get basic dep parse");
-    int n = s.size();
+    int n = tokenization.getTokenList().getTokenListSize();
     int[] heads = new int[n];
     String[] labels = new String[n];
     Arrays.fill(heads, DependencyParse.ROOT);
@@ -196,12 +195,47 @@ public class ConcreteStanfordWrapper {
     return new DependencyParse(heads, labels);
   }
 
-  public ConstituencyParse getCParse(Sentence s) {
-   Communication communication = parse(s);
-   if (communication == null) {
-     LOG.warn("inserting dummy parse into " + s.getId());
-     return dummyCParse(s);
-   }
+  public static StringLabeledDirectedGraph getColDParse(
+      Communication communication, Alphabet<String> edgeAlph) {
+    Section section = communication.getSectionList().get(0);
+    edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
+    Tokenization tokenization = sentence.getTokenization();
+    Optional<edu.jhu.hlt.concrete.DependencyParse> maybeDeps =
+        tokenization.getDependencyParseList()
+        .stream()
+        .filter(dp -> dp.getMetadata().getTool().toLowerCase().contains("col"))
+        .filter(dp -> !dp.getMetadata().getTool().toLowerCase().contains("cc"))
+        .findFirst();
+    if (!maybeDeps.isPresent())
+      throw new RuntimeException("couldn't get col dep parse");
+    int root = tokenization.getTokenList().getTokenListSize();
+    return StringLabeledDirectedGraph.fromConcrete(maybeDeps.get(), edgeAlph, root);
+  }
+
+  public static StringLabeledDirectedGraph getColCCDParse(
+      Communication communication, Alphabet<String> edgeAlph) {
+    Section section = communication.getSectionList().get(0);
+    edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
+    Tokenization tokenization = sentence.getTokenization();
+    Optional<edu.jhu.hlt.concrete.DependencyParse> maybeDeps =
+        tokenization.getDependencyParseList()
+        .stream()
+        .filter(dp -> dp.getMetadata().getTool().toLowerCase().contains("col"))
+        .filter(dp -> dp.getMetadata().getTool().toLowerCase().contains("cc"))
+        .findFirst();
+    if (!maybeDeps.isPresent())
+      throw new RuntimeException("couldn't get col cc dep parse");
+    int root = tokenization.getTokenList().getTokenListSize();
+    return StringLabeledDirectedGraph.fromConcrete(maybeDeps.get(), edgeAlph, root);
+  }
+
+//  public ConstituencyParse getCParse(Sentence s) {
+//   Communication communication = parse(s);
+//   if (communication == null) {
+//     LOG.warn("inserting dummy parse into " + s.getId());
+//     return dummyCParse(s);
+//   }
+  public static ConstituencyParse getCParse(Communication communication) {
    Section section = communication.getSectionList().get(0);
    edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
    Tokenization tokenization = sentence.getTokenization();
@@ -222,27 +256,52 @@ public class ConcreteStanfordWrapper {
      }
    }
 
-   return new ConstituencyParse(s.getId(), p, s.size());
+//   return new ConstituencyParse(s.getId(), p, s.size());
+   String id = communication.getId();
+   return new ConstituencyParse(id, p, n);
   }
 
-  public Map<Span, String> parseSpans(Sentence s) {
-    Map<Span, String> constiuents = new HashMap<>();
-    edu.jhu.hlt.concrete.Parse parse = getCParse(s).getConcreteParse();
-    for (Constituent c : parse.getConstituentList()) {
-      Span mySpan = constituentToSpan(c);
-      String tag = c.getTag();
-      String oldTag = constiuents.put(mySpan, tag);
-      if (oldTag != null) {
-        if (tag.compareTo(oldTag) < 0) {
-          String temp = oldTag;
-          oldTag = tag;
-          tag = temp;
-        }
-        constiuents.put(mySpan, oldTag + "-" + tag);
+  public void addAllParses(Sentence s, Alphabet<String> edgeAlph, boolean overwrite) {
+    Communication c = parse(s);
+    if (s.getBasicDeps(false) == null || overwrite) {
+      DependencyParse deps = getBasicDParse(c);
+      s.setBasicDeps(deps);
+    }
+    if (s.getStanfordParse(false) == null || overwrite) {
+      ConstituencyParse cons = getCParse(c);
+      s.setStanfordParse(cons);
+    }
+    if (edgeAlph != null) {
+      if (s.getCollapsedDeps2(false) == null || overwrite) {
+        StringLabeledDirectedGraph deps = getColDParse(c, edgeAlph);
+        s.setCollapsedDeps2(deps);
+      }
+      if (s.getCollapsedCCDeps2(false) == null || overwrite) {
+        StringLabeledDirectedGraph deps = getColCCDParse(c, edgeAlph);
+        s.setCollapsedCCDeps2(deps);
       }
     }
-    return constiuents;
   }
+
+
+//  public Map<Span, String> parseSpans(Sentence s) {
+//    Map<Span, String> constiuents = new HashMap<>();
+//    edu.jhu.hlt.concrete.Parse parse = getCParse(s).getConcreteParse();
+//    for (Constituent c : parse.getConstituentList()) {
+//      Span mySpan = constituentToSpan(c);
+//      String tag = c.getTag();
+//      String oldTag = constiuents.put(mySpan, tag);
+//      if (oldTag != null) {
+//        if (tag.compareTo(oldTag) < 0) {
+//          String temp = oldTag;
+//          oldTag = tag;
+//          tag = temp;
+//        }
+//        constiuents.put(mySpan, oldTag + "-" + tag);
+//      }
+//    }
+//    return constiuents;
+//  }
 
   public static Span constituentToSpan(Constituent c) {
     return Span.getSpan(c.getStart(), c.getEnding());
@@ -326,25 +385,25 @@ public class ConcreteStanfordWrapper {
     return communication;
   }
 
-  // Sanity check
-  public static void main(String[] args) {
-    ConcreteStanfordWrapper wrapper = getSingleton(false);
-    for (FNParse parse : DataUtil.iter2list(FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
-      Sentence s = parse.getSentence();
-      System.out.println(s.getId() + "==============================================================");
-      System.out.println(s);
-      // Constituents
-      Map<Span, String> constituents = wrapper.parseSpans(s);
-      for (Map.Entry<Span, String> c : constituents.entrySet()) {
-        System.out.printf("%-6s %s\n",
-            c.getValue(),
-            Arrays.toString(s.getWordFor(c.getKey())));
-      }
-      // Dependencies
-      DependencyParse basicDeps = wrapper.getBasicDParse(s);
-      s.setBasicDeps(basicDeps);
-      System.out.println("collapsed deps:\n" + Describe.sentenceWithDeps(s, false));
-      System.out.println("basic deps:\n" + Describe.sentenceWithDeps(s, true));
-    }
-  }
+//  // Sanity check
+//  public static void main(String[] args) {
+//    ConcreteStanfordWrapper wrapper = getSingleton(false);
+//    for (FNParse parse : DataUtil.iter2list(FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
+//      Sentence s = parse.getSentence();
+//      System.out.println(s.getId() + "==============================================================");
+//      System.out.println(s);
+//      // Constituents
+//      Map<Span, String> constituents = wrapper.parseSpans(s);
+//      for (Map.Entry<Span, String> c : constituents.entrySet()) {
+//        System.out.printf("%-6s %s\n",
+//            c.getValue(),
+//            Arrays.toString(s.getWordFor(c.getKey())));
+//      }
+//      // Dependencies
+//      DependencyParse basicDeps = wrapper.getBasicDParse(s);
+//      s.setBasicDeps(basicDeps);
+//      System.out.println("collapsed deps:\n" + Describe.sentenceWithDeps(s, false));
+//      System.out.println("basic deps:\n" + Describe.sentenceWithDeps(s, true));
+//    }
+//  }
 }

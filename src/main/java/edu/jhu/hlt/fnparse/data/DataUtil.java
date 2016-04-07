@@ -206,8 +206,6 @@ public class DataUtil {
     if (DEBUG)
       System.out.println("\n[DataUtil.convert] doc: " + doc.getId() + " cons_sentences=" + doc.cons_sentences + " cons_propbank_gold=" + doc.cons_propbank_gold + " cons_propbank_auto=" + doc.cons_propbank_auto);
 
-    // TODO add gold parse?
-
     int sentIndex = 0;
     ConstituentItr sent = doc.getConstituentItr(doc.cons_sentences);
     ConstituentItr prop = doc.getConstituentItr(doc.cons_propbank_gold);

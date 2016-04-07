@@ -1781,10 +1781,11 @@ public class State implements StateLike {
 
         // Add the dparse
         ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
-        Function<Sentence, DependencyParse> dParser = csw::getBasicDParse;
-        Function<Sentence, ConstituencyParse> cParser = csw::getCParse;
-        s.setBasicDeps(dParser.apply(s));
-        s.setStanfordParse(cParser.apply(s));
+//        Function<Sentence, DependencyParse> dParser = csw::getBasicDParse;
+//        Function<Sentence, ConstituencyParse> cParser = csw::getCParse;
+//        s.setBasicDeps(dParser.apply(s));
+//        s.setStanfordParse(cParser.apply(s));
+        csw.addAllParses(s, null, true);
 
         ys.add(y);
       }
