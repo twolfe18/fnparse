@@ -32,6 +32,7 @@ import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.StringLabeledDirectedGraph;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.util.Alphabet;
@@ -98,6 +99,7 @@ public class ConcreteStanfordWrapper {
     metadata.setTimestamp(System.currentTimeMillis() / 1000);
     anno = null;
     parseTimer = new Timer("ConcreteStanfordAnnotator.parse", 5, false);
+    parseTimer.showTimeHistInToString = true;
   }
 
   private AnnotateTokenizedConcrete getAnno() {
@@ -152,7 +154,7 @@ public class ConcreteStanfordWrapper {
       communication.setId(s.getId());
       parseTimer.stop();
       return communication;
-    } catch (Exception e) {
+    } catch (Throwable e) {   // Throwable includes AssertionError, which Exception doesn't
       LOG.warn("failed to parse " + s.getId());
       e.printStackTrace();
       parseTimer.stop();
@@ -263,6 +265,10 @@ public class ConcreteStanfordWrapper {
 
   public void addAllParses(Sentence s, Alphabet<String> edgeAlph, boolean overwrite) {
     Communication c = parse(s);
+    if (c == null) {
+      Log.warn("didn't add any parses to " + s.getId());
+      return;
+    }
     if (s.getBasicDeps(false) == null || overwrite) {
       DependencyParse deps = getBasicDParse(c);
       s.setBasicDeps(deps);
