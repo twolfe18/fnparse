@@ -17,10 +17,15 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
 
     public final String[] tokens;
     public final String comment;    // may be null if there was no comment
+    public final String providence;
 
     public RelLine(String[] tokens, String comment) {
+      this(tokens, comment, null);
+    }
+    public RelLine(String[] tokens, String comment, String providence) {
       this.tokens = tokens;
       this.comment = comment;
+      this.providence = providence;
     }
 
     public String toLine() {
@@ -54,10 +59,14 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
   private File file;
   private BufferedReader reader;
   private RelLine next;
+  private int lineNo;
+  public boolean includeProvidence;
 
-  public RelationFileIterator(File f) throws IOException {
+  public RelationFileIterator(File f, boolean includeProvidence) throws IOException {
+    this.includeProvidence = includeProvidence;
     this.file = f;
     this.reader = FileUtil.getReader(f);
+    this.lineNo = -1;
     next();
   }
 
@@ -74,24 +83,41 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
     return next != null;
   }
 
+  private String readLine() throws IOException {
+    lineNo++;
+    return reader.readLine();
+  }
+
   @Override
   public RelLine next() {
-    String line;
     RelLine n = next;
     try {
-      for (line = reader.readLine(), next = null;
-          line != null && next == null;
-          line = reader.readLine()) {
-        String comment = null;
-        int c = line.indexOf('#');
-        if (c >= 0) {
-          comment = line.substring(c + 1, line.length());
-          line = line.substring(0, c).trim();
+      next = null;
+      while (next == null) {
+        String line = readLine();
+        if (line == null)
+          break;
+        String comment;
+        if (line.startsWith("x ") || line.startsWith("y ") || line.startsWith("schema ")) {
+          // Do not allow comments on data lines so that we don't have to worry
+          // about creating escape characters for #
+          comment = null;
+        } else {
+          int c = line.indexOf('#');
+          if (c >= 0) {
+            comment = line.substring(c + 1, line.length()).trim();
+            line = line.substring(0, c).trim();
+          } else {
+            comment = null;
+          }
         }
         if (line.isEmpty())
           continue;
         String[] tokens = line.split(" ");
-        next = new RelLine(tokens, comment == null ? null : comment.trim());
+        String providence = null;
+        if (includeProvidence)
+          providence = "line " + lineNo + " of " + file.getPath();
+        next = new RelLine(tokens, comment, providence);
       }
     } catch (IOException e) {
       throw new RuntimeException(e);
