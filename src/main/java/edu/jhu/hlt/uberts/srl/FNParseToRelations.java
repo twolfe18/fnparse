@@ -3,7 +3,9 @@ package edu.jhu.hlt.uberts.srl;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
@@ -60,6 +62,7 @@ public class FNParseToRelations {
     }
     String tn = "dsyn3-" + name;
     LabeledDirectedGraph depsI = deps.get();
+    Set<String> uniq = new HashSet<>();
     int n = depsI.getNumEdges();
     for (int i = 0; i < n; i++) {
       long e = depsI.getEdge(i);
@@ -69,8 +72,13 @@ public class FNParseToRelations {
       int d = LabeledDirectedGraph.unpackDep(e);
       int lab = LabeledDirectedGraph.unpackEdge(e);
       String l = deps.getEdge(lab);
-      w.write("x " + tn + " " + g + " " + d + " " + l);
-      w.newLine();
+      String line = "x " + tn + " " + g + " " + d + " " + l;
+      if (uniq.add(line)) {
+        // There are duplicates because LabeledDirectedGraph stores both
+        // gov->dep and dep<-gov.
+        w.write(line);
+        w.newLine();
+      }
     }
   }
 
@@ -94,6 +102,7 @@ public class FNParseToRelations {
       return;
     }
     String tn = "csyn3-" + name;
+    Set<String> uniq = new HashSet<>();
     for (Node n : cons.getAllConstituents()) {
       if (n.isLeaf() && skipLeaf) {
 //        Log.info("skipping what should be LEXICAL leaf cons: " + n.getTag());
@@ -105,8 +114,15 @@ public class FNParseToRelations {
       }
       Span s = n.getSpan();
       String t = n.getTag();
-      w.write("x " + tn + " " + s.start + " " + s.end + " " + t);
-      w.newLine();
+      String line = "x " + tn + " " + s.start + " " + s.end + " " + t;
+      if (uniq.add(line)) {
+        // I've seen this in gold parses for some reason, e.g.
+        // grep -n 'x csyn3-gold 12 16 NP' -m 3 <file>
+        // 5035:x csyn3-gold 12 16 NP
+        // 5036:x csyn3-gold 12 16 NP
+        w.write(line);
+        w.newLine();
+      }
     }
   }
 
@@ -236,14 +252,16 @@ public class FNParseToRelations {
 
     String dataset = config.getString("dataset");
     boolean addParses = config.getBoolean("addParses", true);
-    Iterable<FNParse> l = FeaturePrecomputation.getData(dataset, addParses);
+
+    File outputVals = config.getFile("outputVals");
+    Log.info("writing values to " + outputVals.getPath());
 
     FNParseToRelations fn2r = new FNParseToRelations();
     fn2r.definitions(config.getFile("outputDefs"));
 
+    Iterable<FNParse> l = FeaturePrecomputation.getData(dataset, addParses);
+
     TimeMarker tm = new TimeMarker();
-    File outputVals = config.getFile("outputVals");
-    Log.info("writing values to " + outputVals.getPath());
     int docs = 0;
     try (BufferedWriter w = FileUtil.getWriter(outputVals)) {
       int done = 0;
