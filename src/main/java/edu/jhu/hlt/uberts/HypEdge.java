@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 
 /**
@@ -29,6 +30,13 @@ public class HypEdge {
   public static boolean TYPE_CHECK = true;
 
   /**
+   * @deprecated TODO Schema should be encoded in Relation, not HypEdge!
+   * An example of why is in {@link TransitionGeneratorBackwardsParser}, where
+   * we are inferring LHS facts (HypEdges) from RHS facts. If we can't do this
+   * because some LHS variables are not bound on the RHS, we should be able to
+   * assert that the LHS {@link Relation} is a schema relation, not just the
+   * fact/HypEdge.
+   *
    * These edges are persistent in the state, e.g.
    *   def role2 <frame> <role>
    *   role2(framenet/Commerce_buy, Buyer)

@@ -19,6 +19,7 @@ public class Rule {
   public final Term rhs;
   public final Term[] lhs;
 
+  // See TransitionGeneratorForwardParser for why this is needed.
   // lhs2rhs[1][0] = 0, second occurrence of t in lhs => location of t in rhs
   int[][] lhs2rhs;  // [termIdx][argIdx] => location in rhs.args, or -1 if not in rhs.
 
@@ -76,6 +77,9 @@ public class Rule {
     return sb.toString();
   }
 
+  /**
+   * @param u if null, will produce a Rule with rel==null.
+   */
   public static Rule parseRule(String rule, Uberts u) {
     String[] lr = rule.split("=>");
     assert lr.length == 2;
@@ -90,7 +94,8 @@ public class Rule {
   }
 
   public static List<Rule> parseRules(File f, Uberts u) throws IOException {
-    Log.info("reading transition grammar rules from " + f.getPath());
+    Log.info("reading transition grammar rules from " + f.getPath()
+        +  " ubertsResolve=" + (u != null));
     try (BufferedReader r = FileUtil.getReader(f)) {
       return parseRules(r, u);
     }

@@ -67,7 +67,7 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class TransitionGeneratorForwardsParser {
 
-//  /** @deprecated only Edge used for finding the index of a common var name */
+  /** Used for finding the index of a common var name. */
   static class Edge {
     Term ta, tb;      // end points
     int ca, cb;       // indices of common arg in ta/tb.argNames
@@ -90,6 +90,9 @@ public class TransitionGeneratorForwardsParser {
           cb = i;
         }
       }
+    }
+    public boolean isValid() {
+      return ca >= 0 && cb >= 0;
     }
     public String argName() { return ta.argNames[ca]; }
     public NodeType argType() {
@@ -137,6 +140,7 @@ public class TransitionGeneratorForwardsParser {
   }
 
   private void add(String commonVar, Term ti, Term tj) {
+    // For example:
     // ti = ner3(i,t,b)
     // tj = succ(i,j)
     // commonVar = i
@@ -173,6 +177,12 @@ public class TransitionGeneratorForwardsParser {
       Log.info("building adjacency matrix for rule: " + r);
     adj = new HashMap<>();
     uniqHNT = new HashMap<>();
+
+
+    assert false : "I'm 99% sure I should only be taking Edges where the source"
+        + " and sink are in the LHS of the Rule (what we are trying to bind)";
+
+
     List<Term> ts = r.getAllTerms();
     int n = ts.size();
     for (int i = 0; i < n - 1; i++) {
@@ -202,6 +212,9 @@ public class TransitionGeneratorForwardsParser {
     return i;
   }
 
+  /**
+   * Characterizes the binding of RHS values to LHS variables.
+   */
   static class LHS {
     private Rule rule;
     private List<TKey> pat;

@@ -16,8 +16,6 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.HypEdge;
-import edu.jhu.hlt.uberts.HypNode;
-import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
@@ -102,7 +100,7 @@ public class UbertsPipeline {
         // Add y:HypEdges as labels
         for (RelLine line : doc.items) {
           if (line.isX() || line.isY()) {
-            HypEdge e = u.makeEdge(line);
+            HypEdge e = u.makeEdge(line, true);
             if (line.isX())
               u.addEdgeToState(e);
             else
@@ -195,8 +193,10 @@ public class UbertsPipeline {
 
     File multiXY = new File("data/srl-reldata/propbank/instances.rel.multi.gz");
     File multiYhat = new File("data/srl-reldata/propbank/instances.yhat.rel.multi.gz");
-    try (RelationFileIterator itr = new RelationFileIterator(multiXY);
-        ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr)) {
+    boolean includeProvidence = false;
+    boolean dedupInputLines = true;
+    try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);
+        ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
       srl.extractFeatures(x, multiYhat);
     }
 

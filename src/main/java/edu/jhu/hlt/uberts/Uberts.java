@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -391,10 +392,18 @@ public class Uberts {
     return r;
   }
   public Relation getEdgeType(String name) {
+    return getEdgeType(name, false);
+  }
+  public Relation getEdgeType(String name, boolean allowNull) {
     Relation r = relations.get(name);
-    if (r == null)
+    if (r == null && !allowNull)
       throw new IllegalArgumentException("no relation named: " + name);
     return r;
+  }
+  public List<Relation> getAllEdgeTypes() {
+    List<Relation> l = new ArrayList<>();
+    l.addAll(relations.values());
+    return l;
   }
 
   public NodeType getWitnessNodeType(String relationName) {
@@ -405,16 +414,32 @@ public class Uberts {
     return lookupNodeType(wntName, true);
   }
 
-  public HypEdge makeEdge(RelLine line) {
+  /**
+   * @param lookupHypNodes says whether {@link HypNode}s should be looked up and
+   * de-dup'd (this is the case for normal inference where you want, e.g.
+   * (tokenIndex 5) to mean the same exact node regardless of where tokenIndex
+   * and 5 came from) OR if you just want to call new HypNode (as is the case if
+   * you just want to write an edge to a file).
+   */
+  public HypEdge makeEdge(RelLine line, boolean lookupHypNodes) {
     Relation r = getEdgeType(line.tokens[1]);
-    assert r.getNumArgs() == line.tokens.length-2;
+    assert r.getNumArgs() == line.tokens.length-2
+        : "values=" + Arrays.toString(Arrays.copyOfRange(line.tokens, 2, line.tokens.length))
+        + " does not match up with " + r.getDefinitionString()
+        + " line=\"" + line.toLine() + "\""
+        + " providence=" + line.providence;
     HypNode[] tail = new HypNode[r.getNumArgs()];
     for (int i = 0; i < tail.length; i++) {
       NodeType nt = r.getTypeForArg(i);
       Object value = line.tokens[i+2];
-      tail[i] = this.lookupNode(nt, value, true);
+      if (lookupHypNodes)
+        tail[i] = this.lookupNode(nt, value, true);
+      else
+        tail[i] = new HypNode(nt, value);
     }
-    return makeEdge(r, tail);
+    if (lookupHypNodes)
+      return makeEdge(r, tail);
+    return new HypEdge(r, null, tail);
   }
   public HypEdge makeEdge(String relationName, HypNode... tail) {
     Relation r = getEdgeType(relationName);
