@@ -2,8 +2,10 @@ package edu.jhu.hlt.uberts.io;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
@@ -37,7 +39,7 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoCloseable {
 
   public static class RelDoc {
-    public final RelLine def;
+    public final RelLine def; // aka startdoc
     public final List<RelLine> items;
     public RelDoc(RelLine def) {
       this.def = def;
@@ -54,9 +56,16 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
   private RelationFileIterator itr;
   private RelDoc cur;
   private RelLine nextDesc;
+  private Set<RelLine> uniq;
 
-  public ManyDocRelationFileIterator(RelationFileIterator itr) {
+  /**
+   * @param dedup if true, will remove duplicate {@link RelLine} entries within
+   * each document.
+   */
+  public ManyDocRelationFileIterator(RelationFileIterator itr, boolean dedup) {
     this.itr = itr;
+    if (dedup)
+      uniq = new HashSet<>();
 
     // Load up the current item
     this.nextDesc = itr.next();
@@ -73,13 +82,21 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
     RelDoc n = cur;
     cur = new RelDoc(nextDesc);
     nextDesc = null;
+    if (uniq != null)
+      uniq.clear();
     while (itr.hasNext() && nextDesc == null) {
       nextDesc = itr.next();
       if (!nextDesc.tokens[0].equals("startdoc")) {
-        cur.items.add(nextDesc);
+        if (uniq == null || uniq.add(nextDesc))
+          cur.items.add(nextDesc);
         nextDesc = null;
       }
     }
+    if (nextDesc == null)
+      cur = null;
+    // first call to next is in the constructor, n will be null
+    // penultimate call sets cur (and thus on the ultimate call n) to null
+    assert n == null || n.def != null;
     return n;
   }
 
