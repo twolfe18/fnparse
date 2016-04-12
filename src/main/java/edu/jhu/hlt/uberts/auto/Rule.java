@@ -4,10 +4,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.uberts.NodeType;
+import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
 
 /**
@@ -47,6 +51,23 @@ public class Rule {
         lhs2rhs[i][j] = indexOf(varName, rhs.argNames);
       }
     }
+
+    // Check that none of the fact var names are the same
+    assert rhs.factArgName == null;
+    Set<String> factArgNames = new HashSet<>();
+    for (Term t : lhs)
+      assert t.factArgName == null || factArgNames.add(t.factArgName);
+  }
+
+  /**
+   * For every {@link Term}, looks at the Relation name and arg {@link
+   * NodeType}s to create a new {@link Relation} which is set as this.rel and
+   * added to {@link Uberts}. If a {@link Term}s {@link Relation} is already
+   * set, this does nothing.
+   */
+  public void resolveRelations(Uberts u) {
+    for (Term t : getAllTerms())
+      t.resolveRelation(u);
   }
 
   public static int indexOf(String needle, String[] haystack) {
@@ -82,7 +103,7 @@ public class Rule {
    */
   public static Rule parseRule(String rule, Uberts u) {
     String[] lr = rule.split("=>");
-    assert lr.length == 2;
+    assert lr.length == 2 : "rule must contain one instance of '=>': " + rule;
     String lhs = lr[0].trim();
     String[] lhsTermStrs = lhs.split("&");
     Term[] lhsTerms = new Term[lhsTermStrs.length];
