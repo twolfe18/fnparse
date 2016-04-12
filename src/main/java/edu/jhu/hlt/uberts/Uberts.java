@@ -229,56 +229,63 @@ public class Uberts {
    * @return a list of new {@link Relation}s defined in this file/reader.
    */
   public List<Relation> readRelData(BufferedReader r) throws IOException  {
-    String relName;
     List<Relation> defs = new ArrayList<>();
-    for (String line = r.readLine(); line != null; line = r.readLine()) {
-      line = stripComment(line);
-      if (line.isEmpty())
-        continue;
-      String[] toks = line.split("\\s+");
-      String command = toks[0];
-      switch (command) {
-      case "def":
-        relName = toks[1];
-        NodeType[] argTypes = new NodeType[toks.length - 2];
-        for (int i = 0; i < argTypes.length; i++) {
-          String argType = toks[i + 2];
-          if (argType.charAt(0) == '<') {
-            int n = argType.length();
-            assert argType.charAt(n-1) == '>';
-            argType = argType.substring(1, n-1);
-          }
-          argTypes[i] = this.lookupNodeType(argType, true);
-        }
-        Relation rr = new Relation(relName, argTypes);
+    for (String line = r.readLine(); line != null; line = r.readLine()) { 
+      Relation rr = readRelData(line);
+      if (rr != null)
         defs.add(rr);
-        this.addEdgeType(rr);
-        break;
-      case "schema":
-      case "x":
-      case "y":
-        relName = toks[1];
-        Relation rel = this.getEdgeType(relName);
-        HypNode[] args = new HypNode[toks.length-2];
-        for (int i = 0; i < args.length; i++) {
-          // TODO Consider this:
-          // How should we deserialize String => ???
-          Object val = toks[i+2];
-          args[i] = this.lookupNode(rel.getTypeForArg(i), val, true);
-        }
-        HypEdge e = this.makeEdge(rel, args);
-        if (command.equals("schema"))
-          e = new HypEdge.Schema(e);
-        if (command.equals("y"))
-          this.addLabel(e);
-        else
-          this.addEdgeToState(e);
-        break;
-      default:
-        throw new RuntimeException("unknown-command: " + command);
-      }
     }
     return defs;
+  }
+
+  public Relation readRelData(String line) {
+    String relName;
+    Relation def = null;
+    line = stripComment(line);
+    if (line.isEmpty())
+      return null;
+    String[] toks = line.split("\\s+");
+    String command = toks[0];
+    switch (command) {
+    case "def":
+      relName = toks[1];
+      NodeType[] argTypes = new NodeType[toks.length - 2];
+      for (int i = 0; i < argTypes.length; i++) {
+        String argType = toks[i + 2];
+        if (argType.charAt(0) == '<') {
+          int n = argType.length();
+          assert argType.charAt(n-1) == '>';
+          argType = argType.substring(1, n-1);
+        }
+        argTypes[i] = this.lookupNodeType(argType, true);
+      }
+      def = new Relation(relName, argTypes);
+      this.addEdgeType(def);
+      break;
+    case "schema":
+    case "x":
+    case "y":
+      relName = toks[1];
+      Relation rel = this.getEdgeType(relName);
+      HypNode[] args = new HypNode[toks.length-2];
+      for (int i = 0; i < args.length; i++) {
+        // TODO Consider this:
+        // How should we deserialize String => ???
+        Object val = toks[i+2];
+        args[i] = this.lookupNode(rel.getTypeForArg(i), val, true);
+      }
+      HypEdge e = this.makeEdge(rel, args);
+      if (command.equals("schema"))
+        e = new HypEdge.Schema(e);
+      if (command.equals("y"))
+        this.addLabel(e);
+      else
+        this.addEdgeToState(e);
+      break;
+    default:
+      throw new RuntimeException("unknown-command: " + command);
+    }
+    return def;
   }
 
   /**
@@ -410,8 +417,14 @@ public class Uberts {
     return getWitnessNodeType(getEdgeType(relationName));
   }
   public NodeType getWitnessNodeType(Relation relation) {
-    String wntName = "witness-" + relation.getName();
+    String wntName = getWitnessNodeTypeName(relation);
     return lookupNodeType(wntName, true);
+  }
+  public static String getWitnessNodeTypeName(Relation relation) {
+    return getWitnessNodeTypeName(relation.getName());
+  }
+  public static String getWitnessNodeTypeName(String relationName) {
+    return "witness-" + relationName;
   }
 
   /**
