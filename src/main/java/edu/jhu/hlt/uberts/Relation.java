@@ -19,6 +19,9 @@ public class Relation {
   public Relation(String name, NodeType... domain) {
     this.name = name;
     this.domain = domain;
+
+    for (int i = 0; i < domain.length; i++)
+      assert domain[i] != null;
   }
 
   public String getName() {
