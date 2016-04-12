@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.ArgMin;
@@ -34,6 +35,9 @@ import edu.jhu.prim.tuple.Pair;
  * Into a {@link TransitionGenerator} who's LHS is a {@link TKey} array which
  * can be inserted into a {@link TNode}.
  * @see Uberts#addTransitionGenerator(TKey[], TransitionGenerator)
+ *
+ * Supports Hobbs' prime notation, e.g.
+ *   srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) => srl3(s2,e2,k)
  *
  * The method works by finding a spanning forest of HypEdges in the LHS of the
  * rule. Edges in this graph correspond to the presence of a shared variable
@@ -74,28 +78,42 @@ public class TransitionGeneratorForwardsParser {
     public Edge(String varName, Term ta, Term tb) {
       this.ta = ta;
       this.tb = tb;
-      ca = -1;
-      for (int i = 0; i < ta.argNames.length; i++) {
-        String a = ta.argNames[i];
-        if (a.equals(varName)) {
-          assert ca < 0;
-          ca = i;
+      if (varName.equals(ta.factArgName)) {
+        ca = Integer.MAX_VALUE;
+      } else {
+        ca = -1;
+        for (int i = 0; i < ta.argNames.length; i++) {
+          String a = ta.argNames[i];
+          if (a.equals(varName)) {
+            assert ca < 0;
+            ca = i;
+          }
         }
       }
-      cb = -1;
-      for (int i = 0; i < tb.argNames.length; i++) {
-        String a = tb.argNames[i];
-        if (a.equals(varName)) {
-          assert cb < 0;
-          cb = i;
+      if (varName.equals(tb.factArgName)) {
+        cb = Integer.MAX_VALUE;
+      } else {
+        cb = -1;
+        for (int i = 0; i < tb.argNames.length; i++) {
+          String a = tb.argNames[i];
+          if (a.equals(varName)) {
+            assert cb < 0;
+            cb = i;
+          }
         }
       }
     }
     public boolean isValid() {
       return ca >= 0 && cb >= 0;
     }
-    public String argName() { return ta.argNames[ca]; }
+    public String argName() {
+      if (ca == Integer.MAX_VALUE)
+        return Uberts.getWitnessNodeTypeName(ta.rel);
+      return ta.argNames[ca];
+    }
     public NodeType argType() {
+      if (ca == Integer.MAX_VALUE)
+        throw new RuntimeException("handle this!");
       NodeType nt = ta.rel.getTypeForArg(ca);
       assert nt == tb.rel.getTypeForArg(cb);
       return nt;
@@ -135,6 +153,8 @@ public class TransitionGeneratorForwardsParser {
     n.add(b);
   }
   private void addBothDir(HNodeType a, HNodeType b) {
+    if (verbose)
+      Log.info("adding edges betwee " + a + " and " + b);
     addOneDir(a, b);
     addOneDir(b, a);
   }
@@ -155,6 +175,8 @@ public class TransitionGeneratorForwardsParser {
 
   private HNodeType lookupHNT(int argPos, NodeType nt) {
     String key = "nt/" + argPos + "/" + nt.getName();
+    if (verbose)
+      Log.info("key=" + key);
     HNodeType val = uniqHNT.get(key);
     if (val == null) {
       val = new HNodeType(argPos, nt);
@@ -164,6 +186,8 @@ public class TransitionGeneratorForwardsParser {
   }
   private HNodeType lookupHNT(int argPos, Relation r) {
     String key = "rel/" + argPos + "/" + r.getName();
+    if (verbose)
+      Log.info("key=" + key);
     HNodeType val = uniqHNT.get(key);
     if (val == null) {
       val = new HNodeType(argPos, r);
@@ -177,13 +201,7 @@ public class TransitionGeneratorForwardsParser {
       Log.info("building adjacency matrix for rule: " + r);
     adj = new HashMap<>();
     uniqHNT = new HashMap<>();
-
-
-    assert false : "I'm 99% sure I should only be taking Edges where the source"
-        + " and sink are in the LHS of the Rule (what we are trying to bind)";
-
-
-    List<Term> ts = r.getAllTerms();
+    List<Term> ts = Arrays.asList(r.lhs);
     int n = ts.size();
     for (int i = 0; i < n - 1; i++) {
       for (int j = i + 1; j < n; j++) {
@@ -192,9 +210,13 @@ public class TransitionGeneratorForwardsParser {
         Set<String> commonVarNames = new HashSet<>();
         for (String vn : ti.argNames)
           commonVarNames.add(vn);
+        if (ti.factArgName != null)
+          commonVarNames.add(ti.factArgName);
         for (String vn : tj.argNames)
           if (commonVarNames.contains(vn))
             add(vn, ti, tj);
+        if (tj.factArgName != null && commonVarNames.contains(tj.factArgName))
+          add(tj.factArgName, ti, tj);
       }
     }
     if (verbose)
@@ -269,20 +291,30 @@ public class TransitionGeneratorForwardsParser {
 
     // Depth first search
     // Construct spanning forest
+    if (verbose)
+      Log.info("parsing: " + r);
     LHS pat = new LHS(r);
     Set<Relation> done = new HashSet<>();
     Deque<HNodeType> stack = new ArrayDeque<>();
-    stack.push(lookupHNT(State.HEAD_ARG_POS, r.lhs[0].rel));
-    done.add(r.lhs[0].rel);
-    pat.add(stack.peek());
     while (done.size() < r.lhs.length) {
-      if (stack.isEmpty())
-        throw new RuntimeException("no spanning tree");
+      if (stack.isEmpty()) {
+        // Find the first LHS term whose Relation we're not done with.
+        for (int i = 0; i < r.lhs.length; i++) {
+          Relation rel = r.lhs[i].rel;
+          if (!done.contains(rel)) {
+            stack.push(lookupHNT(State.HEAD_ARG_POS, rel));
+            done.add(rel);
+            pat.add(stack.peek());
+            break;
+          }
+        }
+      }
       HNodeType cur = stack.peek();
       List<HNodeType> neighbors = adj.get(cur);
       if (verbose) {
         Log.info("cur=" + cur);
-        Log.info("adjacent=" + neighbors);
+        Log.info("cur.isRelation=" + cur.isRelation());
+        Log.info("neighbors=" + neighbors);
       }
 
       HNodeType next = null;
@@ -296,6 +328,10 @@ public class TransitionGeneratorForwardsParser {
           for (HNodeType ntHNT : neighbors) {
             assert ntHNT.isNodeType();
             for (HNodeType relHNT : adj.get(ntHNT)) {
+              if (verbose) {
+                Log.info("relHNT=" + relHNT + " (relHNT==cur)=" + (relHNT==cur)
+                    + " done.contains(relHNT.getRight)=" + done.contains(relHNT.getRight()));
+              }
               if (relHNT == cur)
                 continue;
               if (!done.contains(relHNT.getRight()))
@@ -308,7 +344,10 @@ public class TransitionGeneratorForwardsParser {
           for (HNodeType relHNT : neighbors) {
             assert relHNT.isRelation();
             Relation rel = relHNT.getRight();
-            if (!done.contains(rel))
+            boolean d = done.contains(rel);
+            if (verbose)
+              Log.info("\trel=" + rel + " done=" + d);
+            if (!d)
               m.offer(relHNT, order(rel, r));
           }
         }
@@ -415,7 +454,10 @@ public class TransitionGeneratorForwardsParser {
     }
   }
 
-  public static void main(String[] args) {
+  public static void unprimedExample() {
+    System.out.println();
+    Log.info("starting...");
+
     TransitionGeneratorForwardsParser tfp = new TransitionGeneratorForwardsParser();
 //    tfp.verbose = true;
 
@@ -461,5 +503,44 @@ public class TransitionGeneratorForwardsParser {
     System.out.println("lhs3:");
     for (TKey tk : lhs3)
       System.out.println("\t" + tk);
+  }
+
+  public static void primedExample() {
+    System.out.println();
+    Log.info("starting...");
+
+    TransitionGeneratorForwardsParser tfp = new TransitionGeneratorForwardsParser();
+//    tfp.verbose = true;
+
+    Uberts u = new Uberts(new Random(9001));
+    u.readRelData("def role <frame> <role>");
+    u.readRelData("def event1 <tokenIndex> <tokenIndex>");
+    u.readRelData("def event2 <witness-event1> <frame>");
+    u.readRelData("def srl1 <tokenIndex> <tokenIndex>");
+    u.readRelData("def srl2 <witness-srl1> <witness-event1>");
+    u.readRelData("def srl3 <witness-srl2> <witness-event2> <role>");
+    Rule ru1 = Rule.parseRule("event1'(e1,i,j) & srl1'(s1,k,l) => srl2(s1,e1)", u);
+    ru1.resolveRelations(u);
+    System.out.println(ru1);
+    List<TKey> lhs1 = tfp.parse(ru1).getPath();
+    System.out.println("lhs:");
+    for (TKey tk : lhs1)
+      System.out.println("\t" + tk);
+
+    System.out.println();
+
+    System.out.println("this example requires enforcing a node equality constraint (e1 which appears in the first two LHS terms)");
+    Rule ru2 = Rule.parseRule("srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) => srl3(s2,e2,k)", u);
+    ru2.resolveRelations(u);
+    System.out.println(ru2);
+    List<TKey> lhs2 = tfp.parse(ru2).getPath();
+    System.out.println("lhs:");
+    for (TKey tk : lhs2)
+      System.out.println("\t" + tk);
+  }
+
+  public static void main(String[] args) {
+    unprimedExample();
+    primedExample();
   }
 }
