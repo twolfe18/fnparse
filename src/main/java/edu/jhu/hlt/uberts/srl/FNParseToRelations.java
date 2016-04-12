@@ -37,6 +37,9 @@ public class FNParseToRelations {
   // If true, will convert things like srl3 instances to [srl1, srl2, srl3] instances
   public boolean outputDerivedLabels = false;
 
+  // For new Hobbs models, only write out srl4 and not event*
+  public boolean srl4Mode = true;
+
   private void write(Sentence s, BufferedWriter w) throws IOException {
     int n = s.size();
     for (int i = 0; i < n; i++) {
@@ -150,20 +153,25 @@ public class FNParseToRelations {
     w.newLine();
     w.write("def csyn3-gold <tokenIndex> <tokenIndex> <cfgLabel> # start token (inclusive), end token (exclusive), cfg label");
     w.newLine();
-    if (outputDerivedLabels) {
-      w.write("def event1 <tokenIndex> <tokenIndex> # start token (inclusive), end token (exclusive)");
+    if (srl4Mode) {
+      w.write("def srl4 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <roleLabel> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
+      w.newLine();
+    } else {
+      if (outputDerivedLabels) {
+        w.write("def event1 <tokenIndex> <tokenIndex> # start token (inclusive), end token (exclusive)");
+        w.newLine();
+      }
+      w.write("def event2 <tokenIndex> <tokenIndex> <frame> # start token (inclusive), end token (exclusive), frame");
+      w.newLine();
+      if (outputDerivedLabels) {
+        w.write("def srl1 <tokenIndex> <tokenIndex> # arg start tok (inc), arg end tok (exc)");
+        w.newLine();
+        w.write("def srl2 <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # pred start tok (inc), pred end tok (exc), arg start tok (inc), arg end tok (exc)");
+        w.newLine();
+      }
+      w.write("def srl3 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <roleLabel> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
       w.newLine();
     }
-    w.write("def event2 <tokenIndex> <tokenIndex> <frame> # start token (inclusive), end token (exclusive), frame");
-    w.newLine();
-    if (outputDerivedLabels) {
-      w.write("def srl1 <tokenIndex> <tokenIndex> # arg start tok (inc), arg end tok (exc)");
-      w.newLine();
-      w.write("def srl2 <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # pred start tok (inc), pred end tok (exc), arg start tok (inc), arg end tok (exc)");
-      w.newLine();
-    }
-    w.write("def srl3 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <roleLabel> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
-    w.newLine();
   }
 
   public void write(FNParse y, BufferedWriter w) throws IOException {
@@ -178,13 +186,14 @@ public class FNParseToRelations {
       Span t = fi.getTarget();
       Frame f = fi.getFrame();
       String fs = f.getName();
-      write(t, fs, w);
+      if (!srl4Mode)
+        write(t, fs, w);
       int K = f.numRoles();
       for (int k = 0; k < K; k++) {
         Span s = fi.getArgument(k);
         if (s == Span.nullSpan)
           continue;
-        String ks = f.getFrameRole(k);
+        String ks = srl4Mode ? f.getRole(k) : f.getFrameRole(k);
         write(t, fs, s, ks, w);
         for (Span cs : fi.getContinuationRoleSpans(k))
           write(t, fs, cs, ks + "/C", w);
@@ -210,14 +219,19 @@ public class FNParseToRelations {
 //    String ss = s.start + ")" + s.end;
     String ts = t.start + " " + t.end;
     String ss = s.start + " " + s.end;
-    if (outputDerivedLabels) {
-      w.write("y srl1 " + ss);
+    if (srl4Mode) {
+      w.write("y srl4 " + ts + " " + f + " " + ss + " " + k);
       w.newLine();
-      w.write("y srl2 " + ts + " " + ss);
+    } else {
+      if (outputDerivedLabels) {
+        w.write("y srl1 " + ss);
+        w.newLine();
+        w.write("y srl2 " + ts + " " + ss);
+        w.newLine();
+      }
+      w.write("y srl3 " + ts + " " + f + " " + ss + " " + k);
       w.newLine();
     }
-    w.write("y srl3 " + ts + " " + f + " " + ss + " " + k);
-    w.newLine();
   }
 
   /**
@@ -268,6 +282,7 @@ public class FNParseToRelations {
       for (FNParse y : l) {
         Sentence s = y.getSentence();
         s.lemmatize();
+        Log.info("sentenceLength=" + s.size());
         docs++;
         w.write("startdoc " + y.getId() + " # " + dataset);
         w.newLine();
