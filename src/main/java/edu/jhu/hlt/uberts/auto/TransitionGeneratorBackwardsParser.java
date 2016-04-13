@@ -5,9 +5,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -45,6 +47,63 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
  */
 public class TransitionGeneratorBackwardsParser {
   public static boolean DEBUG = true;
+
+  public static class Iter implements Iterator<RelDoc> {
+    private RelDoc cur;
+    private Iterator<RelDoc> wrapped;
+    private TransitionGeneratorBackwardsParser parser;
+    private Uberts u;
+
+    /**
+     * @param wrapped should contain groups of {@link RelLine}s (documents),
+     *        e.g. {@link ManyDocRelationFileIterator}.
+     * @param u should already have data definitions added. These definitions
+     *        are needed to bootstrap the types in the transition grammar.
+     * @param transitionGrammar contains transition rules, e.g.
+     *        data/srl-reldata/srl-grammar.hobbs.trans
+     */
+    public static Iter fromGrammar(Iterator<RelDoc> wrapped, Uberts u, File transitionGrammar) throws IOException {
+      TypeInference ti = new TypeInference(u);
+      for (Rule untypedRule : Rule.parseRules(transitionGrammar, null))
+        ti.add(untypedRule);
+      List<Rule> typedRules = ti.runTypeInference();
+      return new Iter(wrapped, u, typedRules);
+    }
+
+    public Iter(Iterator<RelDoc> wrapped, Uberts u, Collection<Rule> typedRules) {
+      this.u = u;
+      this.wrapped = wrapped;
+      this.parser = new TransitionGeneratorBackwardsParser();
+      for (Rule r : typedRules)
+        this.parser.add(r);
+      cur = advance();
+    }
+
+    private RelDoc advance() {
+      if (!wrapped.hasNext())
+        return null;
+      RelDoc d = wrapped.next();
+      for (int i = 0; i < d.items.size(); i++) {
+        RelLine l = d.items.get(i);
+        HypEdge fact = u.makeEdge(l, false);
+        for (HypEdge e : parser.expand(fact))
+          d.items.add(e.getRelLine("y"));
+      }
+      return d;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return cur != null;
+    }
+
+    @Override
+    public RelDoc next() {
+      RelDoc r = cur;
+      cur = advance();
+      return r;
+    }
+  }
 
   private Map<Relation, List<Rule>> howToMake = new HashMap<>();
   private boolean verbose = false;
