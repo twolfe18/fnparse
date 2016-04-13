@@ -246,9 +246,11 @@ public class TransitionGeneratorBackwardsParser {
       ti.add(untypedRule);
 
     // Tell the backwards parser about each typed rule.
-    TransitionGeneratorBackwardsParser tgp = new TransitionGeneratorBackwardsParser();
-    for (Rule typedRule : ti.runTypeInference())
-      tgp.add(typedRule);
+//    TransitionGeneratorBackwardsParser tgp = new TransitionGeneratorBackwardsParser();
+//    for (Rule typedRule : ti.runTypeInference())
+//      tgp.add(typedRule);
+    ti.runTypeInference();
+//    ti.debug = true;
 
     // Output the given x and y data PLUS the inferred intermediate labels.
     // TODO Right now this is going to file, but this could easily be routed
@@ -277,7 +279,8 @@ public class TransitionGeneratorBackwardsParser {
         for (int i = 0; i < d.items.size(); i++) {
           RelLine rel = d.items.get(i);
           HypEdge fact = u.makeEdge(rel, lookupHypNodes);
-          for (HypEdge assume : tgp.expand(fact)) {
+//          for (HypEdge assume : tgp.expand(fact)) {
+          for (HypEdge assume : ti.expand(fact)) {
             if (assume.getRelation() == succTok)
               continue;
             counts.increment("facts-derived");

@@ -114,6 +114,9 @@ public class Rule {
     return new Rule(lhsTerms, rhsTerm);
   }
 
+  /**
+   * @param u if null, will produce a Rule with rel==null.
+   */
   public static List<Rule> parseRules(File f, Uberts u) throws IOException {
     Log.info("reading transition grammar rules from " + f.getPath()
         +  " ubertsResolve=" + (u != null));
@@ -122,6 +125,9 @@ public class Rule {
     }
   }
 
+  /**
+   * @param u if null, will produce a Rule with rel==null.
+   */
   public static List<Rule> parseRules(BufferedReader r, Uberts u) throws IOException {
     List<Rule> rules = new ArrayList<>();
     for (String line = r.readLine(); line != null; line = r.readLine()) {

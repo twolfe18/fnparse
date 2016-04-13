@@ -9,9 +9,12 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * Assuming you have added some "def relationName <nodeTypeForArg0> ..."
@@ -28,14 +31,24 @@ import edu.jhu.hlt.uberts.Uberts;
  */
 public class TypeInference {
 
+  // Graph structure
   private Map<Arg, List<Arg>> edges;  // bi-directional, based on name equality, no head nodes (defs or usages)
-  private Map<String, Set<Arg>> rel2UntypedArgs;
   private Map<String, Collection<Arg>> rel2HeadNodeUsages;
+
+  // Type inference
+  private Map<String, Set<Arg>> rel2UntypedArgs;
   private Map<String, Integer> rel2NumArgs;
   private Map<Arg, NodeType> typed;
+
+  // Value inference
+  private Map<String, Set<Arg>> rel2UnvaluedArgs;
+  private Map<Arg, HypNode> values;  // null while not doing value propagation
+
+  // Misc
+  private List<Rule> rules;
   private Uberts u;
-  public boolean debug = true;
-  private List<Rule> rules; // for checking
+  public boolean debug = false;
+
 
   public TypeInference(Uberts u) {
     this.u = u;
@@ -45,6 +58,72 @@ public class TypeInference {
     this.rel2NumArgs = new HashMap<>();
     this.typed = new HashMap<>();
     this.rules = new ArrayList<>();
+  }
+
+  public List<HypEdge> expand(HypEdge fact) {
+    // We re-set the inferred values for every fact
+    this.values = new HashMap<>();
+    this.rel2UnvaluedArgs = new HashMap<>();
+    for (Rule r : rules) {
+      for (Term t : r.lhs) {
+        Set<Arg> unvalued = rel2UnvaluedArgs.get(t.relName);
+        if (unvalued == null) {
+          unvalued = new HashSet<>();
+          rel2UnvaluedArgs.put(t.relName, unvalued);
+        }
+        int na = t.getNumArgs();
+        for (int i = 0; i < na; i++)
+          unvalued.add(new Arg(t.relName, i));
+      }
+    }
+
+    List<HypEdge> all = new ArrayList<>();
+    for (Rule r : rules)
+      expand(fact, r, all);
+    return all;
+  }
+
+  private Set<Pair<Arg, String>> alreadyWarnedAbout = new HashSet<>();
+  private void expand(HypEdge fact, Rule r, List<HypEdge> addTo) {
+    assert r.rhs.rel != null : "did you run type inference?";
+    if (!r.rhs.relName.equals(fact.getRelation().getName()))
+      return; // not applicable
+    if (debug)
+      Log.info("fact=" + fact + " rule=" + r);
+    Relation rel = r.rhs.rel;
+    assert rel == u.getEdgeType(r.rhs.relName);
+    assert rel == fact.getRelation();
+
+    // Propagate values
+    int na = rel.getNumArgs();
+    for (int i = 0; i < na; i++) {
+      Arg known = new Arg(rel.getName(), i);
+      HypNode val = fact.getTail(i);
+      addValue(known, val, new HashSet<>());
+    }
+
+    // Collect the values into inferred facts
+    int lhst = r.lhs.length;
+    lhsTerm:
+    for (int i = 0; i < lhst; i++) {
+      Relation lrel = r.lhs[i].rel;
+      assert lrel != null;
+      int lrelNA = lrel.getNumArgs();
+      HypNode[] tail = new HypNode[lrelNA];
+      for (int j = 0; j < lrelNA; j++) {
+        Arg q = new Arg(lrel.getName(), j);
+        tail[j] = values.get(q);
+        if (tail[j] == null) {
+          if (alreadyWarnedAbout.add(new Pair<>(q, fact.getRelation().getName())))
+            Log.warn("could not compute value for " + q + " based on " + fact + ", skipping");
+          continue lhsTerm;
+        }
+      }
+      HypEdge e = u.makeEdge(lrel, tail);
+      if (debug)
+        Log.info("assumed: " + e);
+      addTo.add(e);
+    }
   }
 
   // populates: this.rel2UntypedArgs
@@ -181,12 +260,12 @@ public class TypeInference {
     for (Arg a : roots)
       addType(a, typed.get(a), new HashSet<>());
 
-    if (debug) {
-      for (Rule r : rules) {
-        for (Term t : r.getAllTerms()) {
-          if (t.rel == null)
-            t.rel = u.getEdgeType(t.relName);
-          assert t.allArgsAreTyped();
+    for (Rule r : rules) {
+      for (Term t : r.getAllTerms()) {
+        if (t.rel == null)
+          t.rel = u.getEdgeType(t.relName);
+        assert t.allArgsAreTyped();
+        if (debug) {
           for (int i = 0; i < t.argNames.length; i++)
             Log.info("type(" + new Arg(t.relName, i) + ")=" + t.getArgType(i));
         }
@@ -195,7 +274,73 @@ public class TypeInference {
     return rules;
   }
 
+  // Should mimic addType
+  private void addValue(Arg a, HypNode value, HashSet<Arg> visited) {
+
+    // Store the value
+    Object old = values.put(a, value);
+    assert old == null || old == value;
+
+    if (!visited.add(a)) {
+      if (debug)
+        Log.info("been here before: " + a);
+      return;
+    }
+
+    if (debug)
+      Log.info("adding: " + a + " := " + value);
+
+    // See if we're done typing this Arg's Relation
+    Set<Arg> uv = rel2UnvaluedArgs.get(a.relation);
+    if (uv != null) {
+      uv.remove(a);
+      if (uv.isEmpty()) {
+        rel2UnvaluedArgs.remove(a.relation);
+
+        if (debug)
+          Log.info("no more unvalued args for " + a.relation);
+
+        // Build the fact
+        Relation rel = u.getEdgeType(a.relation);
+        int na = rel.getNumArgs();
+        assert na == rel2NumArgs.get(a.relation);
+        HypNode[] tail = new HypNode[na];
+        for (int i = 0; i < na; i++) {
+          Arg key = new Arg(a.relation, i);
+          tail[i] = values.get(key);
+          assert tail[i] != null;
+        }
+        HypEdge e = u.makeEdge(rel, tail);
+
+        // Store the head value
+        Arg head = new Arg(a.relation, Arg.WITNESS_ARGPOS);
+        old = values.put(head, e.getHead());
+        assert old == null || old == e.getHead();
+
+        // Find all uses of this head value and propagate!
+        Collection<Arg> boundToHead = rel2HeadNodeUsages.get(a.relation);
+        if (boundToHead != null) {
+          for (Arg b : boundToHead) {
+            if (debug)
+              Log.info(b + " is bound to head node of " + a.relation);
+            addValue(b, e.getHead(), visited);
+          }
+        }
+      }
+    }
+
+    // Propagate this value to other Args which were bound in the same Rule
+    // with the same name.
+    Collection<Arg> sameName = edges.get(a);
+    if (sameName != null)
+      for (Arg s : sameName)
+        addValue(s, value, visited);
+  }
+
   private void addType(Arg a, NodeType t, HashSet<Arg> visited) {
+    if (t == null || visited == null)
+      throw new IllegalArgumentException();
+
     // Store the type
     Object old = typed.put(a, t);
     assert old == null || old == t;
@@ -240,8 +385,8 @@ public class TypeInference {
       }
     }
 
-    // Propagate this type to other Args which were bound in the same Rule with
-    // the same name.
+    // Propagate this type to other Args which were bound in the same Rule
+    // with the same name.
     Collection<Arg> sameName = edges.get(a);
     if (sameName != null)
       for (Arg s : sameName)
