@@ -4,6 +4,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 
+import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 
 /**
@@ -19,7 +21,6 @@ public class Relation {
   public Relation(String name, NodeType... domain) {
     this.name = name;
     this.domain = domain;
-
     for (int i = 0; i < domain.length; i++)
       assert domain[i] != null;
   }
@@ -76,8 +77,13 @@ public class Relation {
   }
   public static class EqualityArray implements Comparable<EqualityArray> {
     private Object[] tail;
+    private long hc;
     public EqualityArray(Object[] tail) {
       this.tail = tail;
+      long[] h = new long[tail.length];
+      for (int i = 0; i < tail.length; i++)
+        h[i] = tail[i].hashCode();
+      hc = Hash.mix64(h);
     }
     @Override
     public boolean equals(Object other) {
@@ -110,6 +116,10 @@ public class Relation {
       }
       sb.append(')');
       return sb.toString();
+    }
+    @Override
+    public int hashCode() {
+      return (int) hc;
     }
   }
 
