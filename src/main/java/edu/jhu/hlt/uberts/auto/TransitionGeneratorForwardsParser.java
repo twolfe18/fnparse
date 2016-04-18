@@ -19,6 +19,7 @@ import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
+import edu.jhu.hlt.uberts.Relation.EqualityArray;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.TNode;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
@@ -71,7 +72,11 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class TransitionGeneratorForwardsParser {
 
-  /** Used for finding the index of a common var name. */
+  /**
+   * Used for finding the index of a common var name.
+   * @deprecated Almost no reason to use this, you should probably be using
+   * {@link TypeInference}.
+   */
   static class Edge {
     Term ta, tb;      // end points
     int ca, cb;       // indices of common arg in ta/tb.argNames
@@ -107,13 +112,17 @@ public class TransitionGeneratorForwardsParser {
       return ca >= 0 && cb >= 0;
     }
     public String argName() {
-      if (ca == Integer.MAX_VALUE)
-        return Uberts.getWitnessNodeTypeName(ta.rel);
+      if (ca == Integer.MAX_VALUE) {
+//        return Uberts.getWitnessNodeTypeName(ta.rel);
+        return tb.argNames[cb];
+      }
       return ta.argNames[ca];
     }
     public NodeType argType() {
       if (ca == Integer.MAX_VALUE)
-        throw new RuntimeException("handle this!");
+        return tb.rel.getTypeForArg(cb);
+      if (cb == Integer.MAX_VALUE)
+        return ta.rel.getTypeForArg(ca);
       NodeType nt = ta.rel.getTypeForArg(ca);
       assert nt == tb.rel.getTypeForArg(cb);
       return nt;
@@ -241,25 +250,34 @@ public class TransitionGeneratorForwardsParser {
     private Rule rule;
     private List<TKey> pat;
     private Map<Relation, Integer> rel2patIdx;
+    private int numGotoParent;
+
     public LHS(Rule r) {
+      numGotoParent = 0;
       rule = r;
       pat = new ArrayList<>();
       rel2patIdx = new HashMap<>();
     }
+
     public List<TKey> getPath() {
       return pat;
     }
+
     public void add(TKey tkey) {
+      assert tkey == TNode.GOTO_PARENT;
+      numGotoParent++;
       pat.add(tkey);
     }
+
     public void add(HNodeType hnt) {
       if (hnt.isRelation()) {
-        int i = pat.size();
+        int i = pat.size() - numGotoParent;
         Integer old = rel2patIdx.put(hnt.getRight(), i);
         assert old == null;
       }
       pat.add(hnt.getTKey());
     }
+
 //    /**
 //     * Return the index of this relation in the pattern. This value can be used
 //     * with {@link GraphTraversalTrace#getBoundEdge(int)} to retrieve the
@@ -268,6 +286,7 @@ public class TransitionGeneratorForwardsParser {
 //    public int getIndexOfRelationInLhsPat(Relation r) {
 //      return rel2patIdx.get(r);
 //    }
+
     public HypEdge getBoundValue(Relation r, GraphTraversalTrace gtt) {
       Integer patIdx = rel2patIdx.get(r);
       if (patIdx == null) {
@@ -280,8 +299,17 @@ public class TransitionGeneratorForwardsParser {
       assert e != null;
       return e;
     }
+
     public Rule getRule() {
       return rule;
+    }
+
+    /** If the last TKey is GOTO_PARENT, then remove it */
+    public void maybeTrimGotoParent() {
+      int n = pat.size();
+      if (pat.get(n - 1) == TNode.GOTO_PARENT)
+        pat.remove(n - 1);
+      assert pat.get(pat.size() - 1) != TNode.GOTO_PARENT;
     }
   }
 
@@ -366,6 +394,7 @@ public class TransitionGeneratorForwardsParser {
         pat.add(next);
       }
     }
+    pat.maybeTrimGotoParent();
     return pat;
   }
 
@@ -386,11 +415,16 @@ public class TransitionGeneratorForwardsParser {
     private LHS match;
     private Uberts u;
 
-    public FeatureExtractionFactor feats = null;
+    public FeatureExtractionFactor<?> feats = null;
 
     public TG(LHS match, Uberts u) {
       this.match = match;
       this.u = u;
+
+      // Do some checking
+      for (int patIdx : match.rel2patIdx.values()) {
+        assert patIdx < match.pat.size();
+      }
     }
 
     @Override
@@ -406,8 +440,30 @@ public class TransitionGeneratorForwardsParser {
         Log.info("rule=" + rule);
         Log.info("pat=\n\t" + StringUtils.join("\n\t", match.pat));
       }
-      Object[] rhsVals = new Object[rule.rhs.getNumArgs()];
+      HypNode[] rhsNodes = new HypNode[rule.rhs.getNumArgs()];
       for (int ti = 0; ti < rule.lhs.length; ti++) {
+
+        // Event/fact/witness variable
+        int fRhsIdx = rule.lhsFact2rhs[ti];
+        if (fRhsIdx >= 0) {
+          // Lookup the bound value
+          Relation r = rule.lhs[ti].rel;
+          HypEdge e = match.getBoundValue(r, lhsValues);
+          assert e.getRelation() == r;
+          Object val = e.getHead().getValue();
+          assert val instanceof EqualityArray;
+          if (VERBOSE)
+            Log.info("extracted val=" + val + " from " + e);
+
+          // Apply these values as RHS args
+          if (rhsNodes[fRhsIdx] == null) {
+            rhsNodes[fRhsIdx] = e.getHead();
+            numRhsBound++;
+          }
+          assert rhsNodes[fRhsIdx] == e.getHead();
+        }
+
+        // Tail arguments
         for (int ai = 0; ai < rule.lhs2rhs[ti].length; ai++) {
           int rhsIdx = rule.lhs2rhs[ti][ai];
           if (VERBOSE)
@@ -426,22 +482,18 @@ public class TransitionGeneratorForwardsParser {
             Log.info("extracted val=" + val + " from " + e);
 
           // Apply these values as RHS args
-          if (rhsVals[rhsIdx] == null) {
-            rhsVals[rhsIdx] = val;
+          if (rhsNodes[rhsIdx] == null) {
+            rhsNodes[rhsIdx] = e.getTail(ai);
             numRhsBound++;
           }
-          assert rhsVals[rhsIdx] == val : "rhsVals[" + rhsIdx + "]=" + rhsVals[rhsIdx] + " newVal=" + val;
+          assert rhsNodes[rhsIdx] == e.getTail(ai);
         }
       }
-      assert numRhsBound == rule.rhs.getNumArgs();
-
-      // Resolve rhs values to HypNodes
-      boolean addIfNotPresent = true;
-      HypNode[] rhsNodes = new HypNode[rhsVals.length];
-      for (int i = 0; i < rhsNodes.length; i++) {
-        NodeType nt = rule.rhs.rel.getTypeForArg(i);
-        rhsNodes[i] = u.lookupNode(nt, rhsVals[i], addIfNotPresent);
-      }
+      assert numRhsBound == rule.rhs.getNumArgs()
+          : "numRhsBound=" + numRhsBound
+          + " expected=" + rule.rhs.getNumArgs()
+          + " rule=" + rule
+          + " lhsVals=" + lhsValues;
 
       HypEdge e = u.makeEdge(rule.rhs.rel, rhsNodes);
       Adjoints sc = Adjoints.Constant.ONE;
