@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 
@@ -41,9 +42,11 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
   public static class RelDoc {
     public final RelLine def; // aka startdoc
     public final List<RelLine> items;
+    public final List<HypEdge.WithProps> facts;
     public RelDoc(RelLine def) {
       this.def = def;
       this.items = new ArrayList<>();
+      this.facts = new ArrayList<>();
     }
   }
 

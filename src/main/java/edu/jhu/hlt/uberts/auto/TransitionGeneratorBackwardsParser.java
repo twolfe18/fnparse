@@ -27,6 +27,7 @@ import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
@@ -51,44 +52,91 @@ public class TransitionGeneratorBackwardsParser {
   public static class Iter implements Iterator<RelDoc> {
     private RelDoc cur;
     private Iterator<RelDoc> wrapped;
-    private TransitionGeneratorBackwardsParser parser;
-    private Uberts u;
+    private TypeInference typeInf;
+    public Counts<String> counts;
+    public Counts<String> countsByRelation;
+    public Set<String> relationsToIgnore;
 
-    /**
-     * @param wrapped should contain groups of {@link RelLine}s (documents),
-     *        e.g. {@link ManyDocRelationFileIterator}.
-     * @param u should already have data definitions added. These definitions
-     *        are needed to bootstrap the types in the transition grammar.
-     * @param transitionGrammar contains transition rules, e.g.
-     *        data/srl-reldata/srl-grammar.hobbs.trans
-     */
-    public static Iter fromGrammar(Iterator<RelDoc> wrapped, Uberts u, File transitionGrammar) throws IOException {
-      TypeInference ti = new TypeInference(u);
-      for (Rule untypedRule : Rule.parseRules(transitionGrammar, null))
-        ti.add(untypedRule);
-      List<Rule> typedRules = ti.runTypeInference();
-      return new Iter(wrapped, u, typedRules);
+    // Anything Uberts-based which is not pure IO (e.g. training/inference) will
+    // break if this is false. True requires a lot of memory.
+    public boolean lookupHypNodes = true;
+
+    public Iter(Iterator<RelDoc> wrapped, Uberts u, Collection<Rule> untypedRules) {
+      this(wrapped, u, untypedRules, null);
     }
-
-    public Iter(Iterator<RelDoc> wrapped, Uberts u, Collection<Rule> typedRules) {
-      this.u = u;
+    public Iter(Iterator<RelDoc> wrapped, Uberts u, Collection<Rule> untypedRules, Collection<String> relationsToIgnore) {
+      this.counts = new Counts<>();
+      this.countsByRelation = new Counts<>();
+      this.relationsToIgnore = new HashSet<>();
+      if (relationsToIgnore != null)
+        this.relationsToIgnore.addAll(relationsToIgnore);
       this.wrapped = wrapped;
-      this.parser = new TransitionGeneratorBackwardsParser();
-      for (Rule r : typedRules)
-        this.parser.add(r);
+      this.typeInf = new TypeInference(u);
+      for (Rule r : untypedRules)
+        typeInf.add(r);
+      typeInf.runTypeInference();
+      cur = advance();
+    }
+    public Iter(Iterator<RelDoc> wrapped, TypeInference alreadyAddedRules) {
+      this(wrapped, alreadyAddedRules, null);
+    }
+    public Iter(Iterator<RelDoc> wrapped, TypeInference alreadyAddedRules, Collection<String> relationsToIgnore) {
+      this.counts = new Counts<>();
+      this.countsByRelation = new Counts<>();
+      this.relationsToIgnore = new HashSet<>();
+      if (relationsToIgnore != null)
+        this.relationsToIgnore.addAll(relationsToIgnore);
+      this.wrapped = wrapped;
+      this.typeInf = alreadyAddedRules;
       cur = advance();
     }
 
+    /**
+     * Convert {@link RelLine}s in doc.items, put them into doc.facts, and
+     * expand all the facts in facts.
+     */
     private RelDoc advance() {
       if (!wrapped.hasNext())
         return null;
       RelDoc d = wrapped.next();
-      for (int i = 0; i < d.items.size(); i++) {
-        RelLine l = d.items.get(i);
-        HypEdge fact = u.makeEdge(l, false);
-        for (HypEdge e : parser.expand(fact))
-          d.items.add(e.getRelLine("y"));
+      assert d.facts.isEmpty();
+      Set<HashableHypEdge> seen = new HashSet<>();
+      Uberts u = typeInf.getUberts();
+
+      // Move
+      for (RelLine l : d.items) {
+        HypEdge e = u.makeEdge(l, lookupHypNodes);
+        if (seen.add(new HashableHypEdge(e))) {
+          long mask = 0;
+          if (l.isX())
+            mask |= HypEdge.IS_X;
+          if (l.isY())
+            mask |= HypEdge.IS_Y;
+          d.facts.add(new HypEdge.WithProps(e, mask));
+        }
       }
+      d.items.clear();
+      counts.update("facts-input", d.facts.size());
+
+      // Expand
+      for (int i = 0; i < d.facts.size(); i++) {
+        HypEdge.WithProps fact = d.facts.get(i);
+        for (HypEdge e : typeInf.expand(fact)) {
+          String rel = e.getRelation().getName();
+          if (relationsToIgnore.contains(rel)) {
+            counts.increment("facts-skipped");
+            countsByRelation.increment("skipped-" + rel);
+            continue;
+          }
+          if (seen.add(new HashableHypEdge(e))) {
+            long mask = fact.getProperties();
+            mask |= HypEdge.IS_DERIVED;
+            d.facts.add(new HypEdge.WithProps(e, mask));
+            counts.increment("facts-derived");
+          }
+        }
+      }
+      counts.update("facts-output", d.facts.size());
       return d;
     }
 
@@ -138,8 +186,11 @@ public class TransitionGeneratorBackwardsParser {
    * though there may be others paths. This is used to deriving training data
    * w.r.t. a transition grammar from training data that doesn't care about the
    * grammar.
+   *
+   * @deprecated see {@link TypeInference#expand(HypEdge)}
    */
   private void expand(HypEdge fact, Rule wayToDerive, List<HypEdge> addTo) {
+    assert false : "should be using TypeInference!!!";
     if (verbose)
       Log.info("back-chaining from " + fact);
     assert wayToDerive.rhs.rel == fact.getRelation();
@@ -220,13 +271,24 @@ public class TransitionGeneratorBackwardsParser {
       System.out.println("gen: " + e);
   }
 
+  /**
+   * Expands a set of necessary facts according to a transition system to
+   * add implied labels for intermediate Relations introduced by the transition
+   * system.
+   */
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
+
+    File outfile = config.getFile("output");
+    Log.info("writing expanded facts to " + outfile.getPath());
+
+    File grammarFile = config.getExistingFile("grammar");
+    Log.info("using grammar in " + grammarFile.getPath());
 
     Uberts u = new Uberts(new Random(9001));
 
     // Define the succTok(i,j) relation and populate it
-    Relation succTok = u.addSuccTok(1000);
+    u.addSuccTok(1000);
 
     // Read in relation definitions for x and y data.
     // This will contain the definitions for final/output variables like
@@ -238,74 +300,39 @@ public class TransitionGeneratorBackwardsParser {
     if (DEBUG)
       Log.info("defined: " + u.getAllEdgeTypes());
 
-    // Read in the grammar, adding and type checking new Relations induced by
-    // the transition grammar.
-    File grammarFile = config.getExistingFile("grammar");
-    TypeInference ti = new TypeInference(u);
-    for (Rule untypedRule : Rule.parseRules(grammarFile, null))
-      ti.add(untypedRule);
-
-    // Tell the backwards parser about each typed rule.
-//    TransitionGeneratorBackwardsParser tgp = new TransitionGeneratorBackwardsParser();
-//    for (Rule typedRule : ti.runTypeInference())
-//      tgp.add(typedRule);
-    ti.runTypeInference();
-//    ti.debug = true;
-
-    // Output the given x and y data PLUS the inferred intermediate labels.
-    // TODO Right now this is going to file, but this could easily be routed
-    // as input to uberts. Could also make an Iterator<RelDoc> class.
-    TimeMarker tm = new TimeMarker();
-    Counts<String> counts = new Counts<>();
-    File outfile = config.getFile("output");
     File multiRefVals = config.getExistingFile("instances");
     boolean includeProvidence = true;
-    Log.info("writing expanded facts to " + outfile.getPath());
-    boolean lookupHypNodes = false;
     boolean dedupInputLines = true;
-//    tgp.verbose = true;
+    TimeMarker tm = new TimeMarker();
     try (RelationFileIterator itr = new RelationFileIterator(multiRefVals, includeProvidence);
         ManyDocRelationFileIterator m = new ManyDocRelationFileIterator(itr, dedupInputLines);
         BufferedWriter w = FileUtil.getWriter(outfile)) {
-      while (m.hasNext()) {
-        RelDoc d = m.next();
+      List<Rule> untypedRules = Rule.parseRules(grammarFile, null);
+      Collection<String> ignore = Arrays.asList("succTok");
+      Iter expanded = new Iter(m, u, untypedRules, ignore);
+      while (expanded.hasNext()) {
+        RelDoc d = expanded.next();
         w.write(d.def.toLine());
         w.newLine();
-        counts.increment("docs");
 
-        // Expand every fact (recursively)
-        // NOTE: Ensure that you call size() even loop iteration!
-        counts.update("facts-input", d.items.size());
-        for (int i = 0; i < d.items.size(); i++) {
-          RelLine rel = d.items.get(i);
-          HypEdge fact = u.makeEdge(rel, lookupHypNodes);
-//          for (HypEdge assume : tgp.expand(fact)) {
-          for (HypEdge assume : ti.expand(fact)) {
-            if (assume.getRelation() == succTok)
-              continue;
-            counts.increment("facts-derived");
-            d.items.add(assume.getRelLine("y", "derived"));
-          }
-        }
-
-        // Write out (uniq) expanded facts
         Set<String> uniqKeys = new HashSet<>();
         Function<RelLine, String> keyFunc = rl -> StringUtils.join("\t", rl.tokens);
-        for (RelLine line : d.items) {
-          if (uniqKeys.add(keyFunc.apply(line))) {
-            w.write(line.toLine());
-            w.newLine();
-            counts.increment("facts-written");
-          }
-        }
+        if (true)
+          throw new RuntimeException("re-impelment me");
+//        for (RelLine line : d.items) {
+//          if (uniqKeys.add(keyFunc.apply(line))) {
+//            w.write(line.toLine());
+//            w.newLine();
+//          }
+//        }
 
         if (tm.enoughTimePassed(15)) {
+          Log.info(expanded.counts + " in " + tm.secondsSinceFirstMark() + " sec");
           w.flush();
-          Log.info("in " + tm.secondsSinceFirstMark() + " seconds: " + counts);
         }
       }
+      Log.info("done, " + expanded.counts);
+      Log.info(expanded.countsByRelation);
     }
-
-    Log.info("done, " + counts);
   }
 }
