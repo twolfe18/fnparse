@@ -1,15 +1,21 @@
 package edu.jhu.hlt.uberts.auto;
 
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
@@ -49,7 +55,6 @@ public class TypeInference {
   private Uberts u;
   public boolean debug = false;
 
-
   public TypeInference(Uberts u) {
     this.u = u;
     this.edges = new HashMap<>();
@@ -58,12 +63,23 @@ public class TypeInference {
     this.rel2NumArgs = new HashMap<>();
     this.typed = new HashMap<>();
     this.rules = new ArrayList<>();
+    this.values = new HashMap<>();
+    this.rel2UnvaluedArgs = new HashMap<>();
+  }
+
+  public Uberts getUberts() {
+    return u;
+  }
+
+  public void clearValues() {
+    if (debug)
+      Log.info("values.size=" + values.size() + " rel2UnvaluedArgs=" + rel2UnvaluedArgs.size());
+    this.values.clear();
+    this.rel2UnvaluedArgs.clear();
   }
 
   public List<HypEdge> expand(HypEdge fact) {
     // We re-set the inferred values for every fact
-    this.values = new HashMap<>();
-    this.rel2UnvaluedArgs = new HashMap<>();
     for (Rule r : rules) {
       for (Term t : r.lhs) {
         Set<Arg> unvalued = rel2UnvaluedArgs.get(t.relName);
@@ -80,15 +96,23 @@ public class TypeInference {
     List<HypEdge> all = new ArrayList<>();
     for (Rule r : rules)
       expand(fact, r, all);
+
+    clearValues();
     return all;
   }
 
   private Set<Pair<Arg, String>> alreadyWarnedAbout = new HashSet<>();
+
+  /**
+   * If the RHS of the given rule matches the given fact's Relation, use the
+   * fact's values and the rule's pairs of co-bound arguments to propagate from
+   * RHS to LHS, creating new facts.
+   */
   private void expand(HypEdge fact, Rule r, List<HypEdge> addTo) {
     assert r.rhs.rel != null : "did you run type inference?";
     if (!r.rhs.relName.equals(fact.getRelation().getName()))
       return; // not applicable
-    if (debug)
+    if (debug)// || r.rhs.relName.equals("event2"))
       Log.info("fact=" + fact + " rule=" + r);
     Relation rel = r.rhs.rel;
     assert rel == u.getEdgeType(r.rhs.relName);
@@ -99,7 +123,7 @@ public class TypeInference {
     for (int i = 0; i < na; i++) {
       Arg known = new Arg(rel.getName(), i);
       HypNode val = fact.getTail(i);
-      addValue(known, val, new HashSet<>());
+      propagateValue(known, val, new HashSet<>());
     }
 
     // Collect the values into inferred facts
@@ -115,13 +139,15 @@ public class TypeInference {
         tail[j] = values.get(q);
         if (tail[j] == null) {
           if (alreadyWarnedAbout.add(new Pair<>(q, fact.getRelation().getName())))
-            Log.warn("could not compute value for " + q + " based on " + fact + ", skipping");
+            Log.warn("could not compute value for " + q + " based on " + fact + " in " + r + ", skipping");
           continue lhsTerm;
         }
       }
       HypEdge e = u.makeEdge(lrel, tail);
-      if (debug)
-        Log.info("assumed: " + e);
+      if (debug) {// || e.getRelation().getName().startsWith("event")) {
+        HashableHypEdge hhe = new HashableHypEdge(e);
+        System.out.println("[TypeInference] adding: " + hhe.hashDesc());
+      }
       addTo.add(e);
     }
   }
@@ -158,7 +184,7 @@ public class TypeInference {
         if (debug)
           Log.info("predefined: " + a);
         NodeType nt = rel.getTypeForArg(i);
-        addType(a, nt, new HashSet<>());
+        propagateType(a, nt, new HashSet<>());
 //        Object old = typed.put(a, nt);
 //        assert old == null || old == nt;
 //
@@ -258,7 +284,7 @@ public class TypeInference {
     Log.info("Running type inference, typed.size=" + typed.size());
     List<Arg> roots = new ArrayList<>(typed.keySet());
     for (Arg a : roots)
-      addType(a, typed.get(a), new HashSet<>());
+      propagateType(a, typed.get(a), new HashSet<>());
 
     for (Rule r : rules) {
       for (Term t : r.getAllTerms()) {
@@ -275,7 +301,7 @@ public class TypeInference {
   }
 
   // Should mimic addType
-  private void addValue(Arg a, HypNode value, HashSet<Arg> visited) {
+  private void propagateValue(Arg a, HypNode value, HashSet<Arg> visited) {
 
     // Store the value
     Object old = values.put(a, value);
@@ -323,7 +349,7 @@ public class TypeInference {
           for (Arg b : boundToHead) {
             if (debug)
               Log.info(b + " is bound to head node of " + a.relation);
-            addValue(b, e.getHead(), visited);
+            propagateValue(b, e.getHead(), visited);
           }
         }
       }
@@ -334,10 +360,10 @@ public class TypeInference {
     Collection<Arg> sameName = edges.get(a);
     if (sameName != null)
       for (Arg s : sameName)
-        addValue(s, value, visited);
+        propagateValue(s, value, visited);
   }
 
-  private void addType(Arg a, NodeType t, HashSet<Arg> visited) {
+  private void propagateType(Arg a, NodeType t, HashSet<Arg> visited) {
     if (t == null || visited == null)
       throw new IllegalArgumentException();
 
@@ -390,7 +416,7 @@ public class TypeInference {
     Collection<Arg> sameName = edges.get(a);
     if (sameName != null)
       for (Arg s : sameName)
-        addType(s, t, visited);
+        propagateType(s, t, visited);
 
     // If we known the Relation, find usages of this head type to propagate to
     Relation rel = u.getEdgeType(a.relation, true);
@@ -401,9 +427,134 @@ public class TypeInference {
         for (Arg b : boundToHead) {
           if (debug)
             Log.info(b + " is bound to head node of " + a.relation);
-          addType(b, headType, visited);
+          propagateType(b, headType, visited);
         }
       }
     }
   }
+
+  /**
+   * Writes a graph representation of a transition system.
+   * Run type inference first so that the types are known before calling.
+   */
+  public void toDOT(BufferedWriter w, boolean argMode) throws IOException {
+    // DOT does not allow "-" in a node id, which is what Arg.toString uses.
+//    Function<Arg, String> a2s = a -> {
+//      String s = a.relation + ".arg" + a.argPos;
+//      return s.replaceAll("-", "_").replace(".", "_");
+//    };
+
+    w.write("digraph transitionGrammar {");
+    w.newLine();
+    w.write("rankdir=LR;");
+    w.newLine();
+
+//    if (argMode) {
+//      // First output the graph of Args
+//      w.write("subgraph typeConstraints {");
+//      w.newLine();
+//      w.write("edge [dir=none,color=green];");
+//      w.newLine();
+//      Set<Pair<String, String>> seenSameTypeEdges = new HashSet<>();
+//      for (Entry<Arg, List<Arg>> a : edges.entrySet()) {
+//        String source = a2s.apply(a.getKey());
+//        for (Arg sinkNode : a.getValue()) {
+//          String sink = a2s.apply(sinkNode);
+//          Pair<String, String> k = new Pair<>(source, sink);
+//          if (!seenSameTypeEdges.contains(k)) {
+//            seenSameTypeEdges.add(k);
+//            seenSameTypeEdges.add(new Pair<>(sink, source));
+//            w.write(source + " -> " + sink);
+//            w.write(" [label=sameType];");
+//            w.newLine();
+//          }
+//        }
+//      }
+//      w.write("}");
+//      w.newLine();
+//    }
+
+    // Relations and their args
+    Set<String> seenNT = new HashSet<>();
+    Set<String> seenRel = new HashSet<>();
+    for (Relation r : u.getAllEdgeTypes()) {
+      // Relation
+      String rs = r.getName().replaceAll("-", "_");
+      if (seenRel.add(rs)) {
+        w.write(rs + " [color=red];");
+        w.newLine();
+      }
+      String source = r.getName().replaceAll("-", "_");
+      // NodeType (head)
+      String nts;
+//      nts = Uberts.getWitnessNodeTypeName(r).replaceAll("-", "_")
+//          .replace("witness", "wtn");
+//      if (seenNT.add(nts)) {
+//        w.write(nts + " [color=green];");
+//        w.newLine();
+//      }
+      for (int i = 0; i < r.getNumArgs(); i++) {
+        // NodeType
+        nts = r.getTypeForArg(i).getName().replaceAll("-", "_");
+        if (seenNT.add(nts)) {
+          w.write(nts + " [color=green];");
+          w.newLine();
+        }
+        // Args
+        String sink = r.getTypeForArg(i).getName().replace("-", "_");
+        String e = source + " -> " + sink + " [label=a" + i + "];";
+        w.write(e);
+        w.newLine();
+      }
+      // Head
+      String e = Uberts.getWitnessNodeTypeName(r).replaceAll("-", "_")
+          .replace("witness", "wtn")
+          + " -> " + r.getName().replaceAll("-", "_") + " [label=head];";
+      w.write(e);
+      w.newLine();
+    }
+
+    // Rules: RHS -> {LHS}
+    for (Rule typedRule : rules) {
+      for (Term lhs : typedRule.lhs) {
+        String source = typedRule.rhs.relName.replaceAll("-", "_");
+        String sink = lhs.relName.replaceAll("-", "_");
+        w.write(source + " -> " + sink + " [label=rule,color=blue];");
+        w.newLine();
+      }
+    }
+
+    w.write("}");
+    w.newLine();
+  }
+
+  /** Builds a DOT graph for visualizing the transition rules */
+  public static void main(String[] args) throws IOException {
+    if (args.length != 3) {
+      System.err.println("please provide:");
+      System.err.println("1) a relation definitions file, e.g. data/srl-reldata/propbank/relations.def");
+      System.err.println("2) a transition grammar file, e.g. data/srl-reldata/srl-grammar.hobbs.trans");
+      System.err.println("3) a file to output DOT graph to");
+      return;
+    }
+    File defs = new File(args[0]);
+    File grammar = new File(args[1]);
+    File output = new File(args[2]);
+
+    Uberts u = new Uberts(new Random(9001));
+    u.readRelData(defs);
+
+    TypeInference ti = new TypeInference(u);
+    for (Rule untypedRule : Rule.parseRules(grammar, null))
+      ti.add(untypedRule);
+    ti.runTypeInference();
+
+    Log.info("writing graph to: " + output.getPath());
+    boolean argMode = false;
+    try (BufferedWriter w = FileUtil.getWriter(output)) {
+      ti.toDOT(w, argMode);
+    }
+    Log.info("done");
+  }
+
 }
