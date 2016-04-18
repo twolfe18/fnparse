@@ -26,6 +26,8 @@ import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.util.Alphabet;
+import edu.mit.jwi.item.ISynset;
+import edu.mit.jwi.item.IWord;
 
 /**
  * Take {@link FNParse}s and write out the relations used by uberts/srl.
@@ -41,6 +43,8 @@ public class FNParseToRelations {
   public boolean srl4Mode = true;
 
   private void write(Sentence s, BufferedWriter w) throws IOException {
+    IWord iw;
+    ISynset is;
     int n = s.size();
     for (int i = 0; i < n; i++) {
       w.write("x word2 " + i + " " + s.getWord(i));
@@ -49,9 +53,12 @@ public class FNParseToRelations {
       w.newLine();
       w.write("x lemma2 " + i + " " + s.getLemma(i));
       w.newLine();
+      if ((iw = s.getWnWord(i)) != null && (is = iw.getSynset()) != null) {
+        w.write("x wnss2 " + i + " " + is.getID());
+        w.newLine();
+      }
     }
     write(s.getBasicDeps(false), "basic", n, w);
-//    write(s.getCollapsedDeps(false), "col", n, w);
     write(s.getCollapsedDeps2(false), "col", w);
     write(s.getCollapsedDeps2(false), "colcc", w);
     write(s.getStanfordParse(false), "stanford", w, true);
@@ -143,6 +150,8 @@ public class FNParseToRelations {
     w.newLine();
     w.write("def lemma2 <tokenIndex> <lemma>");
     w.newLine();
+    w.write("def wnss2 <tokenIndex> <synset>");
+    w.newLine();
     w.write("def dsyn3-basic <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
     w.newLine();
     w.write("def dsyn3-col <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
@@ -188,11 +197,13 @@ public class FNParseToRelations {
       String fs = f.getName();
       if (!srl4Mode)
         write(t, fs, w);
+      int nz = 0;
       int K = f.numRoles();
       for (int k = 0; k < K; k++) {
         Span s = fi.getArgument(k);
         if (s == Span.nullSpan)
           continue;
+        nz++;
         String ks = srl4Mode ? f.getRole(k) : f.getFrameRole(k);
         write(t, fs, s, ks, w);
         for (Span cs : fi.getContinuationRoleSpans(k))
@@ -200,6 +211,8 @@ public class FNParseToRelations {
         for (Span rs : fi.getReferenceRoleSpans(k))
           write(t, fs, rs, ks + "/R", w);
       }
+      if (nz == 0 && srl4Mode)
+        write(t, fs, w);
     }
   }
 
