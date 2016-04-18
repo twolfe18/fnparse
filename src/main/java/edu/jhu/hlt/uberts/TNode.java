@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
@@ -43,9 +44,11 @@ public class TNode {
     }
 
     public HypNode getBoundNode(int i) {
+      assert i < boundVals.size();
       return boundVals.get(i).getLeft();
     }
     public HypEdge getBoundEdge(int i) {
+      assert i < boundVals.size();
       return boundVals.get(i).getRight();
     }
 
@@ -232,6 +235,7 @@ public class TNode {
 
   public static void match(Uberts u, HypEdge newEdge, TNode trie) {
     if (DEBUG) {
+      System.out.println();
       System.out.println("START MATCH: after " + newEdge
           + " was added, numTrieNodes=" + trie.getNumNodes()
           + " numStateNodes=" + u.getState().getNumNodes());
@@ -244,6 +248,7 @@ public class TNode {
       System.out.println("END MATCH: after " + newEdge
           + " was added, numTrieNodes=" + trie.getNumNodes()
           + " numStateNodes=" + u.getState().getNumNodes());
+      System.out.println();
     }
   }
 
@@ -269,48 +274,76 @@ public class TNode {
       return;
     }
 
-    TNode childTrie = trie.getChild(GOTO_PARENT);
-    if (childTrie != null) {
+    TNode childTrie;
+    if ((childTrie = trie.getChild(GOTO_PARENT)) != null) {
       HNode r = traversal.stack.pop();
-      System.out.println("TRACE: GOTO_PARENT, r=" + r);
+      if (DEBUG)
+        System.out.println("TRACE: GOTO_PARENT, r=" + r);
       match(u, traversal.stack.peek(), traversal, childTrie);
       traversal.stack.push(r);
     }
 
-    int edges = 0;
-    for (StateEdge p : state.neighbors2(cur)) {
-      /*
-       * I'm getting, e.g. StateEdge = (HEAD_ARG_POS, pos2)
-       * And my trie doesn't contain any argPos=HEAD_ARG_POS entries,
-       * 
-       * h = pos(4,VBZ)
-       * h --argPos=HEAD--> pos:Relation --argPos=0--> 4:tokenIndex
-       */
-      edges++;
-      HNode n = p.getTarget();
-      if (traversal.visited.contains(n)) {
+    // Intersect nodes that follow cur with trie.children.keys()
+    if (cur == null) {
+      // This means that we are free to start anywhere on the graph,
+      // intersection degenerates to just trie.children.keys()
+      for (TKey poss : trie.children.keySet()) {
+        switch (poss.mode) {
+        case TKey.RELATION:
+          for (LL<HypEdge> ll = state.match2(poss.relationType); ll != null; ll = ll.next)
+            tryMatch(poss, u, new HNode(ll.item), traversal, trie);
+          break;
+        case TKey.NODE_TYPE:
+          throw new RuntimeException("implement me!");
+        case TKey.NODE_VALUE:
+          HypNode maybeExists = u.lookupNode(poss.nodeType, poss.nodeValue, false);
+          if (maybeExists != null)
+            tryMatch(poss, u, new HNode(maybeExists), traversal, trie);
+          break;
+        default:
+          throw new RuntimeException();
+        }
+      }
+    } else {
+      int edges = 0;
+      for (StateEdge p : state.neighbors2(cur)) {
         if (DEBUG)
-          System.out.println("skipping visited node: " + n);
-        continue;
+          System.out.println("trying edge: " + p);
+        /*
+         * I'm getting, e.g. StateEdge = (HEAD_ARG_POS, pos2)
+         * And my trie doesn't contain any argPos=HEAD_ARG_POS entries,
+         *
+         * h = pos(4,VBZ)
+         * h --argPos=HEAD--> pos:Relation --argPos=0--> 4:tokenIndex
+         */
+        edges++;
+        HNode n = p.getTarget();
+        assert n != null : "p=" + p;
+        if (traversal.visited.contains(n)) {
+          if (DEBUG)
+            System.out.println("skipping visited node: " + n);
+          continue;
+        }
+        TKey key;
+        if (n.isNode()) {
+          HypNode node = n.getNode();
+          // Match both value and type
+          key = new TKey(p.argPos, node.getNodeType(), node.getValue());
+          tryMatch(key, u, n, traversal, trie);
+          // Match just type
+          key = new TKey(p.argPos, node.getNodeType());
+          tryMatch(key, u, n, traversal, trie);
+        } else {
+          HypEdge edge = n.getEdge();
+          key = new TKey(p.argPos, edge.getRelation());
+          tryMatch(key, u, n, traversal, trie);
+        }
       }
-      TKey key;
-      if (n.isLeft()) {
-        HypNode node = n.getLeft();
-        // Match both value and type
-        key = new TKey(p.argPos, node.getNodeType(), node.getValue());
-        tryMatch(key, u, n, traversal, trie);
-        // Match just type
-        key = new TKey(p.argPos, node.getNodeType());
-        tryMatch(key, u, n, traversal, trie);
-      } else {
-        HypEdge edge = n.getRight();
-        key = new TKey(p.argPos, edge.getRelation());
-        tryMatch(key, u, n, traversal, trie);
-      }
+      if (DEBUG)
+        System.out.println("checked " + edges + " edges adjacent to " + cur);
     }
-    if (DEBUG)
-      System.out.println("checked " + edges + " edges adjacent to " + cur);
   }
+
   /**
    * @param keyConstructedFromState should not have a name set!
    */
@@ -342,6 +375,7 @@ public class TNode {
 //    System.out.println("\tbindings:" + traversal.bindings);
 //    System.out.println("\tstack:" + traversal.stack);
 //    System.out.println();
+//    Log.info(traversal.boundVals);
     // NOTE: Both of these operations don't mutate the State, only Agenda
     if (tval.tg != null) {
       for (Pair<HypEdge, Adjoints> p : tval.tg.generate(traversal))
