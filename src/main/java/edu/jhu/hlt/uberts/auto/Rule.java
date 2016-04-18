@@ -25,7 +25,8 @@ public class Rule {
 
   // See TransitionGeneratorForwardParser for why this is needed.
   // lhs2rhs[1][0] = 0, second occurrence of t in lhs => location of t in rhs
-  int[][] lhs2rhs;  // [termIdx][argIdx] => location in rhs.args, or -1 if not in rhs.
+  int[][] lhs2rhs;    // [termIdx][argIdx] => location in rhs.args, or -1 if not in rhs.
+  int[] lhsFact2rhs;  // [termIdx] => location in rhs.args, or -1 if the fact/witness/event variable is not used in rhs.
 
   public Rule(Term[] lhs, Term rhs) {
     this.lhs = lhs;
@@ -42,6 +43,7 @@ public class Rule {
   }
 
   private void init() {
+    this.lhsFact2rhs = new int[lhs.length];
     this.lhs2rhs = new int[lhs.length][];
     for (int i = 0; i < lhs2rhs.length; i++) {
       int lhsN = this.lhs[i].argNames.length;
@@ -50,6 +52,11 @@ public class Rule {
         String varName = this.lhs[i].argNames[j];
         lhs2rhs[i][j] = indexOf(varName, rhs.argNames);
       }
+      String f;
+      if ((f = lhs[i].factArgName) != null)
+        lhsFact2rhs[i] = indexOf(f, rhs.argNames);
+      else
+        lhsFact2rhs[i] = -1;
     }
 
     // Check that none of the fact var names are the same
