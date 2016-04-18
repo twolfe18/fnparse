@@ -5,6 +5,8 @@ import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.TNode.TKey;
 
 /**
+ * Represents values like "arg-1-of-srl2".
+ *
  * When typing {@link Relation}s, this describes the thing to type.
  * This was created for {@link TypeInference}, and is newer than things like
  * {@link HNodeType} and {@link TKey}.
@@ -30,7 +32,7 @@ public class Arg {
       throw new IllegalArgumentException();
     this.relation = relation;
     this.argPos = argPos;
-    this.hash = Hash.mix(relation.hashCode(), argPos);
+    this.hash = Hash.mix(this.relation.hashCode(), argPos);
   }
 
   @Override

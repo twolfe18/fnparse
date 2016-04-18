@@ -6,7 +6,6 @@ import java.util.Comparator;
 import java.util.List;
 
 import edu.jhu.hlt.tutils.hash.Hash;
-import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 
 /**
@@ -29,26 +28,51 @@ public class HypEdge {
   // Check tail node types match relation type
   public static boolean TYPE_CHECK = true;
 
-  /**
-   * @deprecated TODO Schema should be encoded in Relation, not HypEdge!
-   * An example of why is in {@link TransitionGeneratorBackwardsParser}, where
-   * we are inferring LHS facts (HypEdges) from RHS facts. If we can't do this
-   * because some LHS variables are not bound on the RHS, we should be able to
-   * assert that the LHS {@link Relation} is a schema relation, not just the
-   * fact/HypEdge.
-   *
-   * These edges are persistent in the state, e.g.
-   *   def role2 <frame> <role>
-   *   role2(framenet/Commerce_buy, Buyer)
-   */
-  public static class Schema extends HypEdge {
-    public Schema(Relation edgeType, HypNode head, HypNode[] tail) {
-      super(edgeType, head, tail);
+  public static final long IS_SCHEMA =  1l<<0;
+  public static final long IS_X =       1l<<1;
+  public static final long IS_Y =       1l<<2;
+  public static final long IS_DERIVED = 1l<<3;
+  public static class WithProps extends HypEdge {
+    private long bitmask;
+
+    public WithProps(HypEdge copy, long bitmask) {
+      this(copy.relation, copy.head, copy.tail, bitmask);
     }
-    public Schema(HypEdge copy) {
-      super(copy.relation, copy.head, copy.tail);
+
+    public WithProps(Relation edgeType, HypNode head, HypNode[] tail, long bitmask) {
+      super(edgeType, head, tail);
+      this.bitmask = bitmask;
+    }
+
+    public boolean hasProperty(long mask) {
+      return (bitmask & mask) != 0;
+    }
+
+    public long getProperties() {
+      return bitmask;
     }
   }
+
+//  /**
+//   * @deprecated TODO Schema should be encoded in Relation, not HypEdge!
+//   * An example of why is in {@link TransitionGeneratorBackwardsParser}, where
+//   * we are inferring LHS facts (HypEdges) from RHS facts. If we can't do this
+//   * because some LHS variables are not bound on the RHS, we should be able to
+//   * assert that the LHS {@link Relation} is a schema relation, not just the
+//   * fact/HypEdge.
+//   *
+//   * These edges are persistent in the state, e.g.
+//   *   def role2 <frame> <role>
+//   *   role2(framenet/Commerce_buy, Buyer)
+//   */
+//  public static class Schema extends HypEdge {
+//    public Schema(Relation edgeType, HypNode head, HypNode[] tail) {
+//      super(edgeType, head, tail);
+//    }
+//    public Schema(HypEdge copy) {
+//      super(copy.relation, copy.head, copy.tail);
+//    }
+//  }
 
   private Relation relation;    // e.g. 'srl2'
   private HypNode head;         // this node is the witness of the fact
@@ -153,24 +177,52 @@ public class HypEdge {
    */
   public static class HashableHypEdge {
     private HypEdge edge;
-    private int hc;
+    public final long hc;
+
     public HashableHypEdge(HypEdge e) {
       this.edge = e;
       long[] h = new long[e.getNumTails() + 1];
       h[0] = e.getRelation().hashCode();
       for (int i = 1; i < h.length; i++)
         h[i] = e.getTail(i-1).hashCode();
-      this.hc = (int) Hash.mix64(h);
+      this.hc = Hash.mix64(h);
     }
+
+    public String hashDesc() {
+      StringBuilder sb = new StringBuilder();
+      sb.append(edge.toString());
+      sb.append(" hc=" + hc);
+      sb.append(" hc(rel)=" + edge.getRelation().hashCode());
+      sb.append(" hc(head)=" + edge.getHead().hashCode() + "/" + edge.getHead().getValue().getClass().getName());
+      sb.append(" hc(tail)=");
+      for (int i = 0; i < edge.getNumTails(); i++) {
+        if (i == 0)
+          sb.append('[');
+        else
+          sb.append(", ");
+        HypNode t = edge.getTail(i);
+        sb.append(t.hashCode());
+        sb.append("/" + t.getValue().getClass().getName());
+        sb.append("/" + t.getValue());
+      }
+      sb.append(']');
+      return sb.toString();
+    }
+
+    public HypEdge getEdge() {
+      return edge;
+    }
+
     @Override
     public int hashCode() {
-      return hc;
+      return (int) hc;
     }
+
     @Override
     public boolean equals(Object other) {
       if (other instanceof HashableHypEdge) {
         HashableHypEdge hhe = (HashableHypEdge) other;
-        if (hc != hhe.hc || edge.relation == hhe.edge.relation)
+        if (hc != hhe.hc || edge.relation != hhe.edge.relation)
           return false;
         int n = edge.relation.getNumArgs();
         assert n == hhe.edge.relation.getNumArgs();
@@ -180,6 +232,11 @@ public class HypEdge {
         return true;
       }
       return false;
+    }
+
+    @Override
+    public String toString() {
+      return "(Hashable " + edge + " hc=" + hc + ")";
     }
   }
 

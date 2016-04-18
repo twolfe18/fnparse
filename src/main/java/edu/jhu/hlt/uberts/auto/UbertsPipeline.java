@@ -11,22 +11,24 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.Uberts.Step;
+import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor.WeightAdjoints;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
-import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -39,6 +41,7 @@ public class UbertsPipeline {
   private Uberts u;
   private List<Rule> rules;
   private List<Relation> helperRelations;
+  private TypeInference typeInf;
 
   public UbertsPipeline(
       Uberts u,
@@ -50,12 +53,7 @@ public class UbertsPipeline {
     helperRelations = new ArrayList<>();
 
     // succTok(i,j)
-    helperRelations.add(u.addSuccTok(100));
-
-    // Read in the defs file which defines (and creates w.r.t. Uberts) the
-    // relations which will appear in the values file.
-    Log.info("reading in relation/node type definitions...");
-    u.readRelData(xyDefsFile);
+    helperRelations.add(u.addSuccTok(1000));
 
     Log.info("reading schema files...");
     for (File f : schemaFiles) {
@@ -63,8 +61,16 @@ public class UbertsPipeline {
       helperRelations.addAll(schemaRelations);
     }
 
-    for (Rule r : Rule.parseRules(grammarFile, u))
-      addRule(r);
+    // Read in the defs file which defines (and creates w.r.t. Uberts) the
+    // relations which will appear in the values file.
+    Log.info("reading in relation/node type definitions...");
+    u.readRelData(xyDefsFile);
+
+    this.typeInf = new TypeInference(u);
+    for (Rule untypedRule : Rule.parseRules(grammarFile, null))
+      typeInf.add(untypedRule);
+    for (Rule typedRule : typeInf.runTypeInference())
+      addRule(typedRule);
   }
 
   public void addRelData(File xyValuesFile) throws IOException {
@@ -85,11 +91,17 @@ public class UbertsPipeline {
    * ruled out by choosing the right one first.
    */
   public void extractFeatures(ManyDocRelationFileIterator x, File output) throws IOException {
+    Log.info("writing features to " + output);
+    boolean debug = false;
     TimeMarker tm = new TimeMarker();
+    Counts<String> posRel = new Counts<>(), negRel = new Counts<>();
     int docs = 0, actions = 0;
+    long features = 0;
+    List<String> ignore = Arrays.asList("succTok");
+    Iter itr = new Iter(x, typeInf, ignore);
     try (BufferedWriter w = FileUtil.getWriter(output)) {
-      while (x.hasNext()) {
-        RelDoc doc = x.next();
+      while (itr.hasNext()) {
+        RelDoc doc = itr.next();
         docs++;
 
         u.getState().clearNonSchema();
@@ -98,36 +110,66 @@ public class UbertsPipeline {
 
         // Add x:HypEdges to State
         // Add y:HypEdges as labels
-        for (RelLine line : doc.items) {
-          if (line.isX() || line.isY()) {
-            HypEdge e = u.makeEdge(line, true);
-            if (line.isX())
-              u.addEdgeToState(e);
-            else
-              u.addLabel(e);
+        int cx = 0, cy = 0;
+        for (HypEdge.WithProps fact : doc.facts) {
+          boolean isX = fact.hasProperty(HypEdge.IS_X);
+          boolean isY = fact.hasProperty(HypEdge.IS_Y);
+          if (isX || isY) {
+            if (isX) {
+              u.addEdgeToState(fact);
+              cx++;
+            } else {
+              if (debug) {
+                HashableHypEdge hhe = new HashableHypEdge(fact);
+                System.out.println("[exFeats] adding: " + hhe.hashDesc());
+              }
+              u.addLabel(fact);
+              cy++;
+            }
           } else {
-            Log.warn("why: " + line);
+            Log.warn("why: " + fact);
           }
+        }
+        if (debug) {
+          Log.info("cx=" + cx + " cy=" + cy);
+          w.flush();
         }
 
         // Run inference and record extracted features
         List<Step> traj = u.recordOracleTrajectory();
         for (Step t : traj) {
+          boolean y = u.getLabel(t.edge);
+          if (y) posRel.increment(t.edge.getRelation().getName());
+          else negRel.increment(t.edge.getRelation().getName());
+          String lab = y ? "+1" : "-1";
+          if (debug)
+            Log.info(lab + " " + t.edge + " " + new HashableHypEdge(t.edge).hc);
           actions++;
           @SuppressWarnings("unchecked")
           WeightAdjoints<String> fx = (WeightAdjoints<String>) t.score;
-          String dtype = "";
-          w.write(t.edge.getRelFileString(dtype));
+          w.write(t.edge.getRelFileString(lab));
           for (String feat : fx.getFeatures()) {
             w.write('\t');
             w.write(feat);
+            features++;
           }
           w.newLine();
         }
 
         if (tm.enoughTimePassed(15)) {
-          Log.info("extracted features for " + docs + " docs and " + actions
-              + " actions in " + tm.secondsSinceFirstMark() + " seconds");
+          double sec = tm.secondsSinceFirstMark();
+          double fPerD = features / ((double) docs);
+          double fPerA = features / ((double) actions);
+          String msg = String.format(
+              "extracted %d features for %d docs (%.1f feat/doc) and %d actions (%.1f feat/act) in %.1f seconds",
+              features, docs, fPerD, actions, fPerA, sec);
+          Log.info(msg);
+          double aPerD = actions / ((double) docs);
+          msg = String.format("%.1f doc/sec, %.1f act/sec, %.1f act/doc",
+              docs/sec, actions/sec, aPerD);
+          Log.info(msg);
+          Log.info("numPosFeatsExtracted: " + posRel + " sum=" + posRel.getTotalCount());
+          Log.info("numNegFeatsExtracted: " + negRel + " sum=" + negRel.getTotalCount());
           w.flush();
         }
       }
@@ -142,8 +184,9 @@ public class UbertsPipeline {
     TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
     Pair<List<TKey>, TG> tg = tgfp.parse2(r, u);
 
-    List<Relation> relevant = Arrays.asList(r.rhs.rel);
-    tg.get2().feats = new FeatureExtractionFactor.Simple(relevant, u);
+//    List<Relation> relevant = Arrays.asList(r.rhs.rel);
+//    tg.get2().feats = new FeatureExtractionFactor.Simple(relevant, u);
+    tg.get2().feats = new FeatureExtractionFactor.GraphWalks();
 
     u.addTransitionGenerator(tg.get1(), tg.get2());
   }
@@ -162,18 +205,20 @@ public class UbertsPipeline {
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties.init(args);
-//    TNode.DEBUG = true;
-//    State.DEBUG = true;
-//    Agenda.DEBUG = true;
 
     File xyDefsFile = new File("data/srl-reldata/propbank/relations.def");
     List<File> schemaFiles = Arrays.asList(
         new File("data/srl-reldata/frameTriage2.propbank.rel"),
         new File("data/srl-reldata/role2.propbank.rel.gz"));
-    File grammarFile = new File("data/srl-reldata/srl-grammar.trans");
+    File grammarFile = new File("data/srl-reldata/srl-grammar.hobbs.trans");
     Random rand = new Random(9001);
     Uberts u = new Uberts(rand);
     UbertsPipeline srl = new UbertsPipeline(u, grammarFile, schemaFiles, xyDefsFile);
+
+//    TNode.DEBUG = true;
+//    State.DEBUG = true;
+//    Agenda.DEBUG = true;
+//    Uberts.DEBUG = true;
 
 //    String base = "data/srl-reldata/srl-FNFUTXT1228670";
 //    File xyDefsFile = new File(base + ".defs");

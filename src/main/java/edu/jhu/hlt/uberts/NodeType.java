@@ -15,13 +15,20 @@ import edu.jhu.hlt.uberts.transition.TransitionGenerator;
  * @author travis
  */
 public class NodeType {
-  private String name;
+  private final String name;
+//  private final boolean witness;
   // TODO put data type (e.g. Span) here?
   // TODO put alphabet here (e.g. Alphabet<Span>)?
 
   public NodeType(String name) {
-    this.name = name;
+//  public NodeType(String name, boolean witness) {
+    this.name = name.intern();
+//    this.witness = witness;
   }
+
+//  public boolean isWitness() {
+//    return witness;
+//  }
 
   public String getName() {
     return name;

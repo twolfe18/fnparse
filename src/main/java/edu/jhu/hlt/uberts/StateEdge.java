@@ -3,7 +3,7 @@ package edu.jhu.hlt.uberts;
 public class StateEdge {
   public final HypNode node;
   public final HypEdge edge;
-  public final int argPos;
+  public final int argPos;        // can be State.HEAD_ARG_POS
   public final boolean node2rel;  // else HypEdge->HypNode
   private HNode source, target;
 
@@ -26,5 +26,9 @@ public class StateEdge {
     if (source == null)
       source = node2rel ? new HNode(node) : new HNode(edge);
     return source;
+  }
+
+  public String toString() {
+    return getSource() + " --arg" + argPos + "--> " + getTarget();
   }
 }

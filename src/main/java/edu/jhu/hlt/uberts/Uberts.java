@@ -13,6 +13,8 @@ import java.util.Random;
 
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.TNode.TKey;
@@ -37,10 +39,13 @@ public class Uberts {
 
   public static boolean DEBUG = false;
 
+  public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
+
   private State state;
   private Agenda agenda;
   private TNode trie;     // stores graph fragments used to match TransitionGenerators and GlobalFactors
   private Random rand;
+  private MultiTimer timer;
 
   // So you can ask for Relations by name and keep them unique
   private Map<String, Relation> relations;
@@ -77,23 +82,14 @@ public class Uberts {
   public void addLabel(HypEdge e) {
     if (goldEdges == null)
       goldEdges = new HashSet<>();
-    boolean added = goldEdges.add(new HashableHypEdge(e));
+    HashableHypEdge he = new HashableHypEdge(e);
+    boolean added = goldEdges.add(he);
     assert added : "duplicate edge? " + e;
   }
-  /**
-   * +1 means a gold edge, good thing to add. -1 means a bad edge which
-   * introduces loss. You can play with anything in between.
-   *
-   * TODO This needs to be expanded upon. There are lots of small issues like
-   * you can just add this into the oracle, you have to know when something is
-   * perfectly correct vs not... etc.
-   */
-  public double getLabel(HypEdge e) {
-    if (goldEdges == null)
-      throw new IllegalStateException("no labels available");
-    if (goldEdges.contains(new HashableHypEdge(e)))
-      return +1;
-    return -1;
+  public boolean getLabel(HypEdge e) {
+    HashableHypEdge he = new HashableHypEdge(e);
+//    Log.info(he.hashCode());
+    return goldEdges.contains(he);
   }
   /**
    * Sets the set of gold edges to the empty set.
@@ -111,16 +107,21 @@ public class Uberts {
     this.trie = new TNode(null, null);
     this.nodes = new HashMap<>();
     this.nodeTypes = new HashMap<>();
+
+    this.timer = new MultiTimer();
+    this.timer.put(REC_ORACLE_TRAJ, new Timer(REC_ORACLE_TRAJ, 30, true));
   }
 
   // TODO This is an ugly hack, fixme.
   public Relation addSuccTok(int n) {
     NodeType tokenIndex = lookupNodeType("tokenIndex", true);
     Relation succTok = addEdgeType(new Relation("succTok", tokenIndex, tokenIndex));
-    HypNode prev = lookupNode(tokenIndex, String.valueOf(-1), true);
-    for (int i = 0; i < 100; i++) {   // TODO figure out a better way to handle this...
-      HypNode cur = lookupNode(tokenIndex, String.valueOf(i), true);
-      addEdgeToState(makeEdge(succTok, prev, cur));
+    HypNode prev = lookupNode(tokenIndex, String.valueOf(-1).intern(), true);
+    for (int i = 0; i < n; i++) {   // TODO figure out a better way to handle this...
+      HypNode cur = lookupNode(tokenIndex, String.valueOf(i).intern(), true);
+      HypEdge e = makeEdge(succTok, prev, cur);
+      e = new HypEdge.WithProps(e, HypEdge.IS_SCHEMA);
+      addEdgeToState(e);
       prev = cur;
     }
     return succTok;
@@ -180,13 +181,20 @@ public class Uberts {
   public List<Step> recordOracleTrajectory() {
     if (goldEdges == null)
       throw new IllegalStateException("you must add labels, goldEdges==null");
+    timer.start(REC_ORACLE_TRAJ);
     List<Step> traj = new ArrayList<>();
     while (agenda.size() > 0) {
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge edge = p.get1();
-      boolean gold = goldEdges.contains(new HashableHypEdge(edge));
+      HashableHypEdge needle = new HashableHypEdge(edge);
+      boolean gold = goldEdges.contains(needle);
+      if (DEBUG)
+        System.out.println("[recOrcl] gold=" + gold + " " + needle.hashDesc());
       traj.add(new Step(edge, p.get2(), gold));
+      if (gold)
+        addEdgeToState(edge);
     }
+    timer.stop(REC_ORACLE_TRAJ);
     return traj;
   }
 
@@ -245,6 +253,8 @@ public class Uberts {
     if (line.isEmpty())
       return null;
     String[] toks = line.split("\\s+");
+    for (int i = 0; i < toks.length; i++)
+      toks[i] = toks[i].intern();
     String command = toks[0];
     switch (command) {
     case "def":
@@ -271,12 +281,12 @@ public class Uberts {
       for (int i = 0; i < args.length; i++) {
         // TODO Consider this:
         // How should we deserialize String => ???
-        Object val = toks[i+2];
+        Object val = toks[i+2].intern();
         args[i] = this.lookupNode(rel.getTypeForArg(i), val, true);
       }
       HypEdge e = this.makeEdge(rel, args);
       if (command.equals("schema"))
-        e = new HypEdge.Schema(e);
+        e = new HypEdge.WithProps(e, HypEdge.IS_SCHEMA);
       if (command.equals("y"))
         this.addLabel(e);
       else
@@ -293,6 +303,7 @@ public class Uberts {
    * are guaranteed to be unique.
    */
   public HypNode lookupNode(NodeType nt, Object value, boolean addIfNotPresent) {
+    assert !(value instanceof String) || value == ((String)value).intern();
     Pair<NodeType, Object> key = new Pair<>(nt, value);
     HypNode v = nodes.get(key);
     if (v == null && addIfNotPresent) {
@@ -306,6 +317,7 @@ public class Uberts {
    * Prefer lookupNode if you can. Throws exception if this node exists.
    */
   public void putNode(HypNode n) {
+    assert !(n.getValue() instanceof String) || n.getValue() == ((String)n.getValue()).intern();
     Pair<NodeType, Object> key = new Pair<>(n.getNodeType(), n.getValue());
     HypNode old = nodes.put(key, n);
     if (old != null)
@@ -317,8 +329,8 @@ public class Uberts {
    * types are gauranteed to be unique.
    */
   public NodeType lookupNodeType(String name, boolean allowNewNodeType) {
-    if (DEBUG)
-      Log.info("name=" + name + " allowNewNodeType=" + allowNewNodeType);
+//    if (DEBUG)
+//      Log.info("name=" + name + " allowNewNodeType=" + allowNewNodeType);
     NodeType nt = nodeTypes.get(name);
     if (nt == null) {
       if (!allowNewNodeType)
@@ -385,14 +397,13 @@ public class Uberts {
     addEdgeToAgenda(p.get1(), p.get2());
   }
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
-    if (DEBUG)
-      Log.info(e.toString());
     assert nodesContains(e);
     agenda.add(e, score);
   }
 
   /** returns its argument */
   public Relation addEdgeType(Relation r) {
+    assert r.getName() == r.getName().intern();
     Relation old = relations.put(r.getName(), r);
     if (old != null)
       throw new IllegalStateException("already existed: " + r);
@@ -424,7 +435,7 @@ public class Uberts {
     return getWitnessNodeTypeName(relation.getName());
   }
   public static String getWitnessNodeTypeName(String relationName) {
-    return "witness-" + relationName;
+    return ("witness-" + relationName).intern();
   }
 
   /**
