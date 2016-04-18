@@ -6,13 +6,14 @@ import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
@@ -25,16 +26,17 @@ import edu.jhu.hlt.tutils.hash.Hash;
 public class State {
 
   public static boolean DEBUG = false;
+  public static boolean CHECK_UNIQ = false;
   public static final int MAX_ARGS = 12;    // how many args allowed for a Relation
   public static final int HEAD_ARG_POS = MAX_ARGS - 1;
 
   /** Another way to index into edges: lookup by (relation,argument) */
-  public static class Arg {
+  private static class ArgVal {
     public final Relation rel;
     public final HypNode arg;
     public final int argPos;
     public final int hc;
-    public Arg(int argPos, Relation rel, HypNode arg) {
+    public ArgVal(int argPos, Relation rel, HypNode arg) {
       if (rel == null)
         throw new IllegalArgumentException();
       if (arg == null)
@@ -48,8 +50,8 @@ public class State {
     public int hashCode() { return hc; }
     @Override
     public boolean equals(Object other) {
-      if (other instanceof Arg) {
-        Arg a = (Arg) other;
+      if (other instanceof ArgVal) {
+        ArgVal a = (ArgVal) other;
         return argPos == a.argPos && rel == a.rel && arg == a.arg;
       }
       return false;
@@ -57,36 +59,50 @@ public class State {
   }
 
   private Map<HypNode, LL<HypEdge>[]> primaryView;
-  private Map<Arg, LL<HypEdge>> fineView;
+  private Map<ArgVal, LL<HypEdge>> fineView;
+  private Map<Relation, LL<HypEdge>> relView;
+  private List<HypEdge> edges;
+  private MultiTimer timer;
 
   public State() {
     this.primaryView = new HashMap<>();
     this.fineView = new HashMap<>();
+    this.relView = new HashMap<>();
+    this.edges = new ArrayList<>();
+    this.timer = new MultiTimer();
+    this.timer.put("clearNonSchema", new Timer("clearNonSchema", 30, true));
   }
 
   public void clear() {
     primaryView.clear();
     fineView.clear();
+    relView.clear();
+    edges.size();
   }
   public void clearNonSchema() {
-    // Find the Schema edges
-    List<HypEdge.Schema> se = new ArrayList<>();
-    for (LL<HypEdge> le : fineView.values()) {
-      for (LL<HypEdge> cur = le; cur != null; cur = cur.next) {
-        HypEdge e = cur.item;
-        if (e instanceof HypEdge.Schema)
-          se.add((HypEdge.Schema) e);
+    if (DEBUG) {
+      Log.info("edges=" + edges.size() + " nodes=" + fineView.size() + " args=" + primaryView.size());
+    }
+    timer.start("clearNonSchema");
+    List<HypEdge> temp = edges;
+    primaryView.clear();
+    fineView.clear();
+    relView.clear();
+    edges = new ArrayList<>();
+    for (HypEdge e : temp) {
+      if (e instanceof HypEdge.WithProps &&
+          ((HypEdge.WithProps)e).hasProperty(HypEdge.IS_SCHEMA)) {
+        add(e);
       }
     }
-    // Remove everything
-    clear();
-    // Add back the schema edges
-    for (HypEdge.Schema e : se)
-      add(e);
+    timer.stop("clearNonSchema");
   }
 
   public int getNumNodes() {
     return primaryView.size();
+  }
+  public int getNumEdges() {
+    return edges.size();
   }
 
   public void dbgShowEdges() {
@@ -108,20 +124,7 @@ public class State {
     writeEdges(w, Collections.emptySet());
   }
   public void writeEdges(BufferedWriter w, Set<Relation> skip) throws IOException {
-    Set<HypEdge> es = new HashSet<>();
-    List<HypEdge> el = new ArrayList<>();
-    for (LL<HypEdge>[] ll : primaryView.values()) {
-      for (int i = 0; i < ll.length; i++) {
-        LL<HypEdge> l = ll[i];
-        for (LL<HypEdge> cur = l; cur != null; cur = cur.next) {
-          HypEdge e = cur.item;
-          if (skip != null && skip.contains(e.getRelation()))
-            continue;
-          if (es.add(e))
-            el.add(e);
-        }
-      }
-    }
+    List<HypEdge> el = new ArrayList<>(edges);
     try {
       Collections.sort(el, HypEdge.BY_RELATION_THEN_TAIL);
     } catch (ClassCastException cce) {
@@ -134,10 +137,14 @@ public class State {
   }
 
   public void add(HypEdge e) {
+    edges.add(e);
     add(HEAD_ARG_POS, e.getHead(), e);
     int n = e.getNumTails();
     for (int i = 0; i < n; i++)
       add(i, e.getTail(i), e);
+
+    Relation key = e.getRelation();
+    relView.put(key, new LL<>(e, relView.get(key)));
 
     if (DEBUG) {
       Log.info("just added to State: " + e);
@@ -157,16 +164,34 @@ public class State {
       es = new LL[MAX_ARGS];
       primaryView.put(n, es);
     }
+    // Unique values?
+    if (CHECK_UNIQ) {
+      for (LL<HypEdge> cur = es[argPos]; cur != null; cur = cur.next)
+        assert !cur.item.equals(e);
+    }
     es[argPos] = new LL<>(e, es[argPos]);
 
-    Arg key2 = new Arg(argPos, e.getRelation(), n);
+    ArgVal key2 = new ArgVal(argPos, e.getRelation(), n);
     LL<HypEdge> es2 = fineView.get(key2);
+    // Unique values?
+    if (CHECK_UNIQ) {
+      for (LL<HypEdge> cur = es2; cur != null; cur = cur.next)
+        assert !cur.item.equals(e);
+    }
     fineView.put(key2, new LL<>(e, es2));
+
+    if (DEBUG) {
+      int p = primaryView.size();
+      int f = fineView.size();
+      int z = CHECK_UNIQ ? 50000 : 500000;
+      if ((p+f) % z == 0 && es2 == null)
+        Log.info("nodes=" + f + " args=" + p + " curFact=" + e);
+    }
   }
 
   /** May return null */
   public LL<HypEdge> match(int argPos, Relation rel, HypNode arg) {
-    return fineView.get(new Arg(argPos, rel, arg));
+    return fineView.get(new ArgVal(argPos, rel, arg));
   }
 
   /** May return null */
@@ -185,6 +210,11 @@ public class State {
     return el;
   }
 
+  public LL<HypEdge> match2(Relation rel) {
+    assert rel != null;
+    return relView.get(rel);
+  }
+
   /**
    * Returns neighbors along with the argument index that hold between a HypNode
    * and a HypEdge (it may be that this:HypNode,neighbors:[HypEdge] or that
@@ -195,6 +225,8 @@ public class State {
     List<StateEdge> a = new ArrayList<>();
     if (node.isLeft()) {
       HypNode n = node.getLeft();
+//      if (n.getNodeType().getName().equals("tokenIndex"))
+//        Log.info("check this");
       LL<HypEdge>[] allArgs = primaryView.get(n);
       for (int i = 0; i < allArgs.length; i++)
         for (LL<HypEdge> cur = allArgs[i]; cur != null; cur = cur.next)
