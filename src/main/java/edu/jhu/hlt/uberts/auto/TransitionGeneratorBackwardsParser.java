@@ -14,13 +14,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.function.Function;
 
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
@@ -49,6 +47,10 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 public class TransitionGeneratorBackwardsParser {
   public static boolean DEBUG = true;
 
+  /**
+   * Takes {@link RelDoc} with items:List<RelLine> populated, expands and moves
+   * them over to facts:List<HypEdge>.
+   */
   public static class Iter implements Iterator<RelDoc> {
     private RelDoc cur;
     private Iterator<RelDoc> wrapped;
@@ -315,10 +317,23 @@ public class TransitionGeneratorBackwardsParser {
         w.write(d.def.toLine());
         w.newLine();
 
+        assert d.items.isEmpty() && !d.facts.isEmpty()
+            : "Iter should have moved them into facts";
+
         Set<String> uniqKeys = new HashSet<>();
-        Function<RelLine, String> keyFunc = rl -> StringUtils.join("\t", rl.tokens);
-        if (true)
-          throw new RuntimeException("re-impelment me");
+        for (HypEdge.WithProps e : d.facts) {
+          String dt = HypEdge.getRelLineDataType(e);
+          if (dt == null) {
+            dt = "???";
+            assert false : "unknown datatype for: " + e;
+          }
+          String rfs = e.getRelFileString(dt);
+          if (uniqKeys.add(rfs)) {
+            w.write(rfs);
+            w.newLine();
+          }
+        }
+//        Function<RelLine, String> keyFunc = rl -> StringUtils.join("\t", rl.tokens);
 //        for (RelLine line : d.items) {
 //          if (uniqKeys.add(keyFunc.apply(line))) {
 //            w.write(line.toLine());

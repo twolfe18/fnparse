@@ -53,6 +53,21 @@ public class HypEdge {
     }
   }
 
+  public static String getRelLineDataType(HypEdge.WithProps e) {
+    String dt = null;
+    if (e.hasProperty(IS_SCHEMA))
+      dt = "schema";
+    if (e.hasProperty(IS_Y)) {
+      assert dt == null;
+      dt = "y";
+    }
+    if (e.hasProperty(IS_X)) {
+      assert dt == null;
+      dt = "x";
+    }
+    return dt;
+  }
+
 //  /**
 //   * @deprecated TODO Schema should be encoded in Relation, not HypEdge!
 //   * An example of why is in {@link TransitionGeneratorBackwardsParser}, where

@@ -317,9 +317,6 @@ public class TypeInference {
 
   // Should mimic addType
   private void propagateValue(Arg a, HypNode value, HashSet<Arg> visited) {
-    if (a.relation.equals("srl4") && a.argPos == 4)
-      Log.info("debug me, a=" + a + " value=" + value);
-
     // Store the value
     Object old = values.put(a, value);
     assert old == null || old == value
@@ -391,7 +388,8 @@ public class TypeInference {
 
     // Store the type
     Object old = typed.put(a, t);
-    assert old == null || old == t;
+    assert old == null || old == t
+        : a + " use to have type " + old + " but it was just set to " + t;
 
     if (!visited.add(a)) {
       if (debug)
