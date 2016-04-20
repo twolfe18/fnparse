@@ -1,19 +1,26 @@
 package edu.jhu.hlt.uberts.auto;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.Random;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.ArgMin;
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
@@ -71,6 +78,10 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public class TransitionGeneratorForwardsParser {
+  public static boolean DEBUG = true;
+
+  // OLD_WAY is broken
+  public static boolean OLD_WAY = false;
 
   /**
    * Used for finding the index of a common var name.
@@ -149,35 +160,450 @@ public class TransitionGeneratorForwardsParser {
   }
 
 
+
+  /*
+   * There are two graphs that we care about:
+   * 1) auto.Arg with the same name (and therefore type), see TypeInference
+   * 2) NodeType -- Relation, which is the graph we want to walk for LHS/TransitionGenerator
+   *
+   * This class is concerned with 2, and specifically creating a linearization
+   * of a spanning tree of only the Relation nodes in 2 (we only need the Relations
+   * since TNode.match will return us the HypEdges which match, and therefore
+   * we get all the values with the HypEdge).
+   *
+   * Its important to note that we are are talking about SETS OF HYPEDGES, not
+   * a Relation. In rules with a LHS containing two instances of the same Relation,
+   * they will be matched to two distinct HypEdges (who happen to have the same
+   * Relation).
+   */
+
+  static class Graph3 {
+    Uberts u;
+    Rule rule;
+
+    Map<TermNode, List<ArgNode>> edgeTA;
+    Map<ArgNode, List<TermNode>> edgeAT;
+    Map<ArgNode, List<ArgNode>> edgeAA;
+
+    ArgNode[][] argNodes;
+    TermNode[] termNodes;
+
+    PriorityQueue<TermNode> notDone;
+    boolean[] notDoneTermIdx;
+    Set<Object> dfsSeen;
+
+    public int leftmostA(List<ArgNode> args, TermNode exclude) {
+      int min = rule.lhs.length;
+      if (args == null)
+        return min;
+      for (ArgNode a : args) {
+        for (TermNode t : edgeAT.get(a)) {
+          if (notDoneTermIdx[t.termIdx] && t.termIdx < min && t != exclude) {
+            min = a.termIdx;
+//            Log.info("a=" + a + " newMin=" + t + " exclude=" + exclude);
+          }
+        }
+      }
+      return min;
+    }
+    public int leftmostT(List<TermNode> terms) {
+      int min = rule.lhs.length;
+      if (terms == null)
+        return min;
+      for (TermNode t : terms) {
+        if (notDoneTermIdx[t.termIdx] && t.termIdx < min)
+          min = t.termIdx;
+      }
+      return min;
+    }
+
+    private List<?> neighbors(Object key) {
+      if (DEBUG)
+        Log.info("of " + key + " ntMaybe=" + ntMaybe + " ntMaybeFrom=" + ntMaybeFrom);
+      // Using dynamic sorting because they depend on the set of visited nodes
+      if (key instanceof TermNode) {
+        Comparator<ArgNode> c = new Comparator<ArgNode>() {
+          @Override
+          public int compare(ArgNode o1, ArgNode o2) {
+            List<ArgNode> a1 = edgeAA.get(o1);
+            List<ArgNode> a2 = edgeAA.get(o2);
+            return leftmostA(a1, (TermNode) key) - leftmostA(a2, (TermNode) key);
+          }
+        };
+        List<ArgNode> l = edgeTA.get(key);
+        if (l == null)
+          return null;
+        Collections.sort(l, c);
+        if (DEBUG)
+          Log.info("leaving TA " + key + ": " + l);
+        return l;
+      } else if (key instanceof ArgNode) {
+        if (ntMaybe != null) {
+          // Then we've already seen one ArgNode in our DFS and the
+          // next node we want is a TermNode, so only consider a->t edges
+          Comparator<TermNode> cAT = new Comparator<TermNode>() {
+            @Override
+            public int compare(TermNode o1, TermNode o2) {
+              return o1.termIdx - o2.termIdx;
+            }
+          };
+          List<TermNode> l = edgeAT.get(key);
+          Collections.sort(l, cAT);
+          if (DEBUG)
+            Log.info("leaving AT " + key + ": " + l);
+          return l;
+        } else {
+          Comparator<ArgNode> c = new Comparator<ArgNode>() {
+            @Override
+            public int compare(ArgNode o1, ArgNode o2) {
+              List<TermNode> l1 = edgeAT.get(o1);
+              List<TermNode> l2 = edgeAT.get(o2);
+              return leftmostT(l1) - leftmostT(l2);
+            }
+          };
+          List<ArgNode> l = edgeAA.get(key);
+          if (l == null)
+            return null;
+          Collections.sort(l, c);
+          if (DEBUG)
+            Log.info("leaving AA " + key + ": " + l);
+          return l;
+        }
+      } else {
+        throw new RuntimeException();
+      }
+    }
+
+    private void add(TermNode t, ArgNode a) {
+      List<ArgNode> l = edgeTA.get(t);
+      if (l == null) {
+        l = new ArrayList<>();
+        edgeTA.put(t, l);
+      }
+      l.add(a);
+      List<TermNode> lt = edgeAT.get(a);
+      if (lt == null) {
+        lt = new ArrayList<>();
+        edgeAT.put(a, lt);
+      }
+      lt.add(t);
+    }
+
+    private void add(ArgNode a1, ArgNode a2) {
+      List<ArgNode> l = edgeAA.get(a1);
+      if (l == null) {
+        l = new ArrayList<>();
+        edgeAA.put(a1, l);
+      }
+      l.add(a2);
+      l = edgeAA.get(a2);
+      if (l == null) {
+        l = new ArrayList<>();
+        edgeAA.put(a2, l);
+      }
+      l.add(a1);
+    }
+
+    public Graph3(Uberts u, Rule r) {
+      this.u = u;
+      this.rule = r;
+      this.edgeAA = new HashMap<>();
+      this.edgeTA = new HashMap<>();
+      this.edgeAT = new HashMap<>();
+
+      // Create nodes in an addressable collection
+      int n = r.lhs.length;
+      argNodes = new ArgNode[n][];
+      termNodes = new TermNode[n];
+      for (int i = 0; i < n; i++) {
+        termNodes[i] = new TermNode(i);
+        int J = termNodes[i].getNumArgs();
+        argNodes[i] = new ArgNode[J];
+        for (int j = 0; j < J; j++)
+          argNodes[i][j] = new ArgNode(i, j);
+      }
+
+      // Add ArgNode -- ArgNode edges
+      boolean[] includeT2A = new boolean[n];
+      // Regular arg -- regular arg
+      for (int t1 = 0; t1 < n-1; t1++) {
+        for (int t2 = t1+1; t2 < n; t2++) {
+          int na1 = termNodes[t1].getNumArgs();
+          int na2 = termNodes[t2].getNumArgs();
+          for (int a1 = 0; a1 < na1; a1++) {
+            for (int a2 = 0; a2 < na2; a2++) {
+              ArgNode x = argNodes[t1][a1];
+              ArgNode y = argNodes[t2][a2];
+              if (x.getArgName().equals(y.getArgName())) {
+                add(x, y);
+                includeT2A[t1] = true;
+                includeT2A[t2] = true;
+              }
+            }
+          }
+        }
+      }
+      // Fact arg -- regular arg
+      for (int t1 = 0; t1 < n; t1++) {
+        Term t1t = r.lhs[t1];
+        if (t1t.factArgName == null)
+          continue;
+        ArgNode a1 = new ArgNode(t1, -1);
+        for (int t2 = 0; t2 < n; t2++) {
+          if (t1 == t2)
+            continue;
+          Term t2t = r.lhs[t2];
+          for (int j = 0; j < t2t.getNumArgs(); j++) {
+            ArgNode a2 = new ArgNode(t2, j);
+            if (t1t.factArgName.equals(a2.getArgName())) {
+              add(a1, a2);
+              includeT2A[t1] = true;
+              includeT2A[t2] = true;
+            }
+          }
+        }
+      }
+
+      // Add TermNode -- ArgNode edges for relevant TermNodes
+      notDone = new PriorityQueue<>(new Comparator<TermNode>() {
+        @Override
+        public int compare(TermNode o1, TermNode o2) {
+          return o1.termIdx - o2.termIdx;
+        }
+      });
+      notDoneTermIdx = new boolean[n];
+      for (int i = 0; i < n; i++) {
+        TermNode t = new TermNode(i);
+        notDone.add(t);
+        notDoneTermIdx[i] = true;
+        if (includeT2A[i])
+          for (int j = 0; j < t.getNumArgs(); j++)
+            add(t, argNodes[i][j]);
+      }
+
+      // DFS to sub-select set of edges representing a tree
+      // pre-order traversal to find spanning tree/forest
+      // Re-order 
+      dfsTrace = new LHS(r);
+      dfsSeen = new HashSet<>();
+      while (!notDone.isEmpty()) {
+        // (Possibly) multiple roots: choose them by order in Term.lhs
+        TermNode cur = notDone.poll();
+        if (DEBUG)
+          Log.info("starting from root=" + cur);
+        ntMaybeFrom = -1;
+        ntMaybe = null;
+        dfsTrace.add(new TKey(State.HEAD_ARG_POS, cur.getRelation()), cur.termIdx);
+        dfs(cur);
+        if (!notDone.isEmpty())
+          gotoParent(cur, false);
+      }
+    }
+
+    void dfs(Object cur) {
+      if (DEBUG)
+        Log.info("cur=" + cur);
+      dfsSeen.add(cur);
+      notDone.remove(cur);
+      if (cur instanceof TermNode)
+        notDoneTermIdx[((TermNode)cur).termIdx] = false;
+      if (notDone.isEmpty())
+        return;
+      List<?> nei = neighbors(cur);
+      if (nei != null) {
+        boolean tried = false;
+        for (Object n : nei) {
+          if (!dfsSeen.contains(n)) {
+            tried |= addToTrace(cur, n);
+            dfs(n);
+            if (notDone.isEmpty())
+              return;
+          } else {
+            if (DEBUG)
+              Log.info("seen, skipping: " + n);
+          }
+        }
+        if (tried)
+          gotoParent(cur, true);
+      }
+    }
+
+    public LHS getLHS() {
+      return dfsTrace;
+    }
+
+    LHS dfsTrace;
+    TKey ntMaybe = null;
+    int ntMaybeFrom = -1;
+    boolean addToTrace(Object cur, Object next) {
+      if (DEBUG)
+        Log.info("cur=" + cur + " next=" + next + " ntMaybe=" + ntMaybe + " ntMaybeFrom=" + ntMaybeFrom);
+      if (cur instanceof TermNode && next instanceof TermNode) {
+        throw new RuntimeException("you should not construct edges like this");
+      } else if (cur instanceof TermNode && next instanceof ArgNode) {
+        // Use another method for root -> term
+        TermNode t = (TermNode) cur;
+        ntMaybeFrom = t.termIdx;
+        return false;
+      } else if (cur instanceof ArgNode && next instanceof TermNode) {
+        ArgNode n = (ArgNode) cur;
+        TermNode t = (TermNode) next;
+        assert ntMaybe != null;
+        // Here we finally commit to the ->NT->Rel step since we've now spanned
+        // Term/Relation -...-> Term/Relatation
+        dfsTrace.add(ntMaybe, ntMaybeFrom);
+        dfsTrace.add(new TKey(n.argIdx, t.getRelation()), t.termIdx);
+        ntMaybeFrom = t.termIdx;
+        ntMaybe = null;
+        return true;
+      } else if (cur instanceof ArgNode && next instanceof ArgNode) {
+        ArgNode from = (ArgNode) cur;
+        ArgNode to = (ArgNode) next;
+        assert to.getNodeType() == from.getNodeType();
+        assert to.getArgName().equals(from.getArgName());
+        assert ntMaybeFrom >= 0;
+        ntMaybe = new TKey(from.argIdx, from.getNodeType());
+        return false;
+      } else {
+        throw new RuntimeException("wat");
+      }
+    }
+    void gotoParent(Object cur, boolean doubleUp) {
+      if (DEBUG)
+        Log.info("cur=" + cur + " ntMaybe=" + ntMaybe + " ntMaybeFrom=" + ntMaybeFrom);
+      if (cur instanceof TermNode) {
+        if (DEBUG)
+          Log.info("GOTO_PARENT");
+        dfsTrace.gotoParent();
+        if (doubleUp)
+          dfsTrace.gotoParent();
+      } else if (ntMaybe != null) {
+        ntMaybe = null;
+      } else if (ntMaybeFrom >= 0) {
+        ntMaybeFrom = -1;
+      }
+    }
+
+    // SHOULD NOT NEED to care about this for DFS/spanning tree
+    class TermNode {
+      int termIdx;
+      public TermNode(int termIdx) {
+        this.termIdx = termIdx;
+      }
+      public int getNumArgs() {
+        return rule.lhs[termIdx].getNumArgs();
+      }
+      public Relation getRelation() {
+        return rule.lhs[termIdx].rel;
+      }
+      @Override
+      public String toString() {
+        return "(TermNode " + termIdx + "/" + getRelation().getName() + ")";
+      }
+    }
+    // SHOULD NOT NEED to care about this for DFS/spanning tree
+    class ArgNode {
+      int termIdx;
+      int argIdx;
+      public ArgNode(int termIdx, int argIdx) {
+        this.termIdx = termIdx;
+        this.argIdx = argIdx;
+      }
+      public NodeType getNodeType() {
+        if (argIdx < 0)
+          return u.getWitnessNodeType(rule.lhs[termIdx].relName);
+        return rule.lhs[termIdx].getArgType(argIdx);
+      }
+      public String getArgName() {
+        if (argIdx < 0)
+          return rule.lhs[termIdx].factArgName;
+        return rule.lhs[termIdx].argNames[argIdx];
+      }
+      @Override
+      public String toString() {
+        return "(ArgNode " + termIdx + "/" + rule.lhs[termIdx].relName
+            + " arg" + argIdx + "/" + getArgName() + ")";
+      }
+    }
+
+    // Maybe a good(ish) way to explain it:
+    // Make a spanning tree using DFS with a set of visited nodes
+    // (represent the spanning tree as a set of edges)
+    // Prune any leaves which are ArgNodes
+    // (do this by removing edges that have an ArgNode end-point which is a leaf (has one outgoing edge))
+    // Re-root the tree by selecting the first TermNode
+    // Re-order the children by their termIdx (ascending)
+    // Output a pre-order traversal of that tree.
+  }
+
+  /**
+   * Sink-half of an edge in the HypNode-HypEdge bipartite graph.
+   * HNodeType.argPos refers to the Relation/HypEdge end-point of this edge.
+   *
+   * Could be:
+   * term -- arg  => argPos is w.r.t. term's relation
+   * arg -- arg   => argPos is meaningless
+   *
+   * This class could be the node type in the following graph:
+   * term -- arg
+   * lhsTermIdx is always defined, argPos is always w.r.t. term's relation.
+   *
+   * @deprecated too confusing, can't fix.
+   */
+  private class TT {
+    HNodeType hnt;
+    int lhsTermIdx;
+    int hc;
+    public TT(HNodeType hnt, int lhsTermIdx) {
+      this.hnt = hnt;
+      this.lhsTermIdx = lhsTermIdx;
+      this.hc = Hash.mix(hnt.hashCode(), lhsTermIdx);
+    }
+    @Override
+    public int hashCode() {
+      return hc;
+    }
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof TT) {
+        TT t = (TT) other;
+        return hnt == t.hnt && lhsTermIdx == t.lhsTermIdx;
+      }
+      return false;
+    }
+    @Override
+    public String toString() {
+      return "<TT " + hnt + " @" + lhsTermIdx + ">";
+    }
+  }
+
   public boolean verbose = false;
-  private Map<HNodeType, List<HNodeType>> adj;
+  private Rule rule;
+  private Map<TT, LL<TT>> adj;
   private Map<String, HNodeType> uniqHNT = new HashMap<>();
 
-  private void addOneDir(HNodeType a, HNodeType b) {
-    List<HNodeType> n = adj.get(a);
-    if (n == null) {
-      n = new ArrayList<>();
-      adj.put(a, n);
-    }
-    n.add(b);
+  private void addOneDir(TT a, TT b) {
+    adj.put(a, new LL<>(b, adj.get(a)));
   }
-  private void addBothDir(HNodeType a, HNodeType b) {
+  private void addBothDir(TT a, TT b) {
     if (verbose)
-      Log.info("adding edges betwee " + a + " and " + b);
+      Log.info("adding edges between " + a + " and " + b);
     addOneDir(a, b);
     addOneDir(b, a);
   }
 
-  private void add(String commonVar, Term ti, Term tj) {
+  private void add(String commonVar, int tiIdx, int tjIdx) {
     // For example:
     // ti = ner3(i,t,b)
     // tj = succ(i,j)
     // commonVar = i
+    Term ti = rule.lhs[tiIdx];
+    Term tj = rule.lhs[tjIdx];
     Edge e = new Edge(commonVar, ti, tj);
-    HNodeType vi = lookupHNT(e.ca, e.argType());
-    HNodeType ri = lookupHNT(e.ca, ti.rel);
-    HNodeType vj = lookupHNT(e.cb, e.argType());
-    HNodeType rj = lookupHNT(e.cb, tj.rel);
+    TT vi = new TT(lookupHNT(e.ca, e.argType()), tiIdx);
+    TT ri = new TT(lookupHNT(e.ca, ti.rel), tiIdx);
+    TT vj = new TT(lookupHNT(e.cb, e.argType()), tjIdx);
+    TT rj = new TT(lookupHNT(e.cb, tj.rel), tjIdx);
     addBothDir(ri, vi);
     addBothDir(vj, rj);
   }
@@ -208,39 +634,32 @@ public class TransitionGeneratorForwardsParser {
   private void buildAdjacencyMatrix(Rule r) {
     if (verbose)
       Log.info("building adjacency matrix for rule: " + r);
+    assert rule == null;
+    rule = r;
     adj = new HashMap<>();
     uniqHNT = new HashMap<>();
-    List<Term> ts = Arrays.asList(r.lhs);
-    int n = ts.size();
+    int n = r.lhs.length;
     for (int i = 0; i < n - 1; i++) {
       for (int j = i + 1; j < n; j++) {
-        Term ti = ts.get(i);
-        Term tj = ts.get(j);
+        Term ti = r.lhs[i];
+        Term tj = r.lhs[j];
         Set<String> commonVarNames = new HashSet<>();
         for (String vn : ti.argNames)
           commonVarNames.add(vn);
         if (ti.factArgName != null)
           commonVarNames.add(ti.factArgName);
+        if (verbose) {
+          Log.info("ti=" + ti + " tj=" + tj + " ti.argNames=" + commonVarNames);
+        }
         for (String vn : tj.argNames)
           if (commonVarNames.contains(vn))
-            add(vn, ti, tj);
+            add(vn, i, j);
         if (tj.factArgName != null && commonVarNames.contains(tj.factArgName))
-          add(tj.factArgName, ti, tj);
+          add(tj.factArgName, i, j);
       }
     }
     if (verbose)
       Log.info("done");
-  }
-
-  private int order(Relation r, Rule rule) {
-    int i = 0;
-    while (i < rule.lhs.length) {
-      Relation r2 = rule.lhs[i].rel;
-      if (r == r2)
-        break;
-      i++;
-    }
-    return i;
   }
 
   /**
@@ -249,33 +668,43 @@ public class TransitionGeneratorForwardsParser {
   static class LHS {
     private Rule rule;
     private List<TKey> pat;
-    private Map<Relation, Integer> rel2patIdx;
+    // TODO This is a problem, can't handle rules with repeated use of a relation in the LHS,
+    // e.g. data/srl-reldata/srl-grammar-moreArgs.hobbs.trans
+    // Key should probably be Term=(relation,indexInLHS)
+//    private Map<Relation, Integer> rel2patIdx;
+
+    // co-indexed with pat, value is index of Term in rule.lhs
+    // -1 means doesn't correspond to a lhs term, like TNode.GOTO_PARENT
+    // TODO should be new int[rule.lhs.length] with values being indexes in pat
+//    private List<Integer> tkey2RuleLhsTermIdx;
+    private int[] lhsTermIdx2PatIdx;
     private int numGotoParent;
 
     public LHS(Rule r) {
       numGotoParent = 0;
       rule = r;
       pat = new ArrayList<>();
-      rel2patIdx = new HashMap<>();
+//      rel2patIdx = new HashMap<>();
+//      tkey2RuleLhsTermIdx = new ArrayList<>();
+      lhsTermIdx2PatIdx = new int[r.lhs.length];
+      Arrays.fill(lhsTermIdx2PatIdx, -1);
     }
 
     public List<TKey> getPath() {
       return pat;
     }
 
-    public void add(TKey tkey) {
-      assert tkey == TNode.GOTO_PARENT;
-      numGotoParent++;
-      pat.add(tkey);
+    public void gotoParent() {
+      pat.add(TNode.GOTO_PARENT);
     }
-
-    public void add(HNodeType hnt) {
-      if (hnt.isRelation()) {
-        int i = pat.size() - numGotoParent;
-        Integer old = rel2patIdx.put(hnt.getRight(), i);
-        assert old == null;
+    public void add(TKey key, int lhsTermIdx) {
+      Log.info(key + " lhsTermIdx=" + lhsTermIdx);
+      assert lhsTermIdx >= 0 && lhsTermIdx < rule.lhs.length;
+      if (key.getMode() == TKey.RELATION) {
+        assert lhsTermIdx2PatIdx[lhsTermIdx] == -1;
+        lhsTermIdx2PatIdx[lhsTermIdx] = pat.size();
       }
-      pat.add(hnt.getTKey());
+      pat.add(key);
     }
 
 //    /**
@@ -287,17 +716,9 @@ public class TransitionGeneratorForwardsParser {
 //      return rel2patIdx.get(r);
 //    }
 
-    public HypEdge getBoundValue(Relation r, GraphTraversalTrace gtt) {
-      Integer patIdx = rel2patIdx.get(r);
-      if (patIdx == null) {
-        throw new RuntimeException("no index for: r=" + r
-            + " rule=" + rule
-            + " pat=" + pat
-            + " rel2patIdx=" + rel2patIdx);
-      }
-      HypEdge e = gtt.getBoundEdge(patIdx);
-      assert e != null;
-      return e;
+    public HypEdge getBoundValue(int lhsTermIdx, GraphTraversalTrace gtt) {
+      int patIdx = lhsTermIdx2PatIdx[lhsTermIdx];
+      return gtt.getBoundEdge(patIdx);
     }
 
     public Rule getRule() {
@@ -313,7 +734,13 @@ public class TransitionGeneratorForwardsParser {
     }
   }
 
+  /**
+   * @deprecated Use parse2
+   */
+
   public LHS parse(Rule r) {
+    assert false : "use parse2, this is old and broken code";
+
     // Build new adjacency matrix
     buildAdjacencyMatrix(r);
 
@@ -322,61 +749,67 @@ public class TransitionGeneratorForwardsParser {
     if (verbose)
       Log.info("parsing: " + r);
     LHS pat = new LHS(r);
-    Set<Relation> done = new HashSet<>();
-    Deque<HNodeType> stack = new ArrayDeque<>();
-    while (done.size() < r.lhs.length) {
+    Set<TT> done2 = new HashSet<>();
+    Deque<TT> stack = new ArrayDeque<>();
+    while (done2.size() < r.lhs.length) {
+
       if (stack.isEmpty()) {
         // Find the first LHS term whose Relation we're not done with.
         for (int i = 0; i < r.lhs.length; i++) {
           Relation rel = r.lhs[i].rel;
-          if (!done.contains(rel)) {
-            stack.push(lookupHNT(State.HEAD_ARG_POS, rel));
-            done.add(rel);
-            pat.add(stack.peek());
+          HNodeType hnt = lookupHNT(State.HEAD_ARG_POS, rel);
+          TT tt = new TT(hnt, i);
+          if (!done2.contains(rel)) {
+            stack.push(tt);
+            done2.add(tt);
+            pat.add(hnt.getTKey(), i);
             break;
           }
         }
       }
-      HNodeType cur = stack.peek();
-      List<HNodeType> neighbors = adj.get(cur);
+
+      TT cur2 = stack.peek();
+      LL<TT> neighbors2 = adj.get(cur2);
       if (verbose) {
-        Log.info("cur=" + cur);
-        Log.info("cur.isRelation=" + cur.isRelation());
-        Log.info("neighbors=" + neighbors);
+        Log.info("cur=" + cur2);
+        Log.info("cur.isRelation=" + cur2.hnt.isRelation());
+        Log.info("neighbors=" + neighbors2);
       }
 
-      HNodeType next = null;
-      if (neighbors != null) {
-
+      TT next = null;
+      if (neighbors2 != null) {
         // neighbors:[HNodeType] is either all Relations or all NodeType
         // -> will have opposite type of cur
-        ArgMin<HNodeType> m = new ArgMin<>();
-        if (cur.isRelation()) {
+        ArgMin<TT> m = new ArgMin<>();
+        if (cur2.hnt.isRelation()) {
           // if NodeTypes: sort them by min_{r : relations not visited} index(r in LHS)
-          for (HNodeType ntHNT : neighbors) {
+          for (LL<TT> ncur = neighbors2; ncur != null; ncur = ncur.next) {
+            TT ttcur = ncur.item;
+            HNodeType ntHNT = ttcur.hnt;
             assert ntHNT.isNodeType();
-            for (HNodeType relHNT : adj.get(ntHNT)) {
+            for (LL<TT> relcur = adj.get(ttcur); relcur != null; relcur = relcur.next) {
               if (verbose) {
-                Log.info("relHNT=" + relHNT + " (relHNT==cur)=" + (relHNT==cur)
-                    + " done.contains(relHNT.getRight)=" + done.contains(relHNT.getRight()));
+                Log.info("relHNT=" + relcur.item + " (relHNT==cur)=" + (relcur.item == ttcur)
+                    + " done.contains(relHNT.getRight)="
+                    + done2.contains(relcur.item));
               }
-              if (relHNT == cur)
+              if (relcur.item == ttcur)
                 continue;
-              if (!done.contains(relHNT.getRight()))
-                m.offer(ntHNT, order(relHNT.getRight(), r));
+              if (!done2.contains(relcur.item))
+                m.offer(ttcur, relcur.item.lhsTermIdx);
             }
           }
         } else {
           // if Relations: sort them by their order in the rule LHS
           // filter out the relations we've seen
-          for (HNodeType relHNT : neighbors) {
-            assert relHNT.isRelation();
-            Relation rel = relHNT.getRight();
-            boolean d = done.contains(rel);
+          for (LL<TT> ncur = neighbors2; ncur != null; ncur = ncur.next) {
+            assert ncur.item.hnt.isRelation();
+            Relation rel = ncur.item.hnt.getRight();
+            boolean d = done2.contains(ncur.item);
             if (verbose)
               Log.info("\trel=" + rel + " done=" + d);
             if (!d)
-              m.offer(relHNT, order(rel, r));
+              m.offer(ncur.item, ncur.item.lhsTermIdx);
           }
         }
         next = m.get();
@@ -386,21 +819,33 @@ public class TransitionGeneratorForwardsParser {
         if (verbose)
           Log.info("back track...");
         stack.pop();
-        pat.add(TNode.GOTO_PARENT);
+        pat.gotoParent();
       } else {
         stack.push(next);
-        if (next.isRelation())
-          done.add(next.getRight());
-        pat.add(next);
+        if (next.hnt.isRelation()) {
+          done2.add(next);
+        }
+        pat.add(next.hnt.getTKey(), next.lhsTermIdx);
       }
     }
     pat.maybeTrimGotoParent();
+
+    // cleanup
+    adj = null;
+    rule = null;
+    uniqHNT = null;
+
     return pat;
   }
 
   public Pair<List<TKey>, TG> parse2(Rule r, Uberts u) {
-    LHS lhs = parse(r);
+
+//    LHS lhs = parse(r);
+    Graph3 g3 = new Graph3(u, r);
+    LHS lhs = g3.getLHS();
+
     TG tg = new TG(lhs, u);
+    Log.info("rule: " + r);
     Log.info("pat:\n\t" + StringUtils.join("\n\t", lhs.getPath()));
     return new Pair<>(lhs.getPath(), tg);
   }
@@ -420,11 +865,6 @@ public class TransitionGeneratorForwardsParser {
     public TG(LHS match, Uberts u) {
       this.match = match;
       this.u = u;
-
-      // Do some checking
-      for (int patIdx : match.rel2patIdx.values()) {
-        assert patIdx < match.pat.size();
-      }
     }
 
     @Override
@@ -443,13 +883,14 @@ public class TransitionGeneratorForwardsParser {
       HypNode[] rhsNodes = new HypNode[rule.rhs.getNumArgs()];
       for (int ti = 0; ti < rule.lhs.length; ti++) {
 
+        Relation r = rule.lhs[ti].rel;
+        HypEdge e = match.getBoundValue(ti, lhsValues);
+        assert e.getRelation() == r;
+
         // Event/fact/witness variable
         int fRhsIdx = rule.lhsFact2rhs[ti];
         if (fRhsIdx >= 0) {
           // Lookup the bound value
-          Relation r = rule.lhs[ti].rel;
-          HypEdge e = match.getBoundValue(r, lhsValues);
-          assert e.getRelation() == r;
           Object val = e.getHead().getValue();
           assert val instanceof EqualityArray;
           if (VERBOSE)
@@ -474,9 +915,6 @@ public class TransitionGeneratorForwardsParser {
           }
 
           // Lookup the bound value
-          Relation r = rule.lhs[ti].rel;
-          HypEdge e = match.getBoundValue(r, lhsValues);
-          assert e.getRelation() == r;
           Object val = e.getTail(ai).getValue();
           if (VERBOSE)
             Log.info("extracted val=" + val + " from " + e);
@@ -511,15 +949,17 @@ public class TransitionGeneratorForwardsParser {
     Log.info("starting...");
 
     TransitionGeneratorForwardsParser tfp = new TransitionGeneratorForwardsParser();
-//    tfp.verbose = true;
+    tfp.verbose = true;
+    TG.VERBOSE = true;
 
     // ner3(i,ti,bi) & succ(i,j) & biolu(bi,ti,bj,tj) => ner3(j,tj,bj)
-    NodeType tokenIndexNT = new NodeType("tokenIndex");
-    NodeType nerTagNT = new NodeType("nerTag");
-    NodeType bioTagNT = new NodeType("bioTag");
-    Relation ner3 = new Relation("ner3", tokenIndexNT, nerTagNT, bioTagNT);
-    Relation succ = new Relation("succ", tokenIndexNT, tokenIndexNT);
-    Relation biolu = new Relation("biolu", bioTagNT, nerTagNT, bioTagNT, nerTagNT);
+    Uberts u = new Uberts(new Random(9001));
+    NodeType tokenIndexNT = u.lookupNodeType("tokenIndex", true);
+    NodeType nerTagNT = u.lookupNodeType("nerTag", true);
+    NodeType bioTagNT = u.lookupNodeType("bioTag", true);
+    Relation ner3 = u.addEdgeType(new Relation("ner3", tokenIndexNT, nerTagNT, bioTagNT));
+    Relation succ = u.addEdgeType(new Relation("succ", tokenIndexNT, tokenIndexNT));
+    Relation biolu = u.addEdgeType(new Relation("biolu", bioTagNT, nerTagNT, bioTagNT, nerTagNT));
     Term ner3Term = new Term(ner3, "i", "ti", "bi");
     Term succTerm = new Term(succ, "i", "j");
     Term bioluTerm = new Term(biolu, "bi", "ti", "bj", "tj");
@@ -528,7 +968,9 @@ public class TransitionGeneratorForwardsParser {
     System.out.println("first/most natural way to write it:");
     Rule r = new Rule(Arrays.asList(ner3Term, succTerm, bioluTerm), newNer3Term);
     System.out.println("rule: " + r);
-    List<TKey> lhs = tfp.parse(r).getPath();
+    List<TKey> lhs = OLD_WAY
+        ? tfp.parse(r).getPath()
+        : new Graph3(u, r).getLHS().getPath();
     System.out.println("lhs:");
     for (TKey tk : lhs)
       System.out.println("\t" + tk);
@@ -538,7 +980,9 @@ public class TransitionGeneratorForwardsParser {
     System.out.println("another way (no real benefit):");
     Rule r2 = new Rule(Arrays.asList(ner3Term, bioluTerm, succTerm), newNer3Term);
     System.out.println("rule2: " + r2);
-    List<TKey> lhs2 = tfp.parse(r2).getPath();
+    List<TKey> lhs2 = OLD_WAY
+        ? tfp.parse(r2).getPath()
+        : new Graph3(u, r2).getLHS().getPath();
     System.out.println("lhs2:");
     for (TKey tk : lhs2)
       System.out.println("\t" + tk);
@@ -551,7 +995,9 @@ public class TransitionGeneratorForwardsParser {
     System.out.println("this rule will fire every time biolu is updated, but not on ner3 updates");
     Rule r3 = new Rule(Arrays.asList(bioluTerm, ner3Term, succTerm), newNer3Term);
     System.out.println("rule3: " + r3);
-    List<TKey> lhs3 = tfp.parse(r3).getPath();
+    List<TKey> lhs3 = OLD_WAY
+        ? tfp.parse(r3).getPath()
+        : new Graph3(u, r3).getLHS().getPath();
     System.out.println("lhs3:");
     for (TKey tk : lhs3)
       System.out.println("\t" + tk);
@@ -574,7 +1020,9 @@ public class TransitionGeneratorForwardsParser {
     Rule ru1 = Rule.parseRule("event1'(e1,i,j) & srl1'(s1,k,l) => srl2(s1,e1)", u);
     ru1.resolveRelations(u);
     System.out.println(ru1);
-    List<TKey> lhs1 = tfp.parse(ru1).getPath();
+    List<TKey> lhs1 = OLD_WAY
+        ? tfp.parse(ru1).getPath()
+        : new Graph3(u, ru1).getLHS().getPath();
     System.out.println("lhs:");
     for (TKey tk : lhs1)
       System.out.println("\t" + tk);
@@ -585,14 +1033,65 @@ public class TransitionGeneratorForwardsParser {
     Rule ru2 = Rule.parseRule("srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) => srl3(s2,e2,k)", u);
     ru2.resolveRelations(u);
     System.out.println(ru2);
-    List<TKey> lhs2 = tfp.parse(ru2).getPath();
+    List<TKey> lhs2 = OLD_WAY
+        ? tfp.parse(ru2).getPath()
+        : new Graph3(u, ru2).getLHS().getPath();
     System.out.println("lhs:");
     for (TKey tk : lhs2)
       System.out.println("\t" + tk);
   }
 
-  public static void main(String[] args) {
+  public static void ruleFileExamples() throws IOException {
+//    "event1'(e1,ts,te) & event2'(e2,e1,f) & srl1'(s1,ss,se) & srl2'(s2,s1,e1) & srl3'(s3,s2,e2,k) => srl4(ts,te,f,ss,se,k)";
+    File rules = new File("data/srl-reldata/srl-grammar-moreArgs.hobbs.trans");
+    System.out.println();
+    Log.info("trying to parse all rules in: " + rules.getPath());
+    System.out.println();
+    Uberts u = new Uberts(new Random(9001));
+    u.addSuccTok(100);
+    u.readRelData(new File("data/srl-reldata/propbank/relations.def"));
+    TypeInference ti = new TypeInference(u);
+    for (Rule untypedRule : Rule.parseRules(rules, u))
+      ti.add(untypedRule);
+    for (Rule r : ti.runTypeInference()) {
+      System.out.println("rule: " + r);
+      assert !OLD_WAY;
+      List<TKey> lhs1 = new Graph3(u, r).getLHS().getPath();
+      System.out.println("lhs:");
+      for (TKey tk : lhs1)
+        System.out.println("\t" + tk);
+      System.out.println();
+      System.out.println();
+    }
+  }
+
+  public static void duplicateRelationExample() {
+    System.out.println();
+    Log.info("starting...");
+
+    TransitionGeneratorForwardsParser tfp = new TransitionGeneratorForwardsParser();
+//    tfp.verbose = true;
+
+    Uberts u = new Uberts(new Random(9001));
+    u.readRelData("def csyn3-stanford <tokenIndex> <tokenIndex> <cfgLabel>");
+    u.readRelData("def srl1 <tokenIndex> <tokenIndex>");
+    Rule ru1 = Rule.parseRule("csyn3-stanford(i,j,lhs) & csyn3-stanford(j,k,lhs2) => srl1(i,k)", u);
+    ru1.resolveRelations(u);
+    System.out.println("this example requires you to be able to bind a relation twice in the LHS");
+    System.out.println(ru1);
+
+    List<TKey> lhs1 = OLD_WAY
+        ? tfp.parse(ru1).getPath()
+        : new Graph3(u, ru1).getLHS().getPath();
+    System.out.println("lhs:");
+    for (TKey tk : lhs1)
+      System.out.println("\t" + tk);
+  }
+
+  public static void main(String[] args) throws IOException {
     unprimedExample();
     primedExample();
+    duplicateRelationExample();
+    ruleFileExamples();
   }
 }

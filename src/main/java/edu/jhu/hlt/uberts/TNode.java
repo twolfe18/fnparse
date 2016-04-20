@@ -62,24 +62,38 @@ public class TNode {
    * A node in a graph fragment which must match.
    *
    * You can think of this as a tagged union of either:
-   * - relation match, equality defined using {@link Relation#equals(Object)}
+   * - relation match, equality defined == on {@link Relation#equals(Object)}
    * - node type match, equality defined using == on {@link NodeType}
    * - node type and value match, equality using == on {@link NodeType} and equals on nodeValue
+   *
+   * CLARIFICATION (on argPos):
+   * This class should be generally called an edge, with some specifics related
+   * to when you can cross it or not. It is really a set of edges in the
+   * HypEdge-HypNode bipartite graph[1]. ONLY ONE of Relation|NodeType will be
+   * non-null in these instances, but that is an implementation detail w.r.t. to
+   * TNode. Every TNode SHOULD have either a Relation|NodeType (currently TKey)
+   * and a set of edges leaving it, where every edge in that collection shares
+   * a source, the Relation|NodeType belonging to this TNode.
+   * ON argPos:
+   * It always refers to the Relation! Don't try to make sense of (NodeType,argPos),
+   * it doesn't make sense. Using the edge analogy, there is always one Relation
+   * in the edge (its an edge in a bipartite graph), and the argPos relates to
+   * that. If you have a Relation TNode, then argPos means you must follow that
+   * argPos to arrive at the TKey's NodeType. If you have a NodeType TNode, you
+   * the TKey neighbors will mean "and that NodeType is argX of this Relation
+   * which you're now at".
    */
   public static class TKey {
-    static final int RELATION = 0;
-    static final int NODE_TYPE = 1;
-    static final int NODE_VALUE = 2;
+    public static final int RELATION = 0;
+    public static final int NODE_TYPE = 1;
+    public static final int NODE_VALUE = 2;
     private NodeType nodeType;
     private Object nodeValue;
     private Relation relationType;
 
     /**
-     * A requirement on the edge that you cross to arrive at the next node/relation.
-     * Every edge is between a HypNode and a HypEdge.
-     * This values is used to ensure that HypEdge.getTail(argPos) == HypNode.
-     * Enforcing the requirement switches whether you're leaving or arriving at
-     * a HypEdge/Relation node.
+     * Argument position of the relevant Relation.
+     * See class description for clarification.
      */
     private final int argPos;
 
@@ -129,6 +143,10 @@ public class TNode {
       this.hc = Integer.MAX_VALUE;
       this.argPos = -2;
       this.mode = -1;
+    }
+
+    public int getMode() {
+      return mode;
     }
 
     @Override

@@ -9,8 +9,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Function;
 
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -51,6 +53,7 @@ public class TypeInference {
   private Map<Arg, HypNode> values;  // null while not doing value propagation
 
   // Misc
+  private Set<String> seenRHS;
   private List<Rule> rules;
   private Uberts u;
   public boolean debug = false;
@@ -65,6 +68,7 @@ public class TypeInference {
     this.rules = new ArrayList<>();
     this.values = new HashMap<>();
     this.rel2UnvaluedArgs = new HashMap<>();
+    this.seenRHS = new HashSet<>();
   }
 
   public Uberts getUberts() {
@@ -221,6 +225,17 @@ public class TypeInference {
   }
 
   public void add(Rule untypedRule) {
+    if (!seenRHS.add(untypedRule.rhs.relName)) {
+      // TODO This is going to cause problems:
+      // I currently do:
+      // a & b => c
+      // b & a => c
+//      throw new IllegalStateException("you may only have one production rule"
+//          + " for each relation type: " + untypedRule);
+      Log.warn("duplicate RHS definition: " + untypedRule);
+      Log.warn("this is only temporarily allowed, and for cases where the"
+          + " LHSs are all the same but in different orders!");
+    }
     rules.add(untypedRule);
 
     // Find all pairs of Args which have the SAME NAME and aren't head/witness/fact nodes
@@ -302,10 +317,13 @@ public class TypeInference {
 
   // Should mimic addType
   private void propagateValue(Arg a, HypNode value, HashSet<Arg> visited) {
+    if (a.relation.equals("srl4") && a.argPos == 4)
+      Log.info("debug me, a=" + a + " value=" + value);
 
     // Store the value
     Object old = values.put(a, value);
-    assert old == null || old == value;
+    assert old == null || old == value
+        : a + " had value " + old + ", but you just offered " + value;
 
     if (!visited.add(a)) {
       if (debug)
@@ -358,9 +376,13 @@ public class TypeInference {
     // Propagate this value to other Args which were bound in the same Rule
     // with the same name.
     Collection<Arg> sameName = edges.get(a);
-    if (sameName != null)
-      for (Arg s : sameName)
+    if (sameName != null) {
+      for (Arg s : sameName) {
+        if (debug)
+          Log.info(s + " has the same name as " + a + ", propagating value: " + value);
         propagateValue(s, value, visited);
+      }
+    }
   }
 
   private void propagateType(Arg a, NodeType t, HashSet<Arg> visited) {
@@ -439,40 +461,44 @@ public class TypeInference {
    */
   public void toDOT(BufferedWriter w, boolean argMode) throws IOException {
     // DOT does not allow "-" in a node id, which is what Arg.toString uses.
-//    Function<Arg, String> a2s = a -> {
-//      String s = a.relation + ".arg" + a.argPos;
-//      return s.replaceAll("-", "_").replace(".", "_");
-//    };
+    Function<Arg, String> a2s = a -> {
+      String s = a.relation + ".arg" + a.argPos;
+      return s.replaceAll("-", "_").replace(".", "_");
+    };
 
     w.write("digraph transitionGrammar {");
     w.newLine();
     w.write("rankdir=LR;");
     w.newLine();
 
-//    if (argMode) {
-//      // First output the graph of Args
-//      w.write("subgraph typeConstraints {");
-//      w.newLine();
-//      w.write("edge [dir=none,color=green];");
-//      w.newLine();
-//      Set<Pair<String, String>> seenSameTypeEdges = new HashSet<>();
-//      for (Entry<Arg, List<Arg>> a : edges.entrySet()) {
-//        String source = a2s.apply(a.getKey());
-//        for (Arg sinkNode : a.getValue()) {
-//          String sink = a2s.apply(sinkNode);
-//          Pair<String, String> k = new Pair<>(source, sink);
-//          if (!seenSameTypeEdges.contains(k)) {
-//            seenSameTypeEdges.add(k);
-//            seenSameTypeEdges.add(new Pair<>(sink, source));
-//            w.write(source + " -> " + sink);
-//            w.write(" [label=sameType];");
-//            w.newLine();
-//          }
-//        }
-//      }
-//      w.write("}");
-//      w.newLine();
-//    }
+    if (argMode) {
+      // First output the graph of Args
+      w.write("subgraph typeConstraints {");
+      w.newLine();
+      w.write("edge [dir=none,color=purple];");
+      w.newLine();
+      Set<Pair<String, String>> seenSameTypeEdges = new HashSet<>();
+      for (Entry<Arg, List<Arg>> a : edges.entrySet()) {
+        String source = a2s.apply(a.getKey());
+        for (Arg sinkNode : a.getValue()) {
+          String sink = a2s.apply(sinkNode);
+          Pair<String, String> k = new Pair<>(source, sink);
+          if (!seenSameTypeEdges.contains(k)) {
+            seenSameTypeEdges.add(k);
+            seenSameTypeEdges.add(new Pair<>(sink, source));
+            w.write(source + " -> " + sink);
+            w.write(" [label=sameVarName];");
+            w.newLine();
+          }
+        }
+
+        NodeType t = typed.get(a.getKey());
+        w.write(t.getName().replaceAll("-", "_") + " -> " + source + " [label=typeOf,color=orange]");
+        w.newLine();
+      }
+      w.write("}");
+      w.newLine();
+    }
 
     // Relations and their args
     Set<String> seenNT = new HashSet<>();
@@ -550,7 +576,7 @@ public class TypeInference {
     ti.runTypeInference();
 
     Log.info("writing graph to: " + output.getPath());
-    boolean argMode = false;
+    boolean argMode = true;
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       ti.toDOT(w, argMode);
     }

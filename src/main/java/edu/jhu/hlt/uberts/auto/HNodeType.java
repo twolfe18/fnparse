@@ -56,4 +56,17 @@ public class HNodeType extends Either<NodeType, Relation> {
   public boolean isRelation() {
     return isRight();
   }
+
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("<HNT");
+    if (isRelation()) {
+      sb.append(" Rel:" + getRight().getName());
+    } else {
+      sb.append(" Node:" + getLeft().getName());
+    }
+    sb.append(" arg" + argPos + ">");
+    return sb.toString();
+  }
 }

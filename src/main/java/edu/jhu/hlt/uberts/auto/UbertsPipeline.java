@@ -67,6 +67,7 @@ public class UbertsPipeline {
     u.readRelData(xyDefsFile);
 
     this.typeInf = new TypeInference(u);
+    this.typeInf.debug = true;
     for (Rule untypedRule : Rule.parseRules(grammarFile, null))
       typeInf.add(untypedRule);
     for (Rule typedRule : typeInf.runTypeInference())
@@ -210,7 +211,8 @@ public class UbertsPipeline {
     List<File> schemaFiles = Arrays.asList(
         new File("data/srl-reldata/frameTriage2.propbank.rel"),
         new File("data/srl-reldata/role2.propbank.rel.gz"));
-    File grammarFile = new File("data/srl-reldata/srl-grammar.hobbs.trans");
+//    File grammarFile = new File("data/srl-reldata/srl-grammar.hobbs.trans");
+    File grammarFile = new File("data/srl-reldata/srl-grammar-moreArgs.hobbs.trans");
     Random rand = new Random(9001);
     Uberts u = new Uberts(rand);
     UbertsPipeline srl = new UbertsPipeline(u, grammarFile, schemaFiles, xyDefsFile);

@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -72,7 +73,8 @@ public class Uberts {
 
   // Supervision (set of gold HypEdges)
   // Modules may add to this set as they register TransitionGenerators for example.
-  private HashSet<HashableHypEdge> goldEdges;
+//  private HashSet<HashableHypEdge> goldEdges;
+  private Labels goldEdges;
   /**
    * Sets the set of gold edges to null (appears as if no labels were ever provided).
    */
@@ -81,21 +83,17 @@ public class Uberts {
   }
   public void addLabel(HypEdge e) {
     if (goldEdges == null)
-      goldEdges = new HashSet<>();
-    HashableHypEdge he = new HashableHypEdge(e);
-    boolean added = goldEdges.add(he);
-    assert added : "duplicate edge? " + e;
+      goldEdges = new Labels();
+    goldEdges.add(e);;
   }
   public boolean getLabel(HypEdge e) {
-    HashableHypEdge he = new HashableHypEdge(e);
-//    Log.info(he.hashCode());
-    return goldEdges.contains(he);
+    return goldEdges.contains(e);
   }
   /**
    * Sets the set of gold edges to the empty set.
    */
   public void initLabels() {
-    goldEdges = new HashSet<>();
+    goldEdges = new Labels();
   }
 
 
@@ -177,25 +175,78 @@ public class Uberts {
     }
   }
 
-  /** Will add gold edges into the state */
+  /**
+   * Runs inference, records the HypEdge popped at every step, and adds gold
+   * HypEdges to the state graph as it goes (pruning other edges which are
+   * popped but not gold).
+   *
+   * You must have added labels before calling this method.
+   *
+   * Note on duplicates: this method will add duplicate HypEdges on the
+   * assumption that their *features* may not be the same. You may have two
+   * ways of deriving a particular fact, e.g.
+   *   srl2'(s2,...) & event2'(e2,...) & ... => srl3(s2,e2,...)
+   *   event2'(e2,...) & srl2'(s2,...) & ... => srl3(s2,e2,...)
+   * Both state minimum requirements for the state graph based on the LHS, but
+   * the features could be global: they can reflect on all parts of the state
+   * graph, unless you design them otherwise.
+   * If you KNOW your features only look at the LHS of the rule (and not further
+   * into the state graph), then you can remove duplicates yourself.
+   * Though these duplicates are present, oracle recall is handled properly.
+   */
   public List<Step> recordOracleTrajectory() {
     if (goldEdges == null)
       throw new IllegalStateException("you must add labels, goldEdges==null");
     timer.start(REC_ORACLE_TRAJ);
+
+    Labels.Perf perf = goldEdges.new Perf();
+//    Set<HashableHypEdge> trajUniq = new HashSet<>();
     List<Step> traj = new ArrayList<>();
     while (agenda.size() > 0) {
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge edge = p.get1();
       HashableHypEdge needle = new HashableHypEdge(edge);
-      boolean gold = goldEdges.contains(needle);
+//      if (!trajUniq.add(needle))
+//        Log.warn("duplicate edge: " + edge);
+      boolean gold = perf.add(edge);
       if (DEBUG)
         System.out.println("[recOrcl] gold=" + gold + " " + needle.hashDesc());
       traj.add(new Step(edge, p.get2(), gold));
       if (gold)
         addEdgeToState(edge);
     }
+    Log.info("oracleRecall=" + perf.recall());
+    System.out.println("goldRelCounts: " + goldEdges.getRelCounts());
+    for (HypEdge fn : perf.getFalseNegatives()) {
+      if ("srl1".equals(fn.getRelation().getName())) {
+        int i = Integer.parseInt((String) fn.getTail(0).getValue());
+        int j = Integer.parseInt((String) fn.getTail(1).getValue());
+        System.out.println("\tfn: " + fn + "\t" + dbgGetSpan(i, j));
+      } else {
+        System.out.println("\tfn: " + fn);
+      }
+    }
     timer.stop(REC_ORACLE_TRAJ);
     return traj;
+  }
+
+  /**
+   * @param i start token index inclusive
+   * @param j end token index exclusive
+   */
+  public List<String> dbgGetSpan(int i, int j) {
+    assert j >= i;
+    Relation word2 = getEdgeType("word2");
+    NodeType tokenNT = lookupNodeType("tokenIndex", false);
+    List<String> s = new ArrayList<>();
+    for (int t = i; t < j; t++) {
+      Object value = String.valueOf(t).intern();
+      HypNode tokenN = lookupNode(tokenNT, value, false);
+      HypEdge wt = state.match1(0, word2, tokenN);
+      String wordVal = (String) wt.getTail(1).getValue();
+      s.add(wordVal);
+    }
+    return s;
   }
 
   public Random getRandom() {
@@ -403,7 +454,6 @@ public class Uberts {
 
   /** returns its argument */
   public Relation addEdgeType(Relation r) {
-    assert r.getName() == r.getName().intern();
     Relation old = relations.put(r.getName(), r);
     if (old != null)
       throw new IllegalStateException("already existed: " + r);

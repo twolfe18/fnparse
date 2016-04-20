@@ -4,7 +4,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 
@@ -19,7 +18,7 @@ public class Relation {
   private NodeType[] domain;
 
   public Relation(String name, NodeType... domain) {
-    this.name = name;
+    this.name = name.intern();
     this.domain = domain;
     for (int i = 0; i < domain.length; i++)
       assert domain[i] != null;
