@@ -332,7 +332,7 @@ public class DeterministicRolePruning implements Serializable {
         if (showPruningRecall)
           Log.info("pruning recall: " + output.recall((FNParse) input));
       } else {
-        Log.warn("check this");
+        Log.info("not showing recall since input is not FNParse: " + input.getClass().getName());
       }
       return output;
     }

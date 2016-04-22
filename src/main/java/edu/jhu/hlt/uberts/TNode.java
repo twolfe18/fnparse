@@ -44,11 +44,11 @@ public class TNode {
     }
 
     public HypNode getBoundNode(int i) {
-      assert i < boundVals.size();
+      assert i < boundVals.size() : "i=" + i + " boundVals: " + boundVals;
       return boundVals.get(i).getLeft();
     }
     public HypEdge getBoundEdge(int i) {
-      assert i < boundVals.size();
+      assert i < boundVals.size() : "i=" + i + " boundVals: " + boundVals;
       return boundVals.get(i).getRight();
     }
 

@@ -197,6 +197,8 @@ public class Uberts {
       throw new IllegalStateException("you must add labels, goldEdges==null");
     timer.start(REC_ORACLE_TRAJ);
 
+    boolean DEBUG = true;
+
     Labels.Perf perf = goldEdges.new Perf();
 //    Set<HashableHypEdge> trajUniq = new HashSet<>();
     List<Step> traj = new ArrayList<>();
@@ -207,11 +209,20 @@ public class Uberts {
 //      if (!trajUniq.add(needle))
 //        Log.warn("duplicate edge: " + edge);
       boolean gold = perf.add(edge);
-      if (DEBUG)
-        System.out.println("[recOrcl] gold=" + gold + " " + needle.hashDesc());
+      if (DEBUG) {
+//        System.out.println("[recOrcl] gold=" + gold + " " + needle.hashDesc());
+        System.out.println("[recOrcl] gold=" + gold + " " + edge);
+      }
       traj.add(new Step(edge, p.get2(), gold));
-      if (gold)
+      if (gold) {
+//        if (edge.getRelation().getName().equals("srl3")) {
+//          Log.info("checkme");
+//          TNode.DEBUG = true;
+//          addEdgeToState(edge);
+//          throw new RuntimeException("stop here");
+//        }
         addEdgeToState(edge);
+      }
     }
     Log.info("oracleRecall=" + perf.recall());
     System.out.println("goldRelCounts: " + goldEdges.getRelCounts());
