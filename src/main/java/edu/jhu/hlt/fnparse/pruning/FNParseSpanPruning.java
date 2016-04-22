@@ -23,6 +23,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 
 /**
  * This specifies a set of frames marked in text (FNTagging) as well as a pruned
@@ -59,6 +60,19 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
       possibleArgs.put(key, vals);
     }
     vals.addAll(values);
+  }
+
+  /**
+   * @returns (t,s) for each FrameInstance/arg combination in this mask.
+   */
+  public List<SpanPair> getAllArgs() {
+    List<SpanPair> a = new ArrayList<>();
+    for (Entry<FrameInstance, List<Span>> x : possibleArgs.entrySet()) {
+      Span t = x.getKey().getTarget();
+      for (Span s : x.getValue())
+        a.add(new SpanPair(t, s));
+    }
+    return a;
   }
 
   public FNParseSpanPruning(
