@@ -3,8 +3,11 @@ package edu.jhu.hlt.uberts.srl;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
@@ -12,17 +15,22 @@ import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.Node;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.StringLabeledDirectedGraph;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
+import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
+import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
+import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.util.Alphabet;
@@ -41,6 +49,12 @@ public class FNParseToRelations {
 
   // For new Hobbs models, only write out srl4 and not event*
   public boolean srl4Mode = true;
+
+  // If true, run DeterministicRolePruning.XUE_PALMER
+  // It treats all width-1 spans as possible targets, plus all gold targets,
+  // which it marks with a "# gold" comment (if it wasn't already included b/c
+  // of the width-1 rule), so you can grep them out if you need to.
+  public boolean outputArgPruning = true;
 
   private void write(Sentence s, BufferedWriter w) throws IOException {
     IWord iw;
@@ -181,6 +195,40 @@ public class FNParseToRelations {
       w.write("def srl3 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <roleLabel> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
       w.newLine();
     }
+    if (outputArgPruning) {
+      w.write("def xue-palmer-args <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # ts, te, ss, se");
+      w.newLine();
+    }
+  }
+
+  private void writeArgs(FNParse y, BufferedWriter w) throws IOException {
+    DeterministicRolePruning drp = new DeterministicRolePruning(
+        Mode.XUE_PALMER, null, null);
+    List<FrameInstance> frameMentions = new ArrayList<>();
+    Set<Span> uniq = new HashSet<>();
+    Sentence sent = y.getSentence();
+    Frame f = new Frame(0, "propbank/dummyframe", null, new String[] {"ARG0", "ARG1"});
+    for (int i = 0; i < sent.size(); i++) {
+      Span t = Span.getSpan(i, i+1);
+      frameMentions.add(FrameInstance.frameMention(f, t, sent));
+      uniq.add(t);
+    }
+    Set<Span> gold = new HashSet<>();
+    for (FrameInstance fi : y.getFrameInstances()) {
+      Span t = fi.getTarget();
+      if (!uniq.contains(t) && gold.add(t))
+        frameMentions.add(FrameInstance.frameMention(f, t, sent));
+    }
+    FNTagging argsFor = new FNTagging(sent, frameMentions);
+    FNParseSpanPruning args = drp.setupInference(Arrays.asList(argsFor), null).decodeAll().get(0);
+    for (SpanPair ts : args.getAllArgs()) {
+      Span t = ts.get1();
+      Span s = ts.get2();
+      w.write("x xue-palmer-args " + t.start + " " + t.end + " " + s.start + " " + s.end);
+      if (gold.contains(t))
+        w.write(" # gold");
+      w.newLine();
+    }
   }
 
   public void write(FNParse y, BufferedWriter w) throws IOException {
@@ -189,6 +237,11 @@ public class FNParseToRelations {
     // dsyn3-basic(g,d,l), dsyn3-col(g,d,l), dsyn3-colcc(g,d,l)
     // csyn3-stanford(i,j,l)
     write(y.getSentence(), w);
+
+    // arg-pruning
+    if (outputArgPruning)
+      writeArgs(y, w);
+
     // y:
     // event1(t), event2(t,f), srl1(s), srl2(t,s), srl3(t,s,k)
     for (FrameInstance fi : y.getFrameInstances()) {
