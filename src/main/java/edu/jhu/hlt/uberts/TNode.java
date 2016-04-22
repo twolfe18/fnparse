@@ -376,11 +376,13 @@ public class TNode {
     if (childTrie != null) {
       traversal.stack.push(n);
       traversal.visited.add(n);
-      traversal.boundVals.add(n);
+      if (n.isEdge())
+        traversal.boundVals.add(n);
       match(u, n, traversal, childTrie);
       traversal.stack.pop();
       traversal.visited.remove(n);
-      traversal.boundVals.remove(traversal.boundVals.size() - 1);
+      if (n.isEdge())
+        traversal.boundVals.remove(traversal.boundVals.size() - 1);
     }
   }
 
