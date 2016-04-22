@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HNode;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -136,7 +137,7 @@ public abstract class FeatureExtractionFactor<T> {
     private Deque<String> steps;
     private int curArgs = 0;
     private int curValues = 0;
-    private int maxArgs = 6;
+    private int maxArgs = 4;
     private int maxValues = 4;
     private int minValues = 1;
     private boolean lastStepIncludesValue;
@@ -204,7 +205,10 @@ public abstract class FeatureExtractionFactor<T> {
         addTo.add(sb.toString());
       }
 
-      for (StateEdge se : s.neighbors2(n)) {
+      List<StateEdge> nei = s.neighbors2(n);
+      if (nei.size() > 10)
+        Log.warn("lots of neighbors of " + n + ", " + nei.size());
+      for (StateEdge se : nei) {
         assert se.getSource().equals(n) : "n=" + n + " source=" + se.getSource();
         HNode t = se.getTarget();
         boolean incVal = false;

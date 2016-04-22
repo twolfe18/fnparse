@@ -17,7 +17,6 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.HypEdge;
-import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
@@ -67,7 +66,7 @@ public class UbertsPipeline {
     u.readRelData(xyDefsFile);
 
     this.typeInf = new TypeInference(u);
-    this.typeInf.debug = true;
+//    this.typeInf.debug = true;
     for (Rule untypedRule : Rule.parseRules(grammarFile, null))
       typeInf.add(untypedRule);
     for (Rule typedRule : typeInf.runTypeInference())
@@ -93,7 +92,7 @@ public class UbertsPipeline {
    */
   public void extractFeatures(ManyDocRelationFileIterator x, File output) throws IOException {
     Log.info("writing features to " + output);
-    boolean debug = false;
+    boolean debug = true;
     TimeMarker tm = new TimeMarker();
     Counts<String> posRel = new Counts<>(), negRel = new Counts<>();
     int docs = 0, actions = 0;
@@ -112,17 +111,20 @@ public class UbertsPipeline {
         // Add x:HypEdges to State
         // Add y:HypEdges as labels
         int cx = 0, cy = 0;
+        assert doc.items.isEmpty() && !doc.facts.isEmpty();
         for (HypEdge.WithProps fact : doc.facts) {
           boolean isX = fact.hasProperty(HypEdge.IS_X);
           boolean isY = fact.hasProperty(HypEdge.IS_Y);
           if (isX || isY) {
             if (isX) {
               u.addEdgeToState(fact);
+              System.out.println("[exFeats] x: " + fact);
               cx++;
             } else {
               if (debug) {
-                HashableHypEdge hhe = new HashableHypEdge(fact);
-                System.out.println("[exFeats] adding: " + hhe.hashDesc());
+//                HashableHypEdge hhe = new HashableHypEdge(fact);
+//                System.out.println("[exFeats] adding: " + hhe.hashDesc());
+                System.out.println("[exFeats] y: " + fact);
               }
               u.addLabel(fact);
               cy++;
@@ -144,7 +146,7 @@ public class UbertsPipeline {
           else negRel.increment(t.edge.getRelation().getName());
           String lab = y ? "+1" : "-1";
           if (debug)
-            Log.info(lab + " " + t.edge + " " + new HashableHypEdge(t.edge).hc);
+            System.out.println("[exFeats.orTraj] " + lab + " " + t.edge);// + " " + new HashableHypEdge(t.edge).hc);
           actions++;
           @SuppressWarnings("unchecked")
           WeightAdjoints<String> fx = (WeightAdjoints<String>) t.score;
@@ -188,6 +190,7 @@ public class UbertsPipeline {
 //    List<Relation> relevant = Arrays.asList(r.rhs.rel);
 //    tg.get2().feats = new FeatureExtractionFactor.Simple(relevant, u);
     tg.get2().feats = new FeatureExtractionFactor.GraphWalks();
+    // If you leave it null, it will assign everything a score of 1
 
     u.addTransitionGenerator(tg.get1(), tg.get2());
   }
