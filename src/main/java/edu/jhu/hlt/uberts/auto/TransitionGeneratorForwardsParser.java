@@ -235,10 +235,11 @@ public class TransitionGeneratorForwardsParser {
       }
     }
 
-    public void halfRecursive(TermNode root) {
+    public void halfRecursive(TermNode root, LHS lhsAddTo) {
       neighborsAUnion = true;
+
+      // Walk the graph to get a spanning tree as a set of edges
       List<IDFCATP> trace = new ArrayList<>();
-      Log.info("root=" + root);
       Deque<Object> stack = new ArrayDeque<>();
       stack.push(root);
       Set<Object> seen = new HashSet<>();
@@ -281,66 +282,14 @@ public class TransitionGeneratorForwardsParser {
       }
 
 
-//      Deque<TermNode> st = new ArrayDeque<>();
-//      List<TKey> output = new ArrayList<>();
-//      st.push(trace.get(0).t2);
-//      for (int i = 1; i < trace.size(); i++) {
-//        IDFCATP id = trace.get(i);
-//        for (TermNode cur : Arrays.asList(id.t1, id.t2)) {
-//          // prev is the top of the stack
-//          
-//        }
-//      }
-//      for (TKey tk : output)
-//        Log.info("output: " + tk);
-
-
-//      Set<String> uniq = new HashSet<>();
-//      List<TKey> output = new ArrayList<>();
-//      if (trace.size() > 0) {
-//        Log.info("output: " + new TKey(State.HEAD_ARG_POS, trace.get(0).t1.getRelation()));
-//      }
-//      Deque<TKey> st = new ArrayDeque<>();
-//      for (IDFCATP e : trace) {
-//        TKey tk;
-//
-//        tk = e.getTA();
-//        while (st.size() > 0 && !st.peek().toString().equals(tk.toString())) {
-//          st.pop();
-//          Log.info("output: " + TNode.GOTO_PARENT);
-//        }
-//        if (uniq.add(tk.toString())) {
-//          Log.info("output: " + tk);
-//        }
-//        st.push(tk);
-//
-//        tk = e.getAT();
-//        while (st.size() > 0 && !st.peek().toString().equals(tk.toString())) {
-//          st.pop();
-//          Log.info("output: " + TNode.GOTO_PARENT);
-//        }
-//        if (uniq.add(tk.toString())) {
-//          Log.info("output: " + tk);
-//        }
-//        st.push(tk);
-//      }
-//      for (TKey tk : output)
-//        Log.info("output: " + tk);
-
-
-      if (root.getRelation().getName().equals("event2"))
-        Log.info("check me");
-      List<TKey> output = new ArrayList<>();
+      // Linearize the set of edges
       if (trace.isEmpty()) {
-        Log.warn("skipping trace");
+        // Special case, no t1->...->t2 walk, just include the root
+        lhsAddTo.add(new TKey(State.HEAD_ARG_POS, root.getRelation()), root.termIdx);
+        notDone.remove(root);
       } else {
         stack = null; // this is going to cause typo bugs
         Deque<IDFCATP> st = new ArrayDeque<>();
-//        IDFCATP first = trace.get(0);
-//        st.push(first);
-//        Log.info("output: " + new TKey(State.HEAD_ARG_POS, first.t1.getRelation()));
-//        Log.info("output: " + new TKey(first.a1.argIdx, first.getCommonNodeType()));
-//        Log.info("output: " + new TKey(cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx, cur.t2.getRelation()));
         outer:
         for (int i = 0; i < trace.size(); i++) {
           IDFCATP prev = null;
@@ -351,81 +300,35 @@ public class TransitionGeneratorForwardsParser {
               break;
             }
             st.pop();
-            Log.info("output: " + TNode.GOTO_PARENT);  // back to NT
+            lhsAddTo.add(TNode.GOTO_PARENT, -1);  // back to NT
             // Maybe we don't need to go all the way to prev.t1
             if (prev.getCommonNodeType() == cur.getCommonNodeType()) {
-              Log.info("output: " + new TKey(cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx, cur.t2.getRelation()));
+              int ap = cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx;
+              lhsAddTo.add(new TKey(ap, cur.t2.getRelation()), cur.t2.termIdx);
+              notDone.remove(cur.t2);
               prev = cur;
               st.push(cur);
               continue outer;
             } else if (prev.t1 == cur.t1) {
-              Log.info("output: " + TNode.GOTO_PARENT);  // back to Rel
+              lhsAddTo.add(TNode.GOTO_PARENT, -1);  // back to Rel
               prev = cur;
               break;
             } else {
               prev = null;
-              Log.info("output: " + TNode.GOTO_PARENT);  // back to Rel
+              lhsAddTo.add(TNode.GOTO_PARENT, -1);  // back to Rel
             }
           }
           if (prev == null) {
-            Log.info("output: " + new TKey(State.HEAD_ARG_POS, cur.t1.getRelation()));
+            lhsAddTo.add(new TKey(State.HEAD_ARG_POS, cur.t1.getRelation()), cur.t1.termIdx);
+            notDone.remove(cur.t1);
           }
-          Log.info("output: " + new TKey(cur.a1.argIdx, cur.getCommonNodeType()));
-          Log.info("output: " + new TKey(cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx, cur.t2.getRelation()));
+          lhsAddTo.add(new TKey(cur.a1.argIdx, cur.getCommonNodeType()), -1);
+          int ap = cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx;
+          lhsAddTo.add(new TKey(ap, cur.t2.getRelation()), cur.t2.termIdx);
+          notDone.remove(cur.t2);
           st.push(cur);
-
-//          IDFCATP prev = st.peek();
-//          IDFCATP cur = trace.get(i);
-//          if (prev.t2 == cur.t1) {
-//            // no backup required
-//
-//            // a1/a2:NodeType -> t2:Relation
-//            int ap2 = prev.a2.argIdx < 0 ? State.HEAD_ARG_POS : prev.a2.argIdx;
-//            Log.info("output: " + new TKey(ap2, prev.t2.getRelation()));
-//
-//            // t1:Relation -> a1/a2:NodeType
-//            Log.info("output: " + new TKey(cur.a1.argIdx, cur.getCommonNodeType()));
-//
-//            // put this on the stack for the next round
-//            st.push(cur);
-//
-////          } else if (prev.getCommonNodeType() == cur.getCommonNodeType() ) {
-////            // We can GOTO_PARENT once to get to a NodeType
-////            int ap1 = prev.a2.argIdx < 0 ? State.HEAD_ARG_POS : prev.a2.argIdx;
-////            Log.info("output: " + new TKey(ap1, prev.t2.getRelation()));
-////
-////            Log.info("output: " + TNode.GOTO_PARENT);  // back to NT
-////
-////            // a1/a2:NodeType -> t2:Relation
-////            int ap2 = cur.a1.argIdx < 0 ? State.HEAD_ARG_POS : cur.a1.argIdx;
-////            Log.info("output: " + new TKey(ap2, cur.t1.getRelation()));
-////
-////            st.pop();
-////            st.push(cur);
-//
-//          } else if (prev.t1 == cur.t1) {
-//
-//            // we've already gotten to the NT for prev
-//            // now we output the relation, and backup to prev.t1
-//            int ap2 = prev.a2.argIdx < 0 ? State.HEAD_ARG_POS : prev.a2.argIdx;
-//            Log.info("output: " + new TKey(ap2, prev.t2.getRelation()));
-//            Log.info("output: " + TNode.GOTO_PARENT);  // back to NT
-//            Log.info("output: " + TNode.GOTO_PARENT);  // back to Rel
-//            // when we're done, replace prev with cur and continue
-//            st.pop();
-//            st.push(cur);
-//
-//          } else {
-//            Log.warn("does this happen?");
-//            assert false;
-//          }
         }
-        while (!output.isEmpty() && output.get(output.size() - 1) == TNode.GOTO_PARENT)
-          output.remove(output.size() - 1);
-        for (TKey tk : output)
-          Log.info("output: " + tk);
       }
-
       neighborsAUnion = false;
     }
 
@@ -740,26 +643,14 @@ public class TransitionGeneratorForwardsParser {
         }
       }
 
-      if (rule.rhs.relName.equals("srl4"))
-        Log.info("debug me");
 
-      // DFS to sub-select set of edges representing a tree
-      // pre-order traversal to find spanning tree/forest
-      // Re-order 
+      boolean first = true;
       dfsTrace = new LHS(r);
-      dfsSeen = new HashSet<>();
       while (!notDone.isEmpty()) {
-        // (Possibly) multiple roots: choose them by order in Term.lhs
-        TermNode cur = notDone.poll();
-        halfRecursive(cur);
-        if (DEBUG)
-          Log.info("starting from root=" + cur);
-        ntMaybeFrom = -1;
-        ntMaybe = null;
-        dfsTrace.add(new TKey(State.HEAD_ARG_POS, cur.getRelation()), cur.termIdx);
-        dfs(cur);
-        if (!notDone.isEmpty())
-          gotoParent(cur, false);
+        if (!first)
+          dfsTrace.gotoRoot();
+        first = false;
+        halfRecursive(notDone.poll(), dfsTrace);
       }
     }
 
@@ -1038,26 +929,13 @@ public class TransitionGeneratorForwardsParser {
   static class LHS {
     private Rule rule;
     private List<TKey> pat;
-    // TODO This is a problem, can't handle rules with repeated use of a relation in the LHS,
-    // e.g. data/srl-reldata/srl-grammar-moreArgs.hobbs.trans
-    // Key should probably be Term=(relation,indexInLHS)
-//    private Map<Relation, Integer> rel2patIdx;
-
-    // co-indexed with pat, value is index of Term in rule.lhs
-    // -1 means doesn't correspond to a lhs term, like TNode.GOTO_PARENT
-    // TODO should be new int[rule.lhs.length] with values being indexes in pat
-//    private List<Integer> tkey2RuleLhsTermIdx;
     private int[] lhsTermIdx2PatIdx;
-//    private int numGotoParent;
     private int relsInPat;
 
     public LHS(Rule r) {
-//      numGotoParent = 0;
       relsInPat = 0;
       rule = r;
       pat = new ArrayList<>();
-//      rel2patIdx = new HashMap<>();
-//      tkey2RuleLhsTermIdx = new ArrayList<>();
       lhsTermIdx2PatIdx = new int[r.lhs.length];
       Arrays.fill(lhsTermIdx2PatIdx, -1);
     }
@@ -1072,23 +950,31 @@ public class TransitionGeneratorForwardsParser {
     public void add(TKey key, int lhsTermIdx) {
       if (DEBUG)
         Log.info(key + " lhsTermIdx=" + lhsTermIdx);
-      assert lhsTermIdx >= 0 && lhsTermIdx < rule.lhs.length;
       if (key.getMode() == TKey.RELATION) {
+        assert lhsTermIdx >= 0 && lhsTermIdx < rule.lhs.length;
         assert lhsTermIdx2PatIdx[lhsTermIdx] == -1;
-//        lhsTermIdx2PatIdx[lhsTermIdx] = pat.size();
         lhsTermIdx2PatIdx[lhsTermIdx] = relsInPat++;
       }
       pat.add(key);
     }
 
-//    /**
-//     * Return the index of this relation in the pattern. This value can be used
-//     * with {@link GraphTraversalTrace#getBoundEdge(int)} to retrieve the
-//     * {@link HypEdge} which provides bound values for a {@link Relation}.
-//     */
-//    public int getIndexOfRelationInLhsPat(Relation r) {
-//      return rel2patIdx.get(r);
-//    }
+    /**
+     * Adds enough GOTO_PARENTs so that the resulting path returns to the root,
+     * allowing you to extend that path to any other Relation in the state.
+     */
+    public void gotoRoot() {
+      int depth = 0;
+      for (TKey tk : pat) {
+        if (tk == TNode.GOTO_PARENT) {
+          depth--;
+          assert depth >= 0;
+        } else {
+          depth++;
+        }
+      }
+      for (int i = 0; i < depth; i++)
+        gotoParent();
+    }
 
     public HypEdge getBoundValue(int lhsTermIdx, GraphTraversalTrace gtt) {
       int patIdx = lhsTermIdx2PatIdx[lhsTermIdx];
@@ -1314,8 +1200,9 @@ public class TransitionGeneratorForwardsParser {
         sc = feats.score(e, u);
       }
       Pair<HypEdge, Adjoints> p = new Pair<>(e, sc);
-      
-      Log.info("rule=" + match.rule + " generated edge=" + e + " from lhsValues=" + lhsValues);
+
+      if (VERBOSE)
+        Log.info("rule=" + match.rule + " generated edge=" + e + " from lhsValues=" + lhsValues);
 
       return Arrays.asList(p);
     }
@@ -1466,10 +1353,36 @@ public class TransitionGeneratorForwardsParser {
       System.out.println("\t" + tk);
   }
 
+  /** No spanning tree over relations in LHS */
+  public static void forestExample() {
+    System.out.println();
+    Log.info("starting...");
+
+    TransitionGeneratorForwardsParser tfp = new TransitionGeneratorForwardsParser();
+//    tfp.verbose = true;
+
+    Uberts u = new Uberts(new Random(9001));
+    u.readRelData("def csyn3-stanford <tokenIndex> <tokenIndex> <cfgLabel>");
+    u.readRelData("def role2 <frame> <role>");
+    u.readRelData("def foo <tokenIndex> <role>");
+    Rule ru1 = Rule.parseRule("csyn3-stanford(i,j,lhs) & role2(f,k) => foo(i,k)", u);
+    ru1.resolveRelations(u);
+    System.out.println("this example does not have a spanning tree over LHS relations, requires two entries from root");
+    System.out.println(ru1);
+
+    List<TKey> lhs1 = OLD_WAY
+        ? tfp.parse(ru1).getPath()
+        : new Graph3(u, ru1).getLHS().getPath();
+    System.out.println("lhs:");
+    for (TKey tk : lhs1)
+      System.out.println("\t" + tk);
+  }
+
   public static void main(String[] args) throws IOException {
     unprimedExample();
     primedExample();
     duplicateRelationExample();
     ruleFileExamples();
+    forestExample();
   }
 }
