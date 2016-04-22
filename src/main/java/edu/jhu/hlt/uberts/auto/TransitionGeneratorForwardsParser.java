@@ -78,7 +78,7 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public class TransitionGeneratorForwardsParser {
-  public static boolean DEBUG = true;
+  public static boolean DEBUG = false;
 
   // OLD_WAY is broken
   public static boolean OLD_WAY = false;
@@ -186,13 +186,250 @@ public class TransitionGeneratorForwardsParser {
     Map<ArgNode, List<ArgNode>> edgeAA;
 
     ArgNode[][] argNodes;
+    ArgNode[] termHeadNodes;
     TermNode[] termNodes;
 
     PriorityQueue<TermNode> notDone;
     boolean[] notDoneTermIdx;
     Set<Object> dfsSeen;
 
-    public int leftmostA(List<ArgNode> args, TermNode exclude) {
+    static class IDFCATP {
+      TermNode t1, t2;
+      ArgNode a1, a2;
+      public IDFCATP(TermNode t1, ArgNode a1, ArgNode a2, TermNode t2) {
+        this.t1 = t1;
+        this.a1 = a1;
+        this.a2 = a2;
+        this.t2 = t2;
+      }
+      public NodeType getCommonNodeType() {
+        assert a1.getNodeType() == a2.getNodeType();
+        return a1.getNodeType();
+      }
+      private TKey t, ta, at;
+      public TKey getT() {
+        if (t == null)
+          t = new TKey(State.HEAD_ARG_POS, t1.getRelation());
+        return t;
+      }
+      public TKey getTA() {
+        if (ta == null)
+          ta = new TKey(a1.argIdx, a1.getNodeType());
+        return ta;
+      }
+      public TKey getAT() {
+        if (at == null) {
+          int ap = a2.argIdx < 0 ? State.HEAD_ARG_POS : a2.argIdx;
+          at = new TKey(ap, t2.getRelation());
+        }
+        return at;
+      }
+      public static boolean eq(IDFCATP a, IDFCATP b) {
+        return a.t1 == b.t1 && a.t2 == b.t2;
+      }
+      public static boolean chain(IDFCATP first, IDFCATP second) {
+        return first.t2 == second.t1;
+      }
+      public String toString() {
+        return t1 + " -> " + a1 + " -> " + a2 + " -> " + t2;
+      }
+    }
+
+    public void halfRecursive(TermNode root) {
+      neighborsAUnion = true;
+      List<IDFCATP> trace = new ArrayList<>();
+      Log.info("root=" + root);
+      Deque<Object> stack = new ArrayDeque<>();
+      stack.push(root);
+      Set<Object> seen = new HashSet<>();
+      outer:
+      while (!stack.isEmpty()) {
+        Object cur = stack.pop();
+        Object prev = stack.isEmpty() ? null : stack.peek();
+        stack.push(cur);
+        Log.info("prev=" + prev + " cur=" + cur + " stack.size=" + stack.size());
+        boolean newCur = seen.add(cur);
+
+        if (cur instanceof TermNode && cur != root && newCur) {
+          // we made it!
+          TermNode tSink = (TermNode) stack.pop();
+          ArgNode aSink = (ArgNode) stack.pop();
+          ArgNode aSource = (ArgNode) stack.pop();
+          TermNode tSource = (TermNode) stack.peek();
+          stack.push(aSource);
+          stack.push(aSink);
+          stack.push(tSink);
+          IDFCATP i = new IDFCATP(tSource, aSource, aSink, tSink);
+          if (trace.isEmpty() || !IDFCATP.eq(trace.get(trace.size()-1), i)) {
+            Log.info(tSource + " -> " + aSource + " -> " + aSink + " -> " + tSink);
+            trace.add(i);
+          }
+        }
+
+        List<?> neighbors = neighborsFUUUUU(cur, prev);
+        if (neighbors != null) {
+          for (Object n : neighbors) {
+            if (!seen.contains(n)) {
+              stack.push(n);
+              continue outer;
+            } else {
+              Log.info("skipping " + n);
+            }
+          }
+        }
+        stack.pop();
+      }
+
+
+//      Deque<TermNode> st = new ArrayDeque<>();
+//      List<TKey> output = new ArrayList<>();
+//      st.push(trace.get(0).t2);
+//      for (int i = 1; i < trace.size(); i++) {
+//        IDFCATP id = trace.get(i);
+//        for (TermNode cur : Arrays.asList(id.t1, id.t2)) {
+//          // prev is the top of the stack
+//          
+//        }
+//      }
+//      for (TKey tk : output)
+//        Log.info("output: " + tk);
+
+
+//      Set<String> uniq = new HashSet<>();
+//      List<TKey> output = new ArrayList<>();
+//      if (trace.size() > 0) {
+//        Log.info("output: " + new TKey(State.HEAD_ARG_POS, trace.get(0).t1.getRelation()));
+//      }
+//      Deque<TKey> st = new ArrayDeque<>();
+//      for (IDFCATP e : trace) {
+//        TKey tk;
+//
+//        tk = e.getTA();
+//        while (st.size() > 0 && !st.peek().toString().equals(tk.toString())) {
+//          st.pop();
+//          Log.info("output: " + TNode.GOTO_PARENT);
+//        }
+//        if (uniq.add(tk.toString())) {
+//          Log.info("output: " + tk);
+//        }
+//        st.push(tk);
+//
+//        tk = e.getAT();
+//        while (st.size() > 0 && !st.peek().toString().equals(tk.toString())) {
+//          st.pop();
+//          Log.info("output: " + TNode.GOTO_PARENT);
+//        }
+//        if (uniq.add(tk.toString())) {
+//          Log.info("output: " + tk);
+//        }
+//        st.push(tk);
+//      }
+//      for (TKey tk : output)
+//        Log.info("output: " + tk);
+
+
+      if (root.getRelation().getName().equals("event2"))
+        Log.info("check me");
+      List<TKey> output = new ArrayList<>();
+      if (trace.isEmpty()) {
+        Log.warn("skipping trace");
+      } else {
+        stack = null; // this is going to cause typo bugs
+        Deque<IDFCATP> st = new ArrayDeque<>();
+//        IDFCATP first = trace.get(0);
+//        st.push(first);
+//        Log.info("output: " + new TKey(State.HEAD_ARG_POS, first.t1.getRelation()));
+//        Log.info("output: " + new TKey(first.a1.argIdx, first.getCommonNodeType()));
+//        Log.info("output: " + new TKey(cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx, cur.t2.getRelation()));
+        outer:
+        for (int i = 0; i < trace.size(); i++) {
+          IDFCATP prev = null;
+          IDFCATP cur = trace.get(i);
+          while (!st.isEmpty()) {
+            prev = st.peek();
+            if (prev.t2 == cur.t1) {
+              break;
+            }
+            st.pop();
+            Log.info("output: " + TNode.GOTO_PARENT);  // back to NT
+            // Maybe we don't need to go all the way to prev.t1
+            if (prev.getCommonNodeType() == cur.getCommonNodeType()) {
+              Log.info("output: " + new TKey(cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx, cur.t2.getRelation()));
+              prev = cur;
+              st.push(cur);
+              continue outer;
+            } else if (prev.t1 == cur.t1) {
+              Log.info("output: " + TNode.GOTO_PARENT);  // back to Rel
+              prev = cur;
+              break;
+            } else {
+              prev = null;
+              Log.info("output: " + TNode.GOTO_PARENT);  // back to Rel
+            }
+          }
+          if (prev == null) {
+            Log.info("output: " + new TKey(State.HEAD_ARG_POS, cur.t1.getRelation()));
+          }
+          Log.info("output: " + new TKey(cur.a1.argIdx, cur.getCommonNodeType()));
+          Log.info("output: " + new TKey(cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx, cur.t2.getRelation()));
+          st.push(cur);
+
+//          IDFCATP prev = st.peek();
+//          IDFCATP cur = trace.get(i);
+//          if (prev.t2 == cur.t1) {
+//            // no backup required
+//
+//            // a1/a2:NodeType -> t2:Relation
+//            int ap2 = prev.a2.argIdx < 0 ? State.HEAD_ARG_POS : prev.a2.argIdx;
+//            Log.info("output: " + new TKey(ap2, prev.t2.getRelation()));
+//
+//            // t1:Relation -> a1/a2:NodeType
+//            Log.info("output: " + new TKey(cur.a1.argIdx, cur.getCommonNodeType()));
+//
+//            // put this on the stack for the next round
+//            st.push(cur);
+//
+////          } else if (prev.getCommonNodeType() == cur.getCommonNodeType() ) {
+////            // We can GOTO_PARENT once to get to a NodeType
+////            int ap1 = prev.a2.argIdx < 0 ? State.HEAD_ARG_POS : prev.a2.argIdx;
+////            Log.info("output: " + new TKey(ap1, prev.t2.getRelation()));
+////
+////            Log.info("output: " + TNode.GOTO_PARENT);  // back to NT
+////
+////            // a1/a2:NodeType -> t2:Relation
+////            int ap2 = cur.a1.argIdx < 0 ? State.HEAD_ARG_POS : cur.a1.argIdx;
+////            Log.info("output: " + new TKey(ap2, cur.t1.getRelation()));
+////
+////            st.pop();
+////            st.push(cur);
+//
+//          } else if (prev.t1 == cur.t1) {
+//
+//            // we've already gotten to the NT for prev
+//            // now we output the relation, and backup to prev.t1
+//            int ap2 = prev.a2.argIdx < 0 ? State.HEAD_ARG_POS : prev.a2.argIdx;
+//            Log.info("output: " + new TKey(ap2, prev.t2.getRelation()));
+//            Log.info("output: " + TNode.GOTO_PARENT);  // back to NT
+//            Log.info("output: " + TNode.GOTO_PARENT);  // back to Rel
+//            // when we're done, replace prev with cur and continue
+//            st.pop();
+//            st.push(cur);
+//
+//          } else {
+//            Log.warn("does this happen?");
+//            assert false;
+//          }
+        }
+        while (!output.isEmpty() && output.get(output.size() - 1) == TNode.GOTO_PARENT)
+          output.remove(output.size() - 1);
+        for (TKey tk : output)
+          Log.info("output: " + tk);
+      }
+
+      neighborsAUnion = false;
+    }
+
+    public int leftmostA(List<ArgNode> args, Object exclude) {
       int min = rule.lhs.length;
       if (args == null)
         return min;
@@ -217,9 +454,102 @@ public class TransitionGeneratorForwardsParser {
       return min;
     }
 
+    private List<?> neighborsFUUUUU(Object cur, Object prev) {
+      if (prev instanceof ArgNode && cur instanceof ArgNode) {
+        // AT
+        Comparator<TermNode> cAT = new Comparator<TermNode>() {
+          @Override
+          public int compare(TermNode o1, TermNode o2) {
+            return o1.termIdx - o2.termIdx;
+          }
+        };
+        List<TermNode> lAT = edgeAT.get(cur);
+        if (lAT == null) lAT = Collections.emptyList();
+        Collections.sort(lAT, cAT);
+        if (DEBUG)
+          Log.info("leaving AT " + cur + ": " + lAT);
+        return lAT;
+
+      } else if (prev instanceof TermNode && cur instanceof ArgNode) {
+        // AA
+        Comparator<ArgNode> c = new Comparator<ArgNode>() {
+          @Override
+          public int compare(ArgNode o1, ArgNode o2) {
+            List<TermNode> l1 = edgeAT.get(o1);
+            List<TermNode> l2 = edgeAT.get(o2);
+            return leftmostT(l1) - leftmostT(l2);
+          }
+        };
+        List<ArgNode> lAA = edgeAA.get(cur);
+        if (lAA == null) lAA = Collections.emptyList();
+        Collections.sort(lAA, c);
+        if (DEBUG)
+          Log.info("leaving AA " + cur + ": " + lAA);
+        return lAA;
+        
+      } else {
+        // TA
+        Comparator<ArgNode> c = new Comparator<ArgNode>() {
+          @Override
+          public int compare(ArgNode o1, ArgNode o2) {
+            List<ArgNode> a1 = edgeAA.get(o1);
+            List<ArgNode> a2 = edgeAA.get(o2);
+//            return leftmostA(a1, (TermNode) prev) - leftmostA(a2, (TermNode) prev);
+            return leftmostA(a1, null) - leftmostA(a2, null);
+          }
+        };
+        List<ArgNode> l = edgeTA.get(cur);
+        if (l == null) l = Collections.emptyList();
+        Collections.sort(l, c);
+        if (DEBUG)
+          Log.info("leaving TA " + cur + ": " + l);
+        return l;
+      }
+    }
+
+    boolean neighborsAUnion = false;
+    private List<?> neighborsA(Object key) {
+
+      Comparator<TermNode> cAT = new Comparator<TermNode>() {
+        @Override
+        public int compare(TermNode o1, TermNode o2) {
+          return o1.termIdx - o2.termIdx;
+        }
+      };
+      List<TermNode> lAT = edgeAT.get(key);
+      Collections.sort(lAT, cAT);
+      if (DEBUG)
+        Log.info("leaving AT " + key + ": " + lAT);
+
+      Comparator<ArgNode> c = new Comparator<ArgNode>() {
+        @Override
+        public int compare(ArgNode o1, ArgNode o2) {
+          List<TermNode> l1 = edgeAT.get(o1);
+          List<TermNode> l2 = edgeAT.get(o2);
+          return leftmostT(l1) - leftmostT(l2);
+        }
+      };
+      List<ArgNode> lAA = edgeAA.get(key);
+      if (lAA != null)
+        Collections.sort(lAA, c);
+      if (DEBUG)
+        Log.info("leaving AA " + key + ": " + lAA);
+
+      List<Object> l = new ArrayList<>();
+      if (lAT != null) l.addAll(lAT);
+      if (lAA != null) l.addAll(lAA);
+      return l;
+    }
+
     private List<?> neighbors(Object key) {
       if (DEBUG)
         Log.info("of " + key + " ntMaybe=" + ntMaybe + " ntMaybeFrom=" + ntMaybeFrom);
+      
+      
+      if (neighborsAUnion && key instanceof ArgNode)
+        return neighborsA(key);
+      
+      
       // Using dynamic sorting because they depend on the set of visited nodes
       if (key instanceof TermNode) {
         Comparator<ArgNode> c = new Comparator<ArgNode>() {
@@ -231,9 +561,8 @@ public class TransitionGeneratorForwardsParser {
           }
         };
         List<ArgNode> l = edgeTA.get(key);
-        if (l == null)
-          return null;
-        Collections.sort(l, c);
+        if (l != null)
+          Collections.sort(l, c);
         if (DEBUG)
           Log.info("leaving TA " + key + ": " + l);
         return l;
@@ -262,9 +591,8 @@ public class TransitionGeneratorForwardsParser {
             }
           };
           List<ArgNode> l = edgeAA.get(key);
-          if (l == null)
-            return null;
-          Collections.sort(l, c);
+          if (l != null)
+            Collections.sort(l, c);
           if (DEBUG)
             Log.info("leaving AA " + key + ": " + l);
           return l;
@@ -315,6 +643,7 @@ public class TransitionGeneratorForwardsParser {
       int n = r.lhs.length;
       argNodes = new ArgNode[n][];
       termNodes = new TermNode[n];
+      termHeadNodes = new ArgNode[n];
       for (int i = 0; i < n; i++) {
         termNodes[i] = new TermNode(i);
         int J = termNodes[i].getNumArgs();
@@ -346,17 +675,44 @@ public class TransitionGeneratorForwardsParser {
       // Fact arg -- regular arg
       for (int t1 = 0; t1 < n; t1++) {
         Term t1t = r.lhs[t1];
-        if (t1t.factArgName == null)
-          continue;
-        ArgNode a1 = new ArgNode(t1, -1);
-        for (int t2 = 0; t2 < n; t2++) {
-          if (t1 == t2)
-            continue;
-          Term t2t = r.lhs[t2];
-          for (int j = 0; j < t2t.getNumArgs(); j++) {
-            ArgNode a2 = new ArgNode(t2, j);
-            if (t1t.factArgName.equals(a2.getArgName())) {
-              add(a1, a2);
+        if (t1t.factArgName != null) {
+          // fact -> reg
+//          ArgNode a1 = new ArgNode(t1, -1);
+          ArgNode a1 = termHeadNodes[t1];
+          if (a1 == null) {
+            a1 = termHeadNodes[t1] = new ArgNode(t1, -1);
+          }
+          for (int t2 = 0; t2 < n; t2++) {
+            if (t1 == t2)
+              continue;
+            Term t2t = r.lhs[t2];
+            for (int j = 0; j < t2t.getNumArgs(); j++) {
+//              ArgNode a2 = new ArgNode(t2, j);
+              ArgNode a2 = argNodes[t2][j];
+              if (t1t.factArgName.equals(a2.getArgName())) {
+                add(a1, a2);
+                includeT2A[t1] = true;
+                includeT2A[t2] = true;
+              }
+            }
+          }
+        }
+        // reg -> fact
+        int na1 = t1t.getNumArgs();
+        for (int a1 = 0; a1 < na1; a1++) {
+          ArgNode an1 = argNodes[t1][a1];
+          for (int t2 = 0; t2 < n; t2++) {
+            if (t2 == t1)
+              continue;
+            Term t2t = r.lhs[t2];
+            if (t2t.factArgName == null)
+              continue;
+            ArgNode anH2 = termHeadNodes[t2];
+            if (anH2 == null) {
+              anH2 = termHeadNodes[t2] = new ArgNode(t2, -1);
+            }
+            if (anH2.getArgName().equals(an1.getArgName())) {
+              add(an1, anH2);
               includeT2A[t1] = true;
               includeT2A[t2] = true;
             }
@@ -376,10 +732,16 @@ public class TransitionGeneratorForwardsParser {
         TermNode t = new TermNode(i);
         notDone.add(t);
         notDoneTermIdx[i] = true;
-        if (includeT2A[i])
+        if (includeT2A[i]) {
           for (int j = 0; j < t.getNumArgs(); j++)
             add(t, argNodes[i][j]);
+          if (termHeadNodes[i] != null)
+            add(t, termHeadNodes[i]);
+        }
       }
+
+      if (rule.rhs.relName.equals("srl4"))
+        Log.info("debug me");
 
       // DFS to sub-select set of edges representing a tree
       // pre-order traversal to find spanning tree/forest
@@ -389,6 +751,7 @@ public class TransitionGeneratorForwardsParser {
       while (!notDone.isEmpty()) {
         // (Possibly) multiple roots: choose them by order in Term.lhs
         TermNode cur = notDone.poll();
+        halfRecursive(cur);
         if (DEBUG)
           Log.info("starting from root=" + cur);
         ntMaybeFrom = -1;
@@ -411,7 +774,7 @@ public class TransitionGeneratorForwardsParser {
         return;
       List<?> nei = neighbors(cur);
       if (nei != null) {
-        boolean tried = false;
+        boolean tried = cur instanceof TermNode; //false;
         for (Object n : nei) {
           if (!dfsSeen.contains(n)) {
             tried |= addToTrace(cur, n);
@@ -423,8 +786,12 @@ public class TransitionGeneratorForwardsParser {
               Log.info("seen, skipping: " + n);
           }
         }
-        if (tried)
+        if (tried) {
           gotoParent(cur, true);
+        } else {
+          if (DEBUG)
+            Log.info("not going to parent because tried=false, cur=" + cur);
+        }
       }
     }
 
@@ -452,7 +819,8 @@ public class TransitionGeneratorForwardsParser {
         // Here we finally commit to the ->NT->Rel step since we've now spanned
         // Term/Relation -...-> Term/Relatation
         dfsTrace.add(ntMaybe, ntMaybeFrom);
-        dfsTrace.add(new TKey(n.argIdx, t.getRelation()), t.termIdx);
+        int argPos = n.argIdx < 0 ? State.HEAD_ARG_POS : n.argIdx;
+        dfsTrace.add(new TKey(argPos, t.getRelation()), t.termIdx);
         ntMaybeFrom = t.termIdx;
         ntMaybe = null;
         return true;
@@ -461,13 +829,15 @@ public class TransitionGeneratorForwardsParser {
         ArgNode to = (ArgNode) next;
         assert to.getNodeType() == from.getNodeType();
         assert to.getArgName().equals(from.getArgName());
-        assert ntMaybeFrom >= 0;
+//        assert ntMaybeFrom >= 0;
+        ntMaybeFrom = from.termIdx;
         ntMaybe = new TKey(from.argIdx, from.getNodeType());
         return false;
       } else {
         throw new RuntimeException("wat");
       }
     }
+
     void gotoParent(Object cur, boolean doubleUp) {
       if (DEBUG)
         Log.info("cur=" + cur + " ntMaybe=" + ntMaybe + " ntMaybeFrom=" + ntMaybeFrom);
@@ -678,10 +1048,12 @@ public class TransitionGeneratorForwardsParser {
     // TODO should be new int[rule.lhs.length] with values being indexes in pat
 //    private List<Integer> tkey2RuleLhsTermIdx;
     private int[] lhsTermIdx2PatIdx;
-    private int numGotoParent;
+//    private int numGotoParent;
+    private int relsInPat;
 
     public LHS(Rule r) {
-      numGotoParent = 0;
+//      numGotoParent = 0;
+      relsInPat = 0;
       rule = r;
       pat = new ArrayList<>();
 //      rel2patIdx = new HashMap<>();
@@ -698,11 +1070,13 @@ public class TransitionGeneratorForwardsParser {
       pat.add(TNode.GOTO_PARENT);
     }
     public void add(TKey key, int lhsTermIdx) {
-      Log.info(key + " lhsTermIdx=" + lhsTermIdx);
+      if (DEBUG)
+        Log.info(key + " lhsTermIdx=" + lhsTermIdx);
       assert lhsTermIdx >= 0 && lhsTermIdx < rule.lhs.length;
       if (key.getMode() == TKey.RELATION) {
         assert lhsTermIdx2PatIdx[lhsTermIdx] == -1;
-        lhsTermIdx2PatIdx[lhsTermIdx] = pat.size();
+//        lhsTermIdx2PatIdx[lhsTermIdx] = pat.size();
+        lhsTermIdx2PatIdx[lhsTermIdx] = relsInPat++;
       }
       pat.add(key);
     }
@@ -940,6 +1314,9 @@ public class TransitionGeneratorForwardsParser {
         sc = feats.score(e, u);
       }
       Pair<HypEdge, Adjoints> p = new Pair<>(e, sc);
+      
+      Log.info("rule=" + match.rule + " generated edge=" + e + " from lhsValues=" + lhsValues);
+
       return Arrays.asList(p);
     }
   }
@@ -1043,6 +1420,7 @@ public class TransitionGeneratorForwardsParser {
 
   public static void ruleFileExamples() throws IOException {
 //    "event1'(e1,ts,te) & event2'(e2,e1,f) & srl1'(s1,ss,se) & srl2'(s2,s1,e1) & srl3'(s3,s2,e2,k) => srl4(ts,te,f,ss,se,k)";
+    DEBUG = true;
     File rules = new File("data/srl-reldata/srl-grammar-moreArgs.hobbs.trans");
     System.out.println();
     Log.info("trying to parse all rules in: " + rules.getPath());
