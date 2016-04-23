@@ -31,6 +31,7 @@ import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.util.Alphabet;
@@ -56,6 +57,15 @@ public class FNParseToRelations {
   // of the width-1 rule), so you can grep them out if you need to.
   public boolean outputArgPruning = true;
 
+  // def csyn6-stanford id parentId headToken startToken endToken label
+  // NOTE: Written out in topological order, root (0,n,S) is first, so you can
+  // add nodes as you go and parent (except when its -1 for root) will always
+  // exist before the child.
+  // TODO Make this more compact when read in (currently doesn't make for good graph walk features)
+  public boolean csyn6Mode = true;
+
+  public boolean includeEvent2 = false;
+
   private void write(Sentence s, BufferedWriter w) throws IOException {
     IWord iw;
     ISynset is;
@@ -75,8 +85,13 @@ public class FNParseToRelations {
     write(s.getBasicDeps(false), "basic", n, w);
     write(s.getCollapsedDeps2(false), "col", w);
     write(s.getCollapsedDeps2(false), "colcc", w);
-    write(s.getStanfordParse(false), "stanford", w, true);
-    write(s.getGoldParse(false), "gold", w, false);
+    if (csyn6Mode) {
+      write2(s.getStanfordParse(false), "stanford", w, true);
+      write2(s.getGoldParse(false), "gold", w, false);
+    } else {
+      write(s.getStanfordParse(false), "stanford", w, true);
+      write(s.getGoldParse(false), "gold", w, false);
+    }
   }
 
   private void write(StringLabeledDirectedGraph deps, String name, BufferedWriter w) throws IOException {
@@ -150,6 +165,47 @@ public class FNParseToRelations {
     }
   }
 
+  private void write2(ConstituencyParse cons, String name, BufferedWriter w, boolean skipLeaf) throws IOException {
+    if (cons == null) {
+      Log.warn("skipping cons since they're not present: " + name);
+      return;
+    }
+    String tn = "csyn6-" + name;
+    boolean toposort = true;
+    List<Node> nodes = cons.getAllConstituents(toposort);
+
+    // Set the node indices
+    int id = 0;
+    for (int i = 0; i < nodes.size(); i++) {
+      Node n = nodes.get(i);
+      n.id = -1;
+      if (n.isLeaf() && skipLeaf) {
+//        Log.info("skipping what should be LEXICAL leaf cons: " + n.getTag());
+        continue;
+      }
+      if (!n.hasSpan()) {
+        Log.warn("for some reason " + n.getTag() + " in " + cons.getSentenceId() + " doesn't have a span!");
+        continue;
+      }
+      n.id = id++;
+    }
+
+    Set<String> uniq = new HashSet<>();
+    for (Node n : nodes) {
+      if (n.id < 0)
+        continue;
+      Span s = n.getSpan();
+      int h = n.getHeadToken();
+      int p = n.getParent() == null ? -1 : n.getParent().id;
+      String t = n.getTag();
+      String line = StringUtils.join(" ", Arrays.asList("x", tn, n.id, p, h, s.start, s.end, t));
+      if (uniq.add(line)) {
+        w.write(line);
+        w.newLine();
+      }
+    }
+  }
+
   public void definitions(File f) throws IOException {
     Log.info("writing definitions to " + f.getPath());
     try (BufferedWriter w = FileUtil.getWriter(f)) {
@@ -166,16 +222,19 @@ public class FNParseToRelations {
     w.newLine();
     w.write("def wnss2 <tokenIndex> <synset>");
     w.newLine();
-    w.write("def dsyn3-basic <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
-    w.newLine();
-    w.write("def dsyn3-col <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
-    w.newLine();
-    w.write("def dsyn3-colcc <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
-    w.newLine();
-    w.write("def csyn3-stanford <tokenIndex> <tokenIndex> <cfgLabel> # start token (inclusive), end token (exclusive), cfg label");
-    w.newLine();
-    w.write("def csyn3-gold <tokenIndex> <tokenIndex> <cfgLabel> # start token (inclusive), end token (exclusive), cfg label");
-    w.newLine();
+    for (String t : Arrays.asList("basic", "col", "colcc")) {
+      w.write("def dsyn3-" + t + " <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
+      w.newLine();
+    }
+    for (String t : Arrays.asList("stanford", "gold")) {
+      if (csyn6Mode) {
+        w.write("def csyn6-" + t + " <csyn6id> <csyn6id> <tokenIndex> <tokenIndex> <tokenIndex> <cfgLabel> # id, parent id, head token, start token (inclusive), end token (exclusive), cfg label");
+        w.newLine();
+      } else {
+        w.write("def csyn3-" + t + " <tokenIndex> <tokenIndex> <cfgLabel> # start token (inclusive), end token (exclusive), cfg label");
+        w.newLine();
+      }
+    }
     if (srl4Mode) {
       w.write("def srl4 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <roleLabel> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
       w.newLine();
@@ -183,10 +242,8 @@ public class FNParseToRelations {
       if (outputDerivedLabels) {
         w.write("def event1 <tokenIndex> <tokenIndex> # start token (inclusive), end token (exclusive)");
         w.newLine();
-      }
-      w.write("def event2 <tokenIndex> <tokenIndex> <frame> # start token (inclusive), end token (exclusive), frame");
-      w.newLine();
-      if (outputDerivedLabels) {
+        w.write("def event2 <tokenIndex> <tokenIndex> <frame> # start token (inclusive), end token (exclusive), frame");
+        w.newLine();
         w.write("def srl1 <tokenIndex> <tokenIndex> # arg start tok (inc), arg end tok (exc)");
         w.newLine();
         w.write("def srl2 <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # pred start tok (inc), pred end tok (exc), arg start tok (inc), arg end tok (exc)");
@@ -203,7 +260,7 @@ public class FNParseToRelations {
 
   private void writeArgs(FNParse y, BufferedWriter w) throws IOException {
     DeterministicRolePruning drp = new DeterministicRolePruning(
-        Mode.XUE_PALMER, null, null);
+        Mode.XUE_PALMER_HERMANN, null, null);
     List<FrameInstance> frameMentions = new ArrayList<>();
     Set<Span> uniq = new HashSet<>();
     Sentence sent = y.getSentence();
@@ -224,6 +281,8 @@ public class FNParseToRelations {
     for (SpanPair ts : args.getAllArgs()) {
       Span t = ts.get1();
       Span s = ts.get2();
+      if (t == Span.nullSpan || s == Span.nullSpan)
+        continue;
       w.write("x xue-palmer-args " + t.start + " " + t.end + " " + s.start + " " + s.end);
       if (gold.contains(t))
         w.write(" # gold");
@@ -275,9 +334,9 @@ public class FNParseToRelations {
     if (outputDerivedLabels) {
       w.write("y event1 " + ts);
       w.newLine();
+      w.write("y event2 " + ts + " " + f);
+      w.newLine();
     }
-    w.write("y event2 " + ts + " " + f);
-    w.newLine();
   }
 
   private void write(Span t, String f, Span s, String k, BufferedWriter w) throws IOException {
