@@ -9,17 +9,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import edu.jhu.hlt.concrete.Constituent;
+import edu.jhu.hlt.concrete.Parse;
+import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.StringLabeledDirectedGraph;
+import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.TemplateContext;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HNode;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
+import edu.jhu.hlt.uberts.Relation.EqualityArray;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.StateEdge;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Arg;
+import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.Alphabet;
 
 public abstract class FeatureExtractionFactor<T> {
 
@@ -115,6 +134,301 @@ public abstract class FeatureExtractionFactor<T> {
     }
     List<T> feats = features(yhat, x);
     return new WeightAdjoints<>(feats, t);
+  }
+
+  /**
+   * Uses the same features defined in {@link BasicFeatureTemplates}.
+   *
+   * NOTE: This contains some general purpose state graph => Sentence code.
+   *
+   * NOTE: This is hard-coded to a particular transition system.
+   */
+  public static class OldFeaturesWrapper extends FeatureExtractionFactor<String> {
+    // See TemplatedFeatures.parseTemplate(String), etc
+    private List<TemplateAlphabet> features;
+    private Sentence sentCache;
+    private TemplateContext ctx;
+    private Alphabet<String> depGraphEdges;
+    private Alphabet<String> roles;
+    private Map<String, Frame> frames;
+    private HeadFinder hf;
+    private MultiTimer timer;
+
+    /** This will read all the features in */
+    public OldFeaturesWrapper(BasicFeatureTemplates bft) {
+      timer = new MultiTimer();
+      timer.put("convert-sentence", new Timer("convert-sentence", 1, false));
+      timer.put("compute-features", new Timer("compute-features", 10000, false));
+
+      depGraphEdges = new Alphabet<>();
+      roles = new Alphabet<>();
+      frames = new HashMap<>(); // TODO populate
+      ctx = new TemplateContext();
+      sentCache = null;
+      edu.jhu.hlt.fnparse.features.precompute.Alphabet alph =
+          new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft);
+      this.hf = alph.getHeadFinder();
+      this.features = alph;
+    }
+
+    private static String getSentenceId(Uberts u) {
+      // def hook2 <hookKeyword> <relationName>
+      // e.g. hook2(done, csyn3-stanford)
+      // def hook2 <hookKeyword> <value>
+      // e.g. hook2(docid, fn/foo/bar)
+      State s = u.getState();
+
+//      NodeType hookKeywordNT = u.lookupNodeType("hookKeyword", false);
+//      HypNode startDocN = u.lookupNode(hookKeywordNT, "startdoc", false);
+//      Relation hook2 = u.getEdgeType("hook2");
+//
+//      // There will be many of these, but the most recent one will be first.
+//      HypEdge startVal = s.match(0, hook2, startDocN).item;
+////      HypEdge startVal = s.match1(0, startRel, hookA0);
+//
+//      String id = (String) startVal.getTail(1).getValue();
+
+      Relation rel = u.getEdgeType("startDoc");
+      HypEdge e = s.match2(rel).item;
+      String id = (String) e.getTail(0).getValue();
+
+      return id;
+    }
+
+    private static ConstituencyParse buildCP(Uberts u, String sentenceId) {
+      // def csyn5-stanford id parentId start end label
+      Relation consRel = u.getEdgeType("csyn6-stanford");
+      State st = u.getState();
+      List<Pair<Integer, edu.jhu.hlt.concrete.Constituent>> cons = new ArrayList<>();
+      Map<Integer, edu.jhu.hlt.concrete.Constituent> id2con = new HashMap<>();
+      for (LL<HypEdge> cur = st.match2(consRel); cur != null; cur = cur.next) {
+        HypEdge e = cur.item;
+        assert e.getNumTails() == 6;
+        int cid = Integer.parseInt((String) e.getTail(0).getValue());
+        int parent = Integer.parseInt((String) e.getTail(1).getValue());
+        int headToken = Integer.parseInt((String) e.getTail(2).getValue());
+        int startToken = Integer.parseInt((String) e.getTail(3).getValue());
+        int endToken = Integer.parseInt((String) e.getTail(4).getValue());
+        String lhs = (String) e.getTail(5).getValue();
+
+        assert startToken < endToken;
+
+        edu.jhu.hlt.concrete.Constituent c = new Constituent();
+        c.setId(cid);
+        c.setStart(startToken);
+        c.setEnding(endToken);
+        c.setTag(lhs);
+        c.setHeadChildIndex(headToken);  // Need to convert token -> child index
+
+        Log.info(cid + " -> " + c);
+        id2con.put(cid, c);
+        cons.add(new Pair<>(parent, c));
+      }
+
+      // Add children
+      for (Pair<Integer, edu.jhu.hlt.concrete.Constituent> pc : cons) {
+        int parent = pc.get1();
+        if (parent < 0)
+          continue; // ROOT
+        edu.jhu.hlt.concrete.Constituent c = pc.get2();
+        edu.jhu.hlt.concrete.Constituent p = id2con.get(parent);
+        p.addToChildList(c.getId());
+      }
+
+      // Set heads
+      for (Pair<Integer, edu.jhu.hlt.concrete.Constituent> pc : cons) {
+        edu.jhu.hlt.concrete.Constituent c = pc.get2();
+        c.setHeadChildIndex(-1);
+        if (!c.isSetChildList() || c.getChildListSize() == 0) {
+          assert c.getStart()+1 == c.getEnding();
+          continue;
+        }
+        int headToken = c.getHeadChildIndex();
+        int headChildIdx = -1;
+        int i = 0;
+        for (int childId : c.getChildList()) {
+          edu.jhu.hlt.concrete.Constituent child = id2con.get(childId);
+          if (child.getStart() <= headToken && headToken < child.getEnding()) {
+            assert headChildIdx < 0;
+            headChildIdx = i;
+          }
+          i++;
+        }
+        c.setHeadChildIndex(headChildIdx);
+      }
+
+      Parse p = new Parse();
+      for (Pair<Integer, edu.jhu.hlt.concrete.Constituent> pc : cons)
+        p.addToConstituentList(pc.get2());
+      return new ConstituencyParse(sentenceId, p);
+    }
+
+    /**
+     * @param root should probably be the length of the sentence. It must be >=0.
+     * @param depRel should have columns gov, dep, label.
+     */
+    private StringLabeledDirectedGraph getDepGraph(Uberts u, int root, Relation depRel) {
+      if (root < 0)
+        throw new IllegalArgumentException("root=" + root + " must be >= 0");
+      StringLabeledDirectedGraph g = new StringLabeledDirectedGraph(depGraphEdges);
+      State st = u.getState();
+      for (LL<HypEdge> cur = st.match2(depRel); cur != null; cur = cur.next) {
+        HypEdge e = cur.item;
+        assert e.getNumTails() == 3;
+        int h = Integer.parseInt((String) e.getTail(0).getValue());
+        int m = Integer.parseInt((String) e.getTail(1).getValue());
+        assert m >= 0;
+        if (h < 0)
+          h = root;
+        String l = (String) e.getTail(2).getValue();
+        g.add(h, m, l);
+      }
+      return g;
+    }
+
+    private void checkForNewSentence(Uberts u) {
+      // How do we know how many tokens are in the document?
+      String id = getSentenceId(u);
+      if (sentCache != null && sentCache.getId().equals(id))
+        return;
+      timer.start("convert-sentence");
+
+      // See FNParseToRelations for these definitions
+      NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
+      Relation wordRel = u.getEdgeType("word2");
+      Relation posRel = u.getEdgeType("pos2");
+      Relation lemmaRel = u.getEdgeType("lemma2");
+
+      State st = u.getState();
+      List<HypNode> tokens = new ArrayList<>();
+      List<String> wordL = new ArrayList<>();
+      List<String> posL = new ArrayList<>();
+      List<String> lemmaL = new ArrayList<>();
+      for (int i = 0; true; i++) {
+        HypNode tok = u.lookupNode(tokenIndex, String.valueOf(i).intern(), false);
+        if (tok == null)
+          break;
+        tokens.add(tok);
+        LL<HypEdge> maybeWord = st.match(0, wordRel, tok);
+        if (maybeWord == null)
+          break;
+        assert maybeWord.next == null : "more than one word at " + tok + ": " + maybeWord;
+        HypEdge wordE = maybeWord.item;
+        HypNode word = wordE.getTail(1);
+        HypNode pos = st.match1(0, posRel, tok).getTail(1);
+        HypNode lemma = st.match1(0, lemmaRel, tok).getTail(1);
+        wordL.add((String) word.getValue());
+        posL.add((String) pos.getValue());
+        lemmaL.add((String) lemma.getValue());
+      }
+      int n = wordL.size();
+      String[] wordA = wordL.toArray(new String[n]);
+      String[] posA = posL.toArray(new String[n]);
+      String[] lemmaA = lemmaL.toArray(new String[n]);
+
+      String dataset = "na";
+      sentCache = new Sentence(dataset, id, wordA, posA, lemmaA);
+
+      // Shapes and WN are computed on the fly
+      // deps (basic, col, colcc) and constituents need to be added
+      Relation depsBRel = u.getEdgeType("dsyn3-basic");
+      String[] labB = new String[n];
+      int[] govB = new int[n];
+      for (int i = 0; i < n; i++) {
+        // Find the 0 or 1 tokens which govern this token
+        HypNode dep = tokens.get(i);
+        LL<HypEdge> gov2dep = st.match(1, depsBRel, dep);
+        if (gov2dep == null) {
+          govB[i] = -1;
+          labB[i] = "UKN";
+        } else {
+          assert gov2dep.next == null : "two gov (not tree) for basic?";
+          HypEdge e = gov2dep.item;
+          govB[i] = Integer.parseInt((String) e.getTail(0).getValue());
+          labB[i] = (String) e.getTail(2).getValue();
+        }
+      }
+      sentCache.setBasicDeps(new DependencyParse(govB, labB));
+      sentCache.setCollapsedDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-col")));
+      sentCache.setCollapsedCCDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-colcc")));
+      sentCache.setStanfordParse(buildCP(u, id));
+      sentCache.computeShapes();
+      sentCache.getWnWord(0);
+      timer.stop("convert-sentence");
+    }
+
+    @Override
+    public List<String> features(HypEdge yhat, Uberts x) {
+      checkForNewSentence(x);
+      timer.start("compute-features");
+      Span t = null, s = null;
+      EqualityArray e1, s1;
+      ctx.clear();
+      ctx.setSentence(sentCache);
+      switch (yhat.getRelation().getName()) {
+      case "srl1":
+        s = extractSpan(yhat, 0, 1);
+        break;
+      case "srl2":
+        s1 = (EqualityArray) yhat.getTail(0).getValue();
+        e1 = (EqualityArray) yhat.getTail(1).getValue();
+        t = extractSpan(e1, 0, 1);
+        s = extractSpan(s1, 0, 1);
+        ctx.clear();
+        ctx.setSentence(sentCache);
+        break;
+      case "srl3":
+        EqualityArray s2 = (EqualityArray) yhat.getTail(0).getValue();
+        EqualityArray e2 = (EqualityArray) yhat.getTail(1).getValue();
+        s1 = (EqualityArray) s2.get(0);
+        e1 = (EqualityArray) s2.get(1);
+        String fn = (String) e2.get(1);
+        ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(fn));
+        ctx.setRole(roles.lookupIndex((String) yhat.getTail(2).getValue()));
+        break;
+      default:
+        if (!yhat.getRelation().getName().equals("srl4"))
+          Log.warn("don't know how to handle: " + yhat);
+        break;
+      }
+      if (s != null && s != Span.nullSpan) {
+        ctx.setArg(s);
+        ctx.setArgHead(hf.head(s, sentCache));
+        ctx.setSpan1(s);
+      }
+      if (t != null && t != Span.nullSpan) {
+        ctx.setTarget(t);
+        ctx.setTargetHead(hf.head(t, sentCache));
+        ctx.setSpan2(t);
+      }
+      List<String> f = new ArrayList<>();
+      for (TemplateAlphabet ftemp : features) {
+        Iterable<String> fts = ftemp.template.extract(ctx);
+        if (fts != null) {
+          for (String ft : fts) {
+//            String fv = ftemp.name + "/" + ft;
+            String fv = ft;
+            f.add(fv.intern());
+          }
+        }
+      }
+      timer.stop("compute-features");
+      return f;
+    }
+  }
+
+  private static Span extractSpan(HypEdge e, int startTailIdx, int endTailIdx) {
+    int start = Integer.parseInt((String) e.getTail(startTailIdx).getValue());
+    int end = Integer.parseInt((String) e.getTail(endTailIdx).getValue());
+    Span s = Span.getSpan(start, end);
+    return s;
+  }
+
+  private static Span extractSpan(EqualityArray ea, int startTailIdx, int endTailIdx) {
+    int start = Integer.parseInt((String) ea.get(startTailIdx));
+    int end = Integer.parseInt((String) ea.get(endTailIdx));
+    Span s = Span.getSpan(start, end);
+    return s;
   }
 
   /**
