@@ -13,6 +13,7 @@ import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
+import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.tutils.ConcreteDocumentMapping;
 import edu.jhu.hlt.tutils.ConcreteToDocument;
 import edu.jhu.hlt.tutils.Document.ConstituentItr;
@@ -69,7 +70,7 @@ public class Sentence implements HasId, Serializable {
    *
    * If this Sentence was constructed from a {@link Communication} via a
    * {@link ConcreteDocumentMapping}, then you can use this field to point to
-   * the Consituent in a tutils.Document corresponding to this sentence. With
+   * the Constituent in a tutils.Document corresponding to this sentence. With
    * this information, you can use {@link ConcreteDocumentMapping} to get a
    * {@link Tokenization} UUID, and add back annotations into their proper
    * location (primarily {@link TokenRefSequence}).
@@ -335,6 +336,13 @@ public class Sentence implements HasId, Serializable {
     for(int i=s.start; i<s.end; i++)
       l.add(tokens[i]);
     return l;
+  }
+
+  public void computeShapes() {
+    assert shapes == null;
+    shapes = new String[tokens.length];
+    for (int i = 0; i < shapes.length; i++)
+      shapes[i] = PosPatternGenerator.shapeNormalize(tokens[i]);
   }
 
   public String getShape(int i) {
