@@ -13,6 +13,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * e.g. event2(t,f) & srl2(t,s) & role(f,k) => srl3(t,f,s,k)
@@ -27,6 +28,8 @@ public class Rule {
   // lhs2rhs[1][0] = 0, second occurrence of t in lhs => location of t in rhs
   int[][] lhs2rhs;    // [termIdx][argIdx] => location in rhs.args, or -1 if not in rhs.
   int[] lhsFact2rhs;  // [termIdx] => location in rhs.args, or -1 if the fact/witness/event variable is not used in rhs.
+
+  public String comment;
 
   public Rule(Term[] lhs, Term rhs) {
     this.lhs = lhs;
@@ -109,6 +112,9 @@ public class Rule {
    * @param u if null, will produce a Rule with rel==null.
    */
   public static Rule parseRule(String rule, Uberts u) {
+    return parseRule(rule, null, u);
+  }
+  public static Rule parseRule(String rule, String comment, Uberts u) {
     String[] lr = rule.split("=>");
     assert lr.length == 2 : "rule must contain one instance of '=>': " + rule;
     String lhs = lr[0].trim();
@@ -118,7 +124,9 @@ public class Rule {
       lhsTerms[i] = Term.parseTerm(lhsTermStrs[i].trim(), u);
     String rhs = lr[1].trim();
     Term rhsTerm = Term.parseTerm(rhs, u);
-    return new Rule(lhsTerms, rhsTerm);
+    Rule r = new Rule(lhsTerms, rhsTerm);
+    r.comment = comment;
+    return r;
   }
 
   /**
@@ -138,10 +146,11 @@ public class Rule {
   public static List<Rule> parseRules(BufferedReader r, Uberts u) throws IOException {
     List<Rule> rules = new ArrayList<>();
     for (String line = r.readLine(); line != null; line = r.readLine()) {
-      line = Uberts.stripComment(line);
+      Pair<String, String> lc = Uberts.stripComment2(line);
+      line = lc.get1();
       if (line.isEmpty())
         continue;
-      Rule rule = parseRule(line, u);
+      Rule rule = parseRule(line, lc.get2(), u);
       rules.add(rule);
     }
     return rules;

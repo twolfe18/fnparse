@@ -278,6 +278,14 @@ public class Uberts {
     return line;
   }
 
+  /** returns (line, comment) */
+  public static Pair<String, String> stripComment2(String line) {
+    int c = line.indexOf('#');
+    if (c >= 0)
+      return new Pair<>(line.substring(0, c), line.substring(c+1).trim());
+    return new Pair<>(line, null);
+  }
+
   public List<Relation> readRelData(File f) throws IOException {
     if (!f.isFile())
       throw new IllegalArgumentException("not a file: " + f.getPath());
