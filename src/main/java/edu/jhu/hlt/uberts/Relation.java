@@ -84,6 +84,9 @@ public class Relation {
         h[i] = tail[i].hashCode();
       hc = Hash.mix64(h);
     }
+    public Object get(int i) {
+      return tail[i];
+    }
     @Override
     public boolean equals(Object other) {
       if (other instanceof EqualityArray) {
