@@ -6,9 +6,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -192,49 +194,50 @@ public class Uberts {
    * into the state graph), then you can remove duplicates yourself.
    * Though these duplicates are present, oracle recall is handled properly.
    */
-  public List<Step> recordOracleTrajectory() {
+  public List<Step> recordOracleTrajectory(boolean dedupEdges) {
     if (goldEdges == null)
       throw new IllegalStateException("you must add labels, goldEdges==null");
     timer.start(REC_ORACLE_TRAJ);
 
     boolean DEBUG = true;
 
+    Set<HashableHypEdge> uniqEdges = new HashSet<>();
+    int dedupd = 0;
+
     Labels.Perf perf = goldEdges.new Perf();
-//    Set<HashableHypEdge> trajUniq = new HashSet<>();
     List<Step> traj = new ArrayList<>();
     while (agenda.size() > 0) {
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge edge = p.get1();
-      HashableHypEdge needle = new HashableHypEdge(edge);
-//      if (!trajUniq.add(needle))
-//        Log.warn("duplicate edge: " + edge);
       boolean gold = perf.add(edge);
-      if (DEBUG) {
-//        System.out.println("[recOrcl] gold=" + gold + " " + needle.hashDesc());
+      if (DEBUG)
         System.out.println("[recOrcl] gold=" + gold + " " + edge);
-      }
       traj.add(new Step(edge, p.get2(), gold));
       if (gold) {
-//        if (edge.getRelation().getName().equals("srl3")) {
-//          Log.info("checkme");
-//          TNode.DEBUG = true;
-//          addEdgeToState(edge);
-//          throw new RuntimeException("stop here");
-//        }
-        addEdgeToState(edge);
+        if (dedupEdges && !uniqEdges.add(new HashableHypEdge(edge)))
+          dedupd++;
+        else
+          addEdgeToState(edge);
       }
     }
-    Log.info("oracleRecall=" + perf.recall());
-    System.out.println("goldRelCounts: " + goldEdges.getRelCounts());
-    for (HypEdge fn : perf.getFalseNegatives()) {
-      if ("srl1".equals(fn.getRelation().getName())) {
-        int i = Integer.parseInt((String) fn.getTail(0).getValue());
-        int j = Integer.parseInt((String) fn.getTail(1).getValue());
-        System.out.println("\tfn: " + fn + "\t" + dbgGetSpan(i, j));
-      } else {
-        System.out.println("\tfn: " + fn);
+
+    Log.info("traj.size=" + traj.size() + " dedupd=" + dedupd);
+    Map<String, Double> recall = perf.recallByRel();
+    for (String relName : goldEdges.getObservedRelationNames()) {
+      Log.info("relation=" + relName
+          + " oracleRecall=" + recall.get(relName)
+          + " n=" + goldEdges.getRelCount(relName));
+      for (HypEdge fn : perf.getFalseNegatives(relName)) {
+        if ("srl1".equals(fn.getRelation().getName())) {
+          int i = Integer.parseInt((String) fn.getTail(0).getValue());
+          int j = Integer.parseInt((String) fn.getTail(1).getValue());
+          System.out.println("\tfn: " + fn + "\t" + dbgGetSpan(i, j));
+        } else {
+          System.out.println("\tfn: " + fn);
+        }
       }
     }
+
     timer.stop(REC_ORACLE_TRAJ);
     return traj;
   }

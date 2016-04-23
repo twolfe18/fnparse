@@ -197,7 +197,8 @@ public class State {
   /** May return null */
   public HypEdge match1(int argPos, Relation rel, HypNode arg) {
     LL<HypEdge> es = match(argPos, rel, arg);
-    assert es != null && es.next == null;
+    assert es != null : "[match1] but there are no matches";
+    assert es.next == null : "[match1] but there is more than one";
     return es.item;
   }
 

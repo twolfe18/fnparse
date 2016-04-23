@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.function.Function;
 
+import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -20,6 +21,15 @@ import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
 
+/**
+ * Similar to {@link BasicFeatureTemplates}, but for state-graph based feature
+ * extraction.
+ *
+ * @deprecated I'm just going to make a proper wrapper for {@link BasicFeatureTemplates},
+ * there is no reason to duplicate all of that work.
+ *
+ * @author travis
+ */
 public class FeatletIndex {
 
   interface Feature {

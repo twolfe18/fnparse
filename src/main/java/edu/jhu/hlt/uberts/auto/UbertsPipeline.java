@@ -11,12 +11,15 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
+import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypNode;
+import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
@@ -42,6 +45,11 @@ public class UbertsPipeline {
   private List<Relation> helperRelations;
   private TypeInference typeInf;
 
+  // Both of these are single arg relations and their argument is a doc id.
+  private NodeType docidNT;
+  private Relation startDocRel;
+  private Relation doneAnnoRel;
+
   public UbertsPipeline(
       Uberts u,
       File grammarFile,
@@ -53,6 +61,16 @@ public class UbertsPipeline {
 
     // succTok(i,j)
     helperRelations.add(u.addSuccTok(1000));
+
+//    hookKeywordNT = u.lookupNodeType("hookKeyword", true);
+//    startDocN = u.lookupNode(hookKeywordNT, "startdoc", true);
+//    docIdNT = u.lookupNodeType("docid", true);
+
+//    hook2Rel = u.addEdgeType(new Relation("hook2", hookKeywordNT, docIdNT));
+//    hook2Rel = u.readRelData("def hook2 <hookKeyword> <docid>");
+    startDocRel = u.readRelData("def startDoc <docid>");
+    doneAnnoRel = u.readRelData("def doneAnno <docid>");
+    docidNT = doneAnnoRel.getTypeForArg(0);
 
     Log.info("reading schema files...");
     for (File f : schemaFiles) {
@@ -69,8 +87,45 @@ public class UbertsPipeline {
 //    this.typeInf.debug = true;
     for (Rule untypedRule : Rule.parseRules(grammarFile, null))
       typeInf.add(untypedRule);
-    for (Rule typedRule : typeInf.runTypeInference())
+    for (Rule typedRule : typeInf.runTypeInference()) {
+      if (typedRule.comment != null && typedRule.comment.toLowerCase().contains("nopredict")) {
+        Log.info("not including in transition system because of NOPREDICT comment: " + typedRule);
+        continue;
+      }
       addRule(typedRule);
+    }
+  }
+
+  private BasicFeatureTemplates bft = new BasicFeatureTemplates();
+  private FeatureExtractionFactor<String> fe = new FeatureExtractionFactor.OldFeaturesWrapper(bft);
+  private void addRule(Rule r) {
+    Log.info("adding " + r);
+    rules.add(r);
+
+    // Add to Uberts as a TransitionGenerator
+    TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
+    Pair<List<TKey>, TG> tg = tgfp.parse2(r, u);
+
+//    List<Relation> relevant = Arrays.asList(r.rhs.rel);
+//    tg.get2().feats = new FeatureExtractionFactor.Simple(relevant, u);
+//    tg.get2().feats = new FeatureExtractionFactor.GraphWalks();
+//    tg.get2().feats = new FeatureExtractionFactor.OldFeaturesWrapper(bft);
+    tg.get2().feats = fe;
+    // If you leave it null, it will assign everything a score of 1
+
+    u.addTransitionGenerator(tg.get1(), tg.get2());
+  }
+
+  public List<Relation> getHelperRelations() {
+    return helperRelations;
+  }
+  public Set<Relation> getHelperRelationsAsSet() {
+    Set<Relation> s = new HashSet<>();
+    for (Relation r : getHelperRelations()) {
+      Log.info("skipping " + r);
+      s.add(r);
+    }
+    return s;
   }
 
   public void addRelData(File xyValuesFile) throws IOException {
@@ -92,6 +147,7 @@ public class UbertsPipeline {
    */
   public void extractFeatures(ManyDocRelationFileIterator x, File output) throws IOException {
     Log.info("writing features to " + output);
+
     boolean debug = true;
     TimeMarker tm = new TimeMarker();
     Counts<String> posRel = new Counts<>(), negRel = new Counts<>();
@@ -108,45 +164,54 @@ public class UbertsPipeline {
         u.getAgenda().clear();
         u.initLabels();
 
+        // Add an edge to the state specifying that we are working on this document/sentence.
+        String docid = doc.def.tokens[1];
+        HypNode docidN = u.lookupNode(docidNT, docid, true);
+        u.addEdgeToState(u.makeEdge(startDocRel, docidN));
+
         // Add x:HypEdges to State
         // Add y:HypEdges as labels
         int cx = 0, cy = 0;
         assert doc.items.isEmpty() && !doc.facts.isEmpty();
         for (HypEdge.WithProps fact : doc.facts) {
-          boolean isX = fact.hasProperty(HypEdge.IS_X);
-          boolean isY = fact.hasProperty(HypEdge.IS_Y);
-          if (isX || isY) {
-            if (isX) {
-              u.addEdgeToState(fact);
-              System.out.println("[exFeats] x: " + fact);
-              cx++;
-            } else {
-              if (debug) {
-//                HashableHypEdge hhe = new HashableHypEdge(fact);
-//                System.out.println("[exFeats] adding: " + hhe.hashDesc());
-                System.out.println("[exFeats] y: " + fact);
-              }
-              u.addLabel(fact);
-              cy++;
+          if (fact.hasProperty(HypEdge.IS_Y)) {
+            if (debug) {
+              //                HashableHypEdge hhe = new HashableHypEdge(fact);
+              //                System.out.println("[exFeats] adding: " + hhe.hashDesc());
+              System.out.println("[exFeats] y: " + fact);
             }
-          } else {
-            Log.warn("why: " + fact);
+            u.addLabel(fact);
+            cy++;
+          }
+        }
+        for (HypEdge.WithProps fact : doc.facts) {
+          if (fact.hasProperty(HypEdge.IS_X)) {
+            u.addEdgeToState(fact);
+            System.out.println("[exFeats] x: " + fact);
+            cx++;
           }
         }
         if (debug) {
-          Log.info("cx=" + cx + " cy=" + cy);
+          Log.info("cx=" + cx + " cy=" + cy + " all=" + doc.facts.size());
           w.flush();
         }
 
+
+        // Put out a notification that all of the annotations have been added.
+        // Up to this, most actions will be blocked.
+        u.addEdgeToState(u.makeEdge(doneAnnoRel, docidN));
+
+
         // Run inference and record extracted features
-        List<Step> traj = u.recordOracleTrajectory();
+        boolean dedupEdges = true;
+        List<Step> traj = u.recordOracleTrajectory(dedupEdges);
         for (Step t : traj) {
           boolean y = u.getLabel(t.edge);
           if (y) posRel.increment(t.edge.getRelation().getName());
           else negRel.increment(t.edge.getRelation().getName());
           String lab = y ? "+1" : "-1";
-          if (debug)
-            System.out.println("[exFeats.orTraj] " + lab + " " + t.edge);// + " " + new HashableHypEdge(t.edge).hc);
+//          if (debug)
+//            System.out.println("[exFeats.orTraj] " + lab + " " + t.edge);// + " " + new HashableHypEdge(t.edge).hc);
           actions++;
           @SuppressWarnings("unchecked")
           WeightAdjoints<String> fx = (WeightAdjoints<String>) t.score;
@@ -177,34 +242,6 @@ public class UbertsPipeline {
         }
       }
     }
-  }
-
-  private void addRule(Rule r) {
-    Log.info("adding " + r);
-    rules.add(r);
-
-    // Add to Uberts as a TransitionGenerator
-    TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
-    Pair<List<TKey>, TG> tg = tgfp.parse2(r, u);
-
-//    List<Relation> relevant = Arrays.asList(r.rhs.rel);
-//    tg.get2().feats = new FeatureExtractionFactor.Simple(relevant, u);
-    tg.get2().feats = new FeatureExtractionFactor.GraphWalks();
-    // If you leave it null, it will assign everything a score of 1
-
-    u.addTransitionGenerator(tg.get1(), tg.get2());
-  }
-
-  public List<Relation> getHelperRelations() {
-    return helperRelations;
-  }
-  public Set<Relation> getHelperRelationsAsSet() {
-    Set<Relation> s = new HashSet<>();
-    for (Relation r : getHelperRelations()) {
-      Log.info("skipping " + r);
-      s.add(r);
-    }
-    return s;
   }
 
   public static void main(String[] args) throws IOException {
