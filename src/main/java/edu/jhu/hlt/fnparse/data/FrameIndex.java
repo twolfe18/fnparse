@@ -165,6 +165,28 @@ public class FrameIndex implements FrameIndexInterface {
     return "<FrameIndex " + name + " numFrames=" + getNumFrames() + ">";
   }
 
+  /**
+   * Accepts strings like "framenet/Commerce_buy" or "propbank/kill-v-1",
+   * figures out which {@link FrameIndex} to use, and return the right frame.
+   */
+  public static Frame getFrameWithSchemaPrefix(String frameName) {
+    int s = frameName.indexOf('/');
+    if (s < 0) {
+      throw new IllegalArgumentException("need frame name with schema in it: " + frameName);
+    } else {
+      // Frames now have the schema in the name, don't need to re-extract
+//      String fn = frameName.substring(s + 1);
+      switch (frameName.substring(0, s)) {
+      case "framenet":
+        return getFrameNet().nameToFrameMap.get(frameName);
+      case "propbank":
+        return getPropbank().nameToFrameMap.get(frameName);
+      default:
+        throw new RuntimeException("can't parse: " + frameName);
+      }
+    }
+  }
+
   public static FrameIndex getPropbank() {
     if (propbank == null) {
       Log.info("[main] reading propbank frames");
