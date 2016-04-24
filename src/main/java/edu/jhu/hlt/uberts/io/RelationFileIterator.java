@@ -8,7 +8,9 @@ import java.util.Arrays;
 import java.util.Iterator;
 
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
+import edu.jhu.prim.tuple.Pair;
 
 public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
 
@@ -97,22 +99,22 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
       next = null;
       while (next == null) {
         String line = readLine();
-        if (line == null)
-          break;
-        String comment;
-        if (line.startsWith("x ") || line.startsWith("y ") || line.startsWith("schema ")) {
-          // Do not allow comments on data lines so that we don't have to worry
-          // about creating escape characters for #
-          comment = null;
-        } else {
-          int c = line.indexOf('#');
-          if (c >= 0) {
-            comment = line.substring(c + 1, line.length()).trim();
-            line = line.substring(0, c).trim();
-          } else {
-            comment = null;
-          }
-        }
+        Pair<String, String> lc = Uberts.stripComment2(line);
+        line = lc.get1();
+        String comment = lc.get2();
+//        if (line.startsWith("x ") || line.startsWith("y ") || line.startsWith("schema ")) {
+//          // Do not allow comments on data lines so that we don't have to worry
+//          // about creating escape characters for #
+//          comment = null;
+//        } else {
+//          int c = line.indexOf('#');
+//          if (c >= 0) {
+//            comment = line.substring(c + 1, line.length()).trim();
+//            line = line.substring(0, c).trim();
+//          } else {
+//            comment = null;
+//          }
+//        }
         if (line.isEmpty())
           continue;
         String[] tokens = line.split(" ");
