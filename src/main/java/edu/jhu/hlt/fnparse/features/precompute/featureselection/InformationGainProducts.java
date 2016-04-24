@@ -813,7 +813,8 @@ public class InformationGainProducts {
       String templateName = bialph.lookupTemplate(t);
       features.add(new String[] {templateName});
     }
-    Refinement refinementMode = Refinement.FRAME_ROLE;
+    //Refinement refinementMode = Refinement.FRAME_ROLE;
+    Refinement refinementMode = Refinement.valueOf(config.getString("refinementMode"));
     List<FeatureName> templates = productFeaturesWithFrameRole(features, role2name, shard, refinementMode);
 
     Log.info("after taking the " + shard + " shard,"

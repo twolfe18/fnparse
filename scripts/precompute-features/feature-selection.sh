@@ -66,8 +66,9 @@ echo "computed there are $NUM_ROLES from looking at $ROLE_DICT"
 # Loading a giant bialph (which may even be bzip2'd) is slow and the resulting
 # loaded representation is small (only has strings for template names).
 # Do this once ahead of time and use java serialization for subsequent loads.
-BIALPH_BIG=$WORKING_DIR/coherent-shards/alphabet.txt$SUF
-BIALPH=$WORKING_DIR/coherent-shards/alphabet.jser.gz
+DD=$WORKING_DIR/coherent-shards-filtered
+BIALPH_BIG=$DD/alphabet.txt$SUF
+BIALPH=$DD/alphabet.jser.gz
 if [[ ! -f $BIALPH_BIG ]]; then
   echo "bialph doesn't exist: $BIALPH_BIG"
   exit 2
@@ -93,26 +94,22 @@ fi
 
 ### Step 1 ####################################################################
 echo "Computing IG for single templates @frame@role..."
-FEATS=$WORKING_DIR/coherent-shards/features
-if [[ ! -d $FEATS ]]; then
-  echo "feats dir doesn't exist: $FEATS"
-  exit 1
-fi
+FEATS="$DD/features/**/*"
 mkdir -p $WD/templates/ig-files
 mkdir -p $WD/templates/sge-logs
-MEM=6
+MEM=9
+MEM_SGE=`echo "$MEM+2" | bc`
 NUM_SHARDS=500
 for I in `seq $NUM_SHARDS | awk '{print $i-1}'`; do
   SHARD="$I/$NUM_SHARDS"
-  qsub -o $WD/templates/sge-logs \
+  qsub -l "mem_free=${MEM_SGE}G" -o $WD/templates/sge-logs \
     ./scripts/precompute-features/compute-ig.sh \
       $FEATS \
-      "glob:**/*" \
       $BIALPH \
       $WD/templates/ig-files/pos-shard-${I}-of-${NUM_SHARDS}.txt.gz \
       $ENTROPY_METHOD \
       $LABEL_TYPE \
-      "FRAME" \
+      "FRAME_ROLE" \
       $IS_PROPBANK \
       $ROLE_DICT \
       $TEST_SET_SENT_IDS \
@@ -120,10 +117,9 @@ for I in `seq $NUM_SHARDS | awk '{print $i-1}'`; do
       $SHARD \
       $JAR_STABLE \
       $MEM
-  qsub -o $WD/templates/sge-logs \
+  qsub -l "mem_free=${MEM_SGE}G" -o $WD/templates/sge-logs \
     ./scripts/precompute-features/compute-ig.sh \
       $FEATS \
-      "glob:**/*" \
       $BIALPH \
       $WD/templates/ig-files/neg-shard-${I}-of-${NUM_SHARDS}.txt.gz \
       $ENTROPY_METHOD \
@@ -214,7 +210,6 @@ for I in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
   qsub -l "mem_free=$MEM_SGE" -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
       $FEATS \
-      "glob:**/*" \
       $BIALPH \
       $PROD_IG_WD/ig-files/pos-shard-${I}-of-${NUM_SHARDS}.txt.gz \
       $ENTROPY_METHOD \
@@ -232,7 +227,6 @@ for I in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
   qsub -l "mem_free=$MEM_SGE" -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
       $FEATS \
-      "glob:**/*" \
       $BIALPH \
       $PROD_IG_WD/ig-files/neg-shard-${I}-of-${NUM_SHARDS}.txt.gz \
       $ENTROPY_METHOD \

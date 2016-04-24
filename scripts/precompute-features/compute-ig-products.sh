@@ -15,20 +15,19 @@ echo "args: $@"
 set -eu
 
 # Same as compute-ig.sh
-FEATS_PARENT=$1
-FEATS_GLOB=$2
-BIALPH=$3             # names of features in FEATS_*
-OUTPUT_IG_FILE=$4
-ENTROPY_METHOD=$5     # BUB, MAP, or MLE
-LABEL_TYPE=$6         # frames or roles
-REFINEMENT_MODE=$7    # probably NULL_LABEL or FRAME
-IS_PROPBANK=$8
-ROLE_NAMES=$9         # e.g. $WORKING_DIR/raw-shards/job-0-of-256/role-names.txt.bz2
-IGNORE_SENT_IDS=${10}
-NUM_ROLES=${11}
-SHARD=${12}
-JAR=${13}
-XMX=${14}
+FEATS=$1              # should be path+glob like "/foo/bar/**/*.txt"
+BIALPH=$2             # names of features in FEATS_*
+OUTPUT_IG_FILE=$3
+ENTROPY_METHOD=$4     # BUB, MAP, or MLE
+LABEL_TYPE=$5         # frames or roles
+REFINEMENT_MODE=$6    # probably NULL_LABEL or FRAME
+IS_PROPBANK=$7
+ROLE_NAMES=$8         # e.g. $WORKING_DIR/raw-shards/job-0-of-256/role-names.txt.bz2
+IGNORE_SENT_IDS=$9
+NUM_ROLES=${10}
+SHARD=${11}
+JAR=${12}
+XMX=${13}
 
 # Which/how many products to compute IG for
 FEATS_PER_SHARD=${15}
@@ -41,6 +40,7 @@ TEMPLATE_IG_FILE=${16}
 #-DbubFuncParentDir=scripts/precompute-features
 
 java -Xmx${XMX}G -cp $JAR \
+  -Dfeatures=$FEATS\
   -Dpropbank=$IS_PROPBANK \
   -DentropyMethod=$ENTROPY_METHOD \
   -DlabelType=$LABEL_TYPE \
@@ -49,8 +49,6 @@ java -Xmx${XMX}G -cp $JAR \
   -DroleNames=$ROLE_NAMES \
   -Dshard=$SHARD \
   -DnumProducts=$FEATS_PER_SHARD \
-  -DfeaturesParent=$FEATS_PARENT \
-  -DfeaturesGlob=$FEATS_GLOB \
   -DtemplateAlph=$BIALPH \
   -DtemplateAlphLineMode=ALPH \
   -DtemplateIGs=$TEMPLATE_IG_FILE \
