@@ -87,6 +87,7 @@ public class UbertsPipeline {
     Log.info("reading in relation/node type definitions...");
     u.readRelData(xyDefsFile);
 
+    Log.info("running type inference...");
     this.typeInf = new TypeInference(u);
 //    this.typeInf.debug = true;
     for (Rule untypedRule : Rule.parseRules(grammarFile, null))
@@ -98,6 +99,7 @@ public class UbertsPipeline {
       }
       addRule(typedRule);
     }
+    Log.info("done");
   }
 
   private void addRule(Rule r) {
@@ -257,41 +259,34 @@ public class UbertsPipeline {
   }
 
   public static void main(String[] args) throws IOException {
-    ExperimentProperties.init(args);
-
-    File xyDefsFile = new File("data/srl-reldata/propbank/relations.def");
-    List<File> schemaFiles = Arrays.asList(
-        new File("data/srl-reldata/frameTriage2.propbank.rel"),
-        new File("data/srl-reldata/role2.propbank.rel.gz"));
-//    File grammarFile = new File("data/srl-reldata/srl-grammar.hobbs.trans");
-    File grammarFile = new File("data/srl-reldata/srl-grammar-moreArgs.hobbs.trans");
-    Random rand = new Random(9001);
-    Uberts u = new Uberts(rand);
-    UbertsPipeline srl = new UbertsPipeline(u, grammarFile, schemaFiles, xyDefsFile);
+    ExperimentProperties config = ExperimentProperties.init(args);
 
 //    TNode.DEBUG = true;
 //    State.DEBUG = true;
 //    Agenda.DEBUG = true;
 //    Uberts.DEBUG = true;
 
-//    String base = "data/srl-reldata/srl-FNFUTXT1228670";
-//    File xyDefsFile = new File(base + ".defs");
-//    File xyValuesFile = new File(base + ".values");
-//    srl.addRelData(xyValuesFile);
-//
-//    boolean oracle = false;
-//    int maxActions = 0;
-//    u.dbgRunInference(oracle, maxActions);
-//
-//    File output = new File(base + ".predicted.values");
-//    Log.info("writing edges to " + output.getPath());
-//    Set<Relation> skip = srl.getHelperRelationsAsSet();
-//    try (BufferedWriter w = FileUtil.getWriter(output)) {
-//      u.getState().writeEdges(w, skip);
-//    }
+//    File xyDefsFile = new File("data/srl-reldata/propbank/relations.def");
+    File xyDefsFile = config.getExistingFile("relationDefs");
 
-    File multiXY = new File("data/srl-reldata/propbank/instances.rel.multi.gz");
-    File multiYhat = new File("data/srl-reldata/propbank/instances.yhat.rel.multi.gz");
+//    List<File> schemaFiles = Arrays.asList(
+//        new File("data/srl-reldata/frameTriage2.propbank.rel"),
+//        new File("data/srl-reldata/role2.propbank.rel.gz"));
+    List<File> schemaFiles = config.getExistingFiles("schemaFiles");
+
+//    File grammarFile = new File("data/srl-reldata/srl-grammar.hobbs.trans");
+//    File grammarFile = new File("data/srl-reldata/srl-grammar-moreArgs.hobbs.trans");
+    File grammarFile = config.getExistingFile("grammarFile");
+
+    Random rand = new Random(9001);
+    Uberts u = new Uberts(rand);
+    UbertsPipeline srl = new UbertsPipeline(u, grammarFile, schemaFiles, xyDefsFile);
+
+//    File multiXY = new File("data/srl-reldata/propbank/instances.rel.multi.gz");
+//    File multiYhat = new File("data/srl-reldata/propbank/instances.yhat.rel.multi.gz");
+    File multiXY = config.getExistingFile("inputRel");
+    File multiYhat = config.getFile("outputRel");
+
     boolean includeProvidence = false;
     boolean dedupInputLines = true;
     try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);

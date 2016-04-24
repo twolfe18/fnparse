@@ -47,7 +47,7 @@ public class SrlSchemaToRelations {
       w.newLine();
       // Instances
       for (Frame f : fi.allFrames()) {
-        String lemmaStr = f.getName().split("\\W+")[1];
+        String lemmaStr = f.getName().split("\\W+")[1].intern();
         HypNode lemmaNode = new HypNode(lemma, lemmaStr);
         HypNode frameNode = new HypNode(frame, f.getName());
         HypNode[] tail = new HypNode[] { lemmaNode, frameNode };
@@ -77,8 +77,8 @@ public class SrlSchemaToRelations {
         s.lemmatize();
         for (FrameInstance fin : t.getFrameInstances()) {
           Span target = fin.getTarget();
-          String lemma = s.getLemma(target.end - 1);
-          String frame = fin.getFrame().getName();
+          String lemma = s.getLemma(target.end - 1).intern();
+          String frame = fin.getFrame().getName().intern();
           if (seenLemmaFrame.add(new Pair<>(lemma, frame))) {
             HypNode lemmaNode = new HypNode(lemmaNT, lemma);
             HypNode frameNode = new HypNode(frameNT, frame);
@@ -117,20 +117,25 @@ public class SrlSchemaToRelations {
     }
   }
 
+  /**
+   * TODO Add support for SF schema? (Currently only does PB/FN).
+   * Maybe don't do this: extract the instance data from Concrete and then write
+   * a grammar which can be used by TypeInference.propagateValue to derive the
+   * role schema.
+   */
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
     boolean pb = config.getBoolean("propbank");
-    String ds = pb ? "propbank" : "framenet";
     Log.info("propbank=" + pb);
 
     boolean overwrite = config.getBoolean("overwrite", false);
     File outdir = config.getOrMakeDir("outdir");
 
-    File frameTriage = new File(outdir, "frameTriage2." + ds + ".rel");
+    File frameTriage = new File(outdir, "frameTriage2.rel");
     if (frameTriage.isFile() && !overwrite)
       throw new RuntimeException("output exists and overwrite=false, " + frameTriage.getPath());
 
-    File role = new File(outdir, "role2." + ds + ".rel.gz");
+    File role = new File(outdir, "role2.rel.gz");
     if (role.isFile() && !overwrite)
       throw new RuntimeException("output exists and overwrite=false, " + role.getPath());
 

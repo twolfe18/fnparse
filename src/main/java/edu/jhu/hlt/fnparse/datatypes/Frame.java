@@ -30,6 +30,8 @@ public class Frame implements Serializable, Comparable<Frame> {
     this.name = name;
     this.lexicalUnits = lexicalUnits;
     this.roles = roles;
+    for (int i = 0; i < roles.length; i++)
+      this.roles[i] = this.roles[i].replaceAll("\\s+", "_").intern();
   }
 
   /**
