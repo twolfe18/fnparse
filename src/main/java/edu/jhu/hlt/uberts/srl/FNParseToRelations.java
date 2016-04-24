@@ -27,6 +27,8 @@ import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.HashableIntArray;
+import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
@@ -35,8 +37,10 @@ import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.util.Alphabet;
+import edu.jhu.util.HPair;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.IWord;
+import edu.stanford.nlp.util.IntPair;
 
 /**
  * Take {@link FNParse}s and write out the relations used by uberts/srl.
@@ -66,21 +70,48 @@ public class FNParseToRelations {
 
   public boolean includeEvent2 = false;
 
+  public static String norm(String x) {
+    x = x.trim();
+    x = x.replaceAll("\\s+", "_");
+    x.replaceAll("#", "HASH");
+    return x;
+  }
+
+  public static String join(String... tokens) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(norm(tokens[0]));
+    for (int i = 1; i < tokens.length; i++) {
+      sb.append(' '); // Could replace with tab
+      sb.append(norm(tokens[i]));
+    }
+    return sb.toString();
+  }
+
+  public static String join(Object... tokens) {
+    StringBuilder sb = new StringBuilder();
+    sb.append(norm(tokens[0].toString()));
+    for (int i = 1; i < tokens.length; i++) {
+      sb.append(' '); // Could replace with tab
+      sb.append(norm(tokens[i].toString()));
+    }
+    return sb.toString();
+  }
+
+  public static void write(BufferedWriter w, Object... tokens) throws IOException {
+    w.write(join(tokens));
+    w.newLine();
+  }
+
   private void write(Sentence s, BufferedWriter w) throws IOException {
     IWord iw;
     ISynset is;
     int n = s.size();
     for (int i = 0; i < n; i++) {
-      w.write("x word2 " + i + " " + s.getWord(i));
-      w.newLine();
-      w.write("x pos2 " + i + " " + s.getPos(i));
-      w.newLine();
-      w.write("x lemma2 " + i + " " + s.getLemma(i));
-      w.newLine();
-      if ((iw = s.getWnWord(i)) != null && (is = iw.getSynset()) != null) {
-        w.write("x wnss2 " + i + " " + is.getID());
-        w.newLine();
-      }
+      write(w, "x", "word2", i, s.getWord(i));
+      write(w, "x", "pos2", i, s.getPos(i));
+      write(w, "x", "lemma2", i, s.getLemma(i));
+      if ((iw = s.getWnWord(i)) != null && (is = iw.getSynset()) != null)
+        write(w, "x", "wnss2", i, is.getID());
     }
     write(s.getBasicDeps(false), "basic", n, w);
     write(s.getCollapsedDeps2(false), "col", w);
@@ -101,7 +132,7 @@ public class FNParseToRelations {
     }
     String tn = "dsyn3-" + name;
     LabeledDirectedGraph depsI = deps.get();
-    Set<String> uniq = new HashSet<>();
+    Set<IntTrip> uniq = new HashSet<>();
     int n = depsI.getNumEdges();
     for (int i = 0; i < n; i++) {
       long e = depsI.getEdge(i);
@@ -110,13 +141,9 @@ public class FNParseToRelations {
         g = -1;   // In output we use -1 as root.
       int d = LabeledDirectedGraph.unpackDep(e);
       int lab = LabeledDirectedGraph.unpackEdge(e);
-      String l = deps.getEdge(lab);
-      String line = "x " + tn + " " + g + " " + d + " " + l;
-      if (uniq.add(line)) {
-        // There are duplicates because LabeledDirectedGraph stores both
-        // gov->dep and dep<-gov.
-        w.write(line);
-        w.newLine();
+      if (uniq.add(new IntTrip(g, d, lab))) {
+        String l = deps.getEdge(lab);
+        write(w, "x ", tn, g, d, l);
       }
     }
   }
@@ -130,8 +157,7 @@ public class FNParseToRelations {
     for (int d = 0; d < n; d++) {
       int g = deps.getHead(d);
       String l = deps.getLabel(d);
-      w.write("x " + tn + " " + g + " " + d + " " + l);
-      w.newLine();
+      write(w, "x", tn, g, d, l);
     }
   }
 
@@ -141,7 +167,7 @@ public class FNParseToRelations {
       return;
     }
     String tn = "csyn3-" + name;
-    Set<String> uniq = new HashSet<>();
+    Set<HPair<Span, String>> uniq = new HashSet<>();
     for (Node n : cons.getAllConstituents()) {
       if (n.isLeaf() && skipLeaf) {
 //        Log.info("skipping what should be LEXICAL leaf cons: " + n.getTag());
@@ -153,14 +179,12 @@ public class FNParseToRelations {
       }
       Span s = n.getSpan();
       String t = n.getTag();
-      String line = "x " + tn + " " + s.start + " " + s.end + " " + t;
-      if (uniq.add(line)) {
+      if (uniq.add(new HPair<>(s, t))) {
         // I've seen this in gold parses for some reason, e.g.
         // grep -n 'x csyn3-gold 12 16 NP' -m 3 <file>
         // 5035:x csyn3-gold 12 16 NP
         // 5036:x csyn3-gold 12 16 NP
-        w.write(line);
-        w.newLine();
+        write(w, "x", tn, s.start, s.end, t);
       }
     }
   }
@@ -190,7 +214,7 @@ public class FNParseToRelations {
       n.id = id++;
     }
 
-    Set<String> uniq = new HashSet<>();
+    Set<HashableIntArray> uniq = new HashSet<>();
     for (Node n : nodes) {
       if (n.id < 0)
         continue;
@@ -198,11 +222,8 @@ public class FNParseToRelations {
       int h = n.getHeadToken();
       int p = n.getParent() == null ? -1 : n.getParent().id;
       String t = n.getTag();
-      String line = StringUtils.join(" ", Arrays.asList("x", tn, n.id, p, h, s.start, s.end, t));
-      if (uniq.add(line)) {
-        w.write(line);
-        w.newLine();
-      }
+      if (uniq.add(new HashableIntArray(n.id, p, h, s.start, s.end, t.hashCode())))
+        write(w, "x", tn, n.id, p, h, s.start, s.end, t);
     }
   }
 
@@ -214,14 +235,10 @@ public class FNParseToRelations {
   }
 
   public void definitions(BufferedWriter w) throws IOException {
-    w.write("def word2 <tokenIndex> <word>");
-    w.newLine();
-    w.write("def pos2 <tokenIndex> <pos>");
-    w.newLine();
-    w.write("def lemma2 <tokenIndex> <lemma>");
-    w.newLine();
-    w.write("def wnss2 <tokenIndex> <synset>");
-    w.newLine();
+    write(w, "def", "word2", "<tokenIndex>", "<word>");
+    write(w, "def", "pos2", "<tokenIndex>", "<pos>");
+    write(w, "def", "lemma2", "<tokenIndex>", "<lemma>");
+    write(w, "def", "wnss2", "<tokenIndex>", "<synset>");
     for (String t : Arrays.asList("basic", "col", "colcc")) {
       w.write("def dsyn3-" + t + " <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
       w.newLine();
@@ -283,6 +300,7 @@ public class FNParseToRelations {
       Span s = ts.get2();
       if (t == Span.nullSpan || s == Span.nullSpan)
         continue;
+//      write(w, "x", "xue-palmer-args", t.start, t.end, s.start, s.end);
       w.write("x xue-palmer-args " + t.start + " " + t.end + " " + s.start + " " + s.end);
       if (gold.contains(t))
         w.write(" # gold");
@@ -342,20 +360,24 @@ public class FNParseToRelations {
   private void write(Span t, String f, Span s, String k, BufferedWriter w) throws IOException {
 //    String ts = t.start + ")" + t.end;
 //    String ss = s.start + ")" + s.end;
-    String ts = t.start + " " + t.end;
-    String ss = s.start + " " + s.end;
+//    String ts = t.start + " " + t.end;
+//    String ss = s.start + " " + s.end;
     if (srl4Mode) {
-      w.write("y srl4 " + ts + " " + f + " " + ss + " " + k);
-      w.newLine();
+      write(w, "y", "srl4", t.start, t.end, f, s.start, s.end, k);
+//      w.write("y srl4 " + ts + " " + f + " " + ss + " " + k);
+//      w.newLine();
     } else {
       if (outputDerivedLabels) {
-        w.write("y srl1 " + ss);
-        w.newLine();
-        w.write("y srl2 " + ts + " " + ss);
-        w.newLine();
+        write(w, "y", "srl1", s.start, s.end);
+        write(w, "y", "srl2", t.start, t.end, s.start, s.end);
+//        w.write("y srl1 " + ss);
+//        w.newLine();
+//        w.write("y srl2 " + ts + " " + ss);
+//        w.newLine();
       }
-      w.write("y srl3 " + ts + " " + f + " " + ss + " " + k);
-      w.newLine();
+//      w.write("y srl3 " + ts + " " + f + " " + ss + " " + k);
+//      w.newLine();
+      write(w, "y", "srl3", t.start, t.end, f, s.start, s.end, k);
     }
   }
 
