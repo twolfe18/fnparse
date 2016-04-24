@@ -24,6 +24,7 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.HPair;
 
 /**
  * An uber transition system for joint predictions. Holds a state and agenda,
@@ -52,10 +53,13 @@ public class Uberts {
   private Map<String, Relation> relations;
 
   // Alphabet of HypNodes which appear in either state or agenda.
-  private Map<Pair<NodeType, Object>, HypNode> nodes;
+//  private Map<Pair<NodeType, Object>, HypNode> nodes;
+  private Map<HPair<NodeType, Object>, HypNode> nodes;
 
   // Never call `new NodeType` outside of Uberts, use lookupNodeType
   private Map<String, NodeType> nodeTypes;
+
+  public boolean showOracleTrajDiagnostics = false;
 
   // Ancillary data for features which don't look at the State graph.
   // New data backend (used to be fnparse.Sentence and FNParse)
@@ -221,19 +225,21 @@ public class Uberts {
       }
     }
 
-    Log.info("traj.size=" + traj.size() + " dedupd=" + dedupd);
-    Map<String, Double> recall = perf.recallByRel();
-    for (String relName : goldEdges.getObservedRelationNames()) {
-      Log.info("relation=" + relName
-          + " oracleRecall=" + recall.get(relName)
-          + " n=" + goldEdges.getRelCount(relName));
-      for (HypEdge fn : perf.getFalseNegatives(relName)) {
-        if ("srl1".equals(fn.getRelation().getName())) {
-          int i = Integer.parseInt((String) fn.getTail(0).getValue());
-          int j = Integer.parseInt((String) fn.getTail(1).getValue());
-          System.out.println("\tfn: " + fn + "\t" + dbgGetSpan(i, j));
-        } else {
-          System.out.println("\tfn: " + fn);
+    if (showOracleTrajDiagnostics) {
+      Log.info("traj.size=" + traj.size() + " dedupd=" + dedupd);
+      Map<String, Double> recall = perf.recallByRel();
+      for (String relName : goldEdges.getObservedRelationNames()) {
+        Log.info("relation=" + relName
+            + " oracleRecall=" + recall.get(relName)
+            + " n=" + goldEdges.getRelCount(relName));
+        for (HypEdge fn : perf.getFalseNegatives(relName)) {
+          if ("srl1".equals(fn.getRelation().getName())) {
+            int i = Integer.parseInt((String) fn.getTail(0).getValue());
+            int j = Integer.parseInt((String) fn.getTail(1).getValue());
+            System.out.println("\tfn: " + fn + "\t" + dbgGetSpan(i, j));
+          } else {
+            System.out.println("\tfn: " + fn);
+          }
         }
       }
     }
@@ -375,7 +381,8 @@ public class Uberts {
    */
   public HypNode lookupNode(NodeType nt, Object value, boolean addIfNotPresent) {
     assert !(value instanceof String) || value == ((String)value).intern();
-    Pair<NodeType, Object> key = new Pair<>(nt, value);
+//    Pair<NodeType, Object> key = new Pair<>(nt, value);
+    HPair<NodeType, Object> key = new HPair<>(nt, value);
     HypNode v = nodes.get(key);
     if (v == null && addIfNotPresent) {
       v = new HypNode(nt, value);
@@ -389,7 +396,8 @@ public class Uberts {
    */
   public void putNode(HypNode n) {
     assert !(n.getValue() instanceof String) || n.getValue() == ((String)n.getValue()).intern();
-    Pair<NodeType, Object> key = new Pair<>(n.getNodeType(), n.getValue());
+//    Pair<NodeType, Object> key = new Pair<>(n.getNodeType(), n.getValue());
+    HPair<NodeType, Object> key = new HPair<>(n.getNodeType(), n.getValue());
     HypNode old = nodes.put(key, n);
     if (old != null)
       throw new RuntimeException("duplicate: " + key);
@@ -437,7 +445,8 @@ public class Uberts {
   }
 
   private boolean nodesContains(HypNode n) {
-    HypNode n2 = nodes.get(new Pair<>(n.getNodeType(), n.getValue()));
+//    HypNode n2 = nodes.get(new Pair<>(n.getNodeType(), n.getValue()));
+    HypNode n2 = nodes.get(new HPair<>(n.getNodeType(), n.getValue()));
     return n2 == n;
   }
   private boolean nodesContains(HypEdge e) {
