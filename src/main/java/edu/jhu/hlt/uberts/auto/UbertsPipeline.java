@@ -50,7 +50,7 @@ public class UbertsPipeline {
   private List<Relation> helperRelations;
   private TypeInference typeInf;
 
-  private double pNegSkip = 0.9;
+  private double pNegSkip = 0.75;
   private BasicFeatureTemplates bft = new BasicFeatureTemplates();
   private FeatureExtractionFactor.OldFeaturesWrapper fe = new FeatureExtractionFactor.OldFeaturesWrapper(bft, pNegSkip);
 
@@ -174,6 +174,7 @@ public class UbertsPipeline {
    */
   public void extractFeatures(ManyDocRelationFileIterator x, File output, Shard dataShard) throws IOException {
     Log.info("writing features to " + output);
+    Log.info("pSkipNeg=" + pNegSkip);
 
     // This will initialize the Alphabet over frame/role names and provide
     // the code to write out features.txt.gz and template-feat-indices.txt.gz

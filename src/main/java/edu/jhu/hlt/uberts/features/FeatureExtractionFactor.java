@@ -365,22 +365,22 @@ public abstract class FeatureExtractionFactor<T> {
       ctx.clear();
       ctx.setSentence(sentCache);
       switch (yhat.getRelation().getName()) {
-      case "srl1":
-        s = extractSpan(yhat, 0, 1);
-        break;
-      case "srl2":
-        s1 = (EqualityArray) yhat.getTail(0).getValue();
-        e1 = (EqualityArray) yhat.getTail(1).getValue();
-        t = extractSpan(e1, 0, 1);
-        s = extractSpan(s1, 0, 1);
-        ctx.clear();
-        ctx.setSentence(sentCache);
-        break;
+//      case "srl1":
+//        s = extractSpan(yhat, 0, 1);
+//        break;
+//      case "srl2":
+//        s1 = (EqualityArray) yhat.getTail(0).getValue();
+//        e1 = (EqualityArray) yhat.getTail(1).getValue();
+//        t = extractSpan(e1, 0, 1);
+//        s = extractSpan(s1, 0, 1);
+//        break;
       case "srl3":
         EqualityArray s2 = (EqualityArray) yhat.getTail(0).getValue();
         s1 = (EqualityArray) s2.get(0);
         e1 = (EqualityArray) s2.get(1);
         Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(yhat);
+        t = s3.t;
+        s = s3.s;
         ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(s3.f));
         ctx.setRoleS(s3.k);
         break;
