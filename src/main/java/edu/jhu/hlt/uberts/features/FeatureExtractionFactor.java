@@ -42,6 +42,11 @@ import edu.jhu.util.Alphabet;
 
 public abstract class FeatureExtractionFactor<T> {
 
+  // Set this to non-null values to enable.
+  // When enabled, an empty list, this.SKIP will be return from features().
+  public Double pSkipNeg = null;
+  public List<T> SKIP = new ArrayList<>();
+
   public abstract List<T> features(HypEdge yhat, Uberts x);
 
 
@@ -150,19 +155,18 @@ public abstract class FeatureExtractionFactor<T> {
     private TemplateContext ctx;
     private Alphabet<String> depGraphEdges;
     private Alphabet<String> roles;
-    private Map<String, Frame> frames;
     private HeadFinder hf;
     private MultiTimer timer;
 
     /** This will read all the features in */
-    public OldFeaturesWrapper(BasicFeatureTemplates bft) {
+    public OldFeaturesWrapper(BasicFeatureTemplates bft, Double pSkipNeg) {
+      this.pSkipNeg = pSkipNeg;
       timer = new MultiTimer();
       timer.put("convert-sentence", new Timer("convert-sentence", 1, false));
       timer.put("compute-features", new Timer("compute-features", 10000, false));
 
       depGraphEdges = new Alphabet<>();
       roles = new Alphabet<>();
-      frames = new HashMap<>(); // TODO populate
       ctx = new TemplateContext();
       sentCache = null;
       edu.jhu.hlt.fnparse.features.precompute.Alphabet alph =
@@ -359,6 +363,10 @@ public abstract class FeatureExtractionFactor<T> {
 
     @Override
     public List<String> features(HypEdge yhat, Uberts x) {
+
+      if (pSkipNeg != null && !x.getLabel(yhat) && x.getRandom().nextDouble() < pSkipNeg)
+        return SKIP;
+
       checkForNewSentence(x);
       timer.start("compute-features");
       Span t = null, s = null;

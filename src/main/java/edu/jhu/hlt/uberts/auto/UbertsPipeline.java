@@ -45,6 +45,10 @@ public class UbertsPipeline {
   private List<Relation> helperRelations;
   private TypeInference typeInf;
 
+  private double pNegSkip = 0.9;
+  private BasicFeatureTemplates bft = new BasicFeatureTemplates();
+  private FeatureExtractionFactor.OldFeaturesWrapper fe = new FeatureExtractionFactor.OldFeaturesWrapper(bft, pNegSkip);
+
   // Both of these are single arg relations and their argument is a doc id.
   private NodeType docidNT;
   private Relation startDocRel;
@@ -96,8 +100,6 @@ public class UbertsPipeline {
     }
   }
 
-  private BasicFeatureTemplates bft = new BasicFeatureTemplates();
-  private FeatureExtractionFactor<String> fe = new FeatureExtractionFactor.OldFeaturesWrapper(bft);
   private void addRule(Rule r) {
     Log.info("adding " + r);
     rules.add(r);
@@ -204,17 +206,20 @@ public class UbertsPipeline {
 
         // Run inference and record extracted features
         boolean dedupEdges = true;
+        int skipped = 0, kept = 0;
         List<Step> traj = u.recordOracleTrajectory(dedupEdges);
         for (Step t : traj) {
           boolean y = u.getLabel(t.edge);
-          if (y) posRel.increment(t.edge.getRelation().getName());
-          else negRel.increment(t.edge.getRelation().getName());
           String lab = y ? "+1" : "-1";
-//          if (debug)
-//            System.out.println("[exFeats.orTraj] " + lab + " " + t.edge);// + " " + new HashableHypEdge(t.edge).hc);
-          actions++;
+//          String lab = (y ? "+" : "-") + t.edge.toString();
+
           @SuppressWarnings("unchecked")
           WeightAdjoints<String> fx = (WeightAdjoints<String>) t.score;
+          if (fx.getFeatures() == fe.SKIP) {
+            skipped++;
+            continue;
+          }
+          kept++;
           w.write(t.edge.getRelFileString(lab));
           for (String feat : fx.getFeatures()) {
             w.write('\t');
@@ -222,7 +227,14 @@ public class UbertsPipeline {
             features++;
           }
           w.newLine();
+
+          if (y) posRel.increment(t.edge.getRelation().getName());
+          else negRel.increment(t.edge.getRelation().getName());
+//          if (debug)
+//            System.out.println("[exFeats.orTraj] " + lab + " " + t.edge);// + " " + new HashableHypEdge(t.edge).hc);
+          actions++;
         }
+        Log.info("skipped=" + skipped + " kept=" + kept);
 
         if (tm.enoughTimePassed(15)) {
           double sec = tm.secondsSinceFirstMark();

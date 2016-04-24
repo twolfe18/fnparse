@@ -135,7 +135,7 @@ public class Uberts {
   public void dbgRunInference(boolean oracle, int actionLimit) {
     Log.info("starting...");
     int applied = 0;
-    for (int i = 0; agenda.size() > 0
+    for (@SuppressWarnings("unused") int i = 0; agenda.size() > 0
         && (actionLimit <= 0 || applied < actionLimit); i++) {
 //      Log.info("choosing the best action, i=" + i + " size=" + agenda.size() + " cap=" + agenda.capacity());
 //      agenda.dbgShowScores();
@@ -197,9 +197,9 @@ public class Uberts {
   public List<Step> recordOracleTrajectory(boolean dedupEdges) {
     if (goldEdges == null)
       throw new IllegalStateException("you must add labels, goldEdges==null");
+//    if (pNegKeep < 0 || pNegKeep > 1)
+//      throw new IllegalArgumentException();
     timer.start(REC_ORACLE_TRAJ);
-
-    boolean DEBUG = true;
 
     Set<HashableHypEdge> uniqEdges = new HashSet<>();
     int dedupd = 0;
