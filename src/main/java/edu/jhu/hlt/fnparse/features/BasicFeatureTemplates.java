@@ -1711,26 +1711,15 @@ public class BasicFeatureTemplates {
     });
     addLabel("frameRole", new TemplateSS() {
       public String extractSS(TemplateContext context) {
-        int role = context.getRole();
-        if (role == TemplateContext.UNSET)
-          return null;
-        Frame f = context.getFrame();
-        assert f != null;
-        String r = role >= f.numRoles() ? "NOT-REALIZED" : f.getRole(role);
-        return "frameRole=" + f.getName() + "." + r;
+        String f = context.getFrame() == null ? "null" : context.getFrame().getName();
+        return "frameRoleArg=" + f + "/" + context.getRoleS();
       }
     });
     addLabel("role", new TemplateSS() {
       // Does not require an arg or span to be set, which is needed for
       // RoleHeadStage
       public String extractSS(TemplateContext context) {
-        int role = context.getRole();
-        if (role == TemplateContext.UNSET)
-          return null;
-        Frame f = context.getFrame();
-        assert f != null;
-        String r = role >= f.numRoles() ? "NOT-REALIZED" : f.getRole(role);
-        return "role=" + r;
+        return "role=" + context.getRoleS();
       }
     });
     addLabel("frameRoleArg", new TemplateSS() {
@@ -1739,13 +1728,8 @@ public class BasicFeatureTemplates {
       public String extractSS(TemplateContext context) {
         if (context.getArg() == null)
           return null;
-        int role = context.getRole();
-        if (role == TemplateContext.UNSET)
-          return null;
-        Frame f = context.getFrame();
-        assert f != null;
-        String r = role >= f.numRoles() ? "NOT-REALIZED" : f.getRole(role);
-        return "frameRoleArg=" + f.getName() + "." + r;
+        String f = context.getFrame() == null ? "null" : context.getFrame().getName();
+        return "frameRoleArg=" + f + "/" + context.getRoleS();
       }
     });
     addLabel("roleArg", new TemplateSS() {
@@ -1754,13 +1738,7 @@ public class BasicFeatureTemplates {
       public String extractSS(TemplateContext context) {
         if (context.getArg() == null)
           return null;
-        int role = context.getRole();
-        if (role == TemplateContext.UNSET)
-          return null;
-        Frame f = context.getFrame();
-        assert f != null;
-        String r = role >= f.numRoles() ? "NOT-REALIZED" : f.getRole(role);
-        return "roleArg=" + r;
+        return "roleArg=" + context.getRoleS();
       }
     });
     addLabel("arg", new TemplateSS() {
@@ -1769,12 +1747,7 @@ public class BasicFeatureTemplates {
       public String extractSS(TemplateContext context) {
         if (context.getArg() == null)
           return null;
-        int role = context.getRole();
-        if (role == TemplateContext.UNSET)
-          return null;
-        Frame f = context.getFrame();
-        assert f != null;
-        return "someArg";
+        return "arg=" + (context.getRoleS() == null ? "null" : "something");
       }
     });
     addLabel("span1IsConstituent", new TemplateSS() {
@@ -1850,26 +1823,28 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
-    addLabel("Role1", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int r = context.getRole();
-        if (r == TemplateContext.UNSET)
-          return null;
-        Frame f = context.getFrame();
-        assert f != null;
-        return "Role1=" + (r == f.numRoles() ? "NO_ROLE" : f.getRole(r));
-      }
-    });
-    addLabel("Role2", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int r = context.getRole2();
-        if (r == TemplateContext.UNSET)
-          return null;
-        Frame f = context.getFrame();
-        assert f != null;
-        return "Role2=" + (r == f.numRoles() ? "NO_ROLE" : f.getRole(r));
-      }
-    });
+//    addLabel("Role1", new TemplateSS() {
+//      public String extractSS(TemplateContext context) {
+////        int r = context.getRole();
+////        if (r == TemplateContext.UNSET)
+////          return null;
+//        String r = context.getRoleS();
+////        Frame f = context.getFrame();
+////        assert f != null;
+////        return "Role1=" + (r == f.numRoles() ? "NO_ROLE" : f.getRole(r));
+//        return "Role1=" + r;
+//      }
+//    });
+//    addLabel("Role2", new TemplateSS() {
+//      public String extractSS(TemplateContext context) {
+//        int r = context.getRole2();
+//        if (r == TemplateContext.UNSET)
+//          return null;
+//        Frame f = context.getFrame();
+//        assert f != null;
+//        return "Role2=" + (r == f.numRoles() ? "NO_ROLE" : f.getRole(r));
+//      }
+//    });
   }
 
 

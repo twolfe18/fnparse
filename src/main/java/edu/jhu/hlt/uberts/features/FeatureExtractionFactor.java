@@ -392,7 +392,7 @@ public abstract class FeatureExtractionFactor<T> {
         e1 = (EqualityArray) s2.get(1);
         String fn = (String) e2.get(1);
         ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(fn));
-        ctx.setRole(roles.lookupIndex((String) yhat.getTail(2).getValue()));
+        ctx.setRoleS((String) yhat.getTail(2).getValue());
         break;
       default:
         if (!yhat.getRelation().getName().equals("srl4"))
@@ -403,11 +403,13 @@ public abstract class FeatureExtractionFactor<T> {
         ctx.setArg(s);
         ctx.setArgHead(hf.head(s, sentCache));
         ctx.setSpan1(s);
+        ctx.setHead1(ctx.getArgHead());
       }
       if (t != null && t != Span.nullSpan) {
         ctx.setTarget(t);
         ctx.setTargetHead(hf.head(t, sentCache));
         ctx.setSpan2(t);
+        ctx.setHead2(ctx.getTargetHead());
       }
       List<String> f = new ArrayList<>();
       for (TemplateAlphabet ftemp : features) {

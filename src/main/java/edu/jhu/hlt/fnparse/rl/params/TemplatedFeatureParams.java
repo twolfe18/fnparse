@@ -82,7 +82,7 @@ public class TemplatedFeatureParams
     context.setTarget(fi.getTarget());
     context.setTargetHead(fi.getTarget().end - 1);
     context.setHead2(fi.getTarget().end - 1);
-    context.setRole(a.k);
+    context.setRoleS(fi.getFrame().getRole(a.k));
     context.setArg(a.getSpanSafe());
     if (a.hasSpan()) {
       int h1 = headFinder.head(a.getSpan(), f.getSentence());

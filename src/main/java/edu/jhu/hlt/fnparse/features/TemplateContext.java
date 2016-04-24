@@ -35,7 +35,8 @@ public class TemplateContext {
   private int targetHead;
 
   // For role id
-  private int role; // if set, must also set frame
+//  private int role; // if set, must also set frame
+  private String roleS;
   private Span arg;
   private int argHead;
 
@@ -65,8 +66,8 @@ public class TemplateContext {
 
   private int prune;
 
-  /** See {@link RoleSequenceStage} */
-  private int role2;
+//  /** See {@link RoleSequenceStage} */
+//  private int role2;
 
   // TODO put constituency and dependency parses in here instead of in sentence?
 
@@ -83,7 +84,8 @@ public class TemplateContext {
     frame = null;
     target = null;
     targetHead = UNSET;
-    role = UNSET;
+//    role = UNSET;
+    roleS = null;
     arg = null;
     argHead = UNSET;
     span1 = null;
@@ -96,35 +98,8 @@ public class TemplateContext {
     head2_parent = UNSET;
     stage = null;
     prune = UNSET;
-    role2 = UNSET;
+//    role2 = UNSET;
   }
-
-  /**
-   * Checks params to see if it is OK to use syntax features, etc
-   * and removes this data if it is prohibited.
-   * 
-   * NOTE: this is the alternative to having every Template know about ParserParams,
-   * which would be a nightmare.
-   * NOTE: having this here is slightly better than having this code repeated in
-   * every stage's feature computation code.
-  public void blankOutIllegalInfo(ParserParams params) {
-    if (!params.useLatentDepenencies) {
-      head1_parent = UNSET;
-      head2_parent = UNSET;
-    }
-    if (!params.useLatentConstituencies) {
-      span1_isConstituent = UNSET;
-      span2_isConstituent = UNSET;
-    }
-    if (!params.useSyntaxFeatures) {
-      cParser = null;
-      if (sentence != null) {
-        sentence.setBasicDeps(null);
-        sentence.setCollapsedDeps(null);
-      }
-    }
-  }
-   */
 
   public Sentence getSentence() {
     return sentence;
@@ -162,16 +137,22 @@ public class TemplateContext {
     this.targetHead = head;
   }
 
-  public int getRole() {
-    return role;
+//  public int getRole() {
+//    return role;
+//  }
+//  public void setRole(int role) {
+//    if (DEBUG) {
+//      assert frame != null : "set frame first";
+//      assert role >= 0;
+//      assert role < frame.numRoles();
+//    }
+//    this.role = role;
+//  }
+  public String getRoleS() {
+    return roleS;
   }
-  public void setRole(int role) {
-    if (DEBUG) {
-      assert frame != null : "set frame first";
-      assert role >= 0;
-      assert role < frame.numRoles();
-    }
-    this.role = role;
+  public void setRoleS(String roleS) {
+    this.roleS = roleS;
   }
 
   public Span getArg() {
@@ -308,25 +289,25 @@ public class TemplateContext {
     this.prune = prune ? 1 : 0;
   }
 
-  public void setRole2(int role) {
-    this.role2 = role;
-  }
-  public int getRole2() {
-    return role2;
-  }
-
-  public String getRoleStrDebug() {
-    if (role == UNSET)
-      return "UNSET";
-    if (role == frame.numRoles())
-      return "NO_ROLE";
-    return frame.getRole(role);
-  }
-  public String getRole2StrDebug() {
-    if (role2 == UNSET)
-      return "UNSET";
-    if (role2 == frame.numRoles())
-      return "NO_ROLE";
-    return frame.getRole(role2);
-  }
+//  public void setRole2(int role) {
+//    this.role2 = role;
+//  }
+//  public int getRole2() {
+//    return role2;
+//  }
+//
+//  public String getRoleStrDebug() {
+//    if (role == UNSET)
+//      return "UNSET";
+//    if (role == frame.numRoles())
+//      return "NO_ROLE";
+//    return frame.getRole(role);
+//  }
+//  public String getRole2StrDebug() {
+//    if (role2 == UNSET)
+//      return "UNSET";
+//    if (role2 == frame.numRoles())
+//      return "NO_ROLE";
+//    return frame.getRole(role2);
+//  }
 }

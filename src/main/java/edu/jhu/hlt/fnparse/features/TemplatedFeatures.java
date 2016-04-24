@@ -303,8 +303,7 @@ public abstract class TemplatedFeatures implements Serializable {
     System.out.println("[context] stage=" + (ctx == null ? "UNSET" : ctx.getStage()));
     System.out.println("[context] sentence=" + s);
     System.out.println("[context] frame=" + (f == null ? "UNSET" : f.getName()));
-    System.out.println("[context] role=" + ctx.getRoleStrDebug());
-    System.out.println("[context] role2=" + ctx.getRole2StrDebug());
+    System.out.println("[context] role=" + ctx.getRoleS());
     System.out.println("[context] target=" + desc(ctx.getTarget(), ctx));
     System.out.println("[context] targetHead=" + desc(ctx.getTargetHead(), ctx));
     System.out.println("[context] arg = " + desc(ctx.getArg(), ctx));
