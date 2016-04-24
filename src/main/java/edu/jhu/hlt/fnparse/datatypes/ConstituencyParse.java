@@ -56,6 +56,9 @@ public class ConstituencyParse implements Serializable {
     private Node headChild;
     private List<Node> children;
 
+    // May be externally managed
+    public int id = -1;
+
     public Node(edu.jhu.hlt.concrete.Constituent c) {
       base = c;
       base2 = null;
@@ -98,6 +101,20 @@ public class ConstituencyParse implements Serializable {
 
     public Node getHeadChild() {
       return headChild;
+    }
+
+    public int getHeadToken() {
+      if (headChild == null)
+        return -1;
+      Set<Node> seen = new HashSet<>();
+      Node cur = this;
+      while (cur.start < cur.end-1) {
+        if (!seen.add(cur))
+          throw new RuntimeException("cycle!");
+        assert cur.start >= 0;
+        cur = cur.headChild;
+      }
+      return cur.start;
     }
 
     public boolean hasSpan() {
@@ -231,6 +248,7 @@ public class ConstituencyParse implements Serializable {
     this.nodes = new HashMap<>();
     this.usingTutils = true;
     helper(parse);
+    buildPointers();
   }
   private void helper(edu.jhu.hlt.tutils.Document.Constituent node) {
     addConstituent(node);
@@ -313,8 +331,19 @@ public class ConstituencyParse implements Serializable {
   }
 
   public List<Node> getAllConstituents() {
+    return getAllConstituents(false);
+  }
+  public List<Node> getAllConstituents(boolean toposort) {
     List<Node> cons = new ArrayList<>();
     cons.addAll(nodes.values());
+    if (toposort) {
+      Collections.sort(cons, new Comparator<Node>() {
+        @Override
+        public int compare(Node o1, Node o2) {
+          return o1.getDepth() - o2.getDepth();
+        }
+      });
+    }
     return cons;
   }
 
@@ -390,7 +419,6 @@ public class ConstituencyParse implements Serializable {
           assert parent != null;
           cur.parent = parent;
         }
-
         // Children
         cur.children = new ArrayList<>();
         int child = cur.base2.getLeftChild();
@@ -401,23 +429,38 @@ public class ConstituencyParse implements Serializable {
           child = d.getRightSib(child);
         }
       }
-    } else {
-      // Use concrete representation
+    } else {    // Use concrete representation
+      // Add all children
       for (Node cur : nodes.values()) {
         if (cur == null) {
           Log.warn("gap in the nodes?");
           assert false;
           continue;
         }
-        //Log.info("[buildPointers] " + i + " = " + cur);
-        if (cur.base.getHeadChildIndex() >= 0)
-          cur.headChild = nodes.get(cur.base.getHeadChildIndex());
+        // Leaves can have childList == null
+        if (!cur.base.isSetChildList() || cur.base.getChildListSize() == 0) {
+          assert cur.base.getStart()+1 == cur.base.getEnding();
+          continue;
+        }
         for (int childIdx : cur.base.getChildList()) {
           Node child = nodes.get(childIdx);
           assert child != null;
           assert child.parent == null || child.parent == cur;
           child.parent = cur;
           cur.children.add(child);
+        }
+      }
+      // Set head child
+      for (Node cur : nodes.values()) {
+        if (cur == null) {
+          Log.warn("gap in the nodes?");
+          assert false;
+          continue;
+        }
+        if (cur.base.getHeadChildIndex() >= 0) {
+//          cur.headChild = nodes.get(cur.base.getHeadChildIndex());
+          cur.headChild = cur.children.get(cur.base.getHeadChildIndex());
+          assert cur.headChild != cur;
         }
       }
     }

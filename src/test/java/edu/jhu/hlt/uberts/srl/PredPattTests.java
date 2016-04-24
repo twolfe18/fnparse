@@ -56,8 +56,8 @@ public class PredPattTests {
   private void runInference() {
     // See if the TransitionGenerator fires
     for (int i = 0; i < 10; i++) {
-      HypNode idx = u.lookupNode(tokenIndex, i);
-      HypNode tag = u.lookupNode(posTag, "tag" + (i%3));
+      HypNode idx = u.lookupNode(tokenIndex, i, true);
+      HypNode tag = u.lookupNode(posTag, "tag" + (i%3), true);
       HypEdge e = u.makeEdge(posRel, idx, tag);
       Log.info("adding on " + e);
       u.addEdgeToState(e);

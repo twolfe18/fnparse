@@ -187,12 +187,16 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     return this.new Adj(features, convertToIntArray);
   }
 
+  public Adjoints score(int[] features, boolean reindex) {
+    return this.new Adj(features, reindex);
+  }
+
   public double getWeight(int i) {
-    assert i >= 0 && i < dimension;
+    assert i >= 0 && i < dimension : "i=" + i + " dimension=" + dimension;
     return w.get(i);
   }
   public double getAveragedWeight(int i) {
-    assert i >= 0 && i < dimension;
+    assert i >= 0 && i < dimension : "i=" + i + " dimension=" + dimension;
     if (c == 0) {
       assert w.get(i) == 0;
       return 0;
@@ -257,10 +261,16 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     private List<ProductIndex> features2;
     private LL<ProductIndex> features3;
 
+    /**
+     * @param features need not adhere to any dimension restrictions.
+     */
     public Adj(LL<ProductIndex> features) {
       features3 = features;
     }
 
+    /**
+     * @param features need not adhere to any dimension restrictions.
+     */
     public Adj(List<ProductIndex> features, boolean convertToIntArray) {
       if (convertToIntArray) {
         this.features = new int[features.size()];
@@ -272,7 +282,20 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
       COUNTER_CONSTRUCT++;
     }
 
+    /**
+     * @param reindex says whether features should be taken mod dimension.
+     */
+    public Adj(int[] features, boolean reindex) {
+      this.features = features;
+      if (reindex) {
+        for (int i = 0; i < features.length; i++)
+          features[i] = reindex(features[i]);
+      }
+    }
+
     private int reindex(long rawIndex) {
+      if (rawIndex < 0)
+        rawIndex = -rawIndex;
       assert rawIndex >= 0;
       long d = dimension - numInterceptFeatures;
       long x = ((long) numInterceptFeatures) + rawIndex % d;

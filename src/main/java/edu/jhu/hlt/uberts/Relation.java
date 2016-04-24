@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 
 /**
@@ -17,8 +18,10 @@ public class Relation {
   private NodeType[] domain;
 
   public Relation(String name, NodeType... domain) {
-    this.name = name;
+    this.name = name.intern();
     this.domain = domain;
+    for (int i = 0; i < domain.length; i++)
+      assert domain[i] != null;
   }
 
   public String getName() {
@@ -31,6 +34,22 @@ public class Relation {
 
   public NodeType getTypeForArg(int i) {
     return domain[i];
+  }
+
+  /**
+   * Returns the definition string for this relation, e.g.
+   * "def word2 <tokenIndex> <word>".
+   */
+  public String getDefinitionString() {
+    StringBuilder sb = new StringBuilder("def ");
+    sb.append(name);
+    for (int i = 0; i < domain.length; i++) {
+      sb.append(' ');
+      sb.append('<');
+      sb.append(domain[i].getName());
+      sb.append('>');
+    }
+    return sb.toString();
   }
 
   /**
@@ -57,8 +76,16 @@ public class Relation {
   }
   public static class EqualityArray implements Comparable<EqualityArray> {
     private Object[] tail;
+    private long hc;
     public EqualityArray(Object[] tail) {
       this.tail = tail;
+      long[] h = new long[tail.length];
+      for (int i = 0; i < tail.length; i++)
+        h[i] = tail[i].hashCode();
+      hc = Hash.mix64(h);
+    }
+    public Object get(int i) {
+      return tail[i];
     }
     @Override
     public boolean equals(Object other) {
@@ -91,6 +118,10 @@ public class Relation {
       }
       sb.append(')');
       return sb.toString();
+    }
+    @Override
+    public int hashCode() {
+      return (int) hc;
     }
   }
 

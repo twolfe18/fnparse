@@ -332,7 +332,7 @@ public class DeterministicRolePruning implements Serializable {
         if (showPruningRecall)
           Log.info("pruning recall: " + output.recall((FNParse) input));
       } else {
-        Log.warn("check this");
+        Log.info("not showing recall since input is not FNParse: " + input.getClass().getName());
       }
       return output;
     }
@@ -355,8 +355,8 @@ public class DeterministicRolePruning implements Serializable {
 
   // shows spans
   public static void main(String[] args) {
-    ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
-    Function<Sentence, DependencyParse> dParser = csw::getBasicDParse;
+//    ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
+    Function<Sentence, DependencyParse> dParser = null; //csw::getBasicDParse;
     DeterministicRolePruning prune =
         new DeterministicRolePruning(Mode.XUE_PALMER_DEP_HERMANN, dParser, null);
     for (FNParse parse : DataUtil.iter2list(
@@ -380,11 +380,12 @@ public class DeterministicRolePruning implements Serializable {
   public static void mainNew(String[] args) {
     List<FNParse> parses = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()).subList(0, 500);
     ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
-    Function<Sentence, DependencyParse> dParser = parser::getBasicDParse;
-    Function<Sentence, ConstituencyParse> cParser = parser::getCParse;
+    Function<Sentence, DependencyParse> dParser = null; //parser::getBasicDParse;
+    Function<Sentence, ConstituencyParse> cParser = null; //parser::getCParse;
     for (FNParse p : parses) {
       Sentence s = p.getSentence();
-      s.setStanfordParse(parser.getCParse(s));
+//      s.setStanfordParse(parser.getCParse(s));
+      parser.addAllParses(s, null, true);
     }
     for (DeterministicRolePruning.Mode mode : DeterministicRolePruning.Mode.values()) {
       DeterministicRolePruning prune = new DeterministicRolePruning(mode, dParser, cParser);

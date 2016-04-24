@@ -137,7 +137,8 @@ public class Frame implements Serializable, Comparable<Frame> {
   }
 
   /**
-   * @return the raw role name conditioned on the frame.
+   * @return the frame and role name, e.g. "framenet/Commerce_buy/Buyer". Can
+   * be used without the frame if you want.
    */
   public String getFrameRole(int i) {
     return name + "/" + roles[i];

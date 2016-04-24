@@ -626,6 +626,7 @@ public abstract class FeaturePrecomputation {
     ExperimentProperties config = ExperimentProperties.getInstance();
     Iterable<FNParse> data = Collections.emptyList();
     Shard shard = ShardUtils.getShard(config);
+    Log.info("shard=" + shard);
 
     // You can specify Communication tar.gz files using the "concrete:" prefix
     String concretePrefix = "concrete:";
@@ -678,15 +679,9 @@ public abstract class FeaturePrecomputation {
       Log.info("reading propbank");
       PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
       pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), shard.second) == shard.first);
-//      data = Iterables.concat(data, pbr.getTrainData(), pbr.getDevData(), pbr.getTestData());
       data = new Iterable<FNParse>() {
         @Override
         public Iterator<FNParse> iterator() {
-//          Stream<FNParse> s = Stream.empty();
-//          s = Stream.concat(s, pbr.getTrainDataStream());
-//          s = Stream.concat(s, pbr.getDevDataStream());
-//          s = Stream.concat(s, pbr.getTestDataStream());
-//          return s.iterator();
           Iterator<FNParse> i = Collections.emptyIterator();
           i = Iterators.concat(i, pbr.getTrainDataStream().iterator());
           i = Iterators.concat(i, pbr.getDevDataStream().iterator());

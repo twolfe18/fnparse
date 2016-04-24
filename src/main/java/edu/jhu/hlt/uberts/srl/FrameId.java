@@ -202,7 +202,7 @@ public class FrameId {
             // Propbank sometimes can't produce a Frame for a given index...
             continue;
           }
-          HypNode frame = u.lookupNode(frames, f);
+          HypNode frame = u.lookupNode(frames, f, true);
 
           if (DEBUG) {
             Log.info("adding possible frame: " + f.getName() + " score=" + ys.getScore());
@@ -260,6 +260,7 @@ public class FrameId {
 
   private List<Feature> getFeatures(Span target, Sentence sent) {
     // TODO Need to instantiate a new FeaturePrecomputation.ToMemBuffer every time?
+    assert featureTemplates != null;
     FeaturePrecomputation.ToMemBuffer fp = new FeaturePrecomputation.ToMemBuffer(false, featureTemplates);
     FNParse y = new FNParse(sent, Collections.emptyList());
     fp.emitAllFrameId(y);

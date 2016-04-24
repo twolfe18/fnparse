@@ -18,6 +18,7 @@ import edu.jhu.hlt.tutils.RedisMap;
 import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.cache.DiskCachedString2TFunc;
+import edu.jhu.util.Alphabet;
 
 /**
  * This class is responsible for parsing the Propbank data to create
@@ -89,7 +90,9 @@ public class ParsePropbankData {
         if (logParses)
           System.out.println("[ParsePropbankData.Redis] no dparse for " + key + ", parsing");
         deTimer.start();
-        dp = getAnno().getBasicDParse(s);
+        getAnno().addAllParses(s, edgeAlph, true);
+        dp = s.getBasicDeps(false);
+//        dp = getAnno().getBasicDParse(s);
         if (insertComputedValues && rmapBasicDeps != null)
           rmapBasicDeps.put(key, dp);
         deTimer.stop();
@@ -114,7 +117,9 @@ public class ParsePropbankData {
         eTimer.start();
         cp = extra.get(key);
         if (cp == null) {
-          cp = getAnno().getCParse(s);
+          getAnno().addAllParses(s, edgeAlph, true);
+          cp = s.getStanfordParse();
+//          cp = getAnno().getCParse(s);
           if (insertComputedValues) {
             extra.put(key, cp);
             if (rmapCons != null)
@@ -135,6 +140,7 @@ public class ParsePropbankData {
 
   private DiskCachedString2TFunc<ConstituencyParse> cParseF;
   protected ConcreteStanfordWrapper anno;
+  protected Alphabet<String> edgeAlph = new Alphabet<>();
 
   private ParsePropbankData() {}
 
@@ -156,7 +162,11 @@ public class ParsePropbankData {
    * found. Does not store (mutate) the parse in the sentence.
    */
   public ConstituencyParse parse(Sentence s) {
-    ConstituencyParse cp = this.cParseF.get(s.getId(), () -> anno.getCParse(s));
+    ConstituencyParse cp = this.cParseF.get(s.getId(), () -> {
+      anno.addAllParses(s, edgeAlph, true);;
+      return s.getStanfordParse(false);
+//      return anno.getCParse(s);
+    });
     cp.dropBase();
     return cp;
   }

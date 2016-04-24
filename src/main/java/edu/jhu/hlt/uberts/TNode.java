@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
@@ -43,9 +44,11 @@ public class TNode {
     }
 
     public HypNode getBoundNode(int i) {
+      assert i < boundVals.size() : "i=" + i + " boundVals: " + boundVals;
       return boundVals.get(i).getLeft();
     }
     public HypEdge getBoundEdge(int i) {
+      assert i < boundVals.size() : "i=" + i + " boundVals: " + boundVals;
       return boundVals.get(i).getRight();
     }
 
@@ -59,53 +62,91 @@ public class TNode {
    * A node in a graph fragment which must match.
    *
    * You can think of this as a tagged union of either:
-   * - relation match, equality defined using {@link Relation#equals(Object)}
+   * - relation match, equality defined == on {@link Relation#equals(Object)}
    * - node type match, equality defined using == on {@link NodeType}
    * - node type and value match, equality using == on {@link NodeType} and equals on nodeValue
+   *
+   * CLARIFICATION (on argPos):
+   * This class should be generally called an edge, with some specifics related
+   * to when you can cross it or not. It is really a set of edges in the
+   * HypEdge-HypNode bipartite graph[1]. ONLY ONE of Relation|NodeType will be
+   * non-null in these instances, but that is an implementation detail w.r.t. to
+   * TNode. Every TNode SHOULD have either a Relation|NodeType (currently TKey)
+   * and a set of edges leaving it, where every edge in that collection shares
+   * a source, the Relation|NodeType belonging to this TNode.
+   * ON argPos:
+   * It always refers to the Relation! Don't try to make sense of (NodeType,argPos),
+   * it doesn't make sense. Using the edge analogy, there is always one Relation
+   * in the edge (its an edge in a bipartite graph), and the argPos relates to
+   * that. If you have a Relation TNode, then argPos means you must follow that
+   * argPos to arrive at the TKey's NodeType. If you have a NodeType TNode, you
+   * the TKey neighbors will mean "and that NodeType is argX of this Relation
+   * which you're now at".
    */
   public static class TKey {
-    static final int RELATION = 0;
-    static final int NODE_TYPE = 1;
-    static final int NODE_VALUE = 2;
+    public static final int RELATION = 0;
+    public static final int NODE_TYPE = 1;
+    public static final int NODE_VALUE = 2;
     private NodeType nodeType;
     private Object nodeValue;
     private Relation relationType;
+
+    /**
+     * Argument position of the relevant Relation.
+     * See class description for clarification.
+     */
+    private final int argPos;
+
     private int mode;
     private int hc;
 
-    public TKey(HypNode n) {  // Sugar
-      this(n.getNodeType(), n.getValue());
+    public TKey(int argPos, HypNode n) {  // Sugar
+      this(argPos, n.getNodeType(), n.getValue());
     }
-    public TKey(NodeType nodeType, Object nodeValue) {
+    public TKey(int argPos, NodeType nodeType, Object nodeValue) {
+      if (argPos < 0)
+        throw new IllegalArgumentException("argPos=" + argPos);
       assert nodeType != null && nodeValue != null;
+      this.argPos = argPos;
       this.nodeType = nodeType;
       this.nodeValue = nodeValue;
       this.relationType = null;
       this.mode = NODE_VALUE;
-      this.hc = 3 * Hash.mix(nodeType.hashCode(), nodeValue.hashCode()) + 0;
+      this.hc = 3 * Hash.mix(nodeType.hashCode(), nodeValue.hashCode(), argPos) + 0;
     }
 
-    public TKey(NodeType nodeType) {
+    public TKey(int argPos, NodeType nodeType) {
+      if (argPos < 0)
+        throw new IllegalArgumentException("argPos=" + argPos);
       assert nodeType != null;
+      this.argPos = argPos;
       this.nodeType = nodeType;
       this.nodeValue = null;
       this.relationType = null;
       this.mode = NODE_TYPE;
-      this.hc = 3 * nodeType.hashCode() + 1;
+      this.hc = 3 * Hash.mix(nodeType.hashCode(), argPos) + 1;
     }
 
-    public TKey(Relation relation) {
+    public TKey(int argPos, Relation relation) {
+      if (argPos < 0)
+        throw new IllegalArgumentException("argPos=" + argPos);
       assert relation != null;
+      this.argPos = argPos;
       this.nodeType = null;
       this.nodeValue = null;
       this.relationType = relation;
       this.mode = RELATION;
-      this.hc = 3 * relation.hashCode() + 2;
+      this.hc = 3 * Hash.mix(relation.hashCode(), argPos) + 2;
     }
 
     private TKey() {    // only for GOTO_PARENT
       this.hc = Integer.MAX_VALUE;
+      this.argPos = -2;
       this.mode = -1;
+    }
+
+    public int getMode() {
+      return mode;
     }
 
     @Override
@@ -117,7 +158,7 @@ public class TNode {
     public boolean equals(Object other) {
       if (other instanceof TKey) {
         TKey tk = (TKey) other;
-        if (mode != tk.mode)
+        if (mode != tk.mode || argPos != tk.argPos)
           return false;
         switch (mode) {
         case RELATION:
@@ -137,7 +178,7 @@ public class TNode {
     public String toString() {
       if (this == GOTO_PARENT)
         return "(TKey GOTO_PARENT)";
-      return "(TKey nt=" + nodeType + " nv=" + nodeValue + " rel=" + relationType + ")";
+      return "(TKey nt=" + nodeType + " nv=" + nodeValue + " rel=" + relationType + " argPos=" + argPos + ")";
     }
   }
 
@@ -211,13 +252,22 @@ public class TNode {
   }
 
   public static void match(Uberts u, HypEdge newEdge, TNode trie) {
-    if (DEBUG)
-      System.out.println("START MATCH: after " + newEdge + " was popped, numNodes=" + trie.getNumNodes());
+    if (DEBUG) {
+      System.out.println();
+      System.out.println("START MATCH: after " + newEdge
+          + " was added, numTrieNodes=" + trie.getNumNodes()
+          + " numStateNodes=" + u.getState().getNumNodes());
+    }
     HNode cur = new HNode(newEdge.getHead());
+//    HNode cur = new HNode(newEdge);
     GraphTraversalTrace gtt = new GraphTraversalTrace();
     match(u, cur, gtt, trie);
-    if (DEBUG)
-      System.out.println("END MATCH: after " + newEdge + " was popped");
+    if (DEBUG) {
+      System.out.println("END MATCH: after " + newEdge
+          + " was added, numTrieNodes=" + trie.getNumNodes()
+          + " numStateNodes=" + u.getState().getNumNodes());
+      System.out.println();
+    }
   }
 
   private String dbgChildKeys() {
@@ -242,55 +292,98 @@ public class TNode {
       return;
     }
 
-    TNode childTrie = trie.getChild(GOTO_PARENT);
-    if (childTrie != null) {
+    TNode childTrie;
+    if ((childTrie = trie.getChild(GOTO_PARENT)) != null) {
       HNode r = traversal.stack.pop();
-      System.out.println("TRACE: GOTO_PARENT, r=" + r);
+      if (DEBUG)
+        System.out.println("TRACE: GOTO_PARENT, r=" + r);
       match(u, traversal.stack.peek(), traversal, childTrie);
       traversal.stack.push(r);
     }
 
-    for (HNode n : state.neighbors(cur)) {
-      if (traversal.visited.contains(n)) {
+    // Intersect nodes that follow cur with trie.children.keys()
+    if (cur == null) {
+      // This means that we are free to start anywhere on the graph,
+      // intersection degenerates to just trie.children.keys()
+      for (TKey poss : trie.children.keySet()) {
+        switch (poss.mode) {
+        case TKey.RELATION:
+          for (LL<HypEdge> ll = state.match2(poss.relationType); ll != null; ll = ll.next)
+            tryMatch(poss, u, new HNode(ll.item), traversal, trie);
+          break;
+        case TKey.NODE_TYPE:
+          throw new RuntimeException("implement me!");
+        case TKey.NODE_VALUE:
+          HypNode maybeExists = u.lookupNode(poss.nodeType, poss.nodeValue, false);
+          if (maybeExists != null)
+            tryMatch(poss, u, new HNode(maybeExists), traversal, trie);
+          break;
+        default:
+          throw new RuntimeException();
+        }
+      }
+    } else {
+      int edges = 0;
+      for (StateEdge p : state.neighbors2(cur)) {
         if (DEBUG)
-          System.out.println("skipping visited node: " + n);
-        continue;
+          System.out.println("trying edge: " + p);
+        /*
+         * I'm getting, e.g. StateEdge = (HEAD_ARG_POS, pos2)
+         * And my trie doesn't contain any argPos=HEAD_ARG_POS entries,
+         *
+         * h = pos(4,VBZ)
+         * h --argPos=HEAD--> pos:Relation --argPos=0--> 4:tokenIndex
+         */
+        edges++;
+        HNode n = p.getTarget();
+        assert n != null : "p=" + p;
+        if (traversal.visited.contains(n)) {
+          if (DEBUG)
+            System.out.println("skipping visited node: " + n);
+          continue;
+        }
+        TKey key;
+        if (n.isNode()) {
+          HypNode node = n.getNode();
+          // Match both value and type
+          key = new TKey(p.argPos, node.getNodeType(), node.getValue());
+          tryMatch(key, u, n, traversal, trie);
+          // Match just type
+          key = new TKey(p.argPos, node.getNodeType());
+          tryMatch(key, u, n, traversal, trie);
+        } else {
+          HypEdge edge = n.getEdge();
+          key = new TKey(p.argPos, edge.getRelation());
+          tryMatch(key, u, n, traversal, trie);
+        }
       }
       if (DEBUG)
-        System.out.println("trying to go to " + n);
-      TKey key;
-      if (n.isLeft()) {
-        HypNode node = n.getLeft();
-        // Match both value and type
-        key = new TKey(node.getNodeType(), node.getValue());
-        tryMatch(key, u, n, traversal, trie);
-        // Match just type
-        key = new TKey(node.getNodeType());
-        tryMatch(key, u, n, traversal, trie);
-      } else {
-        HypEdge edge = n.getRight();
-        key = new TKey(edge.getRelation());
-        tryMatch(key, u, n, traversal, trie);
-      }
+        System.out.println("checked " + edges + " edges adjacent to " + cur);
     }
   }
+
   /**
    * @param keyConstructedFromState should not have a name set!
    */
   private static void tryMatch(TKey keyConstructedFromState, Uberts u, HNode n, GraphTraversalTrace traversal, TNode trie) {
-      // This is the intersection of:
-      // 1) unvisited neighbors (DFS style)
-      // 2) allowed DFS strings in the trie
-      TNode childTrie = trie.getChild(keyConstructedFromState);
-      if (childTrie != null) {
-        traversal.stack.push(n);
-        traversal.visited.add(n);
+    if (DEBUG) {
+      System.out.println("keyFromState=" + keyConstructedFromState);
+    }
+    // This is the intersection of:
+    // 1) unvisited neighbors (DFS style)
+    // 2) allowed DFS strings in the trie
+    TNode childTrie = trie.getChild(keyConstructedFromState);
+    if (childTrie != null) {
+      traversal.stack.push(n);
+      traversal.visited.add(n);
+      if (n.isEdge())
         traversal.boundVals.add(n);
-        match(u, n, traversal, childTrie);
-        traversal.stack.pop();
-        traversal.visited.remove(n);
+      match(u, n, traversal, childTrie);
+      traversal.stack.pop();
+      traversal.visited.remove(n);
+      if (n.isEdge())
         traversal.boundVals.remove(traversal.boundVals.size() - 1);
-      }
+    }
   }
 
   /**
@@ -302,6 +395,7 @@ public class TNode {
 //    System.out.println("\tbindings:" + traversal.bindings);
 //    System.out.println("\tstack:" + traversal.stack);
 //    System.out.println();
+//    Log.info(traversal.boundVals);
     // NOTE: Both of these operations don't mutate the State, only Agenda
     if (tval.tg != null) {
       for (Pair<HypEdge, Adjoints> p : tval.tg.generate(traversal))

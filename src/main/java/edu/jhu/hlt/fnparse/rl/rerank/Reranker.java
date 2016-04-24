@@ -47,6 +47,7 @@ import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
+import edu.jhu.util.Alphabet;
 
 /**
  * See paper.
@@ -318,10 +319,14 @@ public class Reranker implements Serializable {
       ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
       for (int i = 0; i < items.size(); i++) {
         Sentence s = items.label(i).getSentence();
-        if (s.getBasicDeps() == null)
-          s.setBasicDeps(parser.getBasicDParse(s));
-        if (s.getStanfordParse() == null)
-          s.setStanfordParse(parser.getCParse(s));
+//        if (s.getBasicDeps() == null)
+//          s.setBasicDeps(parser.getBasicDParse(s));
+//        if (s.getStanfordParse() == null)
+//          s.setStanfordParse(parser.getCParse(s));
+        if (s.getBasicDeps(false) == null || s.getStanfordParse(false) == null) {
+          Alphabet<String> edgeAlph = null; // only needed for collapsed(-cc)
+          parser.addAllParses(s, edgeAlph, true);
+        }
       }
     }
 

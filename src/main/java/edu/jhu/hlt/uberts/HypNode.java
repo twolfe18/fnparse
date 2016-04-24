@@ -16,6 +16,8 @@ public class HypNode {
   public HypNode(NodeType type, Object value) {
     this.nt = type;
     this.value = value;
+    // In preliminary benchmarking, this assert doesn't seem to be costly
+    assert !(value instanceof String) || value == ((String) value).intern();
   }
 
   public NodeType getNodeType() {

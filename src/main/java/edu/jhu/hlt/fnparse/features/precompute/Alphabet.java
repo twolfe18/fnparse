@@ -37,10 +37,13 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
 
   /** Reads all templates out of {@link BasicFeatureTemplates} */
   public Alphabet() {
+    this(new BasicFeatureTemplates());
+  }
+
+  public Alphabet(BasicFeatureTemplates templateIndex) {
     super();
     this.hf = new SemaforicHeadFinder();
     this.templateName2index = new HashMap<>();
-    BasicFeatureTemplates templateIndex = new BasicFeatureTemplates();
     for (String tn : templateIndex.getBasicTemplateNames()) {
       Template t = templateIndex.getBasicTemplate(tn);
       this.add(new TemplateAlphabet(t, tn, size()));

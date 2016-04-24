@@ -40,8 +40,6 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
-import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
-import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -1161,16 +1159,18 @@ public class RerankerTrainer {
 
       // Get and set the Stanford constituency parse
       if (s.getStanfordParse(false) == null) {
-        if (PARSER == null) throw new RuntimeException();
-        ConstituencyParse cp = PARSER.getCParse(s);
-        s.setStanfordParse(cp);
+//        if (PARSER == null) throw new RuntimeException();
+//        ConstituencyParse cp = PARSER.getCParse(s);
+//        s.setStanfordParse(cp);
+        throw new RuntimeException("re-implement me");
       }
 
       // Get and set the Stanford basic dependency parse
       if (s.getBasicDeps(false) == null) {
-        if (PARSER == null) throw new RuntimeException();
-        DependencyParse dp = PARSER.getBasicDParse(s);
-        s.setBasicDeps(dp);
+//        if (PARSER == null) throw new RuntimeException();
+//        DependencyParse dp = PARSER.getBasicDParse(s);
+//        s.setBasicDeps(dp);
+        throw new RuntimeException("re-implement me");
       }
     }
     Log.info("[addParses] done parsing, took "
