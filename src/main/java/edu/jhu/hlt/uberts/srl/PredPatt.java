@@ -95,9 +95,9 @@ public class PredPatt {
     this.event1 = u.addEdgeType(new Relation("event1", tokenIndex, tokenIndex));
     this.preds = u.getWitnessNodeType(event1);
     TKey[] newPosTagAfterWord = new TKey[] {
-        new TKey(u.getEdgeType("pos")),
-        new TKey(tokenIndex),
-//        new TKey(u.getEdgeType("word")),
+        // TODO
+//        new TKey(u.getEdgeType("pos")),
+//        new TKey(tokenIndex),
     };
     Log.info("adding TransitionGenerator for " + event1);
     u.addTransitionGenerator(newPosTagAfterWord, new TransitionGenerator() {

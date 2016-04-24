@@ -123,8 +123,9 @@ public class Srl {
     // TODO add a table for constituents derived using XUE_PALMER_HERMANN etc
     // Currently works by taking j from pos(j,t) and creating all srl1(i,j) s.t. j-i \in [0,W] for some max width W.
     TKey[] newSrl1 = new TKey[] {
-        new TKey(posRel),
-        new TKey(tokenIndex),
+        // TODO
+//        new TKey(posRel),
+//        new TKey(tokenIndex),
     };
 
     // srl1(s) ^ event1(t) => srl2(t,s)

@@ -97,7 +97,7 @@ public class FrameId {
 
     Log.info("adding TransitionGenerator for event1(t) => event2(t,f) forall f in wsabiePredict(t)");
     TKey[] newEvent1 = new TKey[] {
-        new TKey(u.getEdgeType("event1")),
+//        new TKey(u.getEdgeType("event1")),  TODO
     };
     u.addTransitionGenerator(newEvent1, new TransitionGenerator() {
       @Override
@@ -224,7 +224,7 @@ public class FrameId {
       }
       public String extract(String relation, HypNode token) {
         Relation posRel = u.getEdgeType(relation);
-        LL<HypEdge> posLL = u.getState().match(posRel, token);
+        LL<HypEdge> posLL = null; // TODO u.getState().match(posRel, token);
         assert posLL != null && posLL.next == null;
         return (String) posLL.item.getTail(1).getValue();
       }
@@ -232,7 +232,7 @@ public class FrameId {
 
     Log.info("adding GlobalFactor specifying that frames are mutually exclusive");
     TKey[] newEvent2 = new TKey[] {
-        new TKey(u.getEdgeType("event2")),
+//        new TKey(u.getEdgeType("event2")),  TODO
     };
     u.addGlobalFactor(newEvent2, new AtMost1.RelNode1(event2, gtt -> {
       HypEdge ev2E = gtt.getBoundEdge(0);

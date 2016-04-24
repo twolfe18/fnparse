@@ -66,8 +66,9 @@ public class UbertsTest {
   public void posTestSetup() {
     // pos(i,*) => pos(i+1,*)
     TKey[] newPosLHS = new TKey[] {
-        new TKey(u.getEdgeType("pos")),
-        new TKey(tokenIndex),
+        // TODO
+//        new TKey(u.getEdgeType("pos")),
+//        new TKey(tokenIndex),
     };
     u.addGlobalFactor(newPosLHS, new AtMost1.RelNode1(
         u.getEdgeType("pos"),
@@ -134,10 +135,11 @@ public class UbertsTest {
     int maxEntWidth = 5;
     TNode trie = u.getGraphFragments();
     TNode newNounGraphFragment = trie.lookup(new TKey[] {
-        new TKey(u.getEdgeType("pos")),
-        new TKey(posTag, "N"),
-        TNode.GOTO_PARENT,
-        new TKey(tokenIndex),
+        // TODO
+//        new TKey(u.getEdgeType("pos")),
+//        new TKey(posTag, "N"),
+//        TNode.GOTO_PARENT,
+//        new TKey(tokenIndex),
     }, true);
     newNounGraphFragment.getValue().u = u;
     newNounGraphFragment.getValue().tg = new TransitionGenerator() {
@@ -166,10 +168,11 @@ public class UbertsTest {
 
     // A given (i,j) span may only have one ner tag
     TNode newNerGraphFragment = trie.lookup(new TKey[] {
-        new TKey(u.getEdgeType("ner")),
-        new TKey(tokenIndex),
-        TNode.GOTO_PARENT,
-        new TKey(tokenIndex),
+        // TODO
+//        new TKey(u.getEdgeType("ner")),
+//        new TKey(tokenIndex),
+//        TNode.GOTO_PARENT,
+//        new TKey(tokenIndex),
     }, true);
     newNerGraphFragment.getValue().u = u;
     newNerGraphFragment.getValue().gf = new AtMost1.RelNode2(
@@ -218,10 +221,11 @@ public class UbertsTest {
 
   public void corefSetup() {
     TNode cn = u.getGraphFragments().lookup(new TKey[] {
-        new TKey(u.getEdgeType("ner")),
-        new TKey(u.lookupNode(nerTag, "PER", true)),
-        new TKey(u.getEdgeType("ner")),
-        new TKey(u.getWitnessNodeType("ner")),
+        // TODO
+//        new TKey(u.getEdgeType("ner")),
+//        new TKey(u.lookupNode(nerTag, "PER", true)),
+//        new TKey(u.getEdgeType("ner")),
+//        new TKey(u.getWitnessNodeType("ner")),
     }, true);
     cn.getValue().u = u;
     cn.getValue().tg = new TransitionGenerator() {

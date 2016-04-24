@@ -31,6 +31,8 @@ import edu.jhu.prim.tuple.Pair;
  *
  * ner3(tokenIndex, tag, biolu)
  *
+ * TODO Re-do this in just a transition grammar file.
+ *
  * @author travis
  */
 public class SimpleNer {
@@ -55,7 +57,7 @@ public class SimpleNer {
     String nerPrevTag = null;
     HypNode prev = u.lookupNode(this.tokenIndex, tokenIndex-1, false);
     if (prev != null) {
-      HypEdge nerPrev = s.match1(ner3, prev);
+      HypEdge nerPrev = null; // TODO s.match1(ner3, prev);
       nerPrevTag = (String) nerPrev.getTail(1).getValue();
       nerPrevTag = ((String) nerPrev.getTail(2).getValue()) + "-" + nerPrevTag;
       f[0] = nerPrevTag.hashCode();
@@ -64,7 +66,7 @@ public class SimpleNer {
     String nerPrevPrevTag = null;
     HypNode prevPrev = u.lookupNode(this.tokenIndex, tokenIndex-2, false);
     if (prevPrev != null) {
-      HypEdge nerPrevPrev = s.match1(ner3, prevPrev);
+      HypEdge nerPrevPrev = null; // TODO s.match1(ner3, prevPrev);
       nerPrevPrevTag = (String) nerPrevPrev.getTail(1).getValue();
       nerPrevPrevTag = ((String) nerPrevPrev.getTail(2).getValue()) + "-" + nerPrevPrevTag;
       f[1] = nerPrevPrevTag.hashCode();
@@ -152,7 +154,7 @@ public class SimpleNer {
 
     // ner3(i,t,b) => ner3(i+1,t',b') forall t',b'
     TKey[] newNerLabel = new TKey[] {
-        new TKey(ner3),
+//        new TKey(ner3), TODO
     };
     u.addTransitionGenerator(newNerLabel, new TransitionGenerator() {
       @Override

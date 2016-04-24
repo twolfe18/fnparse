@@ -97,7 +97,7 @@ public class SrlViaFModel extends Srl {
   protected void setupTransitions() {
     Log.info("adding TransionGenerator: event2(t,f) => srl3(t,s,k) via FModel");
     TKey[] newEvent2 = new TKey[] {
-        new TKey(event2)
+//        new TKey(event2)    TODO
     };
     u.addTransitionGenerator(newEvent2, new TransitionGenerator() {
       @Override
@@ -111,7 +111,7 @@ public class SrlViaFModel extends Srl {
 //        int frame = (Integer) frameN.getValue();
         Frame frame = (Frame) frameN.getValue();
 
-        LL<HypEdge> foo = u.getState().match(event1, ev1HN);
+        LL<HypEdge> foo = null; // TODO u.getState().match(event1, ev1HN);
         assert foo != null && foo.next == null;
         HypEdge ev1E = foo.item;
         assert ev1E.getNumTails() == 2;
@@ -151,7 +151,7 @@ public class SrlViaFModel extends Srl {
             continue;
 
           // srl1(s)
-          HypNode sn = u.lookupNode(args, s, true);
+          HypNode sn = null;  // TODO u.lookupNode(args, s, true);
 
           // srl2(t,s)
           HypNode tn = ev2E.getHead();
