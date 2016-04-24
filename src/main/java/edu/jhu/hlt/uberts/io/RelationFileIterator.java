@@ -97,10 +97,10 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
   @Override
   public RelLine next() {
     RelLine n = next;
+    String line;
     try {
       next = null;
-      while (next == null) {
-        String line = readLine();
+      while (next == null && (line = readLine()) != null) {
         Pair<String, String> lc = Uberts.stripComment2(line);
         line = lc.get1();
         String comment = lc.get2();
