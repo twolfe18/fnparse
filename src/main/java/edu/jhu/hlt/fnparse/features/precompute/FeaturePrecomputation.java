@@ -358,7 +358,8 @@ public abstract class FeaturePrecomputation {
       }
 
       FrameInstance fi = frameLocations.get(t);
-      int k = fi == null ? fUkn : kNames.lookupIndex("f=" + fi.getFrame().getName(), true);
+//      int k = fi == null ? fUkn : kNames.lookupIndex("f=" + fi.getFrame().getName(), true);
+      int k = fi == null ? fUkn : lookupFrame(fi.getFrame());
       String ks = "-1,-1," + k;
       emit(ta, Span.nullSpan, ks, features);
     }
@@ -369,6 +370,53 @@ public abstract class FeaturePrecomputation {
     // This is how we prune spans
     Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, 1, 1, new Random(9001));
     emitAllRoleId(y, r);
+  }
+
+  public int lookupFrame(String f) {
+    return kNames.lookupIndex("f=" + f, false);
+  }
+  public int lookupFrame(Frame f) {
+    return kNames.lookupIndex("f=" + f.getName(), false);
+  }
+  public int lookupFrameRole(Frame f, int k) {
+    return kNames.lookupIndex("fr=" + f.getFrameRole(k), false);
+  }
+  public int lookupFrameRole(String f, String k) {
+    return kNames.lookupIndex("fr=" + f + "/" + k, false);
+  }
+  public int lookupRole(String k) {
+    return kNames.lookupIndex("r=" + k, false);
+  }
+  public static class AlphWrapper extends FeaturePrecomputation {
+    public AlphWrapper(boolean roleMode, Alphabet feats) {
+      super(roleMode, feats);
+    }
+    @Override
+    public void emit(Target t, Span s, String k, List<Feature> features) {
+      throw new RuntimeException("only use this class for the Alphabet!");
+    }
+    @Override
+    public void onComplete() {} // no-op
+    public void saveAlphabets(File templateFeatureAlphabet, File outputRoleNames) {
+      // Save the alphabet
+      // template -> feature -> index
+      Log.info("saving template-feature alphabet to " + templateFeatureAlphabet.getPath());
+      try {
+        templates.toFile(templateFeatureAlphabet);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+
+      Log.info("saving the role names to " + outputRoleNames.getPath());
+      try (BufferedWriter w = FileUtil.getWriter(outputRoleNames)) {
+        w.write("-1\tnoRole\n");
+        for (int i = 0; i < kNames.size(); i++)
+          w.write(i + "\t" + kNames.lookupObject(i) + "\n");
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      Log.info("done");
+    }
   }
 
   /**
@@ -408,9 +456,12 @@ public abstract class FeaturePrecomputation {
             String rs = f.getRole(ki);
             String frs = f.getFrameRole(ki);
 
-            int role = kNames.lookupIndex("r=" + rs, false);
-            int frameRole = kNames.lookupIndex("fr=" + frs, false);
-            int frame = kNames.lookupIndex("f=" + fs, false);
+//            int role = kNames.lookupIndex("r=" + rs, false);
+//            int frameRole = kNames.lookupIndex("fr=" + frs, false);
+//            int frame = kNames.lookupIndex("f=" + fs, false);
+            int role = lookupRole(rs);
+            int frameRole = lookupFrameRole(f, ki);
+            int frame = lookupFrame(f);
 
             if (role < 0) {
               Log.warn("unknown r: " + rs);

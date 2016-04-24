@@ -48,6 +48,9 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
       this.items = new ArrayList<>();
       this.facts = new ArrayList<>();
     }
+    public String getId() {
+      return def.tokens[1];
+    }
   }
 
 //  // prepend "startdoc ..." line?

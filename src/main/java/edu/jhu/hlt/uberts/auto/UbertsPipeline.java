@@ -12,10 +12,14 @@ import java.util.Random;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
@@ -31,6 +35,7 @@ import edu.jhu.hlt.uberts.features.FeatureExtractionFactor.WeightAdjoints;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
+import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -141,6 +146,22 @@ public class UbertsPipeline {
     System.out.println();
   }
 
+  private File fPreTemplateFeatureAlph;
+  private File fPreRoleNameAlph;
+  /**
+   * Call this method to make the feature output look like {@link FeaturePrecomputation}.
+   * @param fPreTemplateFeatureAlph is where to write the 4-column tsv for
+   * templates and features and their indices. Typically called template-feat-indices.txt.gz.
+   * @param fPreRoleNameAlph is where to write the frame/role/frame role names
+   * (the column referred to as "k"). Typically called role-names.txt.gz.
+   */
+  public void setFeaturePrecomputationMode(File fPreTemplateFeatureAlph, File fPreRoleNameAlph) {
+    assert fPreRoleNameAlph != null;
+    assert fPreTemplateFeatureAlph != null;
+    this.fPreRoleNameAlph = fPreRoleNameAlph;
+    this.fPreTemplateFeatureAlph = fPreTemplateFeatureAlph;
+  }
+
   /**
    * Extracts features off of all actions generated from the transition grammar
    * and the x rel data given.
@@ -148,20 +169,33 @@ public class UbertsPipeline {
    * NOTE: Make sure you don't add any mutual exclusion factors (e.g. AtMost1)
    * before running this: we don't want to remove negative HypEdges which are
    * ruled out by choosing the right one first.
+   *
+   * @param dataShard may be null, meaning take all data.
    */
-  public void extractFeatures(ManyDocRelationFileIterator x, File output) throws IOException {
+  public void extractFeatures(ManyDocRelationFileIterator x, File output, Shard dataShard) throws IOException {
     Log.info("writing features to " + output);
 
-    boolean debug = true;
+    // This will initialize the Alphabet over frame/role names and provide
+    // the code to write out features.txt.gz and template-feat-indices.txt.gz
+    FeaturePrecomputation.AlphWrapper fpre = null;
+    if (fPreRoleNameAlph != null)
+      fpre = new FeaturePrecomputation.AlphWrapper(true, fe.getFeatures());
+
+    boolean debug = false;
     TimeMarker tm = new TimeMarker();
     Counts<String> posRel = new Counts<>(), negRel = new Counts<>();
     int docs = 0, actions = 0;
+    int skippedDocs = 0;
     long features = 0;
     List<String> ignore = Arrays.asList("succTok");
     Iter itr = new Iter(x, typeInf, ignore);
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       while (itr.hasNext()) {
         RelDoc doc = itr.next();
+        if (dataShard != null && !dataShard.matches(doc.getId())) {
+          skippedDocs++;
+          continue;
+        }
         docs++;
 
         u.getState().clearNonSchema();
@@ -191,7 +225,8 @@ public class UbertsPipeline {
         for (HypEdge.WithProps fact : doc.facts) {
           if (fact.hasProperty(HypEdge.IS_X)) {
             u.addEdgeToState(fact);
-            System.out.println("[exFeats] x: " + fact);
+            if (debug)
+              System.out.println("[exFeats] x: " + fact);
             cx++;
           }
         }
@@ -213,22 +248,56 @@ public class UbertsPipeline {
         for (Step t : traj) {
           boolean y = u.getLabel(t.edge);
           String lab = y ? "+1" : "-1";
-//          String lab = (y ? "+" : "-") + t.edge.toString();
 
           @SuppressWarnings("unchecked")
-          WeightAdjoints<String> fx = (WeightAdjoints<String>) t.score;
+          WeightAdjoints<Pair<TemplateAlphabet, String>> fx =
+              (WeightAdjoints<Pair<TemplateAlphabet, String>>) t.score;
           if (fx.getFeatures() == fe.SKIP) {
             skipped++;
             continue;
           }
           kept++;
-          w.write(t.edge.getRelFileString(lab));
-          for (String feat : fx.getFeatures()) {
-            w.write('\t');
-            w.write(feat);
-            features++;
+
+          // OUTPUT
+          if (fpre != null) {
+            // TODO a lot of overlap between features(srl2) and features(srl3)?
+            // TODO do I need to group-by (t,s) for this output format?
+            // I think the solution which satisfies both of those problems is to
+            // => only write out srl3 edges
+            // this way you know how to format the (t,s,k) fields
+            if (t.edge.getRelation().getName().equals("srl3")) {
+              Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(t.edge);
+              String k;
+              if (y) {
+                k = fpre.lookupRole(s3.k)
+                    + "," + fpre.lookupFrameRole(s3.f, s3.k)
+                    + "," + fpre.lookupFrame(s3.f);
+              } else {
+                k = "-1";
+              }
+              w.write(Target.toLine(new FeaturePrecomputation.Target(docid, s3.t)));
+              w.write("\t" + s3.s.shortString());
+              w.write("\t" + k);
+              for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
+                TemplateAlphabet template = tf.get1();
+                String feat = tf.get2();
+                int featIdx = template.alph.lookupIndex(feat, true);
+                w.write('\t');
+                w.write(template.index + ":" + featIdx);
+                features++;
+              }
+              w.newLine();
+            }
+          } else {
+            // Writes out tab-separated human readable features
+            w.write(t.edge.getRelFileString(lab));
+            for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
+              w.write('\t');
+              w.write(tf.get2()); // (template,feature), but feature includes template in the name
+              features++;
+            }
+            w.newLine();
           }
-          w.newLine();
 
           if (y) posRel.increment(t.edge.getRelation().getName());
           else negRel.increment(t.edge.getRelation().getName());
@@ -236,7 +305,8 @@ public class UbertsPipeline {
 //            System.out.println("[exFeats.orTraj] " + lab + " " + t.edge);// + " " + new HashableHypEdge(t.edge).hc);
           actions++;
         }
-        Log.info("skipped=" + skipped + " kept=" + kept);
+        Log.info("skippedFeatures=" + skipped + " keptFeatures=" + kept
+            + " skippedDocs=" + skippedDocs + " keptDocs=" + docs);
 
         if (tm.enoughTimePassed(15)) {
           double sec = tm.secondsSinceFirstMark();
@@ -256,6 +326,9 @@ public class UbertsPipeline {
         }
       }
     }
+
+    if (fPreRoleNameAlph != null)
+      fpre.saveAlphabets(fPreTemplateFeatureAlph, fPreRoleNameAlph);
   }
 
   public static void main(String[] args) throws IOException {
@@ -287,11 +360,20 @@ public class UbertsPipeline {
     File multiXY = config.getExistingFile("inputRel");
     File multiYhat = config.getFile("outputRel");
 
+    String k = "outputTemplateFeatureAlph";
+    if (config.containsKey(k)) {
+      Log.info("mimicing output of FeaturePrecomputation");
+      srl.setFeaturePrecomputationMode(
+          config.getFile(k),
+          config.getFile("outputRoleAlph"));
+    }
+
+    Shard dataShard = config.getShard();
     boolean includeProvidence = false;
     boolean dedupInputLines = true;
     try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);
         ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
-      srl.extractFeatures(x, multiYhat);
+      srl.extractFeatures(x, multiYhat, dataShard);
     }
 
     Log.info("done");

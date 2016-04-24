@@ -14,13 +14,13 @@ import edu.jhu.hlt.concrete.Parse;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.StringLabeledDirectedGraph;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.TemplateContext;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
@@ -37,6 +37,7 @@ import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.StateEdge;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Arg;
+import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 
@@ -148,25 +149,27 @@ public abstract class FeatureExtractionFactor<T> {
    *
    * NOTE: This is hard-coded to a particular transition system.
    */
-  public static class OldFeaturesWrapper extends FeatureExtractionFactor<String> {
+  public static class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlphabet, String>> {
+    public static boolean DEBUG = false;
+
     // See TemplatedFeatures.parseTemplate(String), etc
-    private List<TemplateAlphabet> features;
+    private edu.jhu.hlt.fnparse.features.precompute.Alphabet features;
     private Sentence sentCache;
     private TemplateContext ctx;
     private Alphabet<String> depGraphEdges;
-    private Alphabet<String> roles;
     private HeadFinder hf;
     private MultiTimer timer;
+    private Counts<String> skipped;
 
     /** This will read all the features in */
     public OldFeaturesWrapper(BasicFeatureTemplates bft, Double pSkipNeg) {
       this.pSkipNeg = pSkipNeg;
       timer = new MultiTimer();
-      timer.put("convert-sentence", new Timer("convert-sentence", 1, false));
-      timer.put("compute-features", new Timer("compute-features", 10000, false));
+      timer.put("convert-sentence", new Timer("convert-sentence", 100, true));
+      timer.put("compute-features", new Timer("compute-features", 10000, true));
 
+      skipped = new Counts<>();
       depGraphEdges = new Alphabet<>();
-      roles = new Alphabet<>();
       ctx = new TemplateContext();
       sentCache = null;
       edu.jhu.hlt.fnparse.features.precompute.Alphabet alph =
@@ -175,28 +178,15 @@ public abstract class FeatureExtractionFactor<T> {
       this.features = alph;
     }
 
+    public edu.jhu.hlt.fnparse.features.precompute.Alphabet getFeatures() {
+      return features;
+    }
+
     private static String getSentenceId(Uberts u) {
-      // def hook2 <hookKeyword> <relationName>
-      // e.g. hook2(done, csyn3-stanford)
-      // def hook2 <hookKeyword> <value>
-      // e.g. hook2(docid, fn/foo/bar)
       State s = u.getState();
-
-//      NodeType hookKeywordNT = u.lookupNodeType("hookKeyword", false);
-//      HypNode startDocN = u.lookupNode(hookKeywordNT, "startdoc", false);
-//      Relation hook2 = u.getEdgeType("hook2");
-//
-//      // There will be many of these, but the most recent one will be first.
-//      HypEdge startVal = s.match(0, hook2, startDocN).item;
-////      HypEdge startVal = s.match1(0, startRel, hookA0);
-//
-//      String id = (String) startVal.getTail(1).getValue();
-
       Relation rel = u.getEdgeType("startDoc");
       HypEdge e = s.match2(rel).item;
-      String id = (String) e.getTail(0).getValue();
-
-      return id;
+      return (String) e.getTail(0).getValue();
     }
 
     private static ConstituencyParse buildCP(Uberts u, String sentenceId) {
@@ -224,7 +214,8 @@ public abstract class FeatureExtractionFactor<T> {
         c.setTag(lhs);
         c.setHeadChildIndex(headToken);  // Need to convert token -> child index
 
-        Log.info(cid + " -> " + c);
+        if (DEBUG)
+          Log.info(cid + " -> " + c);
         id2con.put(cid, c);
         cons.add(new Pair<>(parent, c));
       }
@@ -362,7 +353,7 @@ public abstract class FeatureExtractionFactor<T> {
     }
 
     @Override
-    public List<String> features(HypEdge yhat, Uberts x) {
+    public List<Pair<TemplateAlphabet, String>> features(HypEdge yhat, Uberts x) {
 
       if (pSkipNeg != null && !x.getLabel(yhat) && x.getRandom().nextDouble() < pSkipNeg)
         return SKIP;
@@ -387,16 +378,16 @@ public abstract class FeatureExtractionFactor<T> {
         break;
       case "srl3":
         EqualityArray s2 = (EqualityArray) yhat.getTail(0).getValue();
-        EqualityArray e2 = (EqualityArray) yhat.getTail(1).getValue();
         s1 = (EqualityArray) s2.get(0);
         e1 = (EqualityArray) s2.get(1);
-        String fn = (String) e2.get(1);
-        ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(fn));
-        ctx.setRoleS((String) yhat.getTail(2).getValue());
+        Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(yhat);
+        ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(s3.f));
+        ctx.setRoleS(s3.k);
         break;
       default:
-        if (!yhat.getRelation().getName().equals("srl4"))
-          Log.warn("don't know how to handle: " + yhat);
+        skipped.increment(yhat.getRelation().getName());
+        if (skipped.getTotalCount() % 1000 == 0)
+          Log.info("skipped: " + skipped.toString());
         break;
       }
       if (s != null && s != Span.nullSpan) {
@@ -411,30 +402,26 @@ public abstract class FeatureExtractionFactor<T> {
         ctx.setSpan2(t);
         ctx.setHead2(ctx.getTargetHead());
       }
-      List<String> f = new ArrayList<>();
+      List<Pair<TemplateAlphabet, String>> f = new ArrayList<>();
       for (TemplateAlphabet ftemp : features) {
         Iterable<String> fts = ftemp.template.extract(ctx);
-        if (fts != null) {
-          for (String ft : fts) {
-//            String fv = ftemp.name + "/" + ft;
-            String fv = ft;
-            f.add(fv.intern());
-          }
-        }
+        if (fts != null)
+          for (String ft : fts)
+            f.add(new Pair<>(ftemp, ft.intern()));
       }
       timer.stop("compute-features");
       return f;
     }
   }
 
-  private static Span extractSpan(HypEdge e, int startTailIdx, int endTailIdx) {
+  public static Span extractSpan(HypEdge e, int startTailIdx, int endTailIdx) {
     int start = Integer.parseInt((String) e.getTail(startTailIdx).getValue());
     int end = Integer.parseInt((String) e.getTail(endTailIdx).getValue());
     Span s = Span.getSpan(start, end);
     return s;
   }
 
-  private static Span extractSpan(EqualityArray ea, int startTailIdx, int endTailIdx) {
+  public static Span extractSpan(EqualityArray ea, int startTailIdx, int endTailIdx) {
     int start = Integer.parseInt((String) ea.get(startTailIdx));
     int end = Integer.parseInt((String) ea.get(endTailIdx));
     Span s = Span.getSpan(start, end);

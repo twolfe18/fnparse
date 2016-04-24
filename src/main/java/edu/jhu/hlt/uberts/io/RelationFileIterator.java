@@ -28,8 +28,10 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
       this.tokens = tokens;
       this.comment = comment;
       this.providence = providence;
-      for (int i = 0; i < tokens.length; i++)
+      for (int i = 0; i < tokens.length; i++) {
         tokens[i] = tokens[i].intern();
+        assert tokens[i].indexOf('#') < 0;
+      }
     }
 
     public String toLine() {
