@@ -10,20 +10,19 @@ set -eu
 echo "starting at `date` on $HOSTNAME"
 echo "args: $@"
 
-FEATS_PARENT=$1
-FEATS_GLOB=$2
-BIALPH=$3             # names of features in FEATS_*
-OUTPUT_IG_FILE=$4
-ENTROPY_METHOD=$5     # BUB, MAP, or MLE
-LABEL_TYPE=$6         # frames or roles
-REFINEMENT_MODE=$7    # probably NULL_LABEL or FRAME
-IS_PROPBANK=$8
-ROLE_NAMES=$9         # e.g. $WORKING_DIR/raw-shards/job-0-of-256/role-names.txt.bz2
-IGNORE_SENT_IDS=${10}
-NUM_ROLES=${11}
-SHARD=${12}
-JAR=${13}
-XMX=${14}
+FEATS=$1              # should be path+glob like "/foo/bar/**/*.txt"
+BIALPH=$2             # names of features in FEATS_*
+OUTPUT_IG_FILE=$3
+ENTROPY_METHOD=$4     # BUB, MAP, or MLE
+LABEL_TYPE=$5         # frames or roles
+REFINEMENT_MODE=$6    # probably NULL_LABEL or FRAME
+IS_PROPBANK=$7
+ROLE_NAMES=$8         # e.g. $WORKING_DIR/raw-shards/job-0-of-256/role-names.txt.bz2
+IGNORE_SENT_IDS=$9
+NUM_ROLES=${10}
+SHARD=${11}
+JAR=${12}
+XMX=${13}
 
 # Must be set in environment
 #FNPARSE_DATA=/export/projects/twolfe/fnparse-data/
@@ -35,8 +34,7 @@ XMX=${14}
 # -Dunigrams=true is the flag to make InformationGainProducts
 # behave like InformationGain and only compute IG for single templates.
 java -Xmx${XMX}G -cp $JAR \
-  -DfeaturesParent=$FEATS_PARENT \
-  -DfeaturesGlob=$FEATS_GLOB \
+  -Dfeatures=$FEATS\
   -Dbialph=$BIALPH \
   -Dshard=$SHARD \
   -DnumRoles=$NUM_ROLES \
@@ -56,7 +54,6 @@ java -Xmx${XMX}G -cp $JAR \
   -Ddata.ontonotes5=$FNPARSE_DATA/LDC2013T19/data/files/data/english/annotations \
   -Ddata.propbank.conll=$FNPARSE_DATA/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
   -Ddata.propbank.frames=$FNPARSE_DATA/ontonotes-release-5.0-fixed-frames/frames \
-  -DwriteTopProductsEveryK=1 \
   edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGainProducts
 
 echo "ret code: $?"
