@@ -33,17 +33,19 @@ import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
-import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.HPair;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.IWord;
-import edu.stanford.nlp.util.IntPair;
 
 /**
  * Take {@link FNParse}s and write out the relations used by uberts/srl.
+ *
+ * NOTE: This currently doesn't record whether a {@link FNParse} is in the
+ * train/dev/test split. This has to be managed externally (e.g. a file of ids
+ * which belongs to each train/dev/test).
  *
  * @author travis
  */

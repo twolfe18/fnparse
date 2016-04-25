@@ -361,7 +361,7 @@ public abstract class FeatureExtractionFactor<T> {
       checkForNewSentence(x);
       timer.start("compute-features");
       Span t = null, s = null;
-      EqualityArray e1, s1;
+//      EqualityArray e1, s1;
       ctx.clear();
       ctx.setSentence(sentCache);
       switch (yhat.getRelation().getName()) {
@@ -375,9 +375,9 @@ public abstract class FeatureExtractionFactor<T> {
 //        s = extractSpan(s1, 0, 1);
 //        break;
       case "srl3":
-        EqualityArray s2 = (EqualityArray) yhat.getTail(0).getValue();
-        s1 = (EqualityArray) s2.get(0);
-        e1 = (EqualityArray) s2.get(1);
+//        EqualityArray s2 = (EqualityArray) yhat.getTail(0).getValue();
+//        s1 = (EqualityArray) s2.get(0);
+//        e1 = (EqualityArray) s2.get(1);
         Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(yhat);
         t = s3.t;
         s = s3.s;
@@ -451,8 +451,8 @@ public abstract class FeatureExtractionFactor<T> {
     private int maxArgs = 4;
     private int maxValues = 4;
     private int minValues = 1;
-    private boolean lastStepIncludesValue;
     private Set<String> nodeTypesIgnoreValue;
+//    private boolean lastStepIncludesValue;
 //    private Set<Arg> args;
 
     public GraphWalks() {
@@ -492,14 +492,14 @@ public abstract class FeatureExtractionFactor<T> {
         HypNode t = yhat.getTail(i);
         curArgs++;
         steps.push(yhat.getRelation().getName() + "=arg" + i);
-        dfs2(new HNode(t), x.getState(), features);
+        dfs(new HNode(t), x.getState(), features);
         steps.pop();
         curArgs--;
       }
       return features;
     }
 
-    private void dfs2(HNode n, State s, List<String> addTo) {
+    private void dfs(HNode n, State s, List<String> addTo) {
 
       assert curArgs >= 0 && curValues >= 0;
       if (curArgs > maxArgs || curValues > maxValues)
@@ -556,100 +556,15 @@ public abstract class FeatureExtractionFactor<T> {
         }
         curArgs++;
         steps.push(key + "=" + value);
-        dfs2(t, s, addTo);
+        dfs(t, s, addTo);
         steps.pop();
         curArgs--;
         if (incVal)
           curValues--;
       }
     }
-
-    private void dfs(HypNode n, State s, List<String> addTo) {
-      // Extract features
-      // I think I want to do this before checking seen since I want to include
-      // multiple paths.
-      if (curValues >= minValues && lastStepIncludesValue) {
-        StringBuilder sb = new StringBuilder();
-        for (String st : steps) {
-          if (sb.length() > 0) {
-//            sb.append("_");
-            sb.append(" ||| ");
-          }
-          sb.append(st);
-        }
-        addTo.add(sb.toString());
-      }
-
-      if (!seen.add(n))
-        return;
-
-//      if (steps.size() == maxDepth)
-//        return;
-      assert curArgs >= 0 && curValues >= 0;
-      if (curArgs >= maxArgs || curValues >= maxValues)
-        return;
-
-      // Recurse
-      for (StateEdge se : s.neighbors2(new HNode(n))) {
-        HNode rel = se.getTarget();
-        assert rel.isRight();
-        HypEdge e = rel.getRight();
-        int nt = e.getNumTails();
-        for (int i = 0; i < nt; i++) {
-          HypNode node = e.getTail(i);
-          if (node == n)
-            continue;
-          String step = "arg" + i + "-of-" + e.getRelation().getName() + "=";
-          boolean ignoreVal = nodeTypesIgnoreValue.contains(node.getNodeType().getName());
-          lastStepIncludesValue = !ignoreVal;
-          curArgs++;
-          if (ignoreVal) {
-            step += "?";
-          } else {
-            curValues++;
-            step += node.getValue().toString();
-          }
-          steps.push(step);
-          dfs(node, s, addTo);
-          steps.pop();
-          curArgs--;
-          if (!ignoreVal)
-            curValues--;
-        }
-        curArgs++;
-        steps.push("head-of-" + e.getRelation().getName());
-        lastStepIncludesValue = false;
-        dfs(e.getHead(), s, addTo);
-        steps.pop();
-        curArgs--;
-      }
-    }
   }
 
-  /**
-   * Uses {@link FeatletIndex} for features.
-   */
-  public static class Simple extends FeatureExtractionFactor<String> {
-    private List<FeatletIndex.Feature> features;
 
-    public Simple(List<Relation> relevant, Uberts u) {
-      NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
-      FeatletIndex featlets = new FeatletIndex(tokenIndex, relevant);
-      this.features = featlets.getFeatures();
-    }
-
-    public List<String> features(HypEdge yhat, Uberts x) {
-      List<String> fx = new ArrayList<>();
-      fx.add("INTERCEPT");
-      int n = features.size();
-      for (int i = 0; i < n; i++) {
-        FeatletIndex.Feature f = features.get(i);
-        List<String> ls = f.extract(yhat, x);
-        for (String fs : ls)
-          fx.add(f.getName() + "/" + fs);
-      }
-      return fx;
-    }
-  }
 }
 
