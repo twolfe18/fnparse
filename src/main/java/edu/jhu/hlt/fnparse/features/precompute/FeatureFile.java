@@ -70,7 +70,6 @@ public class FeatureFile {
 
     public Line(String line, boolean sorted) {
       features = new ArrayList<>();
-      this.line = line;
       init(line, sorted);
     }
 
@@ -81,6 +80,7 @@ public class FeatureFile {
 
     public void init(String line, boolean sorted) {
       this.sorted = sorted;
+      this.line = line;
       tokenized = null;
       features.clear();
     }
