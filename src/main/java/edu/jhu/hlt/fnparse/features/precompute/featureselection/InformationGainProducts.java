@@ -25,6 +25,7 @@ import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Average;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.HashableIntArray;
@@ -94,6 +95,8 @@ public class InformationGainProducts {
 
   // How to commpute entropy/MI
   private EntropyMethod entropyMethod;
+
+  public Counts<String> eventCounts = new Counts<>(); // For debugging
 
   /**
    * @param hashingTrickDim 0 means no hashing trick and >0 is how many dimensions
@@ -213,6 +216,13 @@ public class InformationGainProducts {
         + " featuresFrameRestricted.size=" + featuresFrameRestricted.size()
         + " featuresFrameRoleRestricted.size=" + featuresFrameRoleRestricted.size()
         + " numUpdates=" + numUpdates);
+
+    // For debugging
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    int lineLimit = config.getInt("lineLimit", 0);
+    if (lineLimit > 0)
+      Log.info("lineLimit=" + lineLimit);
+
     int lines = 0;
     try (BufferedReader r = FileUtil.getReader(features)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
@@ -223,6 +233,10 @@ public class InformationGainProducts {
               + Describe.memoryUsage());
         }
         lines++;
+        if (lineLimit > 0 && lines > lineLimit) {
+          Log.info("exiting early");
+          break;
+        }
       }
       numUpdates++;
     }
@@ -236,8 +250,18 @@ public class InformationGainProducts {
    * we are calling flatten with foo.int_templates many times!
    */
   private void updateMany(List<TemplateIG> updates, FeatureFile.Line ffl, List<ProductIndex> prodBuf) {
-    if (updates == null)
+    if (updates == null) {
+      if (DEBUG)
+        eventCounts.increment("updateMany-updates-null");
       return;
+    }
+    if (updates.isEmpty()) {
+      if (DEBUG)
+        eventCounts.increment("updateMany-updates-empty");
+      return;
+    }
+    if (DEBUG)
+      eventCounts.increment("updateMany-updates-regular");
     for (TemplateIG u : updates) {
       int[] templates = u.featureName.templateInt;
       assert templates != null;
@@ -246,8 +270,25 @@ public class InformationGainProducts {
       flatten(ffl, 0, templates, 0, ProductIndex.NIL, template2cardinality, prodBuf);
 //      prodBuf = flattenMaybeMemoize(ffl, templates, template2cardinality);
 
-      for (ProductIndex pi : prodBuf)
+      if (DEBUG) {
+        System.out.println("[updateMany] " + u.toString() + " prods=" + prodBuf);
+        if (prodBuf.isEmpty())
+          eventCounts.increment("updateMany-prodBuf-empty");
+        else if (prodBuf.size() > 0)
+          eventCounts.increment("updateMany-prodBuf-gt0");
+        else if (prodBuf.size() > 1)
+          eventCounts.increment("updateMany-prodBuf-gt1");
+        else if (prodBuf.size() > 2)
+          eventCounts.increment("updateMany-prodBuf-gt2");
+        else if (prodBuf.size() > 4)
+          eventCounts.increment("updateMany-prodBuf-gt4");
+        else if (prodBuf.size() > 8)
+          eventCounts.increment("updateMany-prodBuf-gt8");
+      }
+
+      for (ProductIndex pi : prodBuf) {
         u.update(ffl, new ProductIndex[] {pi});
+      }
     }
   }
 
@@ -276,6 +317,7 @@ public class InformationGainProducts {
     // y = is determined by getY:Function<FeatureFile.Line, int[]> in TemplateIG
     // x = feature vector produced by flatten()
     if (ignoreSentenceIds.contains(sentenceId)) {
+      eventCounts.increment("skipped-line-test-set");
       return;
     }
 
@@ -284,15 +326,20 @@ public class InformationGainProducts {
     int[] frames = ffl.getFrames(InformationGain.ADD_ONE);
     int[] roles = ffl.getRoles(InformationGain.ADD_ONE);
 
+    if (DEBUG) {
+      System.out.println("[observeLine] frames=" + Arrays.toString(frames) + " roles=" + Arrays.toString(roles));
+    }
     assert frames.length > 0;
     assert roles.length > 0;
 
-    for (int frame : frames) {
-      updateMany(featuresFrameRestricted.get(frame), ffl, prods);
-      if (!featuresFrameRoleRestricted.isEmpty()) {
-        for (int role : roles) {
-          IntPair key = new IntPair(frame, role);
-          updateMany(featuresFrameRoleRestricted.get(key), ffl, prods);
+    if (featuresFrameRestricted.size() > 0 || !featuresFrameRoleRestricted.isEmpty()) {
+      for (int frame : frames) {
+        updateMany(featuresFrameRestricted.get(frame), ffl, prods);
+        if (!featuresFrameRoleRestricted.isEmpty()) {
+          for (int role : roles) {
+            IntPair key = new IntPair(frame, role);
+            updateMany(featuresFrameRoleRestricted.get(key), ffl, prods);
+          }
         }
       }
     }
@@ -494,13 +541,16 @@ public class InformationGainProducts {
    * @see scripts/precompute-features/combine-mutual-information.py
    */
   public void writeOutProducts(File output, Refinement mode) {
-    boolean explode = mode == Refinement.FRAME || mode == Refinement.FRAME_ROLE;
+//    boolean explode = mode == Refinement.FRAME || mode == Refinement.FRAME_ROLE;
+//    boolean explode = mode == Refinement.FRAME_ROLE;
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    boolean explode = config.getBoolean("explode");
     Log.info("writing output to " + output.getPath()
         + " refinementMode=" + mode +  " explode=" + explode);
     List<TemplateIG> templates = getTemplatesSorted(TemplateIG.BY_NMI_DECREASING);
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       if (templates.size() == 0) {
-        w.write("<no templates>\n");
+//        w.write("<no templates>\n");
         Log.warn("no templates!");
       }
       for (int j = 0; j < templates.size(); j++) {
@@ -547,13 +597,13 @@ public class InformationGainProducts {
 
           // frame,framerole restrictions
           sb.append('\t');
-          if (t.featureName.getY instanceof FrameRoleFilter) {
-            FrameRoleFilter frf = (FrameRoleFilter) t.featureName.getY;
-            sb.append("f=" + frf.getFrame());
-            if (frf.hasRoleRestriction())
-              sb.append(",r=" + frf.getRole());
-          } else if (t.featureName.getY instanceof NullLabelGetY) {
-            NullLabelGetY n = (NullLabelGetY) t.featureName.getY;
+          if (t.featureName != null)
+            assert t.featureName.getY == t.getY : "not sure which to use...";
+          if (t.getY instanceof FrameRoleFilter) {
+            FrameRoleFilter frf = (FrameRoleFilter) t.getY;
+            sb.append(frf.getRestrictionString(true));
+          } else if (t.getY instanceof NullLabelGetY) {
+            NullLabelGetY n = (NullLabelGetY) t.getY;
             sb.append(n.name);
           } else {
             sb.append("NA");
@@ -880,10 +930,11 @@ public class InformationGainProducts {
       Map<String, Integer> role2name,
       Shard frameShard,
       Refinement mode) {
-    Log.info("taking product with " + features.size() + " features,"
-        + " mode=" + mode + " frameShard=" + frameShard);
     ExperimentProperties config = ExperimentProperties.getInstance();
     boolean pb = config.getBoolean("propbank");
+    Log.info("taking product with " + features.size() + " features,"
+        + " mode=" + mode + " frameShard=" + frameShard
+        + " propbank=" + pb);
     FrameIndex fi = pb ? FrameIndex.getPropbank() : FrameIndex.getFrameNet();
 
     Function<FeatureFile.Line, int[]> getY = InformationGain.getGetY(config);
@@ -927,7 +978,7 @@ public class InformationGainProducts {
         }
 
         if (mode == Refinement.FRAME) {
-          FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx);
+          FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, frame);
           FeatureName fn = new FeatureName(feature, filteredGetY);
 //          Log.info("creating " + fn);
           refinements.add(fn);
@@ -938,11 +989,17 @@ public class InformationGainProducts {
           for (int k = 0; k < K; k++) {
             String role = "r=" + ff.getRole(k);
             int roleIdx = role2name.get(role);
-            FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, roleIdx);
+            FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, frame, roleIdx, role);
             refinements.add(new FeatureName(feature, filteredGetY));
           }
         }
       }
+    }
+    if (DEBUG) {
+      System.out.println();
+      for (FeatureName fn : refinements)
+        System.out.println(fn.toString());
+      System.out.println();
     }
     int F = fi.allFrames().size();
     Log.info("features.size=" + features.size()
@@ -1070,6 +1127,7 @@ public class InformationGainProducts {
       igp.update(f);
       if (writeTopProductsEveryK > 0 && igp.getNumUpdates() % writeTopProductsEveryK == 0)
         igp.writeOutProducts(output, refinementMode);
+      Log.info(igp.eventCounts);
     }
 
     // Write out final results

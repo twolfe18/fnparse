@@ -34,7 +34,7 @@ public class NullLabelGetY implements Function<FeatureFile.Line, int[]> {
     if (a == null)
       return null;
     assert a.length == 1;
-    return a[0] == nullValue ? yes : no;
+    return a[0] == nullValue ? no : yes;
   }
 
 }

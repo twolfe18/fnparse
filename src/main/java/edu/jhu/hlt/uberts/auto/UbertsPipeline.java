@@ -179,8 +179,10 @@ public class UbertsPipeline {
     // This will initialize the Alphabet over frame/role names and provide
     // the code to write out features.txt.gz and template-feat-indices.txt.gz
     FeaturePrecomputation.AlphWrapper fpre = null;
-    if (fPreRoleNameAlph != null)
-      fpre = new FeaturePrecomputation.AlphWrapper(true, fe.getFeatures());
+    if (fPreRoleNameAlph != null) {
+      boolean roleMode = true;
+      fpre = new FeaturePrecomputation.AlphWrapper(roleMode, fe.getFeatures());
+    }
 
     boolean debug = false;
     TimeMarker tm = new TimeMarker();
