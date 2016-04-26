@@ -27,6 +27,7 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlphMerger;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureFile.Line;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile.TemplateExtraction;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.LineByLine;
@@ -176,13 +177,45 @@ public class InformationGain implements Serializable, LineByLine {
   public static final boolean ADD_ONE = true;
 
   public static Function<FeatureFile.Line, int[]> getRoles(boolean addOne) {
-    return ffl -> {
-      return ffl.getRoles(addOne);  // addOne=true takes -1 (no role) to 0
+//    return ffl -> {
+//      return ffl.getRoles(addOne);  // addOne=true takes -1 (no role) to 0
+//    };
+    return new Function<FeatureFile.Line, int[]>() {
+      @Override
+      public int[] apply(Line ffl) {
+        return ffl.getRoles(addOne);  // addOne=true takes -1 (no role) to 0
+      }
+      @Override
+      public String toString() {
+        return "getRoles";
+      }
     };
   }
   public static Function<FeatureFile.Line, int[]> getFrames(boolean addOne) {
-    return ffl -> {
-      return ffl.getFrames(addOne); // addOne=true takes -1 (no frame) to 0
+//    return ffl -> {
+//      return ffl.getFrames(addOne); // addOne=true takes -1 (no frame) to 0
+//    };
+    return new Function<FeatureFile.Line, int[]>() {
+      @Override
+      public int[] apply(Line ffl) {
+        return ffl.getFrames(addOne); // addOne=true takes -1 (no frame) to 0
+      }
+      @Override
+      public String toString() {
+        return "getFrames";
+      }
+    };
+  }
+  public static Function<FeatureFile.Line, int[]> getPosLabel() {
+    return new Function<FeatureFile.Line, int[]>() {
+      @Override
+      public int[] apply(Line ffl) {
+        return ffl.getPosLabel();
+      }
+      @Override
+      public String toString() {
+        return "getPosLabel";
+      }
     };
   }
 
@@ -400,12 +433,18 @@ public class InformationGain implements Serializable, LineByLine {
 
   public static Function<FeatureFile.Line, int[]> getGetY(ExperimentProperties config) {
     String l = config.getString("labelType");
-    Log.info("computing information gaint w.r.t. " + l);
+//    Log.info("computing information gain w.r.t. " + l);
+    Log.info("labelType=" + l);
     switch (l) {
+    case "frame":
     case "frames":
       return getFrames(ADD_ONE);
+    case "role":
     case "roles":
       return getRoles(ADD_ONE);
+    case "pos":
+    case "binary":
+      return getPosLabel();
     default:
       throw new RuntimeException("unknown label: " + l);
     }

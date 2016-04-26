@@ -111,7 +111,7 @@ def debug():
 class Feature:
   def __init__(self, line, rank=None, template_name_bug=False):
     ar = line.rstrip().split('\t')
-    assert len(ar) >= 7
+    assert len(ar) >= 7, "ar=%s" % (str(ar))
     self.rank = rank
     self.score = float(ar[0])
     self.ig = float(ar[1])

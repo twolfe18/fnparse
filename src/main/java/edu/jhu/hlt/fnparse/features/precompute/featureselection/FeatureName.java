@@ -31,6 +31,6 @@ public class FeatureName {
 
   @Override
   public String toString() {
-    return String.format("<FeatureName templates=%s %s>", Arrays.toString(templateInt), getY.toString());
+    return String.format("<FeatureName templates=%s getY=%s>", Arrays.toString(templateInt), getY.toString());
   }
 }

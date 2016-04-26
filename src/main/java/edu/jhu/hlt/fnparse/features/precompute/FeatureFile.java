@@ -68,6 +68,14 @@ public class FeatureFile {
     /** Allows memoization of {@link InformationGainProducts#flatten(Line, int, int[], int, ProductIndex, int[], List)} */
     public Map<HashableIntArray, List<ProductIndex>> flattenCache;
 
+    @Override
+    public String toString() {
+      String ls = line;
+      if (ls.length() > 100)
+        ls = ls.substring(0, 100) + "...";
+      return "<FeatureFile.Line sorted=" + sorted + " line=" + ls + ">";
+    }
+
     public Line(String line, boolean sorted) {
       features = new ArrayList<>();
       init(line, sorted);
@@ -162,6 +170,24 @@ public class FeatureFile {
           k[i]++;
       }
       return k;
+    }
+    public int[] getPosLabel() {
+      if (tokenized == null)
+        tokenize();
+      int ki = FeaturePrecomputation.ROLE_STRING_COLUMN;
+      String fFrR = tokenized[ki];
+      if (fFrR.equals("-1") || fFrR.equals("-1,-1,-1"))
+        return POS_LABEL_NO;
+      String[] split;
+      assert (split = fFrR.split(",")).length == 1 || split.length % 3 == 0 : "fFrR=" + fFrR;
+      return POS_LABEL_YES;
+    }
+    private static final int[] POS_LABEL_NO = new int[] {0};
+    private static final int[] POS_LABEL_YES = new int[] {1};
+
+    public String getRoleStringCol() {
+      int ki = FeaturePrecomputation.ROLE_STRING_COLUMN;
+      return tokenized[ki];
     }
 
     public List<TemplateExtraction> groupByTemplate() {
