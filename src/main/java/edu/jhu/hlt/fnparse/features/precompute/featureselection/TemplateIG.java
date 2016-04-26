@@ -68,6 +68,15 @@ public class TemplateIG implements Serializable {
     int numY = config.getInt("numLabels");   // cardinality, not upper bound (as in the values can be sparse)
 //    int numT = config.getInt("numTemplates");
     EntropyMethod em = EntropyMethod.valueOf(config.getString("entropyMethod"));
+
+    BubEntropyEstimatorAdapter bubEst = null;
+    if (em == EntropyMethod.BUB) {
+      final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
+      Log.info("using BUB code in " + bubFuncParentDir.getPath());
+      bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir);
+      bubEst.debug = config.getBoolean("bubDebug", false);
+    }
+
     File input = config.getFile("input", new File("/dev/stdin"));
     File output = config.getFile("output");
     Map<Integer, String> templateNames = readTemplateNames(config.getFile("templateNames"));
@@ -103,6 +112,8 @@ public class TemplateIG implements Serializable {
         if (t == null) {
           Function<FeatureFile.Line, int[]> getY = null;
           t = new TemplateIG(-1, numY, em, getY);
+          if (bubEst != null)
+            t.useBubEntropyEstimation(bubEst);
           c2ig.put(refinement, t);
         }
         t.update(y, new ProductIndex[] {x});
@@ -165,6 +176,9 @@ public class TemplateIG implements Serializable {
         }
       }
     }
+
+    if (bubEst != null)
+      bubEst.close();
   }
 
   public static int HASHING_DIM = 4 * 512 * 1024;
