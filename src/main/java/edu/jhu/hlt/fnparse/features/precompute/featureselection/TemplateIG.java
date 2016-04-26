@@ -1,21 +1,32 @@
 package edu.jhu.hlt.fnparse.features.precompute.featureselection;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGain.MI;
 import edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGain.MIFixed;
 import edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGain.MISummary;
+import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.prim.map.LongIntEntry;
 import edu.jhu.prim.map.LongIntHashMap;
 import edu.jhu.prim.vector.IntIntDenseVector;
+import edu.jhu.util.Alphabet;
 
 /**
  * Holds a template and statistics related to mutual information for it (x)
@@ -25,6 +36,137 @@ import edu.jhu.prim.vector.IntIntDenseVector;
  */
 public class TemplateIG implements Serializable {
   private static final long serialVersionUID = 1287953772086645433L;
+  public static final boolean DEBUG = false;
+
+  public static Map<Integer, String> readTemplateNames(File f) throws IOException {
+    System.err.println("reading template names from " + f.getPath());
+    Map<Integer, String> m = new HashMap<>();
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        String[] tok = line.split("\t");
+        assert tok.length == 2;
+        int t = Integer.parseInt(tok[0]);
+        Object old = m.put(t, tok[1]);
+        assert old == null;
+      }
+    }
+    return m;
+  }
+
+  /**
+   * Reads in three columns: y, x, c
+   * from stdin.
+   * (y,x) are what we measure IG/MI between.
+   * y is a string, and you provide an upper bound of how many y's there are.
+   * x is a template:feature, and you provide the number of templates.
+   * c is a string, representing a group key to split examples on
+   *
+   * A separate TemplateIG is kept for every (t,c), where x=(t,f)
+   */
+  public static void main(String[] args) throws IOException {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    int numY = config.getInt("numLabels");   // cardinality, not upper bound (as in the values can be sparse)
+//    int numT = config.getInt("numTemplates");
+    EntropyMethod em = EntropyMethod.valueOf(config.getString("entropyMethod"));
+    File input = config.getFile("input", new File("/dev/stdin"));
+    File output = config.getFile("output");
+    Map<Integer, String> templateNames = readTemplateNames(config.getFile("templateNames"));
+    System.err.println("reading from " + input.getPath());
+    System.err.println("writing to " + output.getPath());
+    Alphabet<String> yAlph = new Alphabet<>();
+    Map<String, Map<String, TemplateIG>> t2c2ig = new HashMap<>();
+    try (BufferedReader r = FileUtil.getReader(input)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+
+        // Extract
+        String[] toks = line.split("\t");
+        assert toks.length == 3;
+        String ys = toks[0];
+        String xs = toks[1];
+        String refinement = toks[2];
+        int y = yAlph.lookupIndex(ys, true);
+        if (y >= numY)
+          throw new RuntimeException();
+        int colon = xs.indexOf(':');
+        assert colon > 0;
+        String template = xs.substring(0, colon);
+        int feature = Integer.parseInt(xs.substring(colon + 1));
+        ProductIndex x = new ProductIndex(feature);
+
+        // Update
+        Map<String, TemplateIG> c2ig = t2c2ig.get(template);
+        if (c2ig == null) {
+          c2ig = new HashMap<>();
+          t2c2ig.put(template, c2ig);
+        }
+        TemplateIG t = c2ig.get(refinement);
+        if (t == null) {
+          Function<FeatureFile.Line, int[]> getY = null;
+          t = new TemplateIG(-1, numY, em, getY);
+          c2ig.put(refinement, t);
+        }
+        t.update(y, new ProductIndex[] {x});
+      }
+    }
+
+    System.err.println("writing IG/MI to " + output.getPath());
+    try (BufferedWriter w = FileUtil.getWriter(output)) {
+      for (Map.Entry<String, Map<String, TemplateIG>> x1 : t2c2ig.entrySet()) {
+        String template = x1.getKey();
+        for (Map.Entry<String, TemplateIG> x2 : x1.getValue().entrySet()) {
+          String refinement = x2.getKey();
+          TemplateIG tig = x2.getValue();
+
+          StringBuilder sb = new StringBuilder();
+
+          // FOM
+          sb.append(String.valueOf(tig.heuristicScore()));
+
+          // mi
+          sb.append("\t" + tig.ig().mi());
+
+          // hx
+          sb.append("\t" + tig.hx());
+
+          // selectivity
+          sb.append("\t" + tig.ig().selectivity);
+
+          // order
+          //          int[] pieces = getTemplatesForFeature(t.getIndex());
+          //          sb.append("\t" + pieces.length + "\t");
+          sb.append("\t1");
+
+          // featureInts
+          //      for (int i = 0; i < pieces.length; i++) {
+          //        if (i > 0) sb.append('*');
+          //        sb.append(String.valueOf(pieces[i]));
+          //      }
+          sb.append("\t" + template);
+
+          // featureStrings
+          //      sb.append('\t');
+          //      for (int i = 0; i < pieces.length; i++) {
+          //        if (i > 0) sb.append('*');
+          //        sb.append(lastBialph.lookupTemplate(pieces[i]));
+          //      }
+          sb.append("\t" + templateNames.get(Integer.parseInt(template)));
+
+          // How many updates we've seen. If no filtering is done, this will just
+          // be the number of lines in the feature files. If however, we create
+          // TemplateIGs with filters, then it will reflect the relative frequency
+          // of the filter passing.
+          sb.append("\t" + tig.numObservations());
+
+          // frame,framerole restrictions
+          sb.append("\t" + refinement);
+
+          w.write(sb.toString());
+          w.newLine();
+        }
+      }
+    }
+  }
+
   public static int HASHING_DIM = 4 * 512 * 1024;
   public static boolean ADD_UNOBSERVED = false;
 
@@ -73,6 +215,11 @@ public class TemplateIG implements Serializable {
 
   private BubEntropyEstimatorAdapter bubEst;
 
+  @Override
+  public String toString() {
+    return String.format("<TemplateIG entropyMethod=%s featureName=%s numY=%d updates=%d obs=%d obsWithX=%d>",
+        entropyMethod, featureName, numY, updates, observations, observationsWithSomeX);
+  }
 
   /**
    * If this class keeps track of c(y,x) where y is a D dimensional multinomial,
@@ -107,11 +254,17 @@ public class TemplateIG implements Serializable {
       if (getY instanceof FrameRoleFilter) {
         FrameRoleFilter gy = (FrameRoleFilter) getY;
         assert !gy.hasRoleRestriction() : "there should be nothing to refine if you have restricted to a single role already";
+        // y will range over all f,fr,r but will only be non-zero for values
+        // which could have been generated by labelType (see InformationGain.getGetY),
+        // which should be set to ROLES for this to work.
         int role = y;
-        refinedGetY = new FrameRoleFilter(gy.getWrapped(), gy.getAddOne(), gy.getFrame(), role);
+        String frameName = "???f=" + gy.getFrame();
+        String roleName = "???r=" + role;
+        refinedGetY = new FrameRoleFilter(gy.getWrapped(), gy.getAddOne(), gy.getFrame(), frameName, role, roleName);
       } else {
         throw new RuntimeException("implement me");
       }
+      // Index and name are same as ou
       int index = this.index; //new ProductIndex(y, numY).destructiveProd(this.index).getProdFeatureSafe();
       String name = this.name;// + "@" + y;
       TemplateIG yig = new TemplateIG(index, name, 2, entropyMethod, refinedGetY);
@@ -125,7 +278,8 @@ public class TemplateIG implements Serializable {
       while (itr.hasNext()) {
         LongIntEntry e = itr.next();
         long x = e.index();
-        ProductIndex xpi = new ProductIndex(x, 1);
+//        ProductIndex xpi = new ProductIndex(x, 1);
+        ProductIndex xpi = new ProductIndex(x);
         int ci_x = e.get();
         int ci_yx = cyx.get(index(y, numY, xpi));
         yig.cyx.add(index(0, 2, xpi), ci_x-ci_yx);
@@ -182,12 +336,21 @@ public class TemplateIG implements Serializable {
     return name;
   }
 
+  private Counts<String> eventCounts = new Counts<>();
   public void update(FeatureFile.Line hasY, ProductIndex[] x) {
     int[] y = getY.apply(hasY);
     if (y != null) {
+      if (DEBUG)
+        eventCounts.increment("update-getY-pass");
+      Log.info("y=" + Arrays.toString(y) + " line=" + hasY.getRoleStringCol() + " getY=" + getY + " featureName=" + featureName);
       for (int yy : y)
         update(yy, x);
+    } else if (DEBUG) {
+      Log.info("skipping line=" + hasY.getRoleStringCol() + " getY=" + getY + " featureName=" + featureName);
+      eventCounts.increment("update-getY-reject");
     }
+    if (DEBUG && eventCounts.getTotalCount() % 10 == 0)
+      Log.info(eventCounts);
   }
 
   void update(int yy, ProductIndex[] x) {
@@ -220,7 +383,8 @@ public class TemplateIG implements Serializable {
       return xpi.getProdFeature();
   }
   private static long index(int y, int numY, ProductIndex xpi) {
-    ProductIndex xypi = xpi.prod(y, numY);
+//    ProductIndex xypi = xpi.prod(y, numY);
+    ProductIndex xypi = new ProductIndex(y, numY).destructiveProd(xpi.getProdFeature());
     if (USE_HASHING)
       return xypi.getProdFeatureModulo(HASHING_DIM);
     else
