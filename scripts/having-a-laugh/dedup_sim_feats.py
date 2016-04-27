@@ -13,6 +13,8 @@ import os, codecs, re, collections, math, random, sys
 
 TEMPLATE_NAME_BUG = False
 
+NEW_FEATURE_FILE_FORMAT = True
+
 def tokenize_feature(name):
   return sorted(name.split('*'))
 
@@ -111,29 +113,44 @@ def debug():
 class Feature:
   def __init__(self, line, rank=None, template_name_bug=False):
     ar = line.rstrip().split('\t')
-    assert len(ar) >= 7, "ar=%s" % (str(ar))
-    self.rank = rank
-    self.score = float(ar[0])
-    self.ig = float(ar[1])
-    self.hx = float(ar[2])
-    self.selectivity = float(ar[3])
-    self.order = int(ar[4])
-    self.int_templates = map(int, ar[5].split('*'))
-    self.str_templates = ar[6].split('*')
-    if template_name_bug:
-      self.str_templates = map(undo_template_name_bug, self.str_templates)
-    assert self.order == len(self.int_templates)
-    assert self.order == len(self.str_templates)
-    #print 'just read', self.str_like_input()
-
-    if len(ar) >= 8:
-      self.count = int(ar[7])
-      if len(ar) >= 9:
-        # TODO Can be None, frame, or (frame,role)
-        # TODO Try out this as a list of (key,value) pairs, e.g. [('frame', 1887), ('role', 22)]
-        # Every time you run combine-mutual-information.py, we strip one off the end, grouping
-        # by the prefix.
+    if NEW_FEATURE_FILE_FORMAT:
+      self.rank = rank
+      self.score = float(ar[0])
+      self.ig = float(ar[1])
+      self.hx = float(ar[2])
+      self.selectivity = float(ar[3])
+      self.count = int(ar[4])
+      self.order = int(ar[5])
+      self.int_templates = map(int, ar[6].split('*'))
+      self.str_templates = ar[7].split('*')
+      self.order = len(self.int_templates)
+      assert self.order == len(self.str_templates)
+      if len(ar) > 8:
         self.restrict = ar[8]
+    else:
+      assert len(ar) >= 7, "ar=%s" % (str(ar))
+      self.rank = rank
+      self.score = float(ar[0])
+      self.ig = float(ar[1])
+      self.hx = float(ar[2])
+      self.selectivity = float(ar[3])
+      self.order = int(ar[4])
+      self.int_templates = map(int, ar[5].split('*'))
+      self.str_templates = ar[6].split('*')
+      if template_name_bug:
+        self.str_templates = map(undo_template_name_bug, self.str_templates)
+      assert self.order == len(self.int_templates)
+      assert self.order == len(self.str_templates)
+      #print 'just read', self.str_like_input()
+
+      if len(ar) >= 8:
+        self.count = int(ar[7])
+        if len(ar) >= 9:
+          # TODO Can be None, frame, or (frame,role)
+          # TODO Try out this as a list of (key,value) pairs, e.g. [('frame', 1887), ('role', 22)]
+          # Every time you run combine-mutual-information.py, we strip one off the end, grouping
+          # by the prefix.
+          self.restrict = ar[8]
 
   def __str__(self):
     st = 'NA'

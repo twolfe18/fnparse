@@ -18,6 +18,8 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.StringLabeledDirectedGraph;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.TemplateContext;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.tutils.Counts;
@@ -160,6 +162,21 @@ public abstract class FeatureExtractionFactor<T> {
     private HeadFinder hf;
     private MultiTimer timer;
     private Counts<String> skipped;
+
+    // NOTE: I can also construct an Alphabet for product features
+    public void initProdFeatureDbg() {
+      features.clear();
+      Template[] terms = new Template[0];  // TODO
+      Template prod = terms[0];
+      for (int i = 1; i < terms.length; i++) {
+        prod = new TemplatedFeatures.TemplateJoin(prod, terms[i]);
+      }
+      TemplateAlphabet ta = new TemplateAlphabet(prod, "some product name", -1);
+      features.add(ta);
+
+      // This will construct a lazy iterable which uses string appending (slow, but what do you want).
+      Iterable<String> fs = prod.extract(ctx);
+    }
 
     /** This will read all the features in */
     public OldFeaturesWrapper(BasicFeatureTemplates bft, Double pSkipNeg) {

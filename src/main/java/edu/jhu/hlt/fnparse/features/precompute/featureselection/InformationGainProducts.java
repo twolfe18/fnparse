@@ -6,29 +6,20 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Random;
 import java.util.Set;
-import java.util.function.Function;
 
-import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
-import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureFile.TemplateExtraction;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
-import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.tutils.Average;
-import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
-import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
@@ -36,8 +27,6 @@ import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
-import edu.jhu.hlt.tutils.hash.Hash;
-import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -58,20 +47,6 @@ public class InformationGainProducts {
   // Leave off: see note in flattenMaybeMemoize
   public static final boolean FLATTEN_MEMOIZE = false;
 
-  public static String DEBUG_TEMPLATE = null;//"head1ParentBc1000/99";
-
-  // Features being scored and their stats, some are indexed.
-  // These are disjoint collections of TemplateIGs.
-  private IntObjectHashMap<List<TemplateIG>> featuresFrameRestricted;
-  private Map<IntPair, List<TemplateIG>> featuresFrameRoleRestricted;
-  private List<TemplateIG> featuresUnrestricted;
-
-  // Input, list of relevant features to evaluate, before instantiating TemplateIGs
-  private List<FeatureName> baseFeatures;
-
-  private BitSet relevantTemplates;   // Union of values in keys of products
-  private int[] template2cardinality; // Indexed by base template.index, will contain gaps in places of un-necessary templates
-
   /** How to accumulate many template IGs into a single score for a feature */
   public static FeatureScoring FEATURE_SCORE_HEURISTIC = FeatureScoring.ARITHMETIC_MEAN;
   public static enum FeatureScoring {
@@ -80,306 +55,6 @@ public class InformationGainProducts {
     // over a more diverse/larger set.
     ARITHMETIC_MEAN,    // score(feature) = 1/N sum_{template \in feature} ig(template)
     HARMONIC_MEAN,
-  }
-
-  private Set<String> ignoreSentenceIds;
-
-  // If this is >0, then the hashing tick is used and every template is allocated
-  // a vector of this size to represent cx and cyx.
-  private int hashingTrickDim;
-
-  private BiAlph lastBialph;
-
-  // Actually computes the entropy/MI
-  private BubEntropyEstimatorAdapter bubEst;
-
-  // How to commpute entropy/MI
-  private EntropyMethod entropyMethod;
-
-  public Counts<String> eventCounts = new Counts<>(); // For debugging
-
-  /**
-   * @param hashingTrickDim 0 means no hashing trick and >0 is how many dimensions
-   * to use for representing features.
-   */
-  public InformationGainProducts(
-      List<FeatureName> features,
-      int hashingTrickDim,
-      BubEntropyEstimatorAdapter bubEstimator,
-      EntropyMethod em) {
-    this.baseFeatures = features;
-    this.hashingTrickDim = hashingTrickDim;
-    if (this.hashingTrickDim > 0)
-      throw new RuntimeException("don't this/not implemented: hashingTrickDim=" + hashingTrickDim);
-    this.bubEst = bubEstimator;
-    this.entropyMethod = em;
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    File ignoreSentenceIdsFile = config.getExistingFile("ignoreSentenceIds");
-    Log.info("ignoring the sentence ids in " + ignoreSentenceIdsFile.getPath());
-    ignoreSentenceIds = new HashSet<>();
-    try (BufferedReader r = FileUtil.getReader(ignoreSentenceIdsFile)) {
-      for (String line = r.readLine(); line != null; line = r.readLine()) {
-        ignoreSentenceIds.add(line);
-      }
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  private boolean initialized = false;
-  public boolean isInitialized() {
-    return initialized;
-  }
-
-  /**
-   * Converts strings given at construction into ints for efficient processing
-   * (only needs to be called once).
-   */
-  public void init(BiAlph bialph, int numRoles) {
-    Log.info("initializing... numRoles=" + numRoles);
-    assert !initialized;
-    assert relevantTemplates == null;
-    assert template2cardinality == null;
-    initialized = true;
-    lastBialph = bialph;
-
-    // Map everything over
-    featuresFrameRestricted = new IntObjectHashMap<>();
-    featuresFrameRoleRestricted = new HashMap<>();
-    featuresUnrestricted = new ArrayList<>();
-    int featIdx = 0;
-    for (FeatureName fn : baseFeatures) {
-      fn.computeTemplateInts(bialph);
-      TemplateIG tig = new TemplateIG(
-          featIdx,
-          StringUtils.join("*", fn.templateStr),
-          numRoles,
-          entropyMethod,
-          fn.getY);
-      tig.featureName = fn;
-      if (bubEst != null)
-        tig.useBubEntropyEstimation(bubEst);
-      addFeature(tig);
-      featIdx++;
-    }
-
-    // Construct the union of base templates
-    relevantTemplates = new BitSet();
-    for (FeatureName fn : baseFeatures)
-      for (int i : fn.templateInt)
-        relevantTemplates.set(i);
-
-    // Setup template cardinalities
-    template2cardinality = new int[bialph.getUpperBoundOnNumTemplates()];
-    Arrays.fill(template2cardinality, -1);
-    for (int t = relevantTemplates.nextSetBit(0); t >= 0; t = relevantTemplates.nextSetBit(t + 1)) {
-      // Lookup cardinality for template[relevantTemplates[i]] (comes from a file)
-      template2cardinality[t] = bialph.cardinalityOfNewTemplate(t) + 1;
-    }
-    Log.info("done");
-  }
-
-  private void addFeature(TemplateIG tig) {
-//    Log.info(tig.featureName.toString());
-    FeatureName fn = tig.featureName;
-    List<TemplateIG> addTo;
-    if (fn.getY instanceof FrameRoleFilter) {
-      FrameRoleFilter frf = (FrameRoleFilter) fn.getY;
-      if (frf.hasRoleRestriction()) {
-        IntPair key = new IntPair(frf.getFrame(), frf.getRole());
-        addTo = featuresFrameRoleRestricted.get(key);
-        if (addTo == null) {
-          addTo = new ArrayList<>();
-          featuresFrameRoleRestricted.put(key, addTo);
-        }
-      } else {
-        int key = frf.getFrame();
-        addTo = featuresFrameRestricted.get(key);
-        if (addTo == null) {
-          addTo = new ArrayList<>();
-          featuresFrameRestricted.put(key, addTo);
-        }
-      }
-    } else {
-      addTo = featuresUnrestricted;
-    }
-    addTo.add(tig);
-  }
-
-  private int numUpdates = 0;
-  public void update(File features) throws IOException {
-    TimeMarker tm = new TimeMarker();
-    Log.info("reading features=" + features.getPath()
-        + " with numFeatures=" + getAllFeatures().size()
-        + " numUpdates=" + numUpdates
-        + " featuresUnrestricted.size=" + featuresUnrestricted.size()
-        + " featuresFrameRestricted.size=" + featuresFrameRestricted.size()
-        + " featuresFrameRoleRestricted.size=" + featuresFrameRoleRestricted.size()
-        + " numUpdates=" + numUpdates);
-
-    // For debugging
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    int lineLimit = config.getInt("lineLimit", 0);
-    if (lineLimit > 0)
-      Log.info("lineLimit=" + lineLimit);
-
-    int lines = 0;
-    try (BufferedReader r = FileUtil.getReader(features)) {
-      for (String line = r.readLine(); line != null; line = r.readLine()) {
-        observeLine(line);
-        if (tm.enoughTimePassed(15)) {
-          Log.info("read " + lines + " lines in "
-              + tm.secondsSinceFirstMark() + " seconds, "
-              + Describe.memoryUsage());
-        }
-        lines++;
-        if (lineLimit > 0 && lines > lineLimit) {
-          Log.info("exiting early");
-          break;
-        }
-      }
-      numUpdates++;
-    }
-  }
-  public int getNumUpdates() {
-    return numUpdates;
-  }
-
-  /*
-   * TODO(optimization): if we have foo@frame1, foo@frame2, foo@frame3, etc,
-   * we are calling flatten with foo.int_templates many times!
-   */
-  private void updateMany(List<TemplateIG> updates, FeatureFile.Line ffl, List<ProductIndex> prodBuf) {
-    if (updates == null) {
-      if (DEBUG)
-        eventCounts.increment("updateMany-updates-null");
-      return;
-    }
-    if (updates.isEmpty()) {
-      if (DEBUG)
-        eventCounts.increment("updateMany-updates-empty");
-      return;
-    }
-    if (DEBUG)
-      eventCounts.increment("updateMany-updates-regular");
-    for (TemplateIG u : updates) {
-      int[] templates = u.featureName.templateInt;
-      assert templates != null;
-
-      prodBuf.clear();
-      flatten(ffl, 0, templates, 0, ProductIndex.NIL, template2cardinality, prodBuf);
-//      prodBuf = flattenMaybeMemoize(ffl, templates, template2cardinality);
-
-      if (DEBUG) {
-        System.out.println("[updateMany] " + u.toString() + " prods=" + prodBuf);
-        if (prodBuf.isEmpty())
-          eventCounts.increment("updateMany-prodBuf-empty");
-        else if (prodBuf.size() > 0)
-          eventCounts.increment("updateMany-prodBuf-gt0");
-        else if (prodBuf.size() > 1)
-          eventCounts.increment("updateMany-prodBuf-gt1");
-        else if (prodBuf.size() > 2)
-          eventCounts.increment("updateMany-prodBuf-gt2");
-        else if (prodBuf.size() > 4)
-          eventCounts.increment("updateMany-prodBuf-gt4");
-        else if (prodBuf.size() > 8)
-          eventCounts.increment("updateMany-prodBuf-gt8");
-      }
-
-      for (ProductIndex pi : prodBuf) {
-        u.update(ffl, new ProductIndex[] {pi});
-      }
-    }
-  }
-
-//  // For debugging
-//  private static String[] inverseRole2Name;
-//  private static void buildInverseRole2Name(Map<String, Integer> role2name) {
-//    int m = 0;
-//    for (int i : role2name.values())
-//      if (i > m)
-//        m = i;
-//    inverseRole2Name = new String[m + 1];
-//    for (Entry<String, Integer> x : role2name.entrySet()) {
-//      int i = x.getValue();
-//      if (inverseRole2Name[i] != null)
-//        inverseRole2Name[i] += ", " + x.getKey();
-//      else
-//        inverseRole2Name[i] = x.getKey();
-//    }
-//  }
-
-  public void observeLine(String line) {
-    boolean sorted = true;
-    FeatureFile.Line ffl = new FeatureFile.Line(line, sorted);
-    String sentenceId = ffl.getSentenceId();
-
-    // y = is determined by getY:Function<FeatureFile.Line, int[]> in TemplateIG
-    // x = feature vector produced by flatten()
-    if (ignoreSentenceIds.contains(sentenceId)) {
-      eventCounts.increment("skipped-line-test-set");
-      return;
-    }
-
-    List<ProductIndex> prods = new ArrayList<>();
-
-    int[] frames = ffl.getFrames(InformationGain.ADD_ONE);
-    int[] roles = ffl.getRoles(InformationGain.ADD_ONE);
-
-    if (DEBUG) {
-      System.out.println("[observeLine] frames=" + Arrays.toString(frames) + " roles=" + Arrays.toString(roles));
-    }
-    assert frames.length > 0;
-    assert roles.length > 0;
-
-    if (featuresFrameRestricted.size() > 0 || !featuresFrameRoleRestricted.isEmpty()) {
-      for (int frame : frames) {
-        updateMany(featuresFrameRestricted.get(frame), ffl, prods);
-        if (!featuresFrameRoleRestricted.isEmpty()) {
-          for (int role : roles) {
-            IntPair key = new IntPair(frame, role);
-            updateMany(featuresFrameRoleRestricted.get(key), ffl, prods);
-          }
-        }
-      }
-    }
-    updateMany(featuresUnrestricted, ffl, prods);
-  }
-
-  /**
-   * @deprecated
-   * Use this as a non-helper version of flatten, but the memoization should be
-   * turned off. In IGP, though I do create many (t,f1), (t,f2), (t,f3)...
-   * where t is a templates:int[] and fX is a FrameRoleFilter, we don't have to
-   * worry about calling flatten with t many times due to the fact that for any
-   * given line at most one frame appears (and thus at most one fX fires), so
-   * we will not end up re-extracting.
-   *
-   * Do not modify the returned value, as it may be in a cache!
-   */
-  public static List<ProductIndex> flattenMaybeMemoize(
-      FeatureFile.Line data,
-      int[] templates,
-      int[] template2cardinality) {
-    if (!FLATTEN_MEMOIZE) {
-      List<ProductIndex> buffer = new ArrayList<>();
-      flatten(data, 0, templates, 0, ProductIndex.NIL, template2cardinality, buffer);
-      return buffer;
-    }
-    if (data.flattenCache == null)
-      data.flattenCache = new HashMap<>();
-    HashableIntArray key = new HashableIntArray(templates);
-    List<ProductIndex> m = data.flattenCache.get(key);
-//    Log.info("extracting " + Arrays.toString(templates));
-    if (m == null) {
-//      Log.info("MISS!");
-      m = new ArrayList<>();
-      flatten(data, 0, templates, 0, ProductIndex.NIL, template2cardinality, m);
-      data.flattenCache.put(key, m);
-    } else {
-//      Log.info("HIT!");
-    }
-    return m;
   }
 
   /**
@@ -483,142 +158,6 @@ public class InformationGainProducts {
     }
   }
 
-  public List<TemplateIG> getAllFeatures() {
-    List<TemplateIG> all = new ArrayList<>();
-    IntObjectHashMap<List<TemplateIG>>.Iterator itr = featuresFrameRestricted.iterator();
-    while (itr.hasNext()) {
-      itr.advance();
-      all.addAll(itr.value());
-    }
-    for (List<TemplateIG> l : featuresFrameRoleRestricted.values())
-      all.addAll(l);
-    all.addAll(featuresUnrestricted);
-    Log.info("all.size=" + all.size()
-      + " featuresUnrestricted.size=" + featuresUnrestricted.size()
-      + " featuresFrameRestricted.size=" + featuresFrameRestricted.size()
-      + " featuresFrameRoleRestricted.size=" + featuresFrameRoleRestricted.size()
-      + " numUpdates=" + numUpdates);
-    return all;
-  }
-
-  public List<TemplateIG> getTemplatesSorted(Comparator<TemplateIG> cmp) {
-    TimeMarker tm = new TimeMarker();
-    List<TemplateIG> all = getAllFeatures();
-    List<TemplateIG> out = new ArrayList<>();
-    for (TemplateIG t : all) {
-      if (t.totalCount() > 0)
-        out.add(t);
-    }
-    Log.info("all.size=" + all.size() + " out.size=" + out.size());
-    int done = 0;
-    for (TemplateIG t : out) {
-      t.ig();
-      done++;
-      if (tm.enoughTimePassed(15)) {
-        Log.info("took " + tm.secondsSinceFirstMark()
-            + " seconds to compute MI for "
-            + done + " of " + out.size() + " templates");
-      }
-    }
-    Collections.sort(out, cmp);
-    Log.info("done");
-    return out;
-  }
-
-  public int[] getTemplatesForFeature(int i) {
-    assert initialized;
-    return baseFeatures.get(i).templateInt;
-  }
-
-  /**
-   * Write out the results in format:
-   *   line = FOM <tab> mi <tab> hx <tab> order <tab> featureInts <tab> featureStrings
-   * where featureInts is delimited by "*"
-   *
-   * @param explode says if you should call {@link TemplateIG#explode()} on
-   * on every output. This is useful if you want to output PMIs instead of MI
-   * for the entire {@link TemplateIG}.
-   * @see scripts/precompute-features/combine-mutual-information.py
-   */
-  public void writeOutProducts(File output, Refinement mode) {
-//    boolean explode = mode == Refinement.FRAME || mode == Refinement.FRAME_ROLE;
-//    boolean explode = mode == Refinement.FRAME_ROLE;
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    boolean explode = config.getBoolean("explode");
-    Log.info("writing output to " + output.getPath()
-        + " refinementMode=" + mode +  " explode=" + explode);
-    List<TemplateIG> templates = getTemplatesSorted(TemplateIG.BY_NMI_DECREASING);
-    try (BufferedWriter w = FileUtil.getWriter(output)) {
-      if (templates.size() == 0) {
-//        w.write("<no templates>\n");
-        Log.warn("no templates!");
-      }
-      for (int j = 0; j < templates.size(); j++) {
-        TemplateIG template = templates.get(j);
-        List<TemplateIG> ts = explode ? template.explode() : Arrays.asList(template);
-        for (TemplateIG t : ts) {
-          StringBuilder sb = new StringBuilder();
-
-          // FOM
-          sb.append(String.valueOf(t.heuristicScore()));
-
-          // mi
-          //        sb.append("\t" + t.ig().miSmoothed.mi());
-          sb.append("\t" + t.ig().mi());
-
-          // hx
-          sb.append("\t" + t.hx());
-
-          // selectivity
-          sb.append("\t" + t.ig().selectivity);
-
-          // order
-          int[] pieces = getTemplatesForFeature(t.getIndex());
-          sb.append("\t" + pieces.length + "\t");
-
-          // featureInts
-          for (int i = 0; i < pieces.length; i++) {
-            if (i > 0) sb.append('*');
-            sb.append(String.valueOf(pieces[i]));
-          }
-
-          // featureStrings
-          sb.append('\t');
-          for (int i = 0; i < pieces.length; i++) {
-            if (i > 0) sb.append('*');
-            sb.append(lastBialph.lookupTemplate(pieces[i]));
-          }
-
-          // How many updates we've seen. If no filtering is done, this will just
-          // be the number of lines in the feature files. If however, we create
-          // TemplateIGs with filters, then it will reflect the relative frequency
-          // of the filter passing.
-          sb.append("\t" + t.numObservations());
-
-          // frame,framerole restrictions
-          sb.append('\t');
-          if (t.featureName != null)
-            assert t.featureName.getY == t.getY : "not sure which to use...";
-          if (t.getY instanceof FrameRoleFilter) {
-            FrameRoleFilter frf = (FrameRoleFilter) t.getY;
-            sb.append(frf.getRestrictionString(true));
-          } else if (t.getY instanceof NullLabelGetY) {
-            NullLabelGetY n = (NullLabelGetY) t.getY;
-            sb.append(n.name);
-          } else {
-            sb.append("NA");
-          }
-
-          w.write(sb.toString());
-          w.newLine();
-        }
-      }
-      w.flush();
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-  }
-
   @SafeVarargs
   public static Pair<String[], Double> prod(Pair<String, Double>... templateIGs) {
     String[] prod = new String[templateIGs.length];
@@ -657,6 +196,10 @@ public class InformationGainProducts {
       int order,
       boolean showSkippedCard) throws IOException {
 
+    double cHx = config.getDouble("hxScoreCoef", 0.1);
+    double cRand = config.getDouble("randScoreCoef", 0.05);
+    Random rand = new Random(9001);
+
     // Read in the IG of the unigrams (templates)
     List<Pair<String, Double>> templateIGs = new ArrayList<>();
     File templateIGsFile = config.getExistingFile("templateIGs");
@@ -683,18 +226,17 @@ public class InformationGainProducts {
 
         // What we sort on
         //double fom = ig / (1 + hx);
-        double fom = ig - 0.1 * hx;
+        double fom = ig
+            -cHx*hx
+            -cRand*rand.nextGaussian();
 
-        if (DEBUG_TEMPLATE != null && !DEBUG_TEMPLATE.equals(templateString))
-          Log.info("skipping " + templateString + " because DEBUG_TEMPLATE is set");
-        else
-          templateIGs.add(new Pair<>(templateString, fom));
+        templateIGs.add(new Pair<>(templateString, fom));
       }
     }
 
     // Generating all products can blow up in time/space, specially when order>2
     // This prunes the set of products being generated to only take the topK.
-    int thresh = (int) Math.pow(templateIGs.size() * 50000, 1d / order);
+    int thresh = (int) Math.pow(templateIGs.size() * 200000, 1d / order);
     if (templateIGs.size() > thresh) {
       Log.info("pruning from " + templateIGs.size() + " => " + thresh);
       templateIGs = templateIGs.subList(0, thresh);
@@ -824,204 +366,17 @@ public class InformationGainProducts {
   }
 
   /**
-   * {@link InformationGain#main(String[])} does not shard, it just tries to
-   * compute MI for every template. Now that I want to split into the granularity
-   * of template@frame@role, we cannot store all {@link TemplateIG}s in
-   * memory at once, and we must shard even the first step of computing IG for
-   * unigram features (templates).
-   *
-   * This main method uses almost all of the machinery of {@link InformationGainProducts}s,
-   * specifically sharding, as to accomplish the same goal as {@link InformationGain},
-   * but with more machines and less memory per machine.
-   */
-  public static void igReplacement() throws IOException {
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    Log.info("computing IG/MI for every template (unigram feature)");
-
-    // Read in mapping between frame/role ints and their names (e.g. "f=framenet/Commerce_buy"
-    Map<String, Integer> role2name = readRole2Name(config);
-
-    // BiAlph gives int<->string for templates
-    File bf = config.getExistingFile("bialph");
-    BiAlph bialph;
-    if (bf.getName().contains(".jser")) {
-      bialph = (BiAlph) FileUtil.deserialize(bf);
-    } else {
-      bialph = new BiAlph(bf, LineMode.ALPH);
-    }
-
-    // What shard of the template@frame@role to take?
-    Shard shard = config.getShard();
-
-    // Build a list of unigram features (templates),
-    // Each with a @frame@role refinement
-    List<String[]> features = new ArrayList<>();
-    int[] t2c = bialph.makeTemplate2Cardinality();
-    for (int t = 0; t < t2c.length; t++) {
-      if (t2c[t] == 0)
-        continue;
-      String templateName = bialph.lookupTemplate(t);
-      features.add(new String[] {templateName});
-    }
-    //Refinement refinementMode = Refinement.FRAME_ROLE;
-    Refinement refinementMode = Refinement.valueOf(config.getString("refinementMode"));
-    List<FeatureName> templates = productFeaturesWithFrameRole(features, role2name, shard, refinementMode);
-
-    Log.info("after taking the " + shard + " shard,"
-        + " numTemplates=" + templates.size());
-
-    config.putIfAbsent("explode", "false");
-//    computeIG(templates, bialph, config);
-    computeIG(templates, refinementMode, bialph, config);
-  }
-
-  /** Reads the frame/role/label dictionary written out by {@link FeaturePrecomputation} */
-  public static Map<String, Integer> readRole2Name(ExperimentProperties config) throws IOException {
-    // Read in mapping between frame/role ints and their names (e.g. "f=framenet/Commerce_buy"
-    boolean pb = config.getBoolean("propbank");
-    Map<String, Integer> role2name = new HashMap<>();
-    File f = config.getFile("roleNames");
-    Log.info("reading role names from " + f.getPath());
-    try (BufferedReader r = FileUtil.getReader(f)) {
-      for (String line = r.readLine(); line != null; line = r.readLine()) {
-        String[] tok = line.split("\t");
-        int c = Integer.parseInt(tok[0]);
-
-        if (InformationGain.ADD_ONE)
-          c++;
-
-        assert tok.length == 2;
-        Object old = role2name.put(tok[1], c);
-        assert old == null;
-
-        // Earlier extractions don't have the frame index included in the name.
-        // Add it now for backwards compatibility.
-        int eq = tok[1].indexOf('=');
-        if (eq >= 0) {
-          String fin = pb ? "propbank" : "framenet";
-          String newName = tok[1].substring(0, eq) + "=" + fin + "/" + tok[1].substring(eq + 1);
-          Object old2 = role2name.put(newName, c);
-          assert old2 == null || old2.equals(c);
-        }
-      }
-    }
-//    buildInverseRole2Name(role2name);
-    return role2name;
-  }
-
-  /** Specifies how to turn a single features (String[]) into many refinements */
-  public enum Refinement {
-    NONE,         // no refinements, one TemplateIG per feature:String[]
-    FRAME,        // one TemplateIG for every frame in the FrameIndex chosen
-    FRAME_ROLE,   // one TemplateIG for every (f,k)
-    NULL_LABEL,   // Y is redefined from labelMode to be label==valid, see NullLabelGetY
-  }
-
-  /**
-   * @param features
-   * @param bialph
-   * @param role2name
-   * @param frameShard is what fraction of all @frame@role FeatureNames to take,
-   * if null then take all of them.
-   * @return
-   */
-  public static List<FeatureName> productFeaturesWithFrameRole(
-      List<String[]> features,
-      Map<String, Integer> role2name,
-      Shard frameShard,
-      Refinement mode) {
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    boolean pb = config.getBoolean("propbank");
-    Log.info("taking product with " + features.size() + " features,"
-        + " mode=" + mode + " frameShard=" + frameShard
-        + " propbank=" + pb);
-    FrameIndex fi = pb ? FrameIndex.getPropbank() : FrameIndex.getFrameNet();
-
-    Function<FeatureFile.Line, int[]> getY = InformationGain.getGetY(config);
-
-    TimeMarker tm = new TimeMarker();
-    Average.Uniform kPerF = new Average.Uniform();
-    kPerF.add(1); // avoid div by zero, slightly biases average
-    List<FeatureName> refinements = new ArrayList<>();
-    for (int j = 0; j < features.size(); j++) {
-      String[] feature = features.get(j);
-
-      if (mode == Refinement.NULL_LABEL) {
-        refinements.add(new FeatureName(feature, new NullLabelGetY("nullLabel", getY)));
-        continue;
-      } else if (mode == Refinement.NONE) {
-        refinements.add(new FeatureName(feature, getY));
-        continue;
-      }
-
-      for (Frame ff : fi.allFrames()) {
-        String frame = "f=" + ff.getName();
-        int frameIdx = role2name.get(frame);
-
-        // A shard will get all roles for a given template@frame
-        if (frameShard != null) {
-          long[] ha = new long[feature.length+1];
-          ha[0] = frameIdx;
-          for (int i = 0; i < feature.length; i++)
-            ha[i+1] = feature[i].length();
-          long h = Hash.mix64(ha);
-          if (Math.floorMod(h, frameShard.getNumShards()) != frameShard.getShard())
-            continue;
-        }
-
-        if (tm.enoughTimePassed(15)) {
-          Log.info("added "
-              + refinements.size() + " refinements, "
-              + j + " of " + features.size() + " features so far, in "
-              + tm.secondsSinceFirstMark() + " seconds, "
-              + Describe.memoryUsage());
-        }
-
-        if (mode == Refinement.FRAME) {
-          FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, frame);
-          FeatureName fn = new FeatureName(feature, filteredGetY);
-//          Log.info("creating " + fn);
-          refinements.add(fn);
-        } else {
-          assert mode == Refinement.FRAME_ROLE;
-          int K = ff.numRoles();
-          kPerF.add(K);
-          for (int k = 0; k < K; k++) {
-            String role = "r=" + ff.getRole(k);
-            int roleIdx = role2name.get(role);
-            FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, frame, roleIdx, role);
-            refinements.add(new FeatureName(feature, filteredGetY));
-          }
-        }
-      }
-    }
-    if (DEBUG) {
-      System.out.println();
-      for (FeatureName fn : refinements)
-        System.out.println(fn.toString());
-      System.out.println();
-    }
-    int F = fi.allFrames().size();
-    Log.info("features.size=" + features.size()
-        + " refinements.size=" + refinements.size()
-        + " numFrames=" + F
-        + " kPerF=" + kPerF.getAverage() + " (n=" + kPerF.getNumObservations() + ")"
-        + " shard=" + frameShard
-        + " " + Describe.memoryUsage());
-    return refinements;
-  }
-
-  /**
    * Read in the scores of templates (unigram features), heuristically come up
    * with some potential product features to try out, and then take a shard of
    * the total features to compute actual IG/MI for.
    */
-  public static void igp() throws IOException {
+  public static void igp(TemplateIG.Refined<FeatureName> posProdIG, TemplateIG.Refined<FeatureName> negProdIG) throws IOException {
+    assert posProdIG != null || negProdIG != null;
     ExperimentProperties config = ExperimentProperties.getInstance();
     Log.info("computing IG/MI for some product features");
 
     // Load the features and compute the IG for the chosen products
-    File templateAlph = config.getExistingFile("templateAlph");
+    File templateAlph = config.getExistingFile("bialph");
     BiAlph bialph;
     if (templateAlph.getName().contains(".jser")) {
       bialph = (BiAlph) FileUtil.deserialize(templateAlph);
@@ -1036,37 +391,46 @@ public class InformationGainProducts {
     // over the same number of features from all orders) is a hedge against the
     // feature scoring heuristic being bad.
     boolean showSkipCard = config.getBoolean("showSkipCard", false);
-    Shard shard = config.getShard();
-    List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1, showSkipCard), InformationGainProducts::stringArrayHash, shard);
-    List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2, showSkipCard), InformationGainProducts::stringArrayHash, shard);
-    List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3, showSkipCard), InformationGainProducts::stringArrayHash, shard);
+    List<String[]> prod1 = getProductsHeuristicallySorted(config, bialph, 1, showSkipCard);
+    List<String[]> prod2 = getProductsHeuristicallySorted(config, bialph, 2, showSkipCard);
+    List<String[]> prod3 = getProductsHeuristicallySorted(config, bialph, 3, showSkipCard);
     double gain = config.getDouble("gain", 1.5);
     int maxProducts = config.getInt("numProducts", 200);
     assert maxProducts > 0;
     int n1 = count(1, gain, 3, maxProducts);
     int n2 = count(2, gain, 3, maxProducts);
     int n3 = count(3, gain, 3, maxProducts);
-    List<String[]> products = concat(
-        take(prod1, n1),
-        take(prod2, n2),
-        take(prod3, n3));
 
-    Log.info("computing IG for the top " + products.size() + " product features,"
-        + " gain=" + gain + " n1=" + n1 + " n2=" + n2 + " n3=" + n3);
-    for (int i = 0; i < 10 && i < prod1.size(); i++)
-      Log.info("product[1," + i + "]=" + Arrays.toString(prod1.get(i)));
-    for (int i = 0; i < 10 && i < prod2.size(); i++)
-      Log.info("product[2," + i + "]=" + Arrays.toString(prod2.get(i)));
-    for (int i = 0; i < 10 && i < prod3.size(); i++)
-      Log.info("product[3," + i + "]=" + Arrays.toString(prod3.get(i)));
-
-    // List of features => list of feature@frame@role
-    Map<String, Integer> role2name = readRole2Name(config);
-    Shard frameShard = null;  // take all, sharding has already occurred on the features
-    Refinement refinementMode = Refinement.valueOf(config.getString("refinementMode"));//, Refinement.FRAME.name()));
-    List<FeatureName> feats = productFeaturesWithFrameRole(products, role2name, frameShard, refinementMode);
-
-    computeIG(feats, refinementMode, bialph, config);
+    int t1 = 0;
+    for (int i = 0; i < prod1.size() && t1 < n1; i++) {
+      FeatureName fn = new FeatureName(prod1.get(i));
+      boolean p = posProdIG != null && posProdIG.register(fn);
+      boolean n = negProdIG != null && negProdIG.register(fn);
+      if (p || n) {
+        fn.computeTemplateInts(bialph);
+        t1++;
+      }
+    }
+    int t2 = 0;
+    for (int i = 0; i < prod2.size() && t2 < n2; i++) {
+      FeatureName fn = new FeatureName(prod2.get(i));
+      boolean p = posProdIG != null && posProdIG.register(fn);
+      boolean n = negProdIG != null && negProdIG.register(fn);
+      if (p || n) {
+        fn.computeTemplateInts(bialph);
+        t2++;
+      }
+    }
+    int t3 = 0;
+    for (int i = 0; i < prod3.size() && t3 < n3; i++) {
+      FeatureName fn = new FeatureName(prod3.get(i));
+      boolean p = posProdIG != null && posProdIG.register(fn);
+      boolean n = negProdIG != null && negProdIG.register(fn);
+      if (p || n) {
+        fn.computeTemplateInts(bialph);
+        t3++;
+      }
+    }
   }
 
   /**
@@ -1074,17 +438,8 @@ public class InformationGainProducts {
    * for where to route output, etc are read in through {@link ExperimentProperties}.
    */
   public static void computeIG(
-      List<FeatureName> products,
-      Refinement refinementMode,
       BiAlph bialph,
       ExperimentProperties config) throws IOException {
-
-    Log.info("refinementMode=" + refinementMode);
-
-    if (products.isEmpty()) {
-      Log.warn("products.size=0, exiting early!");
-      return;
-    }
 
     final File output = config.getFile("output");
     Log.info("output=" + output.getPath());
@@ -1092,27 +447,14 @@ public class InformationGainProducts {
     final EntropyMethod em = EntropyMethod.valueOf(config.getString("entropyMethod"));
     Log.info("using " + em + " to compute entropy");
 
+    int[] template2cardinality = bialph.makeTemplate2Cardinality();
+
     // If 0, don't write out any intermediate results
-    final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 64);
+    final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 32);
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
-//    final File featuresParent = config.getExistingDir("featuresParent");
-//    final String featuresGlob = config.getString("featuresGlob", "glob:**/*");
-
-    BubEntropyEstimatorAdapter bubEst = null;
-    if (em == EntropyMethod.BUB) {
-      final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
-      Log.info("using BUB code in " + bubFuncParentDir.getPath());
-      bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir);
-      bubEst.debug = config.getBoolean("bubDebug", false);
-    }
-
-    int numRoles = config.getInt("numRoles", 30);
-    int hashingTrickDim = config.getInt("hashingTrickDim", 0);
-    Log.info("numRoles=" + numRoles + " hashingTrickDim=" + hashingTrickDim);
-    InformationGainProducts igp = new InformationGainProducts(
-        products, hashingTrickDim, bubEst, em);
-    igp.init(bialph, numRoles);
+    int numY = config.getInt("numRoles", 30);
+    Shard refinementShard = config.getShard("refinement");
 
     // Scan each of the input files
     List<File> featureFiles = config.getFileGlob("features");
@@ -1123,15 +465,148 @@ public class InformationGainProducts {
       featureFiles = ShardUtils.shardByIndex(featureFiles, dataShard);
     }
     Log.info("iterating over " + featureFiles.size() + " feature files");
-    for (File f : featureFiles) {
-      igp.update(f);
-      if (writeTopProductsEveryK > 0 && igp.getNumUpdates() % writeTopProductsEveryK == 0)
-        igp.writeOutProducts(output, refinementMode);
-      Log.info(igp.eventCounts);
+
+    File ignoreSentenceIdsFile = config.getExistingFile("ignoreSentenceIds");
+    Log.info("ignoring the sentence ids in " + ignoreSentenceIdsFile.getPath());
+    Set<String> ignoreSentenceIds = new HashSet<>();
+    try (BufferedReader r = FileUtil.getReader(ignoreSentenceIdsFile)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        ignoreSentenceIds.add(line);
+      }
     }
 
+    /* These can be constructed lazily with just a shard **********************/
+    // POS: role ~ feature @template@frame
+    // key = (frame,template)
+    TemplateIG.Refined<IntPair> posIG = null;
+    if (config.getBoolean("posUnigram", false)) {
+      Log.info("computing IG/MI for POS unigram templates, refinementShard=" + refinementShard);
+      posIG = new TemplateIG.Refined<>(numY, em, refinementShard, true);
+    }
+
+    // NEG: binary ~ feature @template
+    TemplateIG.Refined<Integer> negIG = null;
+    if (config.getBoolean("negUnigram", false)) {
+      Log.info("computing IG/MI for NEG unigram templates, refinementShard=" + refinementShard);
+      negIG = new TemplateIG.Refined<>(numY, em, refinementShard, true);
+    }
+    /* ************************************************************************/
+
+    // When we go to products, IGP.flatten will take FeatureFile.Line => List<ProductIndex>
+    // @template -> @templateProd
+    // Once we go to products, we will not every refine on @frame, since it will be too much.
+    // For PB we can omit @frame in the first one since their roles are universal.
+    TemplateIG.Refined<FeatureName> posProdIG = null;
+    if (config.getBoolean("posNgram", false))
+      posProdIG = new TemplateIG.Refined<>(numY, em, refinementShard, false);
+    TemplateIG.Refined<FeatureName> negProdIG = null;
+    if (config.getBoolean("negNgram", false))
+      negProdIG = new TemplateIG.Refined<>(numY, em, refinementShard, false);
+    if (posProdIG != null || negProdIG != null) {
+      igp(posProdIG, negProdIG);
+      if (posProdIG != null) {
+        Log.info("computing IG/MI for POS n-gram template features,"
+            + " refinementShard=" + refinementShard
+            + " numRefinements=" + posProdIG.getNumRefinements());
+      }
+      if (negProdIG != null) {
+        Log.info("computing IG/MI for NEG n-gram template features,"
+            + " refinementShard=" + refinementShard
+            + " numRefinements=" + negProdIG.getNumRefinements());
+      }
+    }
+    /* ************************************************************************/
+
+    // Maybe set to true when posNgram=true and mode=framenet since we cannot
+    // afford to refine on frame, but do not want to conflate roles.
+    boolean useFrameRoleInPlaceOfRole =
+        config.getBoolean("useFrameRoleInPlaceOfRole", false);
+
+    BubEntropyEstimatorAdapter bubEst = null;
+    if (em == EntropyMethod.BUB) {
+      final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
+      Log.info("using BUB code in " + bubFuncParentDir.getPath());
+      bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir);
+      bubEst.debug = config.getBoolean("bubDebug", false);
+    }
+
+    TimeMarker tm = new TimeMarker();
+    long nlines = 0, nlinesIgnored = 0;
+    int filesSeen = 0;
+    for (File f : featureFiles) {
+      for (FeatureFile.Line line : FeatureFile.getLines(f, true)) {
+        if (tm.enoughTimePassed(15))
+          Log.info("processed " + nlines + " and ignored " + nlinesIgnored
+              + " lines in " + tm.secondsSinceFirstMark() + " sec");
+        nlines++;
+
+        if (ignoreSentenceIds.contains(line.getSentenceId())) {
+          nlinesIgnored++;
+          continue;
+        }
+
+        if (posProdIG != null) {
+          if (line.getPosLabelB()) {
+            // TODO Could use frameRole here instead.
+            // For FN, this is feasible and desirable.
+            // For PB, this is infeasible and not desirable.
+            int role = line.getRoles(false)[0];
+            if (useFrameRoleInPlaceOfRole)
+              role = line.getFrameRoles(false)[0];
+            List<ProductIndex> buffer = new ArrayList<>();
+            for (FeatureName fname : posProdIG.getRefinements()) {
+              buffer.clear();
+              flatten(line, 0, fname.templateInt, 0, ProductIndex.NIL, template2cardinality, buffer);
+              long[] x = new long[buffer.size()];
+              for (int i = 0; i < x.length; i++)
+                x[i] = buffer.get(i).getProdFeature();
+              posProdIG.update(fname, role, x);
+            }
+          }
+        }
+
+        if (negProdIG != null) {
+          int y = line.getPosLabelB() ? 1 : 0;
+          List<ProductIndex> buffer = new ArrayList<>();
+          for (FeatureName fname : posProdIG.getRefinements()) {
+            buffer.clear();
+            flatten(line, 0, fname.templateInt, 0, ProductIndex.NIL, template2cardinality, buffer);
+            long[] x = new long[buffer.size()];
+            for (int i = 0; i < x.length; i++)
+              x[i] = buffer.get(i).getProdFeature();
+            negProdIG.update(fname, y, x);
+          }
+        }
+
+        if (posIG != null) {
+          if (line.getPosLabelB()) {
+            int frame = line.getFrames(false)[0];
+            int role = line.getRoles(false)[0];
+            for (TemplateExtraction te : line.groupByTemplate()) {
+              IntPair refinement = new IntPair(frame, te.template);
+              posIG.update(refinement, role, te.features);
+            }
+          }
+        }
+
+        if (negIG != null) {
+          int y = line.getPosLabelB() ? 1 : 0;
+          for (TemplateExtraction te : line.groupByTemplate()) {
+            Integer refinement = te.template;
+            negIG.update(refinement, y, te.features);
+          }
+        }
+      }
+
+      // Write out results to disk
+      if (writeTopProductsEveryK > 0 && filesSeen % writeTopProductsEveryK == 0)
+        writeout(output, posIG, negIG, posProdIG, negProdIG, bialph);
+      filesSeen++;
+    }
+    Log.info("done reading, saw " + filesSeen + " files");
+
     // Write out final results
-    igp.writeOutProducts(output, refinementMode);
+    writeout(output, posIG, negIG, posProdIG, negProdIG, bialph);
 
     if (bubEst != null) {
       Log.info("closing matlab/bub connection");
@@ -1141,12 +616,81 @@ public class InformationGainProducts {
     Log.info("done");
   }
 
+  private static void writeout(File output,
+      TemplateIG.Refined<IntPair> posIG,
+      TemplateIG.Refined<Integer> negIG,
+      TemplateIG.Refined<FeatureName> posProdIG,
+      TemplateIG.Refined<FeatureName> negProdIG,
+      BiAlph templateNames) throws IOException {
+    Log.info("writing to " + output.getPath());
+    try (BufferedWriter w = FileUtil.getWriter(output)) {
+
+      if (posIG != null) {
+        Log.info("num POS unigram template refinements " + posIG.getNumRefinements());
+        posIG.writeout(w, frameTemplate -> {
+          // order <tab> templateInt <tab> templateStr (<tab> restrictions)?
+          return "1\t" + frameTemplate.second
+              + "\t" + templateNames.lookupTemplate(frameTemplate.second)
+              + "\ty=1,frame=" + frameTemplate.first;
+        });
+      }
+
+      if (negIG != null) {
+        Log.info("num NEG unigram template refinements " + negIG.getNumRefinements());
+        negIG.writeout(w, template -> "template=" + template);
+        negIG.writeout(w, template -> {
+          // order <tab> templateInt <tab> templateStr (<tab> restrictions)?
+          return "1\t" + template
+              + "\t" + templateNames.lookupTemplate(template)
+              + "\ty=0";
+        });
+      }
+
+      if (posProdIG != null) {
+        Log.info("num POS n-gram template feature refinements " + posProdIG.getNumRefinements());
+        posProdIG.writeout(w, fname -> {
+          // These don't get refined, so its fine to break the "k=v" format.
+          StringBuilder sb = new StringBuilder();
+          sb.append(fname.templateInt.length);  // order
+          sb.append("\t");
+          sb.append(StringUtils.join("*", fname.templateInt));
+          sb.append("\t");
+          sb.append(StringUtils.join("*", fname.templateStr));
+          sb.append("\ty=1");
+          return sb.toString();
+        });
+      }
+
+      if (negProdIG != null) {
+        Log.info("num NEG n-gram template feature refinements " + negProdIG.getNumRefinements());
+        negProdIG.writeout(w, fname -> {
+          // These don't get refined, so its fine to break the "k=v" format.
+          StringBuilder sb = new StringBuilder();
+          sb.append(fname.templateInt.length);  // order
+          sb.append("\t");
+          sb.append(StringUtils.join("*", fname.templateInt));
+          sb.append("\t");
+          sb.append(StringUtils.join("*", fname.templateStr));
+          sb.append("\ty=0");
+          return sb.toString();
+        });
+      }
+    }
+  }
+
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
-    if (config.getBoolean("unigrams", false))
-      igReplacement();
-    else
-      igp();
+
+    // BiAlph gives int<->string for templates
+    File bf = config.getExistingFile("bialph");
+    BiAlph bialph;
+    if (bf.getName().contains(".jser")) {
+      bialph = (BiAlph) FileUtil.deserialize(bf);
+    } else {
+      bialph = new BiAlph(bf, LineMode.ALPH);
+    }
+
+    computeIG(bialph, config);
   }
 }
 
