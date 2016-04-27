@@ -46,6 +46,7 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
     OctaveEngineFactory factory = new OctaveEngineFactory();
     octave = factory.getScriptEngine();
     octave.eval("addpath('" + bubFuncParentDir.getPath() + "');");
+    Log.info("bub setup at " + bubFuncParentDir.getPath());
   }
 
   public <T> double entropy(Counts<T> counts, int dimension) {

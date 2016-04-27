@@ -171,16 +171,19 @@ public class FeatureFile {
       }
       return k;
     }
-    public int[] getPosLabel() {
+    public boolean getPosLabelB() {
       if (tokenized == null)
         tokenize();
       int ki = FeaturePrecomputation.ROLE_STRING_COLUMN;
       String fFrR = tokenized[ki];
       if (fFrR.equals("-1") || fFrR.equals("-1,-1,-1"))
-        return POS_LABEL_NO;
+        return false;
       String[] split;
       assert (split = fFrR.split(",")).length == 1 || split.length % 3 == 0 : "fFrR=" + fFrR;
-      return POS_LABEL_YES;
+      return true;
+    }
+    public int[] getPosLabel() {
+      return getPosLabelB() ? POS_LABEL_YES : POS_LABEL_NO;
     }
     private static final int[] POS_LABEL_NO = new int[] {0};
     private static final int[] POS_LABEL_YES = new int[] {1};
