@@ -5,6 +5,10 @@
 #$ -l num_proc=1
 #$ -S /bin/bash
 
+# TODO NOTE DEPRECATED
+# see feature-selection(-pos-helper).sh for the new way of doing this:
+# use awk directly on feature files and pipe results to TemplateIG.
+
 set -eu
 
 echo "starting at `date` on $HOSTNAME"
@@ -25,7 +29,7 @@ JAR=${12}
 XMX=${13}
 
 # Must be set in environment
-#FNPARSE_DATA=/export/projects/twolfe/fnparse-data/
+FNPARSE_DATA=/export/projects/twolfe/fnparse-data/
 
 # Can't use relative paths when you have a checkout in a temporary directory
 # and don't use -cwd!

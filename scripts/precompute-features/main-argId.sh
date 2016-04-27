@@ -2,17 +2,18 @@
 # How to run all the scripts in this directory by hand.
 # By hand because it needs to be asyncronous (qsub takes a while and doesn't block)
 
-#export FNPARSE_DATA=/export/projects/twolfe/fnparse-data
-export FNPARSE_DATA=$HOME/scratch/fnparse-data
+export FNPARSE_DATA=/export/projects/twolfe/fnparse-data
+#export FNPARSE_DATA=$HOME/scratch/fnparse-data
 
-#SUF=".gz"
-SUF=".bz2"
+SUF=".gz"
+CAT="zcat"
+ZIP="gzip2 -c"
+#SUF=".bz2"
+#CAT="bzcat"
+#ZIP="bzip2 -c"
 
-# TODO Put these in case statement
-CAT="bzcat"
-ZIP="bzip2 -c"
-
-BACKEND=slurm
+#BACKEND=slurm
+BACKEND=sge
 export CLUSTERLIB_BACKEND=$BACKEND
 
 DATASET=framenet
@@ -21,7 +22,8 @@ DATASET=framenet
 #WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/raw-shards
 #WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a/
 #WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DATASET/oct21a/
-WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET
+#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET
+WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/conll16/$DATASET
 JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 
 ############################################################################################
@@ -97,6 +99,9 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py \
 # or "only have this feature fire if is has fired at least K other times in the corpus"
 # These features will be put at the end of every line in the feature files and a new
 # alphabet will be writte out including them.
+
+# TODO NOTE This has been wrapped up into create-template-filters.sh,
+# but I'm leaving this since this script is defunct.
 
 # A) Compute the feature frequencies
 BIALPH_BEFORE_FILTERS=$WORKING_DIR/coherent-shards/alphabet.txt$SUF
@@ -192,6 +197,10 @@ $CAT $WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF | awk -F"\t" 'BEGIN{
 
 ############################################################################################
 ### COMPUTE INFORMATION GAIN
+
+# TODO NOTE This has been wrapped up into feature-selection.sh,
+# but I'm leaving this since this script is defunct.
+
 #WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
 #WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 FNPARSE_DATA=/export/projects/twolfe/fnparse-data/
@@ -366,7 +375,7 @@ java -cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar -ea -server \
     scripts/having-a-laugh/${DATASET}-32-${D}.fs
 
 
-# Filter the feature files to only include features in the alphabet
+# Filter the feature files to only includ ethe features in the alphabet
 mkdir -p $WD/sge-logs
 for i in `seq $NUM_SHARDS | awk '{print $1-1}'`; do
   qsub -N "featFilt-$i" -b y -j y -V -o $WD/sge-logs \

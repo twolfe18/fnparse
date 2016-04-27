@@ -10,7 +10,7 @@ M2_LOCAL=/state/partition1/twolfe/m2-local
 #	rm -f target/*.jar
 #	time mvn clean compile assembly:single -DskipTests
 jar:
-	rm -f target/*.jar
+	rm -rf target/
 	time mvn clean compile assembly:single -DskipTests
 
 install:
