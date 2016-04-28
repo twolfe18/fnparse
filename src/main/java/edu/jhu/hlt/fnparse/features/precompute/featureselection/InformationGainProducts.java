@@ -18,6 +18,7 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile.TemplateExtraction;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
@@ -537,7 +538,8 @@ public class InformationGainProducts {
       for (FeatureFile.Line line : FeatureFile.getLines(f, true)) {
         if (tm.enoughTimePassed(15))
           Log.info("processed " + nlines + " and ignored " + nlinesIgnored
-              + " lines in " + tm.secondsSinceFirstMark() + " sec");
+              + " lines in " + tm.secondsSinceFirstMark() + " sec, "
+              + Describe.memoryUsage());
         nlines++;
 
         if (ignoreSentenceIds.contains(line.getSentenceId())) {
@@ -637,7 +639,6 @@ public class InformationGainProducts {
 
       if (negIG != null) {
         Log.info("num NEG unigram template refinements " + negIG.getNumRefinements());
-        negIG.writeout(w, template -> "template=" + template);
         negIG.writeout(w, template -> {
           // order <tab> templateInt <tab> templateStr (<tab> restrictions)?
           return "1\t" + template
