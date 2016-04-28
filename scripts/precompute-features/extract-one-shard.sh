@@ -63,3 +63,5 @@ java -Xmx14G -ea -server -cp $JAR \
   -DdisallowConcreteStanford=false \
   edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation
 
+echo "done at `date` with ret code $?"
+

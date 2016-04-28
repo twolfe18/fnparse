@@ -7,8 +7,8 @@
 
 import glob, itertools, sys, os, math, subprocess, shutil, re, collections, time
 
-#SUF = '.gz'
-SUF = '.bz2'
+SUF = '.gz'
+#SUF = '.bz2'
 
 def qsub_and_parse_jid(command):
   s = subprocess.check_output(command)
