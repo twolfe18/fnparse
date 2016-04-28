@@ -3,7 +3,7 @@ package edu.jhu.hlt.uberts.srl;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.Relation.EqualityArray;
-import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
+import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 
 public class Srl3EdgeWrapper {
 
@@ -23,8 +23,8 @@ public class Srl3EdgeWrapper {
     EqualityArray e1 = (EqualityArray) s2.get(1);
     f = (String) e2.get(1);
     k = (String) e.getTail(2).getValue();
-    t = FeatureExtractionFactor.extractSpan(e1, 0, 1);
-    s = FeatureExtractionFactor.extractSpan(s1, 0, 1);
+    t = OldFeaturesWrapper.extractSpan(e1, 0, 1);
+    s = OldFeaturesWrapper.extractSpan(s1, 0, 1);
   }
 
 }

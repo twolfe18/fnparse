@@ -39,20 +39,25 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
   public Alphabet() {
     this(new BasicFeatureTemplates());
   }
-
   public Alphabet(BasicFeatureTemplates templateIndex) {
+    this(templateIndex, true);
+  }
+  public Alphabet(BasicFeatureTemplates templateIndex, boolean addAllFromBft) {
     super();
     this.hf = new SemaforicHeadFinder();
     this.templateName2index = new HashMap<>();
-    for (String tn : templateIndex.getBasicTemplateNames()) {
-      Template t = templateIndex.getBasicTemplate(tn);
-      this.add(new TemplateAlphabet(t, tn, size()));
+    if (addAllFromBft) {
+      for (String tn : templateIndex.getBasicTemplateNames()) {
+        Template t = templateIndex.getBasicTemplate(tn);
+        this.add(new TemplateAlphabet(t, tn, size()));
+      }
     }
   }
 
   @Override
   public boolean add(TemplateAlphabet t) {
-    assert t.name != null;
+    if (t.name == null)
+      throw new IllegalArgumentException("this indexes on names, none provided");
     assert t.index == size();
     Integer old = templateName2index.put(t.name, t.index);
     assert old == null;

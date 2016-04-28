@@ -5,7 +5,9 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
@@ -60,6 +62,23 @@ public class FeatureSet {
     List<int[]> fs = getFeatureSet(f, bialph);
     return fs.toArray(new int[0][]);
   }
+  public static List<String[]> getFeatureSet3(File f) {
+    List<String[]> features = new ArrayList<>();
+    Set<String> templates = new HashSet<>();
+    try {
+      String fs = getFeatureSetString(f);
+      for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
+        List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
+        templates.addAll(strTemplates);
+        features.add(strTemplates.toArray(new String[strTemplates.size()]));
+      }
+    } catch (TemplateDescriptionParsingException e) {
+      throw new RuntimeException(e);
+    }
+    Log.info("[main] loaded " + features.size() + " features covering " + templates.size() + " templates");
+    return features;
+  }
+
 
   /**
    * Reads the 7 column tab-separated format:
