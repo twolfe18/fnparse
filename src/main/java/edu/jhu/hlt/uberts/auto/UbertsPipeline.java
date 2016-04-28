@@ -17,10 +17,12 @@ import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
@@ -31,7 +33,8 @@ import edu.jhu.hlt.uberts.Uberts.Step;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
-import edu.jhu.hlt.uberts.features.FeatureExtractionFactor.WeightAdjoints;
+import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
+import edu.jhu.hlt.uberts.features.WeightAdjoints;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
@@ -45,14 +48,20 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class UbertsPipeline {
 
+  enum Mode {
+    EXTRACT_FEATS,
+    LEARN,
+  }
+
   private Uberts u;
   private List<Rule> rules;
   private List<Relation> helperRelations;
   private TypeInference typeInf;
 
   private double pNegSkip = 0.75;
-  private BasicFeatureTemplates bft = new BasicFeatureTemplates();
-  private FeatureExtractionFactor.OldFeaturesWrapper fe = new FeatureExtractionFactor.OldFeaturesWrapper(bft, pNegSkip);
+  private BasicFeatureTemplates bft;
+  private OldFeaturesWrapper fe;
+  private Mode mode;
 
   // Both of these are single arg relations and their argument is a doc id.
   private NodeType docidNT;
@@ -65,6 +74,18 @@ public class UbertsPipeline {
       Iterable<File> schemaFiles,
       File xyDefsFile) throws IOException {
     this.u = u;
+    bft = new BasicFeatureTemplates();
+
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    mode = Mode.valueOf(config.getString("mode"));
+    if (mode == Mode.EXTRACT_FEATS) {
+      fe = new OldFeaturesWrapper(bft, pNegSkip);
+      fe.cacheAdjointsForwards = false;
+    } else if (mode == Mode.LEARN) {
+      fe = new OldFeaturesWrapper(bft);
+      fe.cacheAdjointsForwards = true;
+    }
+
     rules = new ArrayList<>();
     helperRelations = new ArrayList<>();
 
@@ -104,6 +125,7 @@ public class UbertsPipeline {
       }
       addRule(typedRule);
     }
+
     Log.info("done");
   }
 
@@ -119,8 +141,10 @@ public class UbertsPipeline {
 //    tg.get2().feats = new FeatureExtractionFactor.Simple(relevant, u);
 //    tg.get2().feats = new FeatureExtractionFactor.GraphWalks();
 //    tg.get2().feats = new FeatureExtractionFactor.OldFeaturesWrapper(bft);
-    tg.get2().feats = fe;
-    // If you leave it null, it will assign everything a score of 1
+    if (r.rhs.relName.startsWith("event"))
+      tg.get2().feats = new FeatureExtractionFactor.Oracle(r.rhs.relName);
+    else
+      tg.get2().feats = fe;
 
     u.addTransitionGenerator(tg.get1(), tg.get2());
   }
@@ -175,6 +199,7 @@ public class UbertsPipeline {
   public void extractFeatures(ManyDocRelationFileIterator x, File output, Shard dataShard) throws IOException {
     Log.info("writing features to " + output);
     Log.info("pSkipNeg=" + pNegSkip);
+    Log.info("mode=" + mode);
 
     // This will initialize the Alphabet over frame/role names and provide
     // the code to write out features.txt.gz and template-feat-indices.txt.gz
@@ -184,6 +209,7 @@ public class UbertsPipeline {
       fpre = new FeaturePrecomputation.AlphWrapper(roleMode, fe.getFeatures());
     }
 
+    Timer trajProcessingTimer = new Timer("trajProcessingTimer", 10, true);
     boolean debug = false;
     TimeMarker tm = new TimeMarker();
     Counts<String> posRel = new Counts<>(), negRel = new Counts<>();
@@ -216,11 +242,8 @@ public class UbertsPipeline {
         assert doc.items.isEmpty() && !doc.facts.isEmpty();
         for (HypEdge.WithProps fact : doc.facts) {
           if (fact.hasProperty(HypEdge.IS_Y)) {
-            if (debug) {
-              //                HashableHypEdge hhe = new HashableHypEdge(fact);
-              //                System.out.println("[exFeats] adding: " + hhe.hashDesc());
+            if (debug)
               System.out.println("[exFeats] y: " + fact);
-            }
             u.addLabel(fact);
             cy++;
           }
@@ -243,63 +266,76 @@ public class UbertsPipeline {
         // Up to this, most actions will be blocked.
         u.addEdgeToState(u.makeEdge(doneAnnoRel, docidN));
 
+        Log.info("done setup on " + docid);
 
         // Run inference and record extracted features
         boolean dedupEdges = true;
         int skipped = 0, kept = 0;
         List<Step> traj = u.recordOracleTrajectory(dedupEdges);
+        FPR fpr = new FPR();
+        trajProcessingTimer.start();
         for (Step t : traj) {
           boolean y = u.getLabel(t.edge);
-          String lab = y ? "+1" : "-1";
 
-          @SuppressWarnings("unchecked")
-          WeightAdjoints<Pair<TemplateAlphabet, String>> fx =
-              (WeightAdjoints<Pair<TemplateAlphabet, String>>) t.score;
-          if (fx.getFeatures() == fe.SKIP) {
-            skipped++;
-            continue;
-          }
-          kept++;
-
-          // OUTPUT
-          if (fpre != null) {
-            // TODO a lot of overlap between features(srl2) and features(srl3)?
-            // TODO do I need to group-by (t,s) for this output format?
-            // I think the solution which satisfies both of those problems is to
-            // => only write out srl3 edges
-            // this way you know how to format the (t,s,k) fields
-            if (t.edge.getRelation().getName().equals("srl3")) {
-              Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(t.edge);
-              String k;
-              if (y) {
-                k = fpre.lookupRole(s3.k)
-                    + "," + fpre.lookupFrameRole(s3.f, s3.k)
-                    + "," + fpre.lookupFrame(s3.f);
-              } else {
-                k = "-1";
+          // LEARNING
+          if (mode == Mode.LEARN) {
+            double score = t.score.forwards();
+            double margin = 0.1;
+            if (y && score < margin)
+              t.score.backwards(-1);
+            if (!y && score > -margin)
+              t.score.backwards(+1);
+            fpr.accum(y, score > 0);
+          } else {
+            @SuppressWarnings("unchecked")
+            WeightAdjoints<Pair<TemplateAlphabet, String>> fx =
+            (WeightAdjoints<Pair<TemplateAlphabet, String>>) t.score;
+            if (fx.getFeatures() == fe.SKIP) {
+              skipped++;
+              continue;
+            }
+            kept++;
+            // OUTPUT
+            if (fpre != null) {
+              // TODO a lot of overlap between features(srl2) and features(srl3)?
+              // TODO do I need to group-by (t,s) for this output format?
+              // I think the solution which satisfies both of those problems is to
+              // => only write out srl3 edges
+              // this way you know how to format the (t,s,k) fields
+              if (t.edge.getRelation().getName().equals("srl3")) {
+                Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(t.edge);
+                String k;
+                if (y) {
+                  k = fpre.lookupRole(s3.k)
+                      + "," + fpre.lookupFrameRole(s3.f, s3.k)
+                      + "," + fpre.lookupFrame(s3.f);
+                } else {
+                  k = "-1";
+                }
+                w.write(Target.toLine(new FeaturePrecomputation.Target(docid, s3.t)));
+                w.write("\t" + s3.s.shortString());
+                w.write("\t" + k);
+                for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
+                  TemplateAlphabet template = tf.get1();
+                  String feat = tf.get2();
+                  int featIdx = template.alph.lookupIndex(feat, true);
+                  w.write('\t');
+                  w.write(template.index + ":" + featIdx);
+                  features++;
+                }
+                w.newLine();
               }
-              w.write(Target.toLine(new FeaturePrecomputation.Target(docid, s3.t)));
-              w.write("\t" + s3.s.shortString());
-              w.write("\t" + k);
+            } else {
+              // Writes out tab-separated human readable features
+              String lab = y ? "+1" : "-1";
+              w.write(t.edge.getRelFileString(lab));
               for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
-                TemplateAlphabet template = tf.get1();
-                String feat = tf.get2();
-                int featIdx = template.alph.lookupIndex(feat, true);
                 w.write('\t');
-                w.write(template.index + ":" + featIdx);
+                w.write(tf.get2()); // (template,feature), but feature includes template in the name
                 features++;
               }
               w.newLine();
             }
-          } else {
-            // Writes out tab-separated human readable features
-            w.write(t.edge.getRelFileString(lab));
-            for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
-              w.write('\t');
-              w.write(tf.get2()); // (template,feature), but feature includes template in the name
-              features++;
-            }
-            w.newLine();
           }
 
           if (y) posRel.increment(t.edge.getRelation().getName());
@@ -308,8 +344,13 @@ public class UbertsPipeline {
 //            System.out.println("[exFeats.orTraj] " + lab + " " + t.edge);// + " " + new HashableHypEdge(t.edge).hc);
           actions++;
         }
-        Log.info("skippedFeatures=" + skipped + " keptFeatures=" + kept
-            + " skippedDocs=" + skippedDocs + " keptDocs=" + docs);
+        trajProcessingTimer.stop();
+        if (mode == Mode.LEARN) {
+          Log.info("n=" + traj.size() + " " + fpr.toString());
+        } else if (mode == Mode.EXTRACT_FEATS) {
+          Log.info("skippedFeatures=" + skipped + " keptFeatures=" + kept
+              + " skippedDocs=" + skippedDocs + " keptDocs=" + docs);
+        }
 
         if (tm.enoughTimePassed(15)) {
           double sec = tm.secondsSinceFirstMark();

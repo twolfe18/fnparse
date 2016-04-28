@@ -86,6 +86,10 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
   @Override
   public RelDoc next() {
     RelDoc n = cur;
+    if (nextDesc == null) {
+      cur = null;
+      return n;
+    }
     cur = new RelDoc(nextDesc);
     nextDesc = null;
     if (uniq != null)
@@ -98,10 +102,6 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
         nextDesc = null;
       }
     }
-    if (nextDesc == null)
-      cur = null;
-    // first call to next is in the constructor, n will be null
-    // penultimate call sets cur (and thus on the ultimate call n) to null
     assert n == null || n.def != null;
     return n;
   }

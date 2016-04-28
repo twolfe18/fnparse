@@ -136,33 +136,18 @@ public class Uberts {
    * @param oracle says whether only edges which are in the gold label set should
    * be added to state (others are just popped off the agenda and discarded).
    */
-  public void dbgRunInference(boolean oracle, int actionLimit) {
-    Log.info("starting...");
-    int applied = 0;
-    for (@SuppressWarnings("unused") int i = 0; agenda.size() > 0
-        && (actionLimit <= 0 || applied < actionLimit); i++) {
-//      Log.info("choosing the best action, i=" + i + " size=" + agenda.size() + " cap=" + agenda.capacity());
-//      agenda.dbgShowScores();
+  public List<Step> dbgRunInference(boolean oracle, int actionLimit) {
+    List<Step> steps = new ArrayList<>();
+    for (int i = 0; agenda.size() > 0 && (actionLimit <= 0 || i < actionLimit); i++) {
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge best = p.get1();
-      boolean gold = goldEdges.contains(new HashableHypEdge(best));
-//      Log.info("best=" + best + " gold=" + gold);
-      if (oracle && gold) {
-//        Log.info("oracle=true, non-gold edge, skipping");
+      boolean y = getLabel(best);
+      if (!y && oracle)
         continue;
-      }
-//      Adjoints sc = p.get2();
-//      Log.info("score: " + sc);
-//      double score = sc.forwards();
-//      if (score <= 0) {
-//        Log.info("score<0, exiting");
-//        break;
-//      }
+      steps.add(new Step(p, y));
       addEdgeToState(best);
-      applied++;
     }
-    Log.info("done adding positive-scoring HypEdges");
-//    state.dbgShowEdges();
+    return steps;
   }
   public void dbgRunInference() {
     dbgRunInference(false, 0);
@@ -172,6 +157,9 @@ public class Uberts {
     public final HypEdge edge;
     public final Adjoints score;
     public final boolean gold;
+    public Step(Pair<HypEdge, Adjoints> es, boolean gold) {
+      this(es.get1(), es.get2(), gold);
+    }
     public Step(HypEdge e, Adjoints score, boolean gold) {
       this.edge = e;
       this.score = score;
