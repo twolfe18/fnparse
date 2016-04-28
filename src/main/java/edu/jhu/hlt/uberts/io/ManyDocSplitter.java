@@ -45,6 +45,7 @@ public abstract class ManyDocSplitter implements AutoCloseable {
         for (String line = r.readLine(); line != null; line = r.readLine())
           testDocIds.add(line);
       }
+      Log.info("read " + testDocIds.size() + " ids");
     }
 
     public void setDev(File devIdsFile, File devOutputFile) throws IOException {
@@ -55,6 +56,7 @@ public abstract class ManyDocSplitter implements AutoCloseable {
         for (String line = r.readLine(); line != null; line = r.readLine())
           devDocIds.add(line);
       }
+      Log.info("read " + devDocIds.size() + " ids");
     }
 
     @Override
@@ -70,6 +72,10 @@ public abstract class ManyDocSplitter implements AutoCloseable {
     public File getOutputForPartition(String p) {
       if ("test".equals(p))
         return testOutput;
+      if ("dev".equals(p)) {
+        assert devOutput != null;
+        return devOutput;
+      }
       assert "train".equals(p);
       return trainOutput;
     }
