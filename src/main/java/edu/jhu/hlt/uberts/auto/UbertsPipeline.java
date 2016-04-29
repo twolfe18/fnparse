@@ -81,6 +81,8 @@ public class UbertsPipeline {
   private Relation startDocRel;
   private Relation doneAnnoRel;
 
+  public boolean debug = false;
+
   public UbertsPipeline(
       Uberts u,
       File grammarFile,
@@ -95,6 +97,8 @@ public class UbertsPipeline {
       fe = new OldFeaturesWrapper(bft, pNegSkip);
       fe.cacheAdjointsForwards = false;
     } else if (mode == Mode.LEARN) {
+      debug = true;
+      Uberts.COARSE_EVENT_LOGGING = true;
       fe = new OldFeaturesWrapper(bft);
       fe.cacheAdjointsForwards = true;
     }
@@ -161,7 +165,11 @@ public class UbertsPipeline {
 //    else
 //      tg.get2().feats = fe;
 
-    tg.get2().feats = new FeatureExtractionFactor.Oracle(r.rhs.relName);
+    if (mode == Mode.EXTRACT_FEATS)
+      tg.get2().feats = this.fe;
+    else
+      tg.get2().feats = new FeatureExtractionFactor.Oracle(r.rhs.relName);
+
     dbgTransitionGenerators.add(tg.get2());
     u.addTransitionGenerator(tg.get1(), tg.get2());
   }
@@ -270,7 +278,8 @@ public class UbertsPipeline {
     // Idiosyncratic: change all event* edges from y to x
     for (HypEdge.WithProps fact : doc.facts) {
       if (fact.getRelation().getName().startsWith("event")) {
-        Log.info("changing from y=>x: " + fact);
+        if (this.debug)
+          Log.info("changing from y=>x: " + fact);
         fact.setProperty(HypEdge.IS_X, true);
         fact.setProperty(HypEdge.IS_Y, false);
       }
@@ -281,7 +290,7 @@ public class UbertsPipeline {
       if (fact.hasProperty(HypEdge.IS_Y)) {
         if (debug)
           System.out.println("[exFeats] y: " + fact);
-        if (fact.hasProperty(HypEdge.IS_DERIVED))
+        if (this.debug && fact.hasProperty(HypEdge.IS_DERIVED))
           System.out.println("derived label: " + fact);
         u.addLabel(fact);
         cy++;
@@ -294,7 +303,7 @@ public class UbertsPipeline {
         u.addEdgeToState(fact);
         if (debug)
           System.out.println("[exFeats] x: " + fact);
-        if (fact.hasProperty(HypEdge.IS_DERIVED))
+        if (this.debug && fact.hasProperty(HypEdge.IS_DERIVED))
           System.out.println("derived state edge: " + fact);
         cx++;
       }
@@ -307,7 +316,8 @@ public class UbertsPipeline {
     HypEdge d = u.makeEdge(doneAnnoRel, docidN);
     u.addEdgeToState(d);
 
-    Log.info("done setup on " + docid);
+    if (this.debug)
+      Log.info("done setup on " + docid);
     return docid;
   }
 
@@ -379,9 +389,7 @@ public class UbertsPipeline {
       agenda.clear();
 
       if (u.getLabel(best)) {
-        sdfkdsl
       } else {
-        
       }
     }
 
@@ -417,7 +425,8 @@ public class UbertsPipeline {
     int docs = 0, actions = 0;
     int skippedDocs = 0;
     long features = 0;
-    u.showOracleTrajDiagnostics = true;
+    if (mode == mode.LEARN)
+      u.showOracleTrajDiagnostics = true;
     Iter itr = new Iter(x, typeInf, Arrays.asList("succTok"));
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       while (itr.hasNext()) {
@@ -428,13 +437,9 @@ public class UbertsPipeline {
         }
         docs++;
 
-        if (true) {
-          srlClassificationCopOut(doc);
-          continue;
-        }
-
         if (mode == Mode.LEARN && u.getRandom().nextDouble() < 0.5) {
-          evaluate(doc);
+          srlClassificationCopOut(doc);
+//          evaluate(doc);
           continue;
         }
 

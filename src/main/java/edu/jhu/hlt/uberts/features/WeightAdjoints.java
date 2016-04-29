@@ -3,7 +3,6 @@ package edu.jhu.hlt.uberts.features;
 import java.util.List;
 import java.util.Map;
 
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public class WeightAdjoints<T> implements Adjoints {

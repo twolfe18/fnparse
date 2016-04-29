@@ -39,10 +39,10 @@ import edu.jhu.util.HPair;
  */
 public class Uberts {
 
-  public static boolean DEBUG = true;
+  public static boolean DEBUG = false;
 
   // Log things like when an edge is added to the state or a rule fires
-  public static boolean COARSE_EVENT_LOGGING = true;
+  public static boolean COARSE_EVENT_LOGGING = false;
 
   public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
 
