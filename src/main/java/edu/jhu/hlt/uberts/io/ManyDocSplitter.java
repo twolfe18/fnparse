@@ -51,6 +51,7 @@ public abstract class ManyDocSplitter implements AutoCloseable {
     public void setDev(File devIdsFile, File devOutputFile) throws IOException {
       Log.info("reading dev ids from " + devIdsFile + " and writing dev output to " + devOutputFile);
       this.devIdsFile = devIdsFile;
+      this.devOutput = devOutputFile;
       this.devDocIds = new HashSet<>();
       try (BufferedReader r = FileUtil.getReader(devIdsFile)) {
         for (String line = r.readLine(); line != null; line = r.readLine())
