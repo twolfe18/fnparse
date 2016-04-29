@@ -39,7 +39,10 @@ import edu.jhu.util.HPair;
  */
 public class Uberts {
 
-  public static boolean DEBUG = false;
+  public static boolean DEBUG = true;
+
+  // Log things like when an edge is added to the state or a rule fires
+  public static boolean COARSE_EVENT_LOGGING = true;
 
   public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
 
@@ -136,7 +139,10 @@ public class Uberts {
    * @param oracle says whether only edges which are in the gold label set should
    * be added to state (others are just popped off the agenda and discarded).
    */
-  public List<Step> dbgRunInference(boolean oracle, int actionLimit) {
+  public Pair<Labels.Perf, List<Step>> dbgRunInference(boolean oracle, double minScore, int actionLimit) {
+    if (COARSE_EVENT_LOGGING)
+      Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
+    Labels.Perf perf = goldEdges.new Perf();
     List<Step> steps = new ArrayList<>();
     for (int i = 0; agenda.size() > 0 && (actionLimit <= 0 || i < actionLimit); i++) {
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
@@ -144,28 +150,93 @@ public class Uberts {
       boolean y = getLabel(best);
       if (!y && oracle)
         continue;
+      if (p.get2().forwards() < minScore)
+        break;
+      perf.add(best);
       steps.add(new Step(p, y));
       addEdgeToState(best);
     }
-    return steps;
+    return new Pair<>(perf, steps);
   }
-  public void dbgRunInference() {
-    dbgRunInference(false, 0);
+  public Pair<Labels.Perf, List<Step>> dbgRunInference() {
+    return dbgRunInference(false, Double.NEGATIVE_INFINITY, 0);
   }
 
-  public static class Step {
-    public final HypEdge edge;
-    public final Adjoints score;
-    public final boolean gold;
-    public Step(Pair<HypEdge, Adjoints> es, boolean gold) {
-      this(es.get1(), es.get2(), gold);
+  /**
+   * Use this when you don't have any global factors (the scores of actions
+   * don't affect one another).
+   *
+   * Works by using the agenda as an argmax at every step. The best action is
+   * taken and all the others are removed.
+   *
+   * WARNING: This is not compatible with schemes where you push a bunch of
+   * gold edges on to the agenda (with some oracle feature which knows that
+   * they're gold). Since the agenda is emptied at every step, all but one of
+   * these gold edges will be removed at the first step, limiting recall.
+   *
+   * NOTE: This should be removed once you implement a beam Agenda (which has a
+   * maximum size) -- just use a max size of 1.
+   */
+  public Pair<Labels.Perf, List<Step>> runLocalInference(boolean oracle, double minScore, int actionLimit) {
+    if (COARSE_EVENT_LOGGING)
+      Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
+    Labels.Perf perf = goldEdges.new Perf();
+    List<Step> steps = new ArrayList<>();
+    for (int i = 0; agenda.size() > 0 && (actionLimit <= 0 || i < actionLimit); i++) {
+      Pair<HypEdge, Adjoints> p = agenda.popBoth();
+      HypEdge best = p.get1();
+      boolean y = getLabel(best);
+      if (!y && oracle)
+        continue;
+      if (p.get2().forwards() < minScore)
+        break;
+      agenda.clear();
+      perf.add(best);
+      steps.add(new Step(p, y));
+      addEdgeToState(best);
     }
-    public Step(HypEdge e, Adjoints score, boolean gold) {
-      this.edge = e;
-      this.score = score;
-      this.gold = gold;
-    }
+    return new Pair<>(perf, steps);
   }
+
+//  /**
+//   * Normally, the oracle takes the best action you give it, and says "yes, add
+//   * that edge to the state" or "no, throw that edge out". A better oracle could
+//   * have their own beam, with edges ordered differently, and pick whatever edge
+//   * they want. I have some temporal ordering in the dependencies of my edges
+//   * which makes the first oracle kind of sucky. E.g.:
+//   *
+//   * a => b
+//   * c => d
+//   * b & d => y
+//   *
+//   * Suppose we put the a's and c's on the agenda which are needed to get to y.
+//   * If the oracle adds the a nodes to the state AFTER the c nodes, then the
+//   * d will have been there and the b will trigger the last rule. If the oracle
+//   * chooses the A nodes first, there are y that we will never derive because
+//   * the rule doesn't fire.
+//   *
+//   * This oracle will find the first action which produces a gold edge.
+//   *
+//   * NOTE: I have been confused on what the state/action space is, thinking that
+//   * I only have one action available to me: the one at the top of the agenda.
+//   * That isn't true for this model (with some given params), but not this
+//   * transition system per se (if the parameters were different, the order of
+//   * the agenda would be different, and thus the action would be different).
+//   * The proper way to think about is that all actions on the agenda are possible
+//   * next states (which an oracle could choose instead of the highest scoring
+//   * one). Each action has a loss (not cost, as the distinction is made in the
+//   * dagger paper) of 1 if that HypEdge is not in the gold set and 0 otherwise.
+//   * Could even add a "how many edges got added to the agenda as a result of
+//   * adding this edge to the state" penalty term.
+//   */
+//  public void dbgRunAgressiveOracleStep(List<Step> addTo) {
+//    for (HypEdge e : agenda.getContentsInNoParticularOrder()) {
+//      if (getLabel(e)) {
+//        addTo.add(new Step(e, agenda.getScore(e), true));
+//        break;
+//      }
+//    }
+//  }
 
   /**
    * Runs inference, records the HypEdge popped at every step, and adds gold
@@ -187,6 +258,8 @@ public class Uberts {
    * Though these duplicates are present, oracle recall is handled properly.
    */
   public List<Step> recordOracleTrajectory(boolean dedupEdges) {
+    if (COARSE_EVENT_LOGGING)
+      Log.info("starting " + dedupEdges);
     if (goldEdges == null)
       throw new IllegalStateException("you must add labels, goldEdges==null");
 //    if (pNegKeep < 0 || pNegKeep > 1)
@@ -221,13 +294,14 @@ public class Uberts {
             + " oracleRecall=" + recall.get(relName)
             + " n=" + goldEdges.getRelCount(relName));
         for (HypEdge fn : perf.getFalseNegatives(relName)) {
-          if ("srl1".equals(fn.getRelation().getName())) {
-            int i = Integer.parseInt((String) fn.getTail(0).getValue());
-            int j = Integer.parseInt((String) fn.getTail(1).getValue());
-            System.out.println("\tfn: " + fn + "\t" + dbgGetSpan(i, j));
-          } else {
-            System.out.println("\tfn: " + fn);
-          }
+          System.out.println("\tfn: " + fn);
+//          if ("srl1".equals(fn.getRelation().getName())) {
+//            int i = Integer.parseInt((String) fn.getTail(0).getValue());
+//            int j = Integer.parseInt((String) fn.getTail(1).getValue());
+//            System.out.println("\tfn: " + fn + "\t" + dbgGetSpan(i, j));
+//          } else {
+//            System.out.println("\tfn: " + fn);
+//          }
         }
       }
     }
@@ -454,7 +528,7 @@ public class Uberts {
   }
 
   public void addEdgeToState(HypEdge e) {
-    if (DEBUG)
+    if (DEBUG || COARSE_EVENT_LOGGING)
       Log.info(e.toString());
     assert nodesContains(e);
     state.add(e);
@@ -465,6 +539,8 @@ public class Uberts {
     addEdgeToAgenda(p.get1(), p.get2());
   }
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
+    if (COARSE_EVENT_LOGGING)
+      Log.info(e);
     assert nodesContains(e);
     agenda.add(e, score);
   }

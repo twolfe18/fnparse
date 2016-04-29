@@ -78,27 +78,28 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
   public OldFeaturesWrapper(BasicFeatureTemplates bft) {
 
     // This should be enough to over-fit
+    String w = "Bc256/8";
     String[] tempNames = new String[] {
         "Bc256/8-2-grams-between-Head1-and-Span2.Last",
         "Head1Head2-PathNgram-Basic-LEMMA-DIRECTION-len2",
         "Head1Head2-PathNgram-Basic-POS-DEP-len2",
         "Span2-PosPat-FULL_POS-3-1",
-        "Span2-First-Word",
-        "Span2-Last-Word",
+        "Span2-First-" + w,
+        "Span2-Last-" + w,
         "Span1-PosPat-FULL_POS-3-1",
-        "Span1-First-Word",
-        "Span1-Last-Word",
+        "Span1-First-" + w,
+        "Span1-Last-" + w,
         "Span1-Width-Div2",
-        "Head1-Child-Basic-Word",
-        "Head1-Parent-Basic-Word",
-        "Head1-Grandparent-Basic-Word",
+        "Head1-Child-Basic-" + w,
+        "Head1-Parent-Basic-" + w,
+        "Head1-Grandparent-Basic-" + w,
         "Head1-RootPath-Basic-POS-DEP-t",
-        "Head1-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
+//        "Head1-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
         "Head2-RootPath-Basic-POS-DEP-t",
-        "Head2-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
-        "Head2-Child-Basic-Word",
-        "Head2-Parent-Basic-Word",
-        "Head2-Grandparent-Basic-Word",
+//        "Head2-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
+        "Head2-Child-Basic-" + w,
+        "Head2-Parent-Basic-" + w,
+        "Head2-Grandparent-Basic-" + w,
     };
     Template[] temps = new Template[tempNames.length];
     for (int i = 0; i < temps.length; i++) {

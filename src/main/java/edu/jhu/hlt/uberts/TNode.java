@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.LL;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
@@ -398,6 +399,8 @@ public class TNode {
 //    Log.info(traversal.boundVals);
     // NOTE: Both of these operations don't mutate the State, only Agenda
     if (tval.tg != null) {
+      if (Uberts.COARSE_EVENT_LOGGING)
+        Log.info("state match: " + tval.tg);
       for (Pair<HypEdge, Adjoints> p : tval.tg.generate(traversal))
         tval.u.addEdgeToAgenda(p);
     }
