@@ -129,6 +129,7 @@ echo "J_POS=$J_POS"
 FEAT_POS_BYFRAME_ALL=$WD/templates/ig-files/pos.unigram.txt.gz
 NUM_SHARDS=128  # see helper script
 CMD="zcat $WD/templates/ig-files/pos.unigram.byFrame-shard-*-of-${NUM_SHARDS}.txt* \
+  | grep -vi role \
   | sort -rg -k2 \
   | gzip -c >$FEAT_POS_BYFRAME_ALL"
 echo $CMD
@@ -154,6 +155,23 @@ echo $CMD
 J_FEAT_NEG_ALL=`qsub -l "h_rt=72:00:00,num_proc=1,mem_free=${MEM_SGE}G" \
   -o $WD/templates/sge-logs -b y -j y $CMD | get-sge-job-id`
 echo "J_FEAT_NEG_ALL=$J_FEAT_NEG_ALL"
+
+FEAT_NEG_ALL_DEDUP=$WD/templates/ig-files/neg.unigram.dedup.txt
+CMD="compress-cat $FEAT_NEG_ALL \
+  | python scripts/having-a-laugh/dedup_sim_feats.py \
+    5 \
+    /dev/stdin \
+    5000 \
+    /dev/stdout \
+  | sort -rg -k2 \
+  | grep -vi role \
+  | awk 'BEGIN{OFS="\t"'}{\$2*=12}' >$FEAT_NEG_ALL_DEDUP"
+echo $CMD
+J_FEAT_NEG_ALL_DEDUP=`qsub -hold_jid $J_FEAT_NEG_ALL \
+  -o $WD/templates/combined/sge-logs \
+  -l 'h_rt=72:00:00,num_proc=1,mem_free=12G' \
+  -b y -j y \
+  $CMD | get-sge-job-id`
 
 
 
@@ -213,11 +231,12 @@ J_POS_AND_NEG=`qsub -hold_jid "$J_FEAT_NEG_ALL,$J_POS_REDUCED" \
   -b y -j y $CMD | get-sge-job-id`
 
 # 3) dedup
+# dedup pos+neg
 CMD="compress-cat $POS_AND_NEG \
   | python scripts/having-a-laugh/dedup_sim_feats.py \
     5 \
-    $POS_AND_NEG \
-    3000 \
+    /dev/stdin \
+    5000 \
     $WD/templates/combined/posAndNeg-${C_EXP}${C_MAX}${C_BOTH}${C_ABS}${C_RBC}.dedup.txt"
 echo $CMD
 J_POS_AND_NEG_DEDUP=`qsub -hold_jid $J_POS_AND_NEG \
@@ -225,6 +244,33 @@ J_POS_AND_NEG_DEDUP=`qsub -hold_jid $J_POS_AND_NEG \
   -l 'h_rt=72:00:00,num_proc=1,mem_free=12G' \
   -b y -j y \
   $CMD | get-sge-job-id`
+
+# dedup just pos
+POS_REDUCED_DEDUP=$WD/templates/combined/pos-${C_EXP}${C_MAX}${C_BOTH}${C_ABS}${C_RBC}.dedup.txt
+CMD="compress-cat $POS_REDUCED \
+  | python scripts/having-a-laugh/dedup_sim_feats.py \
+    5 \
+    /dev/stdin \
+    5000 \
+    $POS_REDUCED_DEDUP"
+echo $CMD
+J_POS_REDUCED_DEDUP=`qsub -hold_jid $J_POS_REDUCED \
+  -o $WD/templates/combined/sge-logs \
+  -l 'h_rt=72:00:00,num_proc=1,mem_free=12G' \
+  -b y -j y \
+  $CMD | get-sge-job-id`
+
+# (dedup pos) + (dedup neg)
+HALF_AND_HALF=$WD/templates/combined/halfAndHalf-${C_EXP}${C_MAX}${C_BOTH}${C_ABS}${C_RBC}.dedup.txt
+CMD="paste -d '\n' $POS_REDUCED_DEDUP $FEAT_NEG_ALL_DEDUP >$HALF_AND_HALF"
+echo $CMD
+J_HALF_AND_HALF=`qsub -hold_jid "$J_POS_REDUCED_DEDUP,$J_FEAT_NEG_ALL_DEDUP" \
+  -o $WD/templates/combined/sge-logs \
+  -l 'h_rt=72:00:00,num_proc=1,mem_free=2G' \
+  -b y -j y \
+  $CMD | get-sge-job-id`
+
+
 
 done
 done

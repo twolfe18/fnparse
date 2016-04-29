@@ -198,8 +198,10 @@ public class InformationGainProducts {
       boolean showSkippedCard) throws IOException {
 
     double cHx = config.getDouble("hxScoreCoef", 0.1);
-    double cRand = config.getDouble("randScoreCoef", 0.05);
+    double cRand = config.getDouble("randScoreCoef", 0.5);
     Random rand = new Random(9001);
+
+    boolean strict = config.getBoolean("strict", true);
 
     // Read in the IG of the unigrams (templates)
     List<Pair<String, Double>> templateIGs = new ArrayList<>();
@@ -210,10 +212,17 @@ public class InformationGainProducts {
 
         /** @see InformationGain#main for format */
         String[] toks = line.split("\t");
-        //int template = Integer.parseInt(toks[0]);
-        int template = Integer.parseInt(toks[5]);
+        int template = Integer.parseInt(toks[6]);
+        String templateNameCheck = toks[7];
 
         String templateString = bialph.lookupTemplate(template);
+        if (!templateNameCheck.equals(templateString)) {
+          Log.warn("tempates in " + templateIGsFile
+            + " are not indexed with alphabet in " + bialph.getSource()
+            + " because the feature file contained " + templateNameCheck
+            + " and the alphabet said it would be " + templateString);
+          assert !strict;
+        }
         if (templateString == null) {
           Log.warn("skipping template " + template + " because it is not in"
               + " the provided BiAlph: " + bialph.getSource().getPath());
@@ -237,7 +246,9 @@ public class InformationGainProducts {
 
     // Generating all products can blow up in time/space, specially when order>2
     // This prunes the set of products being generated to only take the topK.
-    int thresh = (int) Math.pow(templateIGs.size() * 200000, 1d / order);
+    int maxProducts = config.getInt("numProducts");
+    int thresh = (int) Math.pow(maxProducts * Math.sqrt(templateIGs.size()) * 2000, 1d / order);
+    Log.info("maxProducts=" + maxProducts + " templateIG.size=" + templateIGs.size() + " order=" + order + " thresh=" + thresh);
     if (templateIGs.size() > thresh) {
       Log.info("pruning from " + templateIGs.size() + " => " + thresh);
       templateIGs = templateIGs.subList(0, thresh);
@@ -375,6 +386,7 @@ public class InformationGainProducts {
     assert posProdIG != null || negProdIG != null;
     ExperimentProperties config = ExperimentProperties.getInstance();
     Log.info("computing IG/MI for some product features");
+    boolean debug = false;
 
     // Load the features and compute the IG for the chosen products
     File templateAlph = config.getExistingFile("bialph");
@@ -392,22 +404,29 @@ public class InformationGainProducts {
     // over the same number of features from all orders) is a hedge against the
     // feature scoring heuristic being bad.
     boolean showSkipCard = config.getBoolean("showSkipCard", false);
+    double gain = config.getDouble("gain", 1.5);
+    int maxProducts = config.getInt("numProducts", 200);
     List<String[]> prod1 = getProductsHeuristicallySorted(config, bialph, 1, showSkipCard);
     List<String[]> prod2 = getProductsHeuristicallySorted(config, bialph, 2, showSkipCard);
     List<String[]> prod3 = getProductsHeuristicallySorted(config, bialph, 3, showSkipCard);
-    double gain = config.getDouble("gain", 1.5);
-    int maxProducts = config.getInt("numProducts", 200);
     assert maxProducts > 0;
     int n1 = count(1, gain, 3, maxProducts);
     int n2 = count(2, gain, 3, maxProducts);
     int n3 = count(3, gain, 3, maxProducts);
 
+    if (debug) {
+      Log.info("n1=" + n1 + " n2=" + n2 + " n3=" + n3 + " maxProducts=" + maxProducts);
+      Log.info("prod1.size=" + prod1.size() + " prod2.size=" + prod2.size() + " prod3.size=" + prod3.size());
+    }
+
     int t1 = 0;
     for (int i = 0; i < prod1.size() && t1 < n1; i++) {
       FeatureName fn = new FeatureName(prod1.get(i));
+      if (debug) Log.info("prod1(" + i + ")=" + Arrays.toString(prod1.get(i)) + " fn.hash=" + fn.hashCode());
       boolean p = posProdIG != null && posProdIG.register(fn);
       boolean n = negProdIG != null && negProdIG.register(fn);
       if (p || n) {
+        if (debug) Log.info("added something, t1=" + t1 + " fn=" + fn);
         fn.computeTemplateInts(bialph);
         t1++;
       }
@@ -415,9 +434,11 @@ public class InformationGainProducts {
     int t2 = 0;
     for (int i = 0; i < prod2.size() && t2 < n2; i++) {
       FeatureName fn = new FeatureName(prod2.get(i));
+      if (debug) Log.info("prod2(" + i + ")=" + Arrays.toString(prod2.get(i)) + " fn.hash=" + fn.hashCode());
       boolean p = posProdIG != null && posProdIG.register(fn);
       boolean n = negProdIG != null && negProdIG.register(fn);
       if (p || n) {
+        if (debug) Log.info("added something, t2=" + t2 + " fn=" + fn);
         fn.computeTemplateInts(bialph);
         t2++;
       }
@@ -425,13 +446,17 @@ public class InformationGainProducts {
     int t3 = 0;
     for (int i = 0; i < prod3.size() && t3 < n3; i++) {
       FeatureName fn = new FeatureName(prod3.get(i));
+      if (debug) Log.info("prod3(" + i + ")=" + Arrays.toString(prod3.get(i)) + " fn.hash=" + fn.hashCode());
       boolean p = posProdIG != null && posProdIG.register(fn);
       boolean n = negProdIG != null && negProdIG.register(fn);
       if (p || n) {
+        if (debug) Log.info("added something, t3=" + t3 + " fn=" + fn);
         fn.computeTemplateInts(bialph);
         t3++;
       }
     }
+    if (debug) 
+      Log.info("t1=" + t1 + " t2=" + t2 + " t3=" + t3);
   }
 
   /**
@@ -455,7 +480,10 @@ public class InformationGainProducts {
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
     int numY = config.getInt("numRoles", 30);
+    Log.info("numY=" + numY);
+
     Shard refinementShard = config.getShard("refinement");
+    Log.info("refinementShard=" + refinementShard);
 
     // Scan each of the input files
     List<File> featureFiles = config.getFileGlob("features");
