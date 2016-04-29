@@ -7,7 +7,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 
@@ -50,6 +52,21 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
     }
     public String getId() {
       return def.tokens[1];
+    }
+
+    public List<HypEdge.WithProps> match2FromFacts(Relation r) {
+      List<HypEdge.WithProps> l = new ArrayList<>();
+      for (HypEdge.WithProps e : facts)
+        if (e.getRelation() == r)
+          l.add(e);
+      return l;
+    }
+
+    public Counts<String> countFacts() {
+      Counts<String> c = new Counts<>();
+      for (HypEdge e : facts)
+        c.increment(e.getRelation().getName());
+      return c;
     }
   }
 
