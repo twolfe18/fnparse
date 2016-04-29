@@ -21,6 +21,7 @@ import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.StateEdge;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Arg;
+import edu.jhu.prim.tuple.Pair;
 
 public abstract class FeatureExtractionFactor<T> {
 
@@ -50,6 +51,16 @@ public abstract class FeatureExtractionFactor<T> {
     if (cacheAdjointsForwards)
       a = Adjoints.cacheIfNeeded(a);
     return a;
+  }
+
+  public List<Pair<Relation, Weight<T>>> getWeights() {
+    List<Pair<Relation, Weight<T>>> l = new ArrayList<>();
+    for (Map.Entry<Relation, Map<T, Weight<T>>> x : theta.entrySet()) {
+      Relation r = x.getKey();
+      for (Weight<T> w : x.getValue().values())
+        l.add(new Pair<>(r, w));
+    }
+    return l;
   }
 
   public static class Oracle extends FeatureExtractionFactor<String> {
