@@ -240,23 +240,4 @@ public class State {
     }
     return a;
   }
-
-  /**
-   * @deprecated Loses argPos information!
-   */
-  public List<HNode> neighbors(HNode node) {
-    List<HNode> a = new ArrayList<>();
-    if (node.isLeft()) {
-      HypNode n = node.getLeft();
-      LL<HypEdge>[] allArgs = primaryView.get(n);
-      for (int i = 0; i < allArgs.length; i++)
-        for (LL<HypEdge> cur = allArgs[i]; cur != null; cur = cur.next)
-          a.add(new HNode(cur.item));
-    } else {
-      HypEdge e = node.getRight();
-      for (HypNode n : e.getNeighbors())
-        a.add(new HNode(n));
-    }
-    return a;
-  }
 }

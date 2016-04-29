@@ -248,7 +248,8 @@ public class TransitionGeneratorForwardsParser {
         Object cur = stack.pop();
         Object prev = stack.isEmpty() ? null : stack.peek();
         stack.push(cur);
-        Log.info("prev=" + prev + " cur=" + cur + " stack.size=" + stack.size());
+        if (DEBUG)
+          Log.info("prev=" + prev + " cur=" + cur + " stack.size=" + stack.size());
         boolean newCur = seen.add(cur);
 
         if (cur instanceof TermNode && cur != root && newCur) {
@@ -262,7 +263,8 @@ public class TransitionGeneratorForwardsParser {
           stack.push(tSink);
           IDFCATP i = new IDFCATP(tSource, aSource, aSink, tSink);
           if (trace.isEmpty() || !IDFCATP.eq(trace.get(trace.size()-1), i)) {
-            Log.info(tSource + " -> " + aSource + " -> " + aSink + " -> " + tSink);
+            if (DEBUG)
+              Log.info(tSource + " -> " + aSource + " -> " + aSink + " -> " + tSink);
             trace.add(i);
           }
         }
@@ -274,7 +276,8 @@ public class TransitionGeneratorForwardsParser {
               stack.push(n);
               continue outer;
             } else {
-              Log.info("skipping " + n);
+              if (DEBUG)
+                Log.info("skipping " + n);
             }
           }
         }
@@ -322,9 +325,10 @@ public class TransitionGeneratorForwardsParser {
             lhsAddTo.add(new TKey(State.HEAD_ARG_POS, cur.t1.getRelation()), cur.t1.termIdx);
             notDone.remove(cur.t1);
           }
-          lhsAddTo.add(new TKey(cur.a1.argIdx, cur.getCommonNodeType()), -1);
-          int ap = cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx;
-          lhsAddTo.add(new TKey(ap, cur.t2.getRelation()), cur.t2.termIdx);
+          int ap1 = cur.a1.argIdx < 0 ? State.HEAD_ARG_POS : cur.a1.argIdx;
+          lhsAddTo.add(new TKey(ap1, cur.getCommonNodeType()), -1);
+          int ap2 = cur.a2.argIdx < 0 ? State.HEAD_ARG_POS : cur.a2.argIdx;
+          lhsAddTo.add(new TKey(ap2, cur.t2.getRelation()), cur.t2.termIdx);
           notDone.remove(cur.t2);
           st.push(cur);
         }
@@ -1101,10 +1105,15 @@ public class TransitionGeneratorForwardsParser {
   public Pair<List<TKey>, TG> parse2(Rule r, Uberts u) {
 
 //    LHS lhs = parse(r);
-    Graph3 g3 = new Graph3(u, r);
+    Graph3 g3;
+    try {
+      g3 = new Graph3(u, r);
+    } catch (Exception e) {
+      throw new RuntimeException("failed parsing " + r, e);
+    }
     LHS lhs = g3.getLHS();
 
-    TG tg = new TG(lhs, u);
+    TG tg = new TG(lhs, r, u);
     Log.info("rule: " + r);
     Log.info("pat:\n\t" + StringUtils.join("\n\t", lhs.getPath()));
     return new Pair<>(lhs.getPath(), tg);
@@ -1119,12 +1128,23 @@ public class TransitionGeneratorForwardsParser {
 
     private LHS match;
     private Uberts u;
+    private Rule rule;
 
     public FeatureExtractionFactor<?> feats = null;
 
-    public TG(LHS match, Uberts u) {
+    public TG(LHS match, Rule rule, Uberts u) {
       this.match = match;
+      this.rule = rule;
       this.u = u;
+    }
+
+    public Rule getRule() {
+      return rule;
+    }
+
+    @Override
+    public String toString() {
+      return "(TG for " + rule + ")";
     }
 
     @Override
@@ -1184,7 +1204,7 @@ public class TransitionGeneratorForwardsParser {
             rhsNodes[rhsIdx] = e.getTail(ai);
             numRhsBound++;
           }
-          assert rhsNodes[rhsIdx] == e.getTail(ai);
+          assert rhsNodes[rhsIdx] == e.getTail(ai) : "rhsNodes[" + rhsIdx + "]=" + rhsNodes[rhsIdx] + " e.getTail(" + ai + ")=" + e.getTail(ai);
         }
       }
       assert numRhsBound == rule.rhs.getNumArgs()

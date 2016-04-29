@@ -87,6 +87,9 @@ public class Relation {
     public Object get(int i) {
       return tail[i];
     }
+    public int length() {
+      return tail.length;
+    }
     @Override
     public boolean equals(Object other) {
       if (other instanceof EqualityArray) {
