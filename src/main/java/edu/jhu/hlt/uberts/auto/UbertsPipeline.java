@@ -14,12 +14,13 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.commons.io.filefilter.AgeFileFilter;
-
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
@@ -28,6 +29,7 @@ import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -42,6 +44,7 @@ import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Step;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
@@ -97,8 +100,6 @@ public class UbertsPipeline {
       fe = new OldFeaturesWrapper(bft, pNegSkip);
       fe.cacheAdjointsForwards = false;
     } else if (mode == Mode.LEARN) {
-      debug = true;
-      Uberts.COARSE_EVENT_LOGGING = true;
       fe = new OldFeaturesWrapper(bft);
       fe.cacheAdjointsForwards = true;
     }
@@ -321,6 +322,12 @@ public class UbertsPipeline {
     return docid;
   }
 
+  public static String i2s(int i) {
+    return String.valueOf(i).intern();
+  }
+  public static int s2i(Object s) {
+    return Integer.parseInt((String) s);
+  }
 
   /**
    * Setup and run inference for left-to-right span-by-span role-classification
@@ -329,41 +336,72 @@ public class UbertsPipeline {
    * for each role:
    *   argmax_{span \in xue-palmer-arg U {nullSpan}} score(t,f,k,s)
    */
-  public void srlClassificationCopOut(RelDoc doc) {
+  public FPR srlClassificationCopOut(RelDoc doc) {
+    Log.info("starting...");
 
     setupUbertsForDoc(u, doc);
-    // This should put all srlArg edges onto the agenda
+    // This should put all srlArg edges onto the agenda.
+    Log.info("doc's facts: " + doc.countFacts());
 
     State state = u.getState();
     Agenda agenda = u.getAgenda();
 
+    // Agenda doesn't index edges by relation, so I'll get them from RelDoc instead.
     Relation srlArg = u.getEdgeType("srlArg");
-    List<HypEdge> srlArgs = new ArrayList<>();
-    for (LL<HypEdge> cur = state.match2(srlArg); cur != null; cur = cur.next) {
-      System.out.println(cur.item);
-      srlArgs.add(cur.item);
-    }
+    List<HypEdge.WithProps> srlArgs = doc.match2FromFacts(srlArg);
+    Log.info("found " + srlArgs.size() + " srlArgs");
 
     // Clear the agenda and add from scratch
     agenda.clear();
 
     // Build a t -> [s] from xue-palmer-edges
     Relation xuePalmerArgs = u.getEdgeType("xue-palmer-args");
+    int na = 0;
     Map<Span, LL<Span>> xuePalmerIndex = new HashMap<>();
     for (LL<HypEdge> cur = state.match2(xuePalmerArgs); cur != null; cur = cur.next) {
       HypEdge e = cur.item;
       assert e.getNumTails() == 4;
-      int ts = Integer.parseInt((String) e.getTail(0).getValue());
-      int te = Integer.parseInt((String) e.getTail(1).getValue());
-      int ss = Integer.parseInt((String) e.getTail(2).getValue());
-      int se = Integer.parseInt((String) e.getTail(3).getValue());
+      int ts = s2i(e.getTail(0).getValue());
+      int te = s2i(e.getTail(1).getValue());
+      int ss = s2i(e.getTail(2).getValue());
+      int se = s2i(e.getTail(3).getValue());
       Span key = Span.getSpan(ts, te);
-      xuePalmerIndex.put(key, new LL<>(Span.getSpan(ss, se), xuePalmerIndex.get(key)));
+      Span val = Span.getSpan(ss, se);
+      xuePalmerIndex.put(key, new LL<>(val, xuePalmerIndex.get(key)));
+      na++;
     }
+    Log.info("xue-palmer-args has " + xuePalmerIndex.size() + " targets and " + na + " arguments");
 
     // Do event1 * xue-palmer-args join manually since the multi-var-equality
     // rules are broken.
-    Relation srl4 = u.getEdgeType("srl4");
+    final Relation srl4 = u.getEdgeType("srl4");
+    fe.customEdgeCtxSetup = (yx, ctx) -> {
+      HypEdge yhat = yx.get1();
+      assert yhat.getRelation() == srl4;
+      final HeadFinder hf = SemaforicHeadFinder.getInstance();
+
+      int ts = s2i(yhat.getTail(0).getValue());
+      int te = s2i(yhat.getTail(1).getValue());
+      ctx.setTarget(Span.getSpan(ts, te));
+      ctx.setSpan2(ctx.getTarget());
+//      String frame = (String) yhat.getTail(2).getValue();
+      int ss = s2i(yhat.getTail(3).getValue());
+      int se = s2i(yhat.getTail(4).getValue());
+      ctx.setArg(Span.getSpan(ss, se));
+      ctx.setSpan1(ctx.getArg());
+      ctx.setRoleS((String) yhat.getTail(5).getValue());
+
+      Sentence sent = ctx.getSentence();
+      assert sent != null;
+      ctx.setTargetHead(hf.head(ctx.getTarget(), sent));
+      ctx.setHead2(ctx.getTargetHead());
+      if (ctx.getArg() != Span.nullSpan) {
+        ctx.setArgHead(hf.head(ctx.getArg(), sent));
+        ctx.setHead1(ctx.getArgHead());
+      }
+    };
+
+    HashSet<HashableHypEdge> predictions = new HashSet<>();
     NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
     for (HypEdge tfk : srlArgs) {
       assert tfk.getNumTails() == 3;
@@ -372,27 +410,50 @@ public class UbertsPipeline {
       int ts = Integer.parseInt((String) e1.get(0));
       int te = Integer.parseInt((String) e1.get(1));
       Span key = Span.getSpan(ts, te);
-      for (LL<Span> cur = xuePalmerIndex.get(key); cur != null; cur = cur.next) {
+      HypNode frame = tfk.getTail(1);
+      HypNode role = tfk.getTail(2);
+      Log.info("predicting span for target=" + key + " "  + frame + " " + role);
+      LL<Span> possible = xuePalmerIndex.get(key);
+      possible = new LL<>(Span.nullSpan, possible);
+      for (LL<Span> cur = possible; cur != null; cur = cur.next) {
         Span s = cur.item;
+        System.out.println("\tconsidering: " + s);
         HypNode[] tail = new HypNode[6];
-        tail[0] = u.lookupNode(tokenIndex, String.valueOf(ts), true);
-        tail[1] = u.lookupNode(tokenIndex, String.valueOf(te), true);
-        tail[2] = tfk.getTail(1); // frame
-        tail[3] = u.lookupNode(tokenIndex, String.valueOf(s.start), true);
-        tail[4] = u.lookupNode(tokenIndex, String.valueOf(s.end), true);
-        tail[5] = tfk.getTail(2); // role
+        tail[0] = u.lookupNode(tokenIndex, i2s(ts), true);
+        tail[1] = u.lookupNode(tokenIndex, i2s(te), true);
+        tail[2] = frame;
+        tail[3] = u.lookupNode(tokenIndex, i2s(s.start), true);
+        tail[4] = u.lookupNode(tokenIndex, i2s(s.end), true);
+        tail[5] = role;
         HypEdge yhat = u.makeEdge(srl4, tail);
         Adjoints a = fe.score(yhat, u);
         u.addEdgeToAgenda(yhat, a);
+
+        WeightAdjoints<?> wa = (WeightAdjoints<?>) Adjoints.uncacheIfNeeded(a);
+        System.out.println("\tfeatures extractor=" + fe.getClass()
+            + " n=" + wa.getFeatures().size()
+            + "\t" + StringUtils.trunc(wa.getFeatures().toString(), 250));
       }
-      HypEdge best = agenda.pop();
+      Pair<HypEdge, Adjoints> best = agenda.popBoth();
+      HypEdge yhat = best.get1();
       agenda.clear();
 
-      if (u.getLabel(best)) {
-      } else {
+      // TODO: Create dynamic intercept, right now using score(noArg) = 0
+      if (!(s2i(yhat.getTail(3).getValue()) == Span.nullSpan.start
+          && s2i(yhat.getTail(4).getValue()) == Span.nullSpan.end)) {
+        predictions.add(new HashableHypEdge(yhat));
       }
     }
 
+    HashSet<HashableHypEdge> gold = new HashSet<>();
+    for (HypEdge e : doc.match2FromFacts(srl4))
+      gold.add(new HashableHypEdge(e));
+
+    FPR perf = FPR.fromSets(gold, predictions);
+    Log.info("gold: " + gold);
+    Log.info("hyp:  " + predictions);
+    Log.info("perf: " + perf);
+    return perf;
   }
 
 
@@ -415,7 +476,7 @@ public class UbertsPipeline {
     // This will initialize the Alphabet over frame/role names and provide
     // the code to write out features.txt.gz and template-feat-indices.txt.gz
     FeaturePrecomputation.AlphWrapper fpre = null;
-    if (fPreRoleNameAlph != null) {
+    if (mode == Mode.EXTRACT_FEATS && fPreRoleNameAlph != null) {
       boolean roleMode = true;
       fpre = new FeaturePrecomputation.AlphWrapper(roleMode, fe.getFeatures());
     }
@@ -426,8 +487,13 @@ public class UbertsPipeline {
     int docs = 0, actions = 0;
     int skippedDocs = 0;
     long features = 0;
-    if (mode == mode.LEARN)
-      u.showOracleTrajDiagnostics = true;
+
+//    if (mode == Mode.LEARN) {
+//      debug = true;
+//      u.showOracleTrajDiagnostics = true;
+//      Uberts.COARSE_EVENT_LOGGING = true;
+//    }
+
     Iter itr = new Iter(x, typeInf, Arrays.asList("succTok"));
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       while (itr.hasNext()) {
@@ -438,7 +504,7 @@ public class UbertsPipeline {
         }
         docs++;
 
-        if (mode == Mode.LEARN && u.getRandom().nextDouble() < 0.5) {
+        if (mode == Mode.LEARN) {// && u.getRandom().nextDouble() < 0.5) {
           srlClassificationCopOut(doc);
 //          evaluate(doc);
           continue;
@@ -551,12 +617,13 @@ public class UbertsPipeline {
       }
     }
 
-    if (fPreRoleNameAlph != null)
+    if (mode == Mode.EXTRACT_FEATS && fPreRoleNameAlph != null)
       fpre.saveAlphabets(fPreTemplateFeatureAlph, fPreRoleNameAlph);
   }
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
+    Log.info("starting...");
 
 //    TNode.DEBUG = true;
 //    State.DEBUG = true;
