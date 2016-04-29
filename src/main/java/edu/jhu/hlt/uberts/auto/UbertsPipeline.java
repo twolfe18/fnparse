@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
+import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
@@ -29,7 +30,6 @@ import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
-import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -220,6 +220,11 @@ public class UbertsPipeline {
       evaluate(doc);
     }
   }
+
+  /**
+   * General purpose (calls Uberts.dbgRunInference and follows the transition
+   * system). Reports performance for each Relation.
+   */
   public void evaluate(RelDoc doc) {
     String docid = setupUbertsForDoc(u, doc);
     Log.info("evaluating on " + docid);
@@ -254,7 +259,6 @@ public class UbertsPipeline {
       System.out.println("fn: " + e);
     }
     System.out.println(Nfn + " false negatives");
-
     System.out.println();
   }
 
@@ -335,13 +339,19 @@ public class UbertsPipeline {
    *
    * for each role:
    *   argmax_{span \in xue-palmer-arg U {nullSpan}} score(t,f,k,s)
+   *
+   * @param learn should only be false on the test set when you don't want to
+   * use progressive validation (which, sadly, is the standard thing to do).
    */
-  public FPR srlClassificationCopOut(RelDoc doc) {
-    Log.info("starting...");
+  public FPR adHocSrlClassificationByRole(RelDoc doc, boolean learn) {
+    boolean debug = false;
+    if (debug)
+      Log.info("starting...");
 
     setupUbertsForDoc(u, doc);
     // This should put all srlArg edges onto the agenda.
-    Log.info("doc's facts: " + doc.countFacts());
+    if (debug)
+      Log.info("doc's facts: " + doc.countFacts());
 
     State state = u.getState();
     Agenda agenda = u.getAgenda();
@@ -349,7 +359,8 @@ public class UbertsPipeline {
     // Agenda doesn't index edges by relation, so I'll get them from RelDoc instead.
     Relation srlArg = u.getEdgeType("srlArg");
     List<HypEdge.WithProps> srlArgs = doc.match2FromFacts(srlArg);
-    Log.info("found " + srlArgs.size() + " srlArgs");
+    if (debug)
+      Log.info("found " + srlArgs.size() + " srlArgs");
 
     // Clear the agenda and add from scratch
     agenda.clear();
@@ -370,10 +381,10 @@ public class UbertsPipeline {
       xuePalmerIndex.put(key, new LL<>(val, xuePalmerIndex.get(key)));
       na++;
     }
-    Log.info("xue-palmer-args has " + xuePalmerIndex.size() + " targets and " + na + " arguments");
+    if (debug)
+      Log.info("xue-palmer-args has " + xuePalmerIndex.size() + " targets and " + na + " arguments");
 
-    // Do event1 * xue-palmer-args join manually since the multi-var-equality
-    // rules are broken.
+    // This is the input to feature extraction
     final Relation srl4 = u.getEdgeType("srl4");
     fe.customEdgeCtxSetup = (yx, ctx) -> {
       HypEdge yhat = yx.get1();
@@ -384,7 +395,7 @@ public class UbertsPipeline {
       int te = s2i(yhat.getTail(1).getValue());
       ctx.setTarget(Span.getSpan(ts, te));
       ctx.setSpan2(ctx.getTarget());
-//      String frame = (String) yhat.getTail(2).getValue();
+      ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix((String) yhat.getTail(2).getValue()));
       int ss = s2i(yhat.getTail(3).getValue());
       int se = s2i(yhat.getTail(4).getValue());
       ctx.setArg(Span.getSpan(ss, se));
@@ -401,6 +412,8 @@ public class UbertsPipeline {
       }
     };
 
+    // Make predictions one srlArg/(t,f,k) at a time.
+    HashMap<HashableHypEdge, Adjoints> scores = new HashMap<>();  // score of every (t,f,k,s)
     HashSet<HashableHypEdge> predictions = new HashSet<>();
     NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
     for (HypEdge tfk : srlArgs) {
@@ -412,12 +425,15 @@ public class UbertsPipeline {
       Span key = Span.getSpan(ts, te);
       HypNode frame = tfk.getTail(1);
       HypNode role = tfk.getTail(2);
-      Log.info("predicting span for target=" + key + " "  + frame + " " + role);
+      if (debug)
+        Log.info("predicting span for target=" + key + " "  + frame + " " + role);
       LL<Span> possible = xuePalmerIndex.get(key);
       possible = new LL<>(Span.nullSpan, possible);
+      // Loop over every span for this target
       for (LL<Span> cur = possible; cur != null; cur = cur.next) {
         Span s = cur.item;
-        System.out.println("\tconsidering: " + s);
+        if (debug)
+          System.out.println("\tconsidering: " + s);
         HypNode[] tail = new HypNode[6];
         tail[0] = u.lookupNode(tokenIndex, i2s(ts), true);
         tail[1] = u.lookupNode(tokenIndex, i2s(te), true);
@@ -429,10 +445,15 @@ public class UbertsPipeline {
         Adjoints a = fe.score(yhat, u);
         u.addEdgeToAgenda(yhat, a);
 
+        Object old = scores.put(new HashableHypEdge(yhat), a);
+        assert old == null;
+
+        if (debug) {
         WeightAdjoints<?> wa = (WeightAdjoints<?>) Adjoints.uncacheIfNeeded(a);
         System.out.println("\tfeatures extractor=" + fe.getClass()
-            + " n=" + wa.getFeatures().size()
-            + "\t" + StringUtils.trunc(wa.getFeatures().toString(), 250));
+            + " n=" + wa.getFeatures().size());
+//            + "\t" + StringUtils.trunc(wa.getFeatures().toString(), 250));
+        }
       }
       Pair<HypEdge, Adjoints> best = agenda.popBoth();
       HypEdge yhat = best.get1();
@@ -445,14 +466,36 @@ public class UbertsPipeline {
       }
     }
 
+    // Construct gold and hyp set for evaluation.
+    // Perform updates.
     HashSet<HashableHypEdge> gold = new HashSet<>();
-    for (HypEdge e : doc.match2FromFacts(srl4))
-      gold.add(new HashableHypEdge(e));
+    for (HypEdge e : doc.match2FromFacts(srl4)) {
+      HashableHypEdge hhe = new HashableHypEdge(e);
+      if (!gold.add(hhe)) {
+        Log.warn("dup? " + e);
+        continue;
+      }
+      if (learn && !predictions.contains(hhe)) {
+        Adjoints fn = scores.get(hhe);
+        if (fn != null)   // could be xue-palmer recall error
+          fn.backwards(-1);
+      }
+    }
+    if (learn) {
+      for (HashableHypEdge hhe : predictions) {
+        if (!gold.contains(hhe)) {
+          Adjoints fp = scores.get(hhe);
+          fp.backwards(+1);
+        }
+      }
+    }
 
     FPR perf = FPR.fromSets(gold, predictions);
-    Log.info("gold: " + gold);
-    Log.info("hyp:  " + predictions);
-    Log.info("perf: " + perf);
+    if (debug) {
+      Log.info("gold: " + gold);
+      Log.info("hyp:  " + predictions);
+      Log.info("perf: " + perf);
+    }
     return perf;
   }
 
@@ -467,7 +510,7 @@ public class UbertsPipeline {
    *
    * @param dataShard may be null, meaning take all data.
    */
-  public void extractFeatures(ManyDocRelationFileIterator x, File output, Shard dataShard) throws IOException {
+  public void runInference(ManyDocRelationFileIterator x, File output, Shard dataShard) throws IOException {
     Log.info("writing features to " + output);
     Log.info("pSkipNeg=" + pNegSkip);
     Log.info("mode=" + mode);
@@ -488,12 +531,9 @@ public class UbertsPipeline {
     int skippedDocs = 0;
     long features = 0;
 
-//    if (mode == Mode.LEARN) {
-//      debug = true;
-//      u.showOracleTrajDiagnostics = true;
-//      Uberts.COARSE_EVENT_LOGGING = true;
-//    }
-
+    FPR trainPerf = new FPR();
+    FPR devPerf = new FPR();
+    FPR testPerf = new FPR();
     Iter itr = new Iter(x, typeInf, Arrays.asList("succTok"));
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       while (itr.hasNext()) {
@@ -505,8 +545,9 @@ public class UbertsPipeline {
         docs++;
 
         if (mode == Mode.LEARN) {// && u.getRandom().nextDouble() < 0.5) {
-          srlClassificationCopOut(doc);
-//          evaluate(doc);
+          FPR perfDoc = adHocSrlClassificationByRole(doc, true);
+          trainPerf.accum(perfDoc);
+          Log.info("cumulative: " + trainPerf + "   cur(" + doc.getId() +"): " + perfDoc);
           continue;
         }
 
@@ -532,6 +573,7 @@ public class UbertsPipeline {
               t.score.backwards(+1);
             fpr.accum(y, score > 0);
           } else {
+            @SuppressWarnings("unchecked")
             WeightAdjoints<Pair<TemplateAlphabet, String>> fx =
               (WeightAdjoints<Pair<TemplateAlphabet, String>>) t.score;
             if (fx.getFeatures() == fe.SKIP) {
@@ -591,9 +633,11 @@ public class UbertsPipeline {
         trajProcessingTimer.stop();
         if (mode == Mode.LEARN) {
           Log.info("n=" + traj.size() + " model wrt weakOracle: " + fpr.toString());
-//        } else if (mode == Mode.EXTRACT_FEATS) {
-//          Log.info("skippedFeatures=" + skipped + " keptFeatures=" + kept
-//              + " skippedDocs=" + skippedDocs + " keptDocs=" + docs);
+        } else if (mode == Mode.EXTRACT_FEATS) {
+          if (debug) {
+            Log.info("skippedFeatures=" + skipped + " keptFeatures=" + kept
+                + " skippedDocs=" + skippedDocs + " keptDocs=" + docs);
+          }
         }
 
         if (tm.enoughTimePassed(15)) {
@@ -664,7 +708,7 @@ public class UbertsPipeline {
     boolean dedupInputLines = true;
     try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);
         ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
-      srl.extractFeatures(x, multiYhat, dataShard);
+      srl.runInference(x, multiYhat, dataShard);
     }
 
     Log.info("done");

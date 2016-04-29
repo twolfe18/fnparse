@@ -1719,7 +1719,7 @@ public class BasicFeatureTemplates {
       // Like frameRole, but requires that arg not be null,
       // which can lead to much sparser feature sets (observed feature trick)
       public String extractSS(TemplateContext context) {
-        if (context.getArg() == null)
+        if (context.getArg() == null || context.getArg() == Span.nullSpan)
           return null;
         String f = context.getFrame() == null ? "null" : context.getFrame().getName();
         return "frameRoleArg=" + f + "/" + context.getRoleS();
@@ -1729,7 +1729,7 @@ public class BasicFeatureTemplates {
       // Like frameRole, but requires that arg not be null,
       // which can lead to much sparser feature sets (observed feature trick)
       public String extractSS(TemplateContext context) {
-        if (context.getArg() == null)
+        if (context.getArg() == null || context.getArg() == Span.nullSpan)
           return null;
         return "roleArg=" + context.getRoleS();
       }
@@ -1738,7 +1738,7 @@ public class BasicFeatureTemplates {
       // This is a backoff from roleArg. Requires the same data be present, but
       // doesn't give the name of the role in the feature
       public String extractSS(TemplateContext context) {
-        if (context.getArg() == null)
+        if (context.getArg() == null || context.getArg() == Span.nullSpan)
           return null;
         return "arg=" + (context.getRoleS() == null ? "null" : "something");
       }

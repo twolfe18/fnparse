@@ -80,11 +80,18 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
     skipped = new Counts<>();
   }
 
+  private void ap(Template y, Template x, String name) {
+    if (y != null) {
+      Template prod = new TemplatedFeatures.TemplateJoin(y, x);
+      features.add(new TemplateAlphabet(prod, name, features.size()));
+    }
+  }
   /** Starts up with some dummy features, for debugging */
   public OldFeaturesWrapper(BasicFeatureTemplates bft) {
 
     // This should be enough to over-fit
-    String w = "Bc256/8";
+//    String w = "Bc256/8";
+    String w = "Word";
     String[] tempNames = new String[] {
         "Bc256/8-2-grams-between-Head1-and-Span2.Last",
         "Head1Head2-PathNgram-Basic-LEMMA-DIRECTION-len2",
@@ -100,9 +107,9 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
         "Head1-Parent-Basic-" + w,
         "Head1-Grandparent-Basic-" + w,
         "Head1-RootPath-Basic-POS-DEP-t",
-//        "Head1-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
+        "Head1-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
         "Head2-RootPath-Basic-POS-DEP-t",
-//        "Head2-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
+        "Head2-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
         "Head2-Child-Basic-" + w,
         "Head2-Parent-Basic-" + w,
         "Head2-Grandparent-Basic-" + w,
@@ -114,14 +121,28 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
         throw new RuntimeException("couldn't look up: " + tempNames[i]);
     }
 
+    // For my current ad-hoc SRL, I only have one relation type: srlArg, which
+    // is normally how FeatureExtractionFactor stores its weights (one set of
+    // weights for every Relation).
+    Template role = bft.getBasicTemplate("roleArg");        // fires role if someSpan
+    Template arg = bft.getBasicTemplate("arg");            // fires for nullSpan vs someSpan
+    Template frame = bft.getBasicTemplate("frameRoleArg");  // fires (frame,role) if someSpan
+
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
-    for (int i = 0; i < temps.length; i++)
-      this.features.add(new TemplateAlphabet(temps[i], tempNames[i], features.size()));
+    // UNIGRAMS
+    for (int i = 0; i < temps.length; i++) {
+      ap(role, temps[i], "k*" + temps[i]);
+      ap(arg, temps[i], "b*" + temps[i]);
+      ap(frame, temps[i], "fr*" + temps[i]);
+    }
+    // BIGRAMS
     for (int i = 0; i < temps.length-1; i++) {
       for (int j = i+1; j < temps.length; j++) {
         Template prod = new TemplatedFeatures.TemplateJoin(temps[i], temps[j]);
         String name = tempNames[i] + "*" + tempNames[j];
-        this.features.add(new TemplateAlphabet(prod, name, features.size()));
+        ap(role, prod, "k*" + name);
+        ap(arg, prod, "b*" + name);
+        ap(frame, prod, "fr*" + name);
       }
     }
 
