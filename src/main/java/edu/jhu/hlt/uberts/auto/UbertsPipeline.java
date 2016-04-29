@@ -410,6 +410,7 @@ public class UbertsPipeline {
     Log.info("writing features to " + output);
     Log.info("pSkipNeg=" + pNegSkip);
     Log.info("mode=" + mode);
+    Log.info("dataShard=" + dataShard);
 
     // This will initialize the Alphabet over frame/role names and provide
     // the code to write out features.txt.gz and template-feat-indices.txt.gz
@@ -543,6 +544,8 @@ public class UbertsPipeline {
           Log.info(msg);
           Log.info("numPosFeatsExtracted: " + posRel + " sum=" + posRel.getTotalCount());
           Log.info("numNegFeatsExtracted: " + negRel + " sum=" + negRel.getTotalCount());
+          Log.info("docsKept=" + docs + " docsSkipped=" + skippedDocs + " totalDocs=" + (docs+skippedDocs));
+          System.out.println();
           w.flush();
         }
       }
