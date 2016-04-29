@@ -47,6 +47,15 @@ public class Agenda {
     this.e2i = new HashMap<>();
   }
 
+  public List<HypEdge> getContentsInNoParticularOrder() {
+    List<HypEdge> l = new ArrayList<>();
+    for (int i = 0; i < top; i++)
+      if (heap1[i] != null)
+        l.add(heap1[i]);
+    assert l.size() == this.size();
+    return l;
+  }
+
   /**
    * Removes node->[edge index] entries in n2ei where the node is orphaned (no
    * edges are adjacent because they have been removed).
@@ -109,6 +118,13 @@ public class Agenda {
       }
     }
     return el;
+  }
+
+  public Adjoints getScore(HypEdge e) {
+    int i = e2i.get(e);
+    assert heap1[i] == e;
+    assert heap2[i] != null;
+    return heap2[i];
   }
 
   public void remove(HypEdge e) {
