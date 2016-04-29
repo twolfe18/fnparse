@@ -168,6 +168,9 @@ class Feature:
     st = 'NA'
     if 'str_templates' in self.__dict__:
       st = '*'.join(self.str_templates)
+    if NEW_FEATURE_FILE_FORMAT:
+      return "%f\t%f\t%f\t%f\t%d\t%d\t%s\t%s" % \
+        (y, self.ig, self.hx, self.selectivity, self.count, len(self.int_templates), it, st)
     return "%f\t%f\t%f\t%f\t%d\t%s\t%s" % \
       (y, self.ig, self.hx, self.selectivity, len(self.int_templates), it, st)
 

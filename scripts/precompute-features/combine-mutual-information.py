@@ -3,6 +3,7 @@
 # Interpolates between max and expectation in reducing
 # pointwise mutual information to (pseudo) mutual information.
 
+import dedup_sim_feats
 from dedup_sim_feats import Feature
 import collections
 import sys, copy
@@ -336,9 +337,14 @@ def combine_scores(coef, out_file='/dev/stdout'):
       feat.selectivity = sel.avg()
       feat.count = count_sum
       feat.restrict = key[1:]
+
       f.write(feat.str_like_input())
-      new_res_str = ','.join(k + '=' + v for k,v in feat.restrict)
-      f.write("\t%d\t%s" % (count_sum, new_res_str))
+      if feat.restrict:
+        new_res_str = ','.join(k + '=' + v for k,v in feat.restrict)
+        if dedup_sim_feats.NEW_FEATURE_FILE_FORMAT:
+          f.write("\t%s" % (new_res_str,))
+        else:
+          f.write("\t%d\t%s" % (count_sum, new_res_str))
       f.write('\n')
 
 
