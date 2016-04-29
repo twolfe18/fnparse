@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Parse;
@@ -58,6 +59,11 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
   private HeadFinder hf;
   private MultiTimer timer;
   private Counts<String> skipped;
+
+  // If you can setup a TemplateContext given a HypEdge, then you can use this class.
+  // Sentence setup and conversion is handled for you (so you can access ctx.getSentence()).
+  // If you leave this as null, only srl1,srl2,srl3 will work (maybe more later).
+  public BiConsumer<Pair<HypEdge, Uberts>, TemplateContext> customEdgeCtxSetup = null;
 
   public OldFeaturesWrapper(BasicFeatureTemplates bft, BiAlph bialph, File featureSet) {
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
@@ -328,40 +334,44 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
     Span t = null, s = null;
     ctx.clear();
     ctx.setSentence(sentCache);
-    switch (yhat.getRelation().getName()) {
-    case "srl1":
-      s = extractSpan(yhat, 0, 1);
-      break;
-    case "srl2":
-      EqualityArray s1 = (EqualityArray) yhat.getTail(0).getValue();
-      EqualityArray e1 = (EqualityArray) yhat.getTail(1).getValue();
-      t = extractSpan(e1, 0, 1);
-      s = extractSpan(s1, 0, 1);
-      break;
-    case "srl3":
-      Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(yhat);
-      t = s3.t;
-      s = s3.s;
-      ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(s3.f));
-      ctx.setRoleS(s3.k);
-      break;
-    default:
-      skipped.increment(yhat.getRelation().getName());
-      if (skipped.getTotalCount() % 1000 == 0)
-        Log.info("skipped: " + skipped.toString());
-      break;
-    }
-    if (s != null && s != Span.nullSpan) {
-      ctx.setArg(s);
-      ctx.setArgHead(hf.head(s, sentCache));
-      ctx.setSpan1(s);
-      ctx.setHead1(ctx.getArgHead());
-    }
-    if (t != null && t != Span.nullSpan) {
-      ctx.setTarget(t);
-      ctx.setTargetHead(hf.head(t, sentCache));
-      ctx.setSpan2(t);
-      ctx.setHead2(ctx.getTargetHead());
+    if (customEdgeCtxSetup == null) {
+      switch (yhat.getRelation().getName()) {
+      case "srl1":
+        s = extractSpan(yhat, 0, 1);
+        break;
+      case "srl2":
+        EqualityArray s1 = (EqualityArray) yhat.getTail(0).getValue();
+        EqualityArray e1 = (EqualityArray) yhat.getTail(1).getValue();
+        t = extractSpan(e1, 0, 1);
+        s = extractSpan(s1, 0, 1);
+        break;
+      case "srl3":
+        Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(yhat);
+        t = s3.t;
+        s = s3.s;
+        ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(s3.f));
+        ctx.setRoleS(s3.k);
+        break;
+      default:
+        skipped.increment(yhat.getRelation().getName());
+        if (skipped.getTotalCount() % 1000 == 0)
+          Log.info("skipped: " + skipped.toString());
+        break;
+      }
+      if (s != null && s != Span.nullSpan) {
+        ctx.setArg(s);
+        ctx.setArgHead(hf.head(s, sentCache));
+        ctx.setSpan1(s);
+        ctx.setHead1(ctx.getArgHead());
+      }
+      if (t != null && t != Span.nullSpan) {
+        ctx.setTarget(t);
+        ctx.setTargetHead(hf.head(t, sentCache));
+        ctx.setSpan2(t);
+        ctx.setHead2(ctx.getTargetHead());
+      }
+    } else {
+      customEdgeCtxSetup.accept(new Pair<>(yhat, x), ctx);
     }
     List<Pair<TemplateAlphabet, String>> f = new ArrayList<>();
     for (TemplateAlphabet ftemp : features) {
