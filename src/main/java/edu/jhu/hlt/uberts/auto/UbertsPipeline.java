@@ -287,9 +287,8 @@ public class UbertsPipeline {
               t.score.backwards(+1);
             fpr.accum(y, score > 0);
           } else {
-            @SuppressWarnings("unchecked")
             WeightAdjoints<Pair<TemplateAlphabet, String>> fx =
-            (WeightAdjoints<Pair<TemplateAlphabet, String>>) t.score;
+              (WeightAdjoints<Pair<TemplateAlphabet, String>>) t.score;
             if (fx.getFeatures() == fe.SKIP) {
               skipped++;
               continue;

@@ -11,8 +11,6 @@ public class WeightAdjoints<T> implements Adjoints {
   private Map<T, Weight<T>> theta;
 
   public WeightAdjoints(List<T> features, Map<T, Weight<T>> weights) {
-    if (features.isEmpty())
-      Log.warn("checkme");
     this.fx = features;
     this.theta = weights;
   }
