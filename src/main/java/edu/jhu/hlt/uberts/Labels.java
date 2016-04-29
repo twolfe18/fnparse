@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 
 public class Labels {
@@ -102,10 +103,40 @@ public class Labels {
       }
     }
 
+    public Map<String, FPR> perfByRel() {
+      if (edges.size() == 0)
+        return Collections.emptyMap();
+      Map<String, FPR> m = new HashMap<>();
+      for (String relName : edges2.keySet()) {
+        int tp = tpByRel.getCount(relName);
+        int fp = fpByRel.getCount(relName);
+        int fn = edges2.get(relName).size() - tp;
+        FPR perf = new FPR();
+        perf.accum(tp, fp, fn);
+        Object old = m.put(relName, perf);
+        assert old == null;
+      }
+      return m;
+    }
+
     public double precision() {
       if (tp + fp == 0)
         return 1;
       return ((double) tp) / (tp + fp);
+    }
+
+    public Map<String, Double> precisionByRel() {
+      if (edges.size() == 0)
+        return Collections.emptyMap();
+      Map<String, Double> m = new HashMap<>();
+      for (String relName : edges2.keySet()) {
+        int tp = tpByRel.getCount(relName);
+        int fp = fpByRel.getCount(relName);
+        double recall = ((double) tp) / (tp + fp);
+        Object old = m.put(relName, recall);
+        assert old == null;
+      }
+      return m;
     }
 
     public double recall() {
@@ -139,7 +170,9 @@ public class Labels {
 
     public List<HypEdge> getFalseNegatives() {
       List<HypEdge> fn = new ArrayList<>();
-      for (String relName : edges2.keySet())
+      List<String> rels = new ArrayList<>(edges2.keySet());
+      Collections.sort(rels);
+      for (String relName : rels)
         fn.addAll(getFalseNegatives(relName));
       return fn;
     }
