@@ -14,14 +14,53 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 
+/**
+ * If you're looking for a way to filter RelDoc streams, you can do it here.
+ *
+ * @author travis
+ */
 public abstract class ManyDocSplitter implements AutoCloseable {
 
+  /**
+   * If you return null, then this doesn't belong to any partition.
+   */
   abstract String partition(RelDoc d);
 
   abstract File getOutputForPartition(String p);
+
+  public static class NoSrlFilter extends ManyDocSplitter {
+    private File output;
+    public NoSrlFilter(File output) {
+      this.output = output;
+    }
+    @Override
+    public String partition(RelDoc d) {
+      for (HypEdge e : d.facts)
+        if (e.getRelation().getName().startsWith("srl"))
+          return "keep";
+      for (RelLine line : d.items)
+        if (line.tokens.length >= 3 && line.tokens[1].startsWith("srl"))
+          return "keep";
+      return null;
+    }
+
+    @Override
+    public File getOutputForPartition(String p) {
+      return output;
+    }
+
+    public static void main(String[] args) throws IOException {
+      ExperimentProperties config = ExperimentProperties.init(args);
+      try (NoSrlFilter ts = new NoSrlFilter(config.getFile("relOutput"))) {
+        ts.split(config.getExistingFile("relInput"));
+      }
+    }
+  }
 
   public static class TestSet extends ManyDocSplitter {
     private File testIdsFile;
@@ -80,6 +119,19 @@ public abstract class ManyDocSplitter implements AutoCloseable {
       assert "train".equals(p);
       return trainOutput;
     }
+
+    public static void main(String[] args) throws IOException {
+      ExperimentProperties config = ExperimentProperties.init(args);
+      try (TestSet ts = new TestSet(config.getExistingFile("testSetIds"),
+          config.getFile("trainRelOutput"),
+          config.getFile("testRelOutput"))) {
+        if (config.containsKey("devSetIds")) {
+          ts.setDev(config.getExistingFile("devSetIds"),
+              config.getFile("devRelOutput"));
+        }
+        ts.split(config.getExistingFile("relInput"));
+      }
+    }
   }
 
   private Map<String, BufferedWriter> writers = new HashMap<>();
@@ -96,9 +148,18 @@ public abstract class ManyDocSplitter implements AutoCloseable {
   }
 
   public void split(Iterator<RelDoc> itr) throws IOException {
+    TimeMarker tm = new TimeMarker();
     while (itr.hasNext()) {
+      if (tm.enoughTimePassed(15)) {
+        Log.info("after " + tm.secondsSinceFirstMark() + " sec: " + partitionCounts);
+      }
+
       RelDoc d = itr.next();
       String p = partition(d);
+      if (p == null) {
+        partitionCounts.increment("<skipped>");
+        continue;
+      }
       partitionCounts.increment(p);
       BufferedWriter w = writers.get(p);
       if (w == null) {
@@ -124,19 +185,6 @@ public abstract class ManyDocSplitter implements AutoCloseable {
       } catch (IOException e) {
         e.printStackTrace();
       }
-    }
-  }
-
-  public static void main(String[] args) throws IOException {
-    ExperimentProperties config = ExperimentProperties.init(args);
-    try (TestSet ts = new TestSet(config.getExistingFile("testSetIds"),
-        config.getFile("trainRelOutput"),
-        config.getFile("testRelOutput"))) {
-      if (config.containsKey("devSetIds")) {
-        ts.setDev(config.getExistingFile("devSetIds"),
-            config.getFile("devRelOutput"));
-      }
-      ts.split(config.getExistingFile("relInput"));
     }
   }
 }
