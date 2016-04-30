@@ -115,7 +115,7 @@ public class UbertsTest {
     }
 
     // Print out the state graph
-    u.getState().dbgShowEdges();
+//    u.getState().dbgShowEdges();
   }
 
   /**
@@ -203,7 +203,7 @@ public class UbertsTest {
     Agenda a = u.getAgenda();
     State s = u.getState();
     a.dbgShowScores();
-    s.dbgShowEdges();
+//    s.dbgShowEdges();
 
     // Add what should be NER tags
     while (a.size() > 0) {
@@ -216,7 +216,7 @@ public class UbertsTest {
 
     Log.info("after adding NER:");
     a.dbgShowScores();
-    s.dbgShowEdges();
+//    s.dbgShowEdges();
   }
 
   public void corefSetup() {

@@ -259,6 +259,6 @@ public class SimpleNer {
     Log.info("numTokens=" + ner.getNumTokens());
     u.addEdgeToState(ner.makeRootEdge());
     u.dbgRunInference();
-    u.getState().dbgShowEdges();
+//    u.getState().dbgShowEdges();
   }
 }

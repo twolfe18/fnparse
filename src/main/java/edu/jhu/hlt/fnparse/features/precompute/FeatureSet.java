@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
-import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -65,15 +64,11 @@ public class FeatureSet {
   public static List<String[]> getFeatureSet3(File f) {
     List<String[]> features = new ArrayList<>();
     Set<String> templates = new HashSet<>();
-    try {
-      String fs = getFeatureSetString(f);
-      for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
-        List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
-        templates.addAll(strTemplates);
-        features.add(strTemplates.toArray(new String[strTemplates.size()]));
-      }
-    } catch (TemplateDescriptionParsingException e) {
-      throw new RuntimeException(e);
+    String fs = getFeatureSetString(f);
+    for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
+      List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
+      templates.addAll(strTemplates);
+      features.add(strTemplates.toArray(new String[strTemplates.size()]));
     }
     Log.info("[main] loaded " + features.size() + " features covering " + templates.size() + " templates");
     return features;
@@ -92,9 +87,19 @@ public class FeatureSet {
     try (BufferedReader r = FileUtil.getReader(f)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] toks = line.split("\t");
-        if (toks.length != 7)
+        if (toks.length != 8)
           Log.warn("unknown line format: " + line);
-        features.add(toks[6]);
+
+
+//        // TODO TEMPORARY HACK
+//        int c;
+//        if ((c = toks[7].indexOf("-Top")) > 0)
+//          toks[7] = toks[7].substring(0, c);
+//        if ((c = toks[7].indexOf("-Cnt")) > 0)
+//          toks[7] = toks[7].substring(0, c);
+
+
+        features.add(toks[7]);
       }
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -120,27 +125,23 @@ public class FeatureSet {
     boolean allowLossyAlphForFS = config.getBoolean("allowLossyAlphForFS", false);
     List<int[]> features = new ArrayList<>();
     BitSet templates = new BitSet();
-    try {
-      for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
-        List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
-        int n = strTemplates.size();
-        int[] intTemplates = new int[n];
-        for (int i = 0; i < n; i++) {
-          String tn = strTemplates.get(i);
-          Log.info("looking up template: " + tn);
-          int t = bialph.mapTemplate(tn);
-          if (t < 0 && allowLossyAlphForFS) {
-            Log.info("skipping because " + tn + " was not in the alphabet");
-            continue;
-          }
-          assert t >= 0 : "couldn't find \"" + tn + "\" in " + bialph.getSource().getPath();
-          intTemplates[i] = t;
-          templates.set(t);
+    for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
+      List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
+      int n = strTemplates.size();
+      int[] intTemplates = new int[n];
+      for (int i = 0; i < n; i++) {
+        String tn = strTemplates.get(i);
+        Log.info("looking up template: " + tn);
+        int t = bialph.mapTemplate(tn);
+        if (t < 0 && allowLossyAlphForFS) {
+          Log.info("skipping because " + tn + " was not in the alphabet");
+          continue;
         }
-        features.add(intTemplates);
+        assert t >= 0 : "couldn't find \"" + tn + "\" in " + bialph.getSource().getPath();
+        intTemplates[i] = t;
+        templates.set(t);
       }
-    } catch (TemplateDescriptionParsingException e) {
-      throw new RuntimeException(e);
+      features.add(intTemplates);
     }
     Log.info("[main] loaded " + features.size() + " features covering " + templates.cardinality() + " templates");
     return features;

@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.util.Set;
 
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
@@ -33,8 +34,15 @@ public class FeatureCounts implements LineByLine {
     public static final int MISSING_VALUE = -1;
     private Counts<Integer>[] t2f2count;
 
-    @SuppressWarnings("unchecked")
     public FromFile(File previousOutputOfThisClassesMain) throws IOException {
+      this(previousOutputOfThisClassesMain, null);
+    }
+
+    /**
+     * @param previousOutputOfThisClassesMain
+     * @param tKeep is the set of template names to keep. If null, everything is kept.
+     */
+    public FromFile(File previousOutputOfThisClassesMain, Set<String> tKeep) throws IOException {
       TimeMarker tm = new TimeMarker();
       Log.info("loading counts from " + previousOutputOfThisClassesMain.getPath());
       t2f2count = new Counts[9000];   // TODO dynamic resizing
@@ -43,9 +51,17 @@ public class FeatureCounts implements LineByLine {
         String header = r.readLine();
         assert header.startsWith("#");
         for (String line = r.readLine(); line != null; line = r.readLine()) {
+          if (tm.enoughTimePassed(15)) {
+            Log.info("read " + i + " lines in "
+                + tm.secondsSinceFirstMark() + " seconds, "
+                + Describe.memoryUsage());
+          }
           i++;
+
           String[] toks = line.split("\t");
           assert toks.length == 4;
+          if (tKeep != null && !tKeep.contains(toks[0]))
+            continue;
           int t = Integer.parseInt(toks[1]);
           int f = Integer.parseInt(toks[2]);
           int count = Integer.parseInt(toks[3]);
@@ -55,12 +71,6 @@ public class FeatureCounts implements LineByLine {
             t2f2count[t] = cnt = new Counts<>();
           }
           cnt.update(f, count);
-
-          if (tm.enoughTimePassed(15)) {
-            Log.info("read " + i + " lines in "
-                + tm.secondsSinceFirstMark() + " seconds, "
-                + Describe.memoryUsage());
-          }
         }
       }
       Log.info("done");
@@ -74,6 +84,10 @@ public class FeatureCounts implements LineByLine {
       return t2f2count[template].numNonZero();
     }
 
+    public int getCount(int template, int feature) {
+      return t2f2count[template].getCount(feature);
+    }
+
     /** Can return -1 */
     public IntIntHashMap mapFeaturesByFrequency(int template) {
       Counts<Integer> cnt = t2f2count[template];
@@ -82,6 +96,16 @@ public class FeatureCounts implements LineByLine {
       for (int i : cnt.getKeysSortedByCount(true))
         oldF2newF.put(i, oldF2newF.size());
       return oldF2newF;
+    }
+
+//    public List<Integer> featuresWithCountAtLeast(int c, int template) {
+//      if (c < 2)
+//        throw new IllegalArgumentException();
+//      Counts<Integer> cnt = t2f2count[template];
+//      return cnt.countIsAtLeast(c);
+//    }
+    public Counts<Integer> getCounts(int template) {
+      return t2f2count[template];
     }
 
     /** Can return -1 */

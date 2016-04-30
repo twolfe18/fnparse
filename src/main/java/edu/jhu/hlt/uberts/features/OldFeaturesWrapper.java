@@ -1,6 +1,7 @@
 package edu.jhu.hlt.uberts.features;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,6 +23,7 @@ import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
+import edu.jhu.hlt.fnparse.features.precompute.TemplateTransformerTemplate;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
@@ -94,17 +96,29 @@ public class OldFeaturesWrapper {
 
     @Override
     public Adjoints score(HypEdge yhat, Uberts x) {
-      int[] y = customRefinements.apply(yhat);
+      int[] y = null;
+      if (customRefinements != null)
+        y = customRefinements.apply(yhat);
+
       List<Pair<TemplateAlphabet, String>> f1 = inner.features(yhat, x);
       int n = f1.size();
-//      int T = inner.features.size();
-      int[] f3 = new int[n * y.length];
+      int[] f3;
+
+      if (customRefinements != null)
+        f3 = new int[n * y.length];
+      else
+        f3 = new int[n];
+
       for (int i = 0; i < n; i++) {
         Pair<TemplateAlphabet, String> p = f1.get(i);
         int t = p.get1().index;
         int f = Hash.hash(p.get2());
-        for (int j = 0; j < y.length; j++)
-          f3[i * y.length + j] = Hash.mix(y[j], t, f) & mask;
+        if (customRefinements == null) {
+          f3[i] = Hash.mix(t, f) & mask;
+        } else {
+          for (int j = 0; j < y.length; j++)
+            f3[i * y.length + j] = Hash.mix(y[j], t, f) & mask;
+        }
       }
       if (useAvg)
         return theta.averageView().score(f3, false);
@@ -163,6 +177,54 @@ public class OldFeaturesWrapper {
     skipped = new Counts<>();
   }
 
+
+  public OldFeaturesWrapper(
+      BasicFeatureTemplates bft,
+      String featureSetWithPluses,
+      File bialph, // e.g. data/mimic-coe/framenet/coherent-shards/alphabet.txt.gz
+      File fcounts // e.g. data/mimic-coe/framenet/feature-counts/all.txt.gz
+      ) throws IOException {
+
+    TemplateTransformerTemplate ttt = new TemplateTransformerTemplate(fcounts, bialph, featureSetWithPluses);
+    Map<String, Template> extra = ttt.getSpecialTemplates(bft);
+    ttt.free();
+
+    this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
+    try {
+      for (Template t : TemplatedFeatures.parseTemplates(featureSetWithPluses, bft, extra)) {
+        int i = features.size();
+        this.features.add(new TemplateAlphabet(t, "t" + i, i));
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    Log.info("setup with " + features.size() + " features");
+
+    customRefinements = e -> {
+      assert e.getNumTails() == 6;
+      if (UbertsPipeline.isNullSpan(e))
+        return new int[] {0};
+//      String f = (String) e.getTail(2).getValue();
+//      String k = (String) e.getTail(5).getValue();
+      HypNode f = e.getTail(2);
+      HypNode k = e.getTail(5);
+      int mask = (1<<14)-1;
+      int ff = (f.hashCode() & mask) * 2 + 0;
+      int kk = (k.hashCode() & mask) * 2 + 1;
+//      return new int[] {1, 2 + ff, 2 + kk};
+      return new int[] {1, 2 + (k.hashCode() & mask)};
+    };
+
+    timer = new MultiTimer();
+    timer.put("convert-sentence", new Timer("convert-sentence", 100, true));
+    timer.put("compute-features", new Timer("compute-features", 10000, true));
+
+    ctx = new TemplateContext();
+    depGraphEdges = new Alphabet<>();
+    hf = new SemaforicHeadFinder();
+    skipped = new Counts<>();
+  }
+
   /** Starts up with some dummy features, for debugging */
   public OldFeaturesWrapper(BasicFeatureTemplates bft) {
 
@@ -173,6 +235,7 @@ public class OldFeaturesWrapper {
         "Bc256/8-2-grams-between-Head1-and-Span2.Last",
         "Head1Head2-PathNgram-Basic-LEMMA-DIRECTION-len2",
         "Head1Head2-PathNgram-Basic-POS-DEP-len2",
+        "Head1Head2-Path-Basic-LEMMA-DEP-t",
         "Span2-PosPat-FULL_POS-3-1",
         "Span2-First-" + w,
         "Span2-Last-" + w,

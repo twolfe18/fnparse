@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -143,8 +144,7 @@ public abstract class TemplatedFeatures implements Serializable {
   }
 
   /** Take a full template string and break it into independent templates */
-  public static List<String> tokenizeTemplates(String templateString)
-      throws TemplateDescriptionParsingException {
+  public static List<String> tokenizeTemplates(String templateString) {
     List<String> toks = new ArrayList<>();
     for (String s : templateString.split("\\+"))
       toks.add(s.trim());
@@ -161,11 +161,17 @@ public abstract class TemplatedFeatures implements Serializable {
   /** Take an independent template and build it up from basic templates */
   private static Template parseTemplateToken(String templateToken)
       throws TemplateDescriptionParsingException {
+    BasicFeatureTemplates bft = new BasicFeatureTemplates();
+    return parseTemplateToken(templateToken, bft, null);
+  }
+
+  private static Template parseTemplateToken(
+      String templateToken,
+      BasicFeatureTemplates bft,
+      Map<String, Template> overrides)
+      throws TemplateDescriptionParsingException {
     // Normalize
     List<String> tokens = tokenizeProducts(templateToken);
-
-    // Holds the templates
-    BasicFeatureTemplates bft = new BasicFeatureTemplates();
 
     // Lookup Templates
     int n = tokens.size();
@@ -184,7 +190,10 @@ public abstract class TemplatedFeatures implements Serializable {
 //      }
 //      if (templates[i] == null)
 //        templates[i] = bft.getBasicTemplate(tokens.get(i));
-      templates[i] = bft.getBasicTemplate(tokens.get(i));
+      if (overrides != null)
+        templates[i] = overrides.get(tokens.get(i));
+      if (templates[i] == null)
+        templates[i] = bft.getBasicTemplate(tokens.get(i));
     }
 
     // Verify all the templates
@@ -211,16 +220,24 @@ public abstract class TemplatedFeatures implements Serializable {
     }
   }
 
+  public static List<Template> parseTemplates(String templateDescription)
+      throws TemplateDescriptionParsingException {
+    throw new RuntimeException("lift BasicFeatureTemplates");
+  }
+
   /**
    * Will throw an exception if it can't parse it (which many contain a message)
    */
-  public static List<Template> parseTemplates(String templateDescription)
+  public static List<Template> parseTemplates(
+      String templateDescription,
+      BasicFeatureTemplates bft,
+      Map<String, Template> overrides)
       throws TemplateDescriptionParsingException {
     assert templateDescription != null;
     assert templateDescription.length() > 0 : "you need to provide some templates";
     List<Template> templates = new ArrayList<>();
     for (String tok : tokenizeTemplates(templateDescription))
-      templates.add(parseTemplateToken(tok));
+      templates.add(parseTemplateToken(tok, bft, overrides));
     return templates;
   }
 

@@ -17,9 +17,11 @@ import java.util.Set;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -34,6 +36,7 @@ import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
+import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -58,7 +61,6 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
 import edu.jhu.prim.tuple.Pair;
-import edu.jhu.util.HPair;
 
 /**
  * Takes in Uberts pieces (e.g. transition grammar and labels) and runs inference.
@@ -91,6 +93,19 @@ public class UbertsPipeline {
   public boolean debug = false;
   public MultiTimer timer;
 
+  private static String prependRefinementTemplate(String refinement, File featureSet) {
+    String fs = FeatureSet.getFeatureSetString(featureSet);
+    List<String> features = TemplatedFeatures.tokenizeTemplates(fs);
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < features.size(); i++) {
+      if (i > 0) sb.append(" + ");
+      sb.append(refinement);
+      sb.append('*');
+      sb.append(features.get(i));
+    }
+    return sb.toString();
+  }
+
   public UbertsPipeline(
       Uberts u,
       File grammarFile,
@@ -111,8 +126,36 @@ public class UbertsPipeline {
       feSlow = new OldFeaturesWrapper.Strings(new OldFeaturesWrapper(bft), pNegSkip);
       feSlow.cacheAdjointsForwards = false;
     } else if (mode == Mode.LEARN) {
-      int numBits = 24;
-      feFast = new OldFeaturesWrapper.Ints(new OldFeaturesWrapper(bft), numBits);
+      int numBits = 26;
+
+//      File fs = new File("data/srl-reldata/feature-sets/framenet/MAP/pos-320-16_neg-320-16.fs");
+
+//      File fs = new File("data/srl-reldata/feature-sets/framenet/MAP/pos-1280-16_neg-1280-16.fs");
+//      String ts = FeatureSet.getFeatureSetString(fs);
+
+      File posFsFile = config.getExistingFile("posFsFile");
+      File negFsFile = config.getExistingFile("negFsFile");
+
+      // This really does work better than the others tried below :)
+      // More features != better if you don't choose carefully.
+      String ts = prependRefinementTemplate("arg", negFsFile)
+          + " + " + prependRefinementTemplate("roleArg", posFsFile);
+
+//      String ts = prependRefinementTemplate("arg", negFsFile)
+//          + " + " + prependRefinementTemplate("argAndRoleArg", posFsFile);
+
+//      String ts = prependRefinementTemplate("arg", negFsFile)
+//          + " + " + prependRefinementTemplate("roleArg", posFsFile)
+//          + " + " + prependRefinementTemplate("arg", posFsFile)
+//          + " + " + prependRefinementTemplate("roleArg", negFsFile);
+
+
+//      File bialph = new File("data/mimic-coe/framenet/coherent-shards/alphabet.txt.gz");
+//      File fcounts = new File("data/mimic-coe/framenet/feature-counts/all.txt.gz");
+      File bialph = config.getExistingFile("bialph");
+      File fcounts = config.getExistingFile("featureCounts");
+
+      feFast = new OldFeaturesWrapper.Ints(new OldFeaturesWrapper(bft, ts, bialph, fcounts), numBits);
       feFast.cacheAdjointsForwards = true;
       assert feFast.getInner() != null;
     }
@@ -460,6 +503,7 @@ public class UbertsPipeline {
       LL<Span> possible = xuePalmerIndex.get(key);
       possible = new LL<>(Span.nullSpan, possible);
       // Loop over every span for this target
+      Pair<HypEdge, Adjoints> best = null;
       for (LL<Span> cur = possible; cur != null; cur = cur.next) {
         Span s = cur.item;
         if (debug)
@@ -473,7 +517,9 @@ public class UbertsPipeline {
         tail[5] = role;
         HypEdge yhat = u.makeEdge(srl4, tail);
         Adjoints a = feFast.score(yhat, u);
-        u.addEdgeToAgenda(yhat, a);
+//        u.addEdgeToAgenda(yhat, a);
+        if (best == null || a.forwards() > best.get2().forwards())
+          best = new Pair<>(yhat, a);
 
         Object old = scores.put(new HashableHypEdge(yhat), a);
         assert old == null;
@@ -485,7 +531,7 @@ public class UbertsPipeline {
 //            + "\t" + StringUtils.trunc(wa.getFeatures().toString(), 250));
         }
       }
-      Pair<HypEdge, Adjoints> best = agenda.popBoth();
+//      Pair<HypEdge, Adjoints> best = agenda.popBoth();
       HypEdge yhat = best.get1();
       agenda.clear();
 
@@ -731,7 +777,85 @@ public class UbertsPipeline {
       fpre.saveAlphabets(fPreTemplateFeatureAlph, fPreRoleNameAlph);
   }
 
+  public void train(ExperimentProperties config) throws IOException {
+
+    File trainRel = config.getExistingFile("relTrain");
+    File testRel = config.getExistingFile("relTest");
+    Log.info("train=" + trainRel);
+    Log.info("test=" + testRel);
+    File devRel = null;
+    if (config.containsKey("relDev")) {
+      devRel = config.getExistingFile("relDev");
+      Log.info("dev=" + devRel);
+    }
+
+    boolean includeProvidence = false;
+    boolean dedupInputLines = true;
+    int maxIter = config.getInt("maxIter", 10);
+    for (int i = 0; i < maxIter; i++) {
+      Log.info("starting iter=" + i + " of " + maxIter);
+
+      // TRAIN
+      FPR trainPerf = new FPR();
+      FPR trainPerfWindow = new FPR();
+      try (RelationFileIterator itr = new RelationFileIterator(trainRel, includeProvidence);
+          ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
+        int processed = 0;
+        while (x.hasNext()) {
+          RelDoc doc = x.next();
+          FPR perfDoc = adHocSrlClassificationByRole(doc, true);
+          trainPerf.accum(perfDoc);
+          trainPerfWindow.accum(perfDoc);
+          processed++;
+          Log.info("iter=" + i + " processed=" + processed + " train: "
+              + trainPerf + " window: " + trainPerfWindow
+              + " cur(" + doc.getId() +"): " + perfDoc);
+          if (processed % 500 == 0)
+            trainPerfWindow = new FPR();
+        }
+      }
+
+      // DEV
+      if (devRel != null) {
+        feFast.useAverageWeights(true);
+        FPR devPerf = new FPR();
+        try (RelationFileIterator itr = new RelationFileIterator(devRel, includeProvidence);
+            ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
+          int processed = 0;
+          while (x.hasNext()) {
+            RelDoc doc = x.next();
+            FPR perfDoc = adHocSrlClassificationByRole(doc, false);
+            devPerf.accum(perfDoc);
+            processed++;
+            Log.info("iter=" + i + " processed=" + processed + " dev: "
+                + trainPerf + " cur(" + doc.getId() +"): " + perfDoc);
+          }
+        }
+        feFast.useAverageWeights(false);
+      }
+
+      // TEST
+      FPR testPerf = new FPR();
+      try (RelationFileIterator itr = new RelationFileIterator(testRel, includeProvidence);
+          ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
+        feFast.useAverageWeights(true);
+        int processed = 0;
+        while (x.hasNext()) {
+          RelDoc doc = x.next();
+          FPR perfDoc = adHocSrlClassificationByRole(doc, false);
+          testPerf.accum(perfDoc);
+          processed++;
+          Log.info("iter=" + i + " processed=" + processed + " test: "
+              + trainPerf + " cur(" + doc.getId() +"): " + perfDoc);
+        }
+        feFast.useAverageWeights(false);
+      }
+
+    }
+  }
+
   public static void main(String[] args) throws IOException {
+    BrownClusters.DEBUG = true;
     ExperimentProperties config = ExperimentProperties.init(args);
     Log.info("starting...");
 
@@ -772,9 +896,14 @@ public class UbertsPipeline {
     Shard dataShard = config.getShard();
     boolean includeProvidence = false;
     boolean dedupInputLines = true;
-    try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);
-        ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
-      srl.runInference(x, multiYhat, dataShard);
+
+    if (srl.mode == Mode.LEARN) {
+      srl.train(config);
+    } else {
+      try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);
+          ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
+        srl.runInference(x, multiYhat, dataShard);
+      }
     }
 
     Log.info(Describe.memoryUsage());

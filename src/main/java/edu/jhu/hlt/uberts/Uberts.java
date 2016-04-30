@@ -115,7 +115,8 @@ public class Uberts {
     this.rand = rand;
     this.relations = new HashMap<>();
     this.agenda = new Agenda();
-    this.state = new State();
+//    this.state = new State();
+    this.state = new State.Split();
     this.trie = new TNode(null, null);
     this.nodes = new HashMap<>();
     this.nodeTypes = new HashMap<>();

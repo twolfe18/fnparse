@@ -29,6 +29,7 @@ import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.prim.tuple.Pair;
 import edu.mit.jwi.item.ISynset;
@@ -1741,6 +1742,17 @@ public class BasicFeatureTemplates {
         if (context.getArg() == null || context.getArg() == Span.nullSpan)
           return null;
         return "arg=" + (context.getRoleS() == null ? "null" : "something");
+      }
+    });
+    addLabel("argAndRoleArg", new Template() {
+      // This is a backoff from roleArg. Requires the same data be present, but
+      // doesn't give the name of the role in the feature
+      public Iterable<String> extract(TemplateContext context) {
+        if (context.getArg() == null || context.getArg() == Span.nullSpan)
+          return null;
+        return Arrays.asList(
+            "arg=" + (context.getRoleS() == null ? "null" : "something"),
+            "roleArg=" + context.getRoleS());
       }
     });
     addLabel("span1IsConstituent", new TemplateSS() {
