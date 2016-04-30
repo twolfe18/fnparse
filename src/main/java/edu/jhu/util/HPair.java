@@ -19,6 +19,14 @@ public class HPair<L, R> {
     this.hash = Hash.mix64(left.hashCode(), right.hashCode());
   }
 
+  public L get1() {
+    return left;
+  }
+
+  public R get2() {
+    return right;
+  }
+
   @Override
   public int hashCode() {
     return (int) hash;

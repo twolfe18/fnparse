@@ -22,12 +22,14 @@ import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
@@ -35,6 +37,7 @@ import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.NodeType;
@@ -44,7 +47,6 @@ import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Step;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
-import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
@@ -56,6 +58,7 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.HPair;
 
 /**
  * Takes in Uberts pieces (e.g. transition grammar and labels) and runs inference.
@@ -76,7 +79,8 @@ public class UbertsPipeline {
 
   private double pNegSkip = 0.75;
   private BasicFeatureTemplates bft;
-  private OldFeaturesWrapper fe;
+  private OldFeaturesWrapper.Strings feSlow;
+  private OldFeaturesWrapper.Ints feFast;
   private Mode mode;
 
   // Both of these are single arg relations and their argument is a doc id.
@@ -85,6 +89,7 @@ public class UbertsPipeline {
   private Relation doneAnnoRel;
 
   public boolean debug = false;
+  public MultiTimer timer;
 
   public UbertsPipeline(
       Uberts u,
@@ -94,14 +99,22 @@ public class UbertsPipeline {
     this.u = u;
     bft = new BasicFeatureTemplates();
 
+    timer = new MultiTimer();
+    timer.put("setupUbertsForDoc", new Timer("setupUbertsForDoc", 30, true));
+    timer.put("adHocSrlClassificationByRole.setup", new Timer("adHocSrlClassificationByRole.setup", 30, true));
+    timer.put("adHocSrlClassificationByRole.prediction", new Timer("adHocSrlClassificationByRole.prediction", 30, true));
+    timer.put("adHocSrlClassificationByRole.update", new Timer("adHocSrlClassificationByRole.update", 30, true));
+
     ExperimentProperties config = ExperimentProperties.getInstance();
     mode = Mode.valueOf(config.getString("mode"));
     if (mode == Mode.EXTRACT_FEATS) {
-      fe = new OldFeaturesWrapper(bft, pNegSkip);
-      fe.cacheAdjointsForwards = false;
+      feSlow = new OldFeaturesWrapper.Strings(new OldFeaturesWrapper(bft), pNegSkip);
+      feSlow.cacheAdjointsForwards = false;
     } else if (mode == Mode.LEARN) {
-      fe = new OldFeaturesWrapper(bft);
-      fe.cacheAdjointsForwards = true;
+      int numBits = 20;
+      feFast = new OldFeaturesWrapper.Ints(new OldFeaturesWrapper(bft), numBits);
+      feFast.cacheAdjointsForwards = true;
+      assert feFast.getInner() != null;
     }
 
     rules = new ArrayList<>();
@@ -166,10 +179,12 @@ public class UbertsPipeline {
 //    else
 //      tg.get2().feats = fe;
 
-    if (mode == Mode.EXTRACT_FEATS)
-      tg.get2().feats = this.fe;
-    else
+    if (mode == Mode.EXTRACT_FEATS) {
+//      tg.get2().feats = this.feFast;
+      tg.get2().feats = this.feSlow;
+    } else {
       tg.get2().feats = new FeatureExtractionFactor.Oracle(r.rhs.relName);
+    }
 
     dbgTransitionGenerators.add(tg.get2());
     u.addTransitionGenerator(tg.get1(), tg.get2());
@@ -267,10 +282,11 @@ public class UbertsPipeline {
    */
   public String setupUbertsForDoc(Uberts u, RelDoc doc) {
     boolean debug = false;
-
+    timer.start("setupUbertsForDoc");
     u.getState().clearNonSchema();
     u.getAgenda().clear();
     u.initLabels();
+
 
     // Add an edge to the state specifying that we are working on this document/sentence.
     String docid = doc.def.tokens[1];
@@ -280,15 +296,15 @@ public class UbertsPipeline {
     int cx = 0, cy = 0;
     assert doc.items.isEmpty() && !doc.facts.isEmpty();
 
-    // Idiosyncratic: change all event* edges from y to x
-    for (HypEdge.WithProps fact : doc.facts) {
-      if (fact.getRelation().getName().startsWith("event")) {
-        if (this.debug)
-          Log.info("changing from y=>x: " + fact);
-        fact.setProperty(HypEdge.IS_X, true);
-        fact.setProperty(HypEdge.IS_Y, false);
-      }
-    }
+//    // Idiosyncratic: change all event* edges from y to x
+//    for (HypEdge.WithProps fact : doc.facts) {
+//      if (fact.getRelation().getName().startsWith("event")) {
+//        if (this.debug)
+//          Log.info("changing from y=>x: " + fact);
+//        fact.setProperty(HypEdge.IS_X, true);
+//        fact.setProperty(HypEdge.IS_Y, false);
+//      }
+//    }
 
     // Add all labels first
     for (HypEdge.WithProps fact : doc.facts) {
@@ -323,6 +339,7 @@ public class UbertsPipeline {
 
     if (this.debug)
       Log.info("done setup on " + docid);
+    timer.stop("setupUbertsForDoc");
     return docid;
   }
 
@@ -349,7 +366,17 @@ public class UbertsPipeline {
       Log.info("starting...");
 
     setupUbertsForDoc(u, doc);
-    // This should put all srlArg edges onto the agenda.
+    timer.start("adHocSrlClassificationByRole.setup");
+//    u.getState().clearNonSchema();
+//    u.getAgenda().clear();
+//    u.initLabels();
+//    for (HypEdge.WithProps fact : doc.facts)
+//      if (fact.hasProperty(HypEdge.IS_Y))
+//        u.addLabel(fact);
+//    // Add an edge to the state specifying that we are working on this document/sentence.
+//    String docid = doc.def.tokens[1];
+//    HypNode docidN = u.lookupNode(docidNT, docid, true);
+//    u.addEdgeToState(u.makeEdge(startDocRel, docidN));
     if (debug)
       Log.info("doc's facts: " + doc.countFacts());
 
@@ -386,7 +413,7 @@ public class UbertsPipeline {
 
     // This is the input to feature extraction
     final Relation srl4 = u.getEdgeType("srl4");
-    fe.customEdgeCtxSetup = (yx, ctx) -> {
+    feFast.getInner().customEdgeCtxSetup = (yx, ctx) -> {
       HypEdge yhat = yx.get1();
       assert yhat.getRelation() == srl4;
       final HeadFinder hf = SemaforicHeadFinder.getInstance();
@@ -411,8 +438,11 @@ public class UbertsPipeline {
         ctx.setHead1(ctx.getArgHead());
       }
     };
+    timer.stop("adHocSrlClassificationByRole.setup");
+
 
     // Make predictions one srlArg/(t,f,k) at a time.
+    timer.start("adHocSrlClassificationByRole.prediction");
     HashMap<HashableHypEdge, Adjoints> scores = new HashMap<>();  // score of every (t,f,k,s)
     HashSet<HashableHypEdge> predictions = new HashSet<>();
     NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
@@ -442,7 +472,7 @@ public class UbertsPipeline {
         tail[4] = u.lookupNode(tokenIndex, i2s(s.end), true);
         tail[5] = role;
         HypEdge yhat = u.makeEdge(srl4, tail);
-        Adjoints a = fe.score(yhat, u);
+        Adjoints a = feFast.score(yhat, u);
         u.addEdgeToAgenda(yhat, a);
 
         Object old = scores.put(new HashableHypEdge(yhat), a);
@@ -450,7 +480,7 @@ public class UbertsPipeline {
 
         if (debug) {
         WeightAdjoints<?> wa = (WeightAdjoints<?>) Adjoints.uncacheIfNeeded(a);
-        System.out.println("\tfeatures extractor=" + fe.getClass()
+        System.out.println("\tfeatures extractor=" + feFast.getClass()
             + " n=" + wa.getFeatures().size());
 //            + "\t" + StringUtils.trunc(wa.getFeatures().toString(), 250));
         }
@@ -465,9 +495,11 @@ public class UbertsPipeline {
         predictions.add(new HashableHypEdge(yhat));
       }
     }
+    timer.stop("adHocSrlClassificationByRole.prediction");
 
     // Construct gold and hyp set for evaluation.
     // Perform updates.
+    timer.start("adHocSrlClassificationByRole.update");
     HashSet<HashableHypEdge> gold = new HashSet<>();
     for (HypEdge e : doc.match2FromFacts(srl4)) {
       HashableHypEdge hhe = new HashableHypEdge(e);
@@ -488,7 +520,9 @@ public class UbertsPipeline {
           fp.backwards(+1);
         }
       }
+      feFast.completedObservation();
     }
+    timer.stop("adHocSrlClassificationByRole.update");
 
     FPR perf = FPR.fromSets(gold, predictions);
     if (debug) {
@@ -499,6 +533,15 @@ public class UbertsPipeline {
     return perf;
   }
 
+  private static final String NS_START = i2s(Span.nullSpan.start).intern();
+  private static final String NS_END = i2s(Span.nullSpan.end).intern();
+  public static boolean isNullSpan(HypEdge srl4Edge) {
+    assert srl4Edge.getRelation().getName().equals("srl4");
+//    return s2i(srl4Edge.getTail(3).getValue()) == Span.nullSpan.start
+//        && s2i(srl4Edge.getTail(4).getValue()) == Span.nullSpan.end;
+    return srl4Edge.getTail(3).getValue() == NS_START
+        && srl4Edge.getTail(4).getValue() == NS_END;
+  }
 
   /**
    * Extracts features off of all actions generated from the transition grammar
@@ -515,13 +558,14 @@ public class UbertsPipeline {
     Log.info("pSkipNeg=" + pNegSkip);
     Log.info("mode=" + mode);
     Log.info("dataShard=" + dataShard);
+    ExperimentProperties config = ExperimentProperties.getInstance();
 
     // This will initialize the Alphabet over frame/role names and provide
     // the code to write out features.txt.gz and template-feat-indices.txt.gz
     FeaturePrecomputation.AlphWrapper fpre = null;
     if (mode == Mode.EXTRACT_FEATS && fPreRoleNameAlph != null) {
       boolean roleMode = true;
-      fpre = new FeaturePrecomputation.AlphWrapper(roleMode, fe.getFeatures());
+      fpre = new FeaturePrecomputation.AlphWrapper(roleMode, feSlow.getInner().getFeatures());
     }
 
     Timer trajProcessingTimer = new Timer("trajProcessingTimer", 10, true);
@@ -534,6 +578,7 @@ public class UbertsPipeline {
     FPR trainPerf = new FPR();
     FPR devPerf = new FPR();
     FPR testPerf = new FPR();
+    int maxInstances = config.getInt("maxInstances", 0);
     Iter itr = new Iter(x, typeInf, Arrays.asList("succTok"));
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       while (itr.hasNext()) {
@@ -544,10 +589,30 @@ public class UbertsPipeline {
         }
         docs++;
 
+//        // For testing base memory requirements for iterating over the data.
+//        if (true) {
+//          if (docs % 1000 == 0)
+//            Log.info("docs=" + docs + " " + Describe.memoryUsage());
+//          continue;
+//        }
+
+        if (maxInstances > 0 && docs >= maxInstances) {
+          Log.info("exiting early since we hit maxInstances=" + maxInstances);
+          break;
+        }
+
         if (mode == Mode.LEARN) {// && u.getRandom().nextDouble() < 0.5) {
-          FPR perfDoc = adHocSrlClassificationByRole(doc, true);
-          trainPerf.accum(perfDoc);
-          Log.info("cumulative: " + trainPerf + "   cur(" + doc.getId() +"): " + perfDoc);
+          if (u.getRandom().nextDouble() < 0.3) {
+            feFast.useAverageWeights(true);
+            FPR perfDoc = adHocSrlClassificationByRole(doc, false);
+            testPerf.accum(perfDoc);
+            feFast.useAverageWeights(false);
+            Log.info("test(avg): " + testPerf + "   cur(" + doc.getId() +"): " + perfDoc);
+          } else {
+            FPR perfDoc = adHocSrlClassificationByRole(doc, true);
+            trainPerf.accum(perfDoc);
+            Log.info("train: " + trainPerf + "   cur(" + doc.getId() +"): " + perfDoc);
+          }
           continue;
         }
 
@@ -576,7 +641,7 @@ public class UbertsPipeline {
             @SuppressWarnings("unchecked")
             WeightAdjoints<Pair<TemplateAlphabet, String>> fx =
               (WeightAdjoints<Pair<TemplateAlphabet, String>>) t.score;
-            if (fx.getFeatures() == fe.SKIP) {
+            if (fx.getFeatures() == feSlow.SKIP) {
               skipped++;
               continue;
             }
@@ -711,6 +776,7 @@ public class UbertsPipeline {
       srl.runInference(x, multiYhat, dataShard);
     }
 
+    Log.info(Describe.memoryUsage());
     Log.info("done");
   }
 }

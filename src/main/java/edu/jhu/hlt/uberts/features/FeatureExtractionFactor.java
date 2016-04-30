@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -21,6 +22,7 @@ import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.StateEdge;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Arg;
+import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 
 public abstract class FeatureExtractionFactor<T> {
@@ -32,7 +34,15 @@ public abstract class FeatureExtractionFactor<T> {
 
   // If true, wraps all scores with Adjoints.cacheIfNeeded
   public boolean cacheAdjointsForwards = true;
-  private Map<Relation, Map<T, Weight<T>>> theta = new HashMap<>();
+//  private Map<Relation, Map<T, Weight<T>>> theta = new HashMap<>();
+  private int numInstances = 0;   // for perceptron averaging
+  private boolean useAvg = false;
+
+  // Keys in inner map are either Relation.getName() or results from customeRefinements
+//  private Map<T, Map<String, Weight<HPair<String, T>>>> theta2;
+  private Map<T, IntObjectHashMap<Weight<Pair<Integer, T>>>> theta2 = new HashMap<>();
+  private IntObjectHashMap<IntObjectHashMap<Weight<Pair<Integer, T>>>> theta2Special = new IntObjectHashMap<>();
+  protected Function<HypEdge, int[]> customRefinements = null;
 
   public abstract List<T> features(HypEdge yhat, Uberts x);
 
@@ -40,27 +50,76 @@ public abstract class FeatureExtractionFactor<T> {
    * Returns a non-caching Adjoints.
    */
   public Adjoints score(HypEdge yhat, Uberts x) {
-    // Look up weight vector based on Relation of the given edge
-    Map<T, Weight<T>> t = theta.get(yhat.getRelation());
-    if (t == null) {
-      t = new HashMap<>();
-      theta.put(yhat.getRelation(), t);
+
+    WeightList<Pair<Integer, T>> weights = new WeightList<>(numInstances, useAvg);
+    int[] refs;
+    if (customRefinements == null)
+      refs = new int[] {0};
+    else
+      refs = customRefinements.apply(yhat);
+    for (T feat : features(yhat, x)) {
+      IntObjectHashMap<Weight<Pair<Integer, T>>> m;
+      if (feat instanceof Integer) {
+        int f = (Integer) feat;
+        m = theta2Special.get(f);
+        if (m == null) {
+          m = new IntObjectHashMap<>();
+          theta2Special.put(f, m);
+        }
+      } else {
+        m = theta2.get(feat);
+        if (m == null) {
+          m = new IntObjectHashMap<>();
+          theta2.put(feat, m);
+        }
+      }
+      for (int i = 0; i < refs.length; i++) {
+        Weight<Pair<Integer, T>> w = m.get(refs[i]);
+        if (w == null) {
+          w = new Weight<>(new Pair<>(refs[i], feat));
+          m.put(refs[i], w);
+        }
+        weights.add(w);
+      }
     }
-    List<T> feats = features(yhat, x);
-    Adjoints a = new WeightAdjoints<>(feats, t);
     if (cacheAdjointsForwards)
-      a = Adjoints.cacheIfNeeded(a);
-    return a;
+      return Adjoints.cacheIfNeeded(weights);
+    return weights;
+
+//    // Look up weight vector based on Relation of the given edge
+//    Map<T, Weight<T>> t = theta.get(yhat.getRelation());
+//    if (t == null) {
+//      t = new HashMap<>();
+//      theta.put(yhat.getRelation(), t);
+//    }
+//    List<T> feats = features(yhat, x);
+//    Adjoints a;
+//    if (useAvg)
+//      a = new WeightAdjoints<>(feats, t, numInstances);
+//    else
+//      a = new WeightAdjoints<>(feats, t);
+//    if (cacheAdjointsForwards)
+//      a = Adjoints.cacheIfNeeded(a);
+//    return a;
+  }
+
+  public void useAverageWeights(boolean useAvg) {
+    this.useAvg = useAvg;
+  }
+
+  public void completedObservation() {
+    numInstances++;
   }
 
   public List<Pair<Relation, Weight<T>>> getWeights() {
-    List<Pair<Relation, Weight<T>>> l = new ArrayList<>();
-    for (Map.Entry<Relation, Map<T, Weight<T>>> x : theta.entrySet()) {
-      Relation r = x.getKey();
-      for (Weight<T> w : x.getValue().values())
-        l.add(new Pair<>(r, w));
-    }
-    return l;
+    throw new RuntimeException("re-implement me");
+//    List<Pair<Relation, Weight<T>>> l = new ArrayList<>();
+//    for (Map.Entry<Relation, Map<T, Weight<T>>> x : theta.entrySet()) {
+//      Relation r = x.getKey();
+//      for (Weight<T> w : x.getValue().values())
+//        l.add(new Pair<>(r, w));
+//    }
+//    return l;
   }
 
   public static class Oracle extends FeatureExtractionFactor<String> {

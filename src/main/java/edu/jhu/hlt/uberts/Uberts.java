@@ -442,7 +442,6 @@ public class Uberts {
    * are guaranteed to be unique.
    */
   public HypNode lookupNode(NodeType nt, Object value, boolean addIfNotPresent) {
-    assert !(value instanceof String) || value == ((String)value).intern();
 //    Pair<NodeType, Object> key = new Pair<>(nt, value);
     HPair<NodeType, Object> key = new HPair<>(nt, value);
     HypNode v = nodes.get(key);

@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Parse;
@@ -30,6 +31,7 @@ import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.Timer;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
@@ -37,6 +39,7 @@ import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Relation.EqualityArray;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.auto.UbertsPipeline;
 import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
@@ -48,8 +51,57 @@ import edu.jhu.util.Alphabet;
  *
  * NOTE: This is hard-coded to a particular transition system.
  */
-public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlphabet, String>> {
+public class OldFeaturesWrapper {
   public static boolean DEBUG = false;
+
+  public static class Strings extends FeatureExtractionFactor<Pair<TemplateAlphabet, String>> {
+    private OldFeaturesWrapper inner;
+    public Strings(OldFeaturesWrapper inner, Double pSkipNeg) {
+      this.inner = inner;
+      super.customRefinements = inner.customRefinements;
+      super.pSkipNeg = pSkipNeg;
+    }
+    @Override
+    public List<Pair<TemplateAlphabet, String>> features(HypEdge yhat, Uberts x) {
+      if (pSkipNeg != null && !x.getLabel(yhat) && x.getRandom().nextDouble() < pSkipNeg)
+        return SKIP;
+      // TODO Need to intern?
+      return inner.features(yhat, x);
+    }
+    public OldFeaturesWrapper getInner() {
+      return inner;
+    }
+  }
+
+  public static class Ints extends FeatureExtractionFactor<Integer> {
+    private OldFeaturesWrapper inner;
+    private int mask;
+
+    public Ints(OldFeaturesWrapper inner, int numBits) {
+      mask = (1 << numBits) - 1;
+      super.customRefinements = inner.customRefinements;
+      this.inner = inner;
+    }
+
+    @Override
+    public List<Integer> features(HypEdge yhat, Uberts x) {
+      List<Pair<TemplateAlphabet, String>> f1 = inner.features(yhat, x);
+      int n = f1.size();
+      int T = inner.features.size();
+      List<Integer> f2 = new ArrayList<>(n);
+      for (int i = 0; i < n; i++) {
+        Pair<TemplateAlphabet, String> p = f1.get(i);
+        int t = p.get1().index;
+        int h = Hash.hash(p.get2()) & mask;
+        f2.add(h * T + t);
+      }
+      return f2;
+    }
+
+    public OldFeaturesWrapper getInner() {
+      return inner;
+    }
+  }
 
   // See TemplatedFeatures.parseTemplate(String), etc
   private edu.jhu.hlt.fnparse.features.precompute.Alphabet features;
@@ -64,6 +116,8 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
   // Sentence setup and conversion is handled for you (so you can access ctx.getSentence()).
   // If you leave this as null, only srl1,srl2,srl3 will work (maybe more later).
   public BiConsumer<Pair<HypEdge, Uberts>, TemplateContext> customEdgeCtxSetup = null;
+
+  public Function<HypEdge, int[]> customRefinements = null;
 
   public OldFeaturesWrapper(BasicFeatureTemplates bft, BiAlph bialph, File featureSet) {
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
@@ -80,12 +134,14 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
     skipped = new Counts<>();
   }
 
+  /** ap == "add product" */
   private void ap(Template y, Template x, String name) {
     if (y != null) {
       Template prod = new TemplatedFeatures.TemplateJoin(y, x);
       features.add(new TemplateAlphabet(prod, name, features.size()));
     }
   }
+
   /** Starts up with some dummy features, for debugging */
   public OldFeaturesWrapper(BasicFeatureTemplates bft) {
 
@@ -124,51 +180,70 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
     // For my current ad-hoc SRL, I only have one relation type: srlArg, which
     // is normally how FeatureExtractionFactor stores its weights (one set of
     // weights for every Relation).
-    Template role = bft.getBasicTemplate("roleArg");        // fires role if someSpan
-    Template arg = bft.getBasicTemplate("arg");            // fires for nullSpan vs someSpan
-    Template frame = bft.getBasicTemplate("frameRoleArg");  // fires (frame,role) if someSpan
+//    Template role = bft.getBasicTemplate("roleArg");        // fires role if someSpan
+//    Template arg = bft.getBasicTemplate("arg");            // fires for nullSpan vs someSpan
+//    Template frame = bft.getBasicTemplate("frameRoleArg");  // fires (frame,role) if someSpan
+
+    customRefinements = e -> {
+      assert e.getNumTails() == 6;
+      if (UbertsPipeline.isNullSpan(e))
+        return new int[] {0};
+//      String f = (String) e.getTail(2).getValue();
+//      String k = (String) e.getTail(5).getValue();
+      Object f = e.getTail(2);
+      Object k = e.getTail(5);
+      int mask = (1<<14)-1;
+      int ff = (f.hashCode() & mask) * 2 + 0;
+      int kk = (k.hashCode() & mask) * 2 + 1;
+      return new int[] {1, 2 + ff, 2 + kk};
+    };
 
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
     // UNIGRAMS
     for (int i = 0; i < temps.length; i++) {
-      ap(role, temps[i], "k*" + temps[i]);
-      ap(arg, temps[i], "b*" + temps[i]);
-      ap(frame, temps[i], "fr*" + temps[i]);
+//      ap(role, temps[i], "k*" + temps[i]);
+//      ap(arg, temps[i], "b*" + temps[i]);
+//      ap(frame, temps[i], "fr*" + temps[i]);
+      features.add(new TemplateAlphabet(temps[i], tempNames[i], features.size()));
     }
     // BIGRAMS
     for (int i = 0; i < temps.length-1; i++) {
       for (int j = i+1; j < temps.length; j++) {
         Template prod = new TemplatedFeatures.TemplateJoin(temps[i], temps[j]);
         String name = tempNames[i] + "*" + tempNames[j];
-        ap(role, prod, "k*" + name);
-        ap(arg, prod, "b*" + name);
-        ap(frame, prod, "fr*" + name);
+        features.add(new TemplateAlphabet(prod, name, features.size()));
+//        ap(role, prod, "k*" + name);
+//        ap(arg, prod, "b*" + name);
+//        ap(frame, prod, "fr*" + name);
       }
     }
 
-    ctx = new TemplateContext();
-    depGraphEdges = new Alphabet<>();
-    hf = new SemaforicHeadFinder();
-    timer = new MultiTimer();
-    skipped = new Counts<>();
-  }
-
-  /** This will read all unigram templates in */
-  public OldFeaturesWrapper(BasicFeatureTemplates bft, Double pSkipNeg) {
-    this.pSkipNeg = pSkipNeg;
     timer = new MultiTimer();
     timer.put("convert-sentence", new Timer("convert-sentence", 100, true));
     timer.put("compute-features", new Timer("compute-features", 10000, true));
 
-    skipped = new Counts<>();
-    depGraphEdges = new Alphabet<>();
     ctx = new TemplateContext();
-    sentCache = null;
-    edu.jhu.hlt.fnparse.features.precompute.Alphabet alph =
-        new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft);
-    this.hf = alph.getHeadFinder();
-    this.features = alph;
+    depGraphEdges = new Alphabet<>();
+    hf = new SemaforicHeadFinder();
+    skipped = new Counts<>();
   }
+
+//  /** This will read all unigram templates in */
+//  public OldFeaturesWrapper(BasicFeatureTemplates bft, Double pSkipNeg) {
+//    this.pSkipNeg = pSkipNeg;
+//    timer = new MultiTimer();
+//    timer.put("convert-sentence", new Timer("convert-sentence", 100, true));
+//    timer.put("compute-features", new Timer("compute-features", 10000, true));
+//
+//    skipped = new Counts<>();
+//    depGraphEdges = new Alphabet<>();
+//    ctx = new TemplateContext();
+//    sentCache = null;
+//    edu.jhu.hlt.fnparse.features.precompute.Alphabet alph =
+//        new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft);
+//    this.hf = alph.getHeadFinder();
+//    this.features = alph;
+//  }
 
   public edu.jhu.hlt.fnparse.features.precompute.Alphabet getFeatures() {
     return features;
@@ -344,12 +419,7 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
     timer.stop("convert-sentence");
   }
 
-  @Override
   public List<Pair<TemplateAlphabet, String>> features(HypEdge yhat, Uberts x) {
-
-    if (pSkipNeg != null && !x.getLabel(yhat) && x.getRandom().nextDouble() < pSkipNeg)
-      return SKIP;
-
     checkForNewSentence(x);
     timer.start("compute-features");
     Span t = null, s = null;
@@ -399,7 +469,8 @@ public class OldFeaturesWrapper extends FeatureExtractionFactor<Pair<TemplateAlp
       Iterable<String> fts = ftemp.template.extract(ctx);
       if (fts != null)
         for (String ft : fts)
-          f.add(new Pair<>(ftemp, ft.intern()));
+          f.add(new Pair<>(ftemp, ft));
+//          f.add(new Pair<>(ftemp, ft.intern()));
     }
     timer.stop("compute-features");
     return f;

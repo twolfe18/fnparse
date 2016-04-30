@@ -8,10 +8,19 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 public class WeightAdjoints<T> implements Adjoints {
   private List<T> fx;
   private Map<T, Weight<T>> theta;
+  private int numInstances = -1;    // used for average weights, -1 if no averaging
 
+  /** Don't use averaging */
   public WeightAdjoints(List<T> features, Map<T, Weight<T>> weights) {
     this.fx = features;
     this.theta = weights;
+  }
+
+  /** Use averaging */
+  public WeightAdjoints(List<T> features, Map<T, Weight<T>> weights, int numInstances) {
+    this.fx = features;
+    this.theta = weights;
+    this.numInstances = numInstances;
   }
 
   public List<T> getFeatures() {
@@ -23,8 +32,12 @@ public class WeightAdjoints<T> implements Adjoints {
     double s = 0;
     for (T index : fx) {
       Weight<T> w = theta.get(index);
-      if (w != null)
-        s += w.theta;
+      if (w != null) {
+        if (numInstances <= 0)
+          s += w.getWeight();
+        else
+          s += w.getAvgWeight(numInstances);
+      }
     }
     return s;
   }
@@ -37,7 +50,10 @@ public class WeightAdjoints<T> implements Adjoints {
         w = new Weight<>(index);
         theta.put(index, w);
       }
-      w.increment(-dErr_dForwards);
+      if (numInstances >= 0)
+        w.incrementWithAvg(-dErr_dForwards, numInstances);
+      else
+        w.increment(-dErr_dForwards);
     }
   }
 
