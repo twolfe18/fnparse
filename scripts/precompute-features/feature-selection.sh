@@ -108,7 +108,7 @@ echo "Computing IG for single templates..."
 FEATS="$DD/features/**/*"
 mkdir -p $WD/templates/ig-files
 mkdir -p $WD/templates/sge-logs
-MEM=12
+MEM=17
 MEM_SGE=`echo "$MEM+2" | bc`
 
 # POS features, array job

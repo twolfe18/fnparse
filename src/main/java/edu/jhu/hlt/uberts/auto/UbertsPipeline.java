@@ -337,7 +337,8 @@ public class UbertsPipeline {
     u.addEdgeToState(u.makeEdge(startDocRel, docidN));
 
     int cx = 0, cy = 0;
-    assert doc.items.isEmpty() && !doc.facts.isEmpty();
+    assert doc.items.isEmpty();
+    assert !doc.facts.isEmpty() : "facts: " + doc.facts;
 
 //    // Idiosyncratic: change all event* edges from y to x
 //    for (HypEdge.WithProps fact : doc.facts) {
@@ -800,16 +801,26 @@ public class UbertsPipeline {
       FPR trainPerfWindow = new FPR();
       try (RelationFileIterator itr = new RelationFileIterator(trainRel, includeProvidence);
           ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
+        FPR devPerf = new FPR();
         int processed = 0;
         while (x.hasNext()) {
           RelDoc doc = x.next();
-          FPR perfDoc = adHocSrlClassificationByRole(doc, true);
-          trainPerf.accum(perfDoc);
-          trainPerfWindow.accum(perfDoc);
+          if (devRel == null && processed % 10 == 0) {
+            feFast.useAverageWeights(true);
+            FPR perfDoc = adHocSrlClassificationByRole(doc, false);
+            devPerf.accum(perfDoc);
+            Log.info("iter=" + i + " processed=" + processed + " dev: "
+                + devPerf + " cur(" + doc.getId() +"): " + perfDoc);
+            feFast.useAverageWeights(false);
+          } else {
+            FPR perfDoc = adHocSrlClassificationByRole(doc, true);
+            trainPerf.accum(perfDoc);
+            trainPerfWindow.accum(perfDoc);
+            Log.info("iter=" + i + " processed=" + processed + " train: "
+                + trainPerf + " window: " + trainPerfWindow
+                + " cur(" + doc.getId() +"): " + perfDoc);
+          }
           processed++;
-          Log.info("iter=" + i + " processed=" + processed + " train: "
-              + trainPerf + " window: " + trainPerfWindow
-              + " cur(" + doc.getId() +"): " + perfDoc);
           if (processed % 500 == 0)
             trainPerfWindow = new FPR();
         }
@@ -880,11 +891,6 @@ public class UbertsPipeline {
     Uberts u = new Uberts(rand);
     UbertsPipeline srl = new UbertsPipeline(u, grammarFile, schemaFiles, xyDefsFile);
 
-//    File multiXY = new File("data/srl-reldata/propbank/instances.rel.multi.gz");
-//    File multiYhat = new File("data/srl-reldata/propbank/instances.yhat.rel.multi.gz");
-    File multiXY = config.getExistingFile("inputRel");
-    File multiYhat = config.getFile("outputRel");
-
     String k = "outputTemplateFeatureAlph";
     if (config.containsKey(k)) {
       Log.info("mimicing output of FeaturePrecomputation");
@@ -900,6 +906,12 @@ public class UbertsPipeline {
     if (srl.mode == Mode.LEARN) {
       srl.train(config);
     } else {
+
+//    File multiXY = new File("data/srl-reldata/propbank/instances.rel.multi.gz");
+//    File multiYhat = new File("data/srl-reldata/propbank/instances.yhat.rel.multi.gz");
+      File multiXY = config.getExistingFile("inputRel");
+      File multiYhat = config.getFile("outputRel");
+
       try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);
           ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
         srl.runInference(x, multiYhat, dataShard);

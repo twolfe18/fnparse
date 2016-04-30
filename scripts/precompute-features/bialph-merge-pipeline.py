@@ -19,6 +19,7 @@ def qsub_and_parse_jid(command):
     jid = int(m.group(1))
     name_maybe_trunc = m.group(2)
     print '  (qsub) launched job', jid
+    time.sleep(0.1)
     return jid
   else:
     raise Exception('couldn\'t parse qsub output: ' + s)
