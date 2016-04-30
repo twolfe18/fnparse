@@ -801,10 +801,11 @@ public class UbertsPipeline {
       FPR trainPerfWindow = new FPR();
       try (RelationFileIterator itr = new RelationFileIterator(trainRel, includeProvidence);
           ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
+        Iter it = new Iter(x, typeInf, Arrays.asList("succTok"));
         FPR devPerf = new FPR();
         int processed = 0;
-        while (x.hasNext()) {
-          RelDoc doc = x.next();
+        while (it.hasNext()) {
+          RelDoc doc = it.next();
           if (devRel == null && processed % 10 == 0) {
             feFast.useAverageWeights(true);
             FPR perfDoc = adHocSrlClassificationByRole(doc, false);
@@ -833,8 +834,9 @@ public class UbertsPipeline {
         try (RelationFileIterator itr = new RelationFileIterator(devRel, includeProvidence);
             ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
           int processed = 0;
-          while (x.hasNext()) {
-            RelDoc doc = x.next();
+          Iter it = new Iter(x, typeInf, Arrays.asList("succTok"));
+          while (it.hasNext()) {
+            RelDoc doc = it.next();
             FPR perfDoc = adHocSrlClassificationByRole(doc, false);
             devPerf.accum(perfDoc);
             processed++;
@@ -851,8 +853,9 @@ public class UbertsPipeline {
           ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
         feFast.useAverageWeights(true);
         int processed = 0;
-        while (x.hasNext()) {
-          RelDoc doc = x.next();
+        Iter it = new Iter(x, typeInf, Arrays.asList("succTok"));
+        while (it.hasNext()) {
+          RelDoc doc = it.next();
           FPR perfDoc = adHocSrlClassificationByRole(doc, false);
           testPerf.accum(perfDoc);
           processed++;
