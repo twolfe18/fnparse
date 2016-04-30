@@ -47,7 +47,7 @@ public class SrlSchemaToRelations {
       w.newLine();
       // Instances
       for (Frame f : fi.allFrames()) {
-        String lemmaStr = f.getName().split("\\W+")[1].intern();
+        String lemmaStr = f.getName().split("\\W+")[1];
         HypNode lemmaNode = new HypNode(lemma, lemmaStr);
         HypNode frameNode = new HypNode(frame, f.getName());
         HypNode[] tail = new HypNode[] { lemmaNode, frameNode };
@@ -77,8 +77,8 @@ public class SrlSchemaToRelations {
         s.lemmatize();
         for (FrameInstance fin : t.getFrameInstances()) {
           Span target = fin.getTarget();
-          String lemma = s.getLemma(target.end - 1).intern();
-          String frame = fin.getFrame().getName().intern();
+          String lemma = s.getLemma(target.end - 1);
+          String frame = fin.getFrame().getName();
           if (seenLemmaFrame.add(new Pair<>(lemma, frame))) {
             HypNode lemmaNode = new HypNode(lemmaNT, lemma);
             HypNode frameNode = new HypNode(frameNT, frame);

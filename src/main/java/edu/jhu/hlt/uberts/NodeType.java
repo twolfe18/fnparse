@@ -1,5 +1,6 @@
 package edu.jhu.hlt.uberts;
 
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 
 /**
@@ -16,19 +17,24 @@ import edu.jhu.hlt.uberts.transition.TransitionGenerator;
  */
 public class NodeType {
   private final String name;
-//  private final boolean witness;
-  // TODO put data type (e.g. Span) here?
-  // TODO put alphabet here (e.g. Alphabet<Span>)?
+  private final int hash;
 
   public NodeType(String name) {
-//  public NodeType(String name, boolean witness) {
     this.name = name.intern();
-//    this.witness = witness;
+    this.hash = Hash.hash(name);
   }
 
-//  public boolean isWitness() {
-//    return witness;
-//  }
+  @Override
+  public int hashCode() {
+    return hash;
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof NodeType)
+      return name == ((NodeType) other).name;
+    return false;
+  }
 
   public String getName() {
     return name;

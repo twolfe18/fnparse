@@ -24,6 +24,7 @@ import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlp
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
+import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
@@ -32,6 +33,7 @@ import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
@@ -65,7 +67,6 @@ public class OldFeaturesWrapper {
     public List<Pair<TemplateAlphabet, String>> features(HypEdge yhat, Uberts x) {
       if (pSkipNeg != null && !x.getLabel(yhat) && x.getRandom().nextDouble() < pSkipNeg)
         return SKIP;
-      // TODO Need to intern?
       return inner.features(yhat, x);
     }
     public OldFeaturesWrapper getInner() {
@@ -77,25 +78,53 @@ public class OldFeaturesWrapper {
     private OldFeaturesWrapper inner;
     private int mask;
 
+    private AveragedPerceptronWeights theta;
+
     public Ints(OldFeaturesWrapper inner, int numBits) {
       mask = (1 << numBits) - 1;
       super.customRefinements = inner.customRefinements;
       this.inner = inner;
+      theta = new AveragedPerceptronWeights(1 << numBits, 0);
+    }
+
+    @Override
+    public void completedObservation() {
+      theta.completedObservation();
+    }
+
+    @Override
+    public Adjoints score(HypEdge yhat, Uberts x) {
+      int[] y = customRefinements.apply(yhat);
+      List<Pair<TemplateAlphabet, String>> f1 = inner.features(yhat, x);
+      int n = f1.size();
+//      int T = inner.features.size();
+      int[] f3 = new int[n * y.length];
+      for (int i = 0; i < n; i++) {
+        Pair<TemplateAlphabet, String> p = f1.get(i);
+        int t = p.get1().index;
+        int f = Hash.hash(p.get2());
+        for (int j = 0; j < y.length; j++)
+          f3[i * y.length + j] = Hash.mix(y[j], t, f) & mask;
+      }
+      if (useAvg)
+        return theta.averageView().score(f3, false);
+      return theta.score(f3, false);
     }
 
     @Override
     public List<Integer> features(HypEdge yhat, Uberts x) {
-      List<Pair<TemplateAlphabet, String>> f1 = inner.features(yhat, x);
-      int n = f1.size();
-      int T = inner.features.size();
-      List<Integer> f2 = new ArrayList<>(n);
-      for (int i = 0; i < n; i++) {
-        Pair<TemplateAlphabet, String> p = f1.get(i);
-        int t = p.get1().index;
-        int h = Hash.hash(p.get2()) & mask;
-        f2.add(h * T + t);
-      }
-      return f2;
+//      List<Pair<TemplateAlphabet, String>> f1 = inner.features(yhat, x);
+//      int n = f1.size();
+//      int T = inner.features.size();
+//      List<Integer> f2 = new ArrayList<>(n);
+//      for (int i = 0; i < n; i++) {
+//        Pair<TemplateAlphabet, String> p = f1.get(i);
+//        int t = p.get1().index;
+//        int h = Hash.hash(p.get2()) & mask;
+//        f2.add(h * T + t);
+//      }
+//      return f2;
+      throw new RuntimeException("should be going through score");
     }
 
     public OldFeaturesWrapper getInner() {
@@ -132,14 +161,6 @@ public class OldFeaturesWrapper {
     hf = new SemaforicHeadFinder();
     timer = new MultiTimer();
     skipped = new Counts<>();
-  }
-
-  /** ap == "add product" */
-  private void ap(Template y, Template x, String name) {
-    if (y != null) {
-      Template prod = new TemplatedFeatures.TemplateJoin(y, x);
-      features.add(new TemplateAlphabet(prod, name, features.size()));
-    }
   }
 
   /** Starts up with some dummy features, for debugging */
@@ -190,12 +211,13 @@ public class OldFeaturesWrapper {
         return new int[] {0};
 //      String f = (String) e.getTail(2).getValue();
 //      String k = (String) e.getTail(5).getValue();
-      Object f = e.getTail(2);
-      Object k = e.getTail(5);
+      HypNode f = e.getTail(2);
+      HypNode k = e.getTail(5);
       int mask = (1<<14)-1;
       int ff = (f.hashCode() & mask) * 2 + 0;
       int kk = (k.hashCode() & mask) * 2 + 1;
-      return new int[] {1, 2 + ff, 2 + kk};
+//      return new int[] {1, 2 + ff, 2 + kk};
+      return new int[] {1, 2 + (k.hashCode() & mask)};
     };
 
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
@@ -367,7 +389,7 @@ public class OldFeaturesWrapper {
     List<String> posL = new ArrayList<>();
     List<String> lemmaL = new ArrayList<>();
     for (int i = 0; true; i++) {
-      HypNode tok = u.lookupNode(tokenIndex, String.valueOf(i).intern(), false);
+      HypNode tok = u.lookupNode(tokenIndex, String.valueOf(i), false);
       if (tok == null)
         break;
       tokens.add(tok);
@@ -470,7 +492,6 @@ public class OldFeaturesWrapper {
       if (fts != null)
         for (String ft : fts)
           f.add(new Pair<>(ftemp, ft));
-//          f.add(new Pair<>(ftemp, ft.intern()));
     }
     timer.stop("compute-features");
     return f;

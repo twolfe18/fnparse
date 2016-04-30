@@ -36,7 +36,7 @@ public abstract class FeatureExtractionFactor<T> {
   public boolean cacheAdjointsForwards = true;
 //  private Map<Relation, Map<T, Weight<T>>> theta = new HashMap<>();
   private int numInstances = 0;   // for perceptron averaging
-  private boolean useAvg = false;
+  protected boolean useAvg = false;
 
   // Keys in inner map are either Relation.getName() or results from customeRefinements
 //  private Map<T, Map<String, Weight<HPair<String, T>>>> theta2;

@@ -46,7 +46,7 @@ public class UbertsTest {
     for (int i = 0; i < sent.length; i++) {
       HypNode[] tail = new HypNode[] {
           u.lookupNode(tokenIndex, i, true),
-          u.lookupNode(word, sent[i].intern(), true),
+          u.lookupNode(word, sent[i], true),
       };
       HypEdge e = u.makeEdge("word", tail);
       u.addEdgeToState(e);
@@ -60,7 +60,7 @@ public class UbertsTest {
     for (String p : Arrays.asList("N", "V", "OTHER"))
 //    for (String p : Arrays.asList("N", "V"))
 //    for (String p : Arrays.asList("N"))
-      posTags.add(u.lookupNode(posTag, p.intern(), true));
+      posTags.add(u.lookupNode(posTag, p, true));
   }
 
   public void posTestSetup() {

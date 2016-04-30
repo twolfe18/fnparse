@@ -198,7 +198,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   public double getAveragedWeight(int i) {
     assert i >= 0 && i < dimension : "i=" + i + " dimension=" + dimension;
     if (c == 0) {
-      assert w.get(i) == 0;
+      assert w.get(i) == 0 : "are you calling completedObservation?";
       return 0;
     }
     return w.get(i) - (1d/c) * u.get(i);

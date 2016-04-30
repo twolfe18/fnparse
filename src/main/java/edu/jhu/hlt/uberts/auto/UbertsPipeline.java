@@ -111,7 +111,7 @@ public class UbertsPipeline {
       feSlow = new OldFeaturesWrapper.Strings(new OldFeaturesWrapper(bft), pNegSkip);
       feSlow.cacheAdjointsForwards = false;
     } else if (mode == Mode.LEARN) {
-      int numBits = 20;
+      int numBits = 24;
       feFast = new OldFeaturesWrapper.Ints(new OldFeaturesWrapper(bft), numBits);
       feFast.cacheAdjointsForwards = true;
       assert feFast.getInner() != null;
@@ -344,7 +344,7 @@ public class UbertsPipeline {
   }
 
   public static String i2s(int i) {
-    return String.valueOf(i).intern();
+    return String.valueOf(i);
   }
   public static int s2i(Object s) {
     return Integer.parseInt((String) s);
@@ -533,14 +533,14 @@ public class UbertsPipeline {
     return perf;
   }
 
-  private static final String NS_START = i2s(Span.nullSpan.start).intern();
-  private static final String NS_END = i2s(Span.nullSpan.end).intern();
+  private static final String NS_START = i2s(Span.nullSpan.start);
+  private static final String NS_END = i2s(Span.nullSpan.end);
   public static boolean isNullSpan(HypEdge srl4Edge) {
     assert srl4Edge.getRelation().getName().equals("srl4");
 //    return s2i(srl4Edge.getTail(3).getValue()) == Span.nullSpan.start
 //        && s2i(srl4Edge.getTail(4).getValue()) == Span.nullSpan.end;
-    return srl4Edge.getTail(3).getValue() == NS_START
-        && srl4Edge.getTail(4).getValue() == NS_END;
+    return srl4Edge.getTail(3).getValue().equals(NS_START)
+        && srl4Edge.getTail(4).getValue().equals(NS_END);
   }
 
   /**
@@ -591,6 +591,7 @@ public class UbertsPipeline {
 
 //        // For testing base memory requirements for iterating over the data.
 //        if (true) {
+//          u.clearNodes();
 //          if (docs % 1000 == 0)
 //            Log.info("docs=" + docs + " " + Describe.memoryUsage());
 //          continue;

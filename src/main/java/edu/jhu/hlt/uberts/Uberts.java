@@ -103,6 +103,13 @@ public class Uberts {
     goldEdges = new Labels();
   }
 
+  /**
+   * You need to do this to release memory if you are calling lookupNode on all
+   * the data you're processing.
+   */
+  public void clearNodes() {
+    nodes.clear();
+  }
 
   public Uberts(Random rand) {
     this.rand = rand;
@@ -121,9 +128,9 @@ public class Uberts {
   public Relation addSuccTok(int n) {
     NodeType tokenIndex = lookupNodeType("tokenIndex", true);
     Relation succTok = addEdgeType(new Relation("succTok", tokenIndex, tokenIndex));
-    HypNode prev = lookupNode(tokenIndex, String.valueOf(-1).intern(), true);
+    HypNode prev = lookupNode(tokenIndex, String.valueOf(-1), true);
     for (int i = 0; i < n; i++) {   // TODO figure out a better way to handle this...
-      HypNode cur = lookupNode(tokenIndex, String.valueOf(i).intern(), true);
+      HypNode cur = lookupNode(tokenIndex, String.valueOf(i), true);
       HypEdge e = makeEdge(succTok, prev, cur);
       e = new HypEdge.WithProps(e, HypEdge.IS_SCHEMA);
       addEdgeToState(e);
@@ -320,8 +327,7 @@ public class Uberts {
     NodeType tokenNT = lookupNodeType("tokenIndex", false);
     List<String> s = new ArrayList<>();
     for (int t = i; t < j; t++) {
-      Object value = String.valueOf(t).intern();
-      HypNode tokenN = lookupNode(tokenNT, value, false);
+      HypNode tokenN = lookupNode(tokenNT, String.valueOf(t), false);
       HypEdge wt = state.match1(0, word2, tokenN);
       String wordVal = (String) wt.getTail(1).getValue();
       s.add(wordVal);
@@ -392,8 +398,6 @@ public class Uberts {
     if (line.isEmpty())
       return null;
     String[] toks = line.split("\\s+");
-    for (int i = 0; i < toks.length; i++)
-      toks[i] = toks[i].intern();
     String command = toks[0];
     switch (command) {
     case "def":
@@ -417,12 +421,8 @@ public class Uberts {
       relName = toks[1];
       Relation rel = this.getEdgeType(relName);
       HypNode[] args = new HypNode[toks.length-2];
-      for (int i = 0; i < args.length; i++) {
-        // TODO Consider this:
-        // How should we deserialize String => ???
-        Object val = toks[i+2].intern();
-        args[i] = this.lookupNode(rel.getTypeForArg(i), val, true);
-      }
+      for (int i = 0; i < args.length; i++)
+        args[i] = this.lookupNode(rel.getTypeForArg(i), toks[i+2], true);
       HypEdge e = this.makeEdge(rel, args);
       if (command.equals("schema"))
         e = new HypEdge.WithProps(e, HypEdge.IS_SCHEMA);
@@ -456,7 +456,6 @@ public class Uberts {
    * Prefer lookupNode if you can. Throws exception if this node exists.
    */
   public void putNode(HypNode n) {
-    assert !(n.getValue() instanceof String) || n.getValue() == ((String)n.getValue()).intern();
 //    Pair<NodeType, Object> key = new Pair<>(n.getNodeType(), n.getValue());
     HPair<NodeType, Object> key = new HPair<>(n.getNodeType(), n.getValue());
     HypNode old = nodes.put(key, n);
