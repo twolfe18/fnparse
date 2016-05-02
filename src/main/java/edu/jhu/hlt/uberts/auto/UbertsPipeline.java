@@ -133,13 +133,20 @@ public class UbertsPipeline {
 //      File fs = new File("data/srl-reldata/feature-sets/framenet/MAP/pos-1280-16_neg-1280-16.fs");
 //      String ts = FeatureSet.getFeatureSetString(fs);
 
-      File posFsFile = config.getExistingFile("posFsFile");
-      File negFsFile = config.getExistingFile("negFsFile");
-
       // This really does work better than the others tried below :)
       // More features != better if you don't choose carefully.
-      String ts = prependRefinementTemplate("arg", negFsFile)
-          + " + " + prependRefinementTemplate("roleArg", posFsFile);
+      String ts = "";
+      if (!"none".equals(config.getString("posFsFile", "none"))) {
+        File posFsFile = config.getExistingFile("posFsFile");
+        ts += prependRefinementTemplate("roleArg", posFsFile);
+      }
+      if (!"none".equals(config.getString("negFsFile", "none"))) {
+        File negFsFile = config.getExistingFile("negFsFile");
+        if (ts.length() > 0)
+          ts += " + ";
+        ts += prependRefinementTemplate("arg", negFsFile);
+      }
+      assert ts.length() > 0;
 
 //      String ts = prependRefinementTemplate("arg", negFsFile)
 //          + " + " + prependRefinementTemplate("argAndRoleArg", posFsFile);

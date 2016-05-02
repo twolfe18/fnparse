@@ -29,7 +29,6 @@ import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
-import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.prim.tuple.Pair;
 import edu.mit.jwi.item.ISynset;
