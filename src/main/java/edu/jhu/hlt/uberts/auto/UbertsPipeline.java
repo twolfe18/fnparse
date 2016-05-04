@@ -849,7 +849,7 @@ public class UbertsPipeline {
             devPerf.accum(perfDoc);
             processed++;
             Log.info("iter=" + i + " processed=" + processed + " dev: "
-                + trainPerf + " cur(" + doc.getId() +"): " + perfDoc);
+                + devPerf + " cur(" + doc.getId() +"): " + perfDoc);
           }
         }
         feFast.useAverageWeights(false);
