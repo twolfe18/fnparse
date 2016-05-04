@@ -23,8 +23,8 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
  * corpora into many files to be processed separately (and possibly merged).
  *
  * Last time I ran this on some annotated Propbank data, I could fit about
- * 65k documents into a little under 3G of memory (sadly, this was about half
- * of a 210M gzipped text file...).
+ * 90k documents into around 4G of memory (sadly, this was only 210M in a
+ * gzipped text file...), and it took ~400 seconds on my laptop.
  *
  * @author travis
  */
@@ -74,7 +74,7 @@ public class ManyDocShuffler {
 
     // Output
     Log.info("writing results...");
-    tm.enoughTimePassed(15);
+    tm = new TimeMarker();
     try (BufferedWriter w = FileUtil.getWriter(out)) {
       int wrote = 0;
       for (RelDoc r : l) {

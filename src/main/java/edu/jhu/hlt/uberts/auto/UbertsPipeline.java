@@ -787,9 +787,10 @@ public class UbertsPipeline {
 
   public void train(ExperimentProperties config) throws IOException {
 
-    File trainRel = config.getExistingFile("relTrain");
+//    List<File> trainRels = config.getExistingFiles("relTrain");
+    List<File> trainRels = config.getFileGlob("relTrain");
     File testRel = config.getExistingFile("relTest");
-    Log.info("train=" + trainRel);
+    Log.info("train=" + trainRels);
     Log.info("test=" + testRel);
     File devRel = null;
     if (config.containsKey("relDev")) {
@@ -799,9 +800,9 @@ public class UbertsPipeline {
 
     boolean includeProvidence = false;
     boolean dedupInputLines = true;
-    int maxIter = config.getInt("maxIter", 10);
-    for (int i = 0; i < maxIter; i++) {
-      Log.info("starting iter=" + i + " of " + maxIter);
+    for (int i = 0; i < trainRels.size(); i++) {
+      File trainRel = trainRels.get(i);
+      Log.info("starting iter=" + i + ": " + trainRel.getPath());
 
       // TRAIN
       FPR trainPerf = new FPR();
