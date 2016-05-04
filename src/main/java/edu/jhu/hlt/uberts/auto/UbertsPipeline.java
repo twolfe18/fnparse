@@ -796,6 +796,8 @@ public class UbertsPipeline {
     if (config.containsKey("relDev")) {
       devRel = config.getExistingFile("relDev");
       Log.info("dev=" + devRel);
+    } else {
+      Log.info("taking every 10th exaple in train as dev");
     }
 
     boolean includeProvidence = false;
