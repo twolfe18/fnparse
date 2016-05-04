@@ -43,8 +43,8 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
 
   public static class RelDoc {
     public final RelLine def; // aka startdoc
-    public final List<RelLine> items;
-    public final List<HypEdge.WithProps> facts;
+    public List<RelLine> items;
+    public List<HypEdge.WithProps> facts;
     public RelDoc(RelLine def) {
       this.def = def;
       this.items = new ArrayList<>();
@@ -52,6 +52,39 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
     }
     public String getId() {
       return def.tokens[1];
+    }
+
+    public void internCommandStrings() {
+      def.tokens[0] = def.tokens[0].intern();
+      for (RelLine rl : items) {
+        // e.g. "x", "y", or "schema"
+        rl.tokens[0] = rl.tokens[0].intern();
+      }
+    }
+
+    public void internRelationNames() {
+      for (RelLine rl : items) {
+        // e.g. "word2", "csyn6-stanford"
+        rl.tokens[1] = rl.tokens[1].intern();
+      }
+    }
+
+    public void lookForIntsToIntern() {
+      lookForIntsToIntern(100);
+    }
+    public void lookForIntsToIntern(int maxIntToIntern) {
+      def.lookForIntsToIntern(maxIntToIntern);
+      for (RelLine rl : items)
+        rl.lookForIntsToIntern(maxIntToIntern);
+    }
+
+    public void lookForShortStringsToIntern() {
+      lookForIntsToIntern(4);   // This will get POS tags and short words
+    }
+    public void lookForShortStringsToIntern(int maxLengthToIntern) {
+      def.lookForShortStringsToIntern(maxLengthToIntern);
+      for (RelLine rl : items)
+        rl.lookForShortStringsToIntern(maxLengthToIntern);
     }
 
     public List<HypEdge.WithProps> match2FromFacts(Relation r) {

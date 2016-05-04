@@ -45,6 +45,29 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
       return sb.toString();
     }
 
+    public void lookForIntsToIntern() {
+      lookForIntsToIntern(100);
+    }
+    public void lookForIntsToIntern(int maxIntToIntern) {
+      for (int i = 0; i < tokens.length; i++) {
+        try {
+          int x = Integer.parseInt(tokens[i]);
+          if (Math.abs(x) <= maxIntToIntern)
+            tokens[i] = String.valueOf(x).intern();
+        } catch (NumberFormatException e) {
+        }
+      }
+    }
+
+    public void lookForShortStringsToIntern() {
+      lookForIntsToIntern(4);   // This will get POS tags and short words
+    }
+    public void lookForShortStringsToIntern(int maxLengthToIntern) {
+      for (int i = 0; i < tokens.length; i++)
+        if (tokens[i].length() <= maxLengthToIntern)
+          tokens[i] = tokens[i].intern();
+    }
+
     @Override
     public String toString() {
       if (comment != null)

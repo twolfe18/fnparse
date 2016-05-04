@@ -28,6 +28,7 @@ public class TemplateIG implements Serializable {
   public static final boolean DEBUG = false;
 
   /**
+   * Stores many {@link TemplateIG}s by a key of type T.
    * @param <T> should be hashable (hashcode/equals)
    */
   static class Refined<T> {
