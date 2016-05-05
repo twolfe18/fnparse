@@ -89,19 +89,6 @@ public abstract class ManyDocSplitter implements AutoCloseable {
       assert "train".equals(p);
       return trainOutput;
     }
-
-    public static void main(String[] args) throws IOException {
-      ExperimentProperties config = ExperimentProperties.init(args);
-      try (TestSet ts = new TestSet(config.getExistingFile("testSetIds"),
-          config.getFile("trainRelOutput"),
-          config.getFile("testRelOutput"))) {
-        if (config.containsKey("devSetIds")) {
-          ts.setDev(config.getExistingFile("devSetIds"),
-              config.getFile("devRelOutput"));
-        }
-        ts.split(config.getExistingFile("relInput"));
-      }
-    }
   }
 
   private Map<String, BufferedWriter> writers = new HashMap<>();
@@ -155,6 +142,24 @@ public abstract class ManyDocSplitter implements AutoCloseable {
       } catch (IOException e) {
         e.printStackTrace();
       }
+    }
+  }
+
+  public static void main(String[] args) throws IOException {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    String m = config.getString("mode");
+    if (m.equals("trainDevTest")) {
+      try (TestSet ts = new TestSet(config.getExistingFile("testSetIds"),
+          config.getFile("trainRelOutput"),
+          config.getFile("testRelOutput"))) {
+        if (config.containsKey("devSetIds")) {
+          ts.setDev(config.getExistingFile("devSetIds"),
+              config.getFile("devRelOutput"));
+        }
+        ts.split(config.getExistingFile("relInput"));
+      }
+    } else {
+      throw new RuntimeException("unknown mode: " + m + " (did you mean trainDevTest?)");
     }
   }
 }
