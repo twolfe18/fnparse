@@ -18,6 +18,17 @@ import edu.jhu.prim.tuple.Pair;
 /**
  * e.g. event2(t,f) & srl2(t,s) & role(f,k) => srl3(t,f,s,k)
  *
+ * TODO I should probably change the names of this and {@link Term} to match
+ * the Definite Clause Grammar described in:
+ *   Parsing as Deduction
+ *   Pereira and Warren (1983)
+ *   http://www.aclweb.org/anthology/P83-1021
+ * Rule => Literal
+ * Term => Predicate
+ * argument => Term
+ * RHS => positive literal or head
+ * LHS => negative literals or body
+ *
  * @author travis
  */
 public class Rule {

@@ -22,6 +22,8 @@ import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.NodePathPiece;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.features.Path.EdgeType;
+import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateSS;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
@@ -385,6 +387,78 @@ public class BasicFeatureTemplates {
     }
 
     /* START OF TEMPLATES *****************************************************/
+    
+    
+    /*
+     * NEW
+     */
+  // lexpath: John <nsubj kill
+  // bcpath: 011010 <nsubj 110100
+  // lexarg: with <prep knife
+  // bcarg: 000100 <prep 101011
+    addTemplate("lexPredArg", new TemplateSS() {
+      @Override
+      String extractSS(TemplateContext context) {
+        Sentence s = context.getSentence();
+        DependencyParse d = s.getBasicDeps(false);
+        int t = context.getTargetHead();
+        int a = context.getArgHead();
+        if (s == null || t < 0 || a < 0)
+          return null;
+        Path p = new Path(s, d, t, a, NodeType.LEMMA, EdgeType.DEP);
+        return p.getPath();
+      }
+    });
+    addTemplate("lexArgMod", new Template() {
+      @Override
+      public Iterable<String> extract(TemplateContext context) {
+        Sentence s = context.getSentence();
+        DependencyParse d = s.getBasicDeps(false);
+        Span as = context.getSpan1();
+        int a = context.getHead1();
+        if (s == null || as == null || a < 0)
+          return null;
+        List<String> l = new ArrayList<>();
+        for (int i = as.start; i < as.end; i++) {
+          if (i == a)
+            continue;
+          Path p = new Path(s, d, a, i, NodeType.LEMMA, EdgeType.DEP);
+          l.add(p.getPath());
+        }
+        return l;
+      }
+    });
+    addTemplate("lexPredMod", new Template() {
+      @Override
+      public Iterable<String> extract(TemplateContext context) {
+        Sentence s = context.getSentence();
+        DependencyParse d = s.getBasicDeps(false);
+        Span as = context.getSpan1();
+        int t = context.getTargetHead();
+        int a = context.getHead1();
+        if (t < 0 || s == null || as == null || a < 0)
+          return null;
+        List<String> l = new ArrayList<>();
+        int w = 10;
+        int lo = Math.max(0, t - w);
+        int hi = Math.min(s.size(), t + w);
+        for (int i = lo; i < hi; i++) {
+          if (i == t)
+            continue;
+          if (as.start <= i && i < as.end)
+            continue;
+          Path p = new Path(s, d, t, i, NodeType.LEMMA, EdgeType.DEP);
+          if (p.size() <= 4)
+            l.add(p.getPath());
+        }
+        return l;
+      }
+    });
+
+    
+    
+    
+    
     // intercept
     addTemplate("1", new TemplateSS() {
       @Override
