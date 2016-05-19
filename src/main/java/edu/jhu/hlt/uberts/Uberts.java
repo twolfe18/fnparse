@@ -96,6 +96,9 @@ public class Uberts {
   public boolean getLabel(HypEdge e) {
     return goldEdges.contains(e);
   }
+  public boolean getLabel(HashableHypEdge e) {
+    return goldEdges.contains(e);
+  }
   /**
    * Sets the set of gold edges to the empty set.
    */

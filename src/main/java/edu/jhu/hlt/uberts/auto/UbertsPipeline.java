@@ -11,12 +11,15 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.BiConsumer;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.TemplateContext;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
@@ -34,6 +37,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.data.BrownClusters;
@@ -56,6 +60,7 @@ import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.features.Weight;
 import edu.jhu.hlt.uberts.features.WeightAdjoints;
+import edu.jhu.hlt.uberts.features.WeightList;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
@@ -123,10 +128,11 @@ public class UbertsPipeline {
     ExperimentProperties config = ExperimentProperties.getInstance();
     mode = Mode.valueOf(config.getString("mode"));
     if (mode == Mode.EXTRACT_FEATS) {
+      pNegSkip = config.getDouble("pNegSkip", 0.75);
       feSlow = new OldFeaturesWrapper.Strings(new OldFeaturesWrapper(bft), pNegSkip);
       feSlow.cacheAdjointsForwards = false;
     } else if (mode == Mode.LEARN) {
-      int numBits = 26;
+      int numBits = config.getInt("numBits", 20);
 
 //      File fs = new File("data/srl-reldata/feature-sets/framenet/MAP/pos-320-16_neg-320-16.fs");
 
@@ -400,6 +406,407 @@ public class UbertsPipeline {
   public static int s2i(Object s) {
     return Integer.parseInt((String) s);
   }
+  public static Span getTargetFromXuePalmer(HypEdge e) {
+    int ts = s2i(e.getTail(0).getValue());
+    int te = s2i(e.getTail(1).getValue());
+    return Span.getSpan(ts, te);
+  }
+  public static Span getTargetFromSrl4(HypEdge e) {
+    int ts = s2i(e.getTail(0).getValue());
+    int te = s2i(e.getTail(1).getValue());
+    return Span.getSpan(ts, te);
+  }
+  public static Span getArgFromSrl4(HypEdge e) {
+    int ss = s2i(e.getTail(3).getValue());
+    int se = s2i(e.getTail(4).getValue());
+    return Span.getSpan(ss, se);
+  }
+
+//  public FPR adHocSrlClassificationBySpan(RelDoc doc, boolean learn) {
+    // srl3'(s3,s2,e2,k)
+    // & event1'(e1,ts,te)
+    // & event2'(e2,e1,f)
+    // & srl1'(s1,ss,se)
+    // & srl2'(s2,s1,e1)
+    // => srl4(ts,te,f,ss,se,k)
+
+    // For each gold and predicted can be Set<HypEdge> with types srl3 and srl4
+
+    // Build t -> [s] index from xue-palmer-args
+    // for each given gold event2, join with t->[s] to get [s]
+    // for each span, classify yes or no, presence of gold srl3 give you a label
+    // 
+//  }
+
+//  public FPR adHocSrlClassificationBySpan(RelDoc doc, boolean learn) {
+//    setupUbertsForDoc(u, doc);
+//
+//    State state = u.getState();
+//    Agenda agenda = u.getAgenda();
+//
+//    final Relation xuePalmerArgs = u.getEdgeType("xue-palmer-args");
+//    final Relation srl4 = u.getEdgeType("srl4");
+//    feFast.getInner().customEdgeCtxSetup = (yx, ctx) -> {
+//      HypEdge yhat = yx.get1();
+//      final HeadFinder hf = SemaforicHeadFinder.getInstance();
+//
+//      int ts = s2i(yhat.getTail(0).getValue());
+//      int te = s2i(yhat.getTail(1).getValue());
+//      ctx.setTarget(Span.getSpan(ts, te));
+//      ctx.setSpan2(ctx.getTarget());
+//
+//      int ss, se;
+//      if (yhat.getRelation() == xuePalmerArgs) {
+//        ss = s2i(yhat.getTail(2).getValue());
+//        se = s2i(yhat.getTail(3).getValue());
+//      } else if (yhat.getRelation() == srl4) {
+//        ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix((String) yhat.getTail(2).getValue()));
+//        ss = s2i(yhat.getTail(3).getValue());
+//        se = s2i(yhat.getTail(4).getValue());
+//        ctx.setRoleS((String) yhat.getTail(5).getValue());
+//      } else {
+//        throw new RuntimeException();
+//      }
+//
+//      ctx.setArg(Span.getSpan(ss, se));
+//      ctx.setSpan1(ctx.getArg());
+//      Sentence sent = ctx.getSentence();
+//      assert sent != null;
+//      ctx.setTargetHead(hf.head(ctx.getTarget(), sent));
+//      ctx.setHead2(ctx.getTargetHead());
+//      if (ctx.getArg() != Span.nullSpan) {
+//        ctx.setArgHead(hf.head(ctx.getArg(), sent));
+//        ctx.setHead1(ctx.getArgHead());
+//      }
+//    };
+//
+//    // 0) Figure out what the gold labels are
+//    Set<HypEdge> goldTFS = new HashSet<>();
+//    Set<HypEdge> goldTFSK = new HashSet<>();
+//    final Map<Span, String> goldT2F = new HashMap<>();
+//    for (HypEdge e : doc.match2FromFacts(srl4)) {
+//      todo
+//    }
+//
+//    // Use refinements to describe w_0 and w_f for step 1
+//    feFast.getInner().customRefinements = e -> {
+//      if (e.getRelation() == xuePalmerArgs) {
+//        Span t = getTargetFromXuePalmer(e);
+//        String frame = goldT2F.get(t);
+//        return new int[] {0, Hash.hash(frame)};
+//      } else {
+//        return new int[] {0};
+//      }
+//    };
+//
+//    // 1) Classify what spans are args
+//    //    (w_0 + w_f) * f(t,s)
+//    for (LL<HypEdge> cur = state.match2(xuePalmerArgs); cur != null; cur = cur.next) {
+//      Adjoints sc1 = feFast.score(cur.item, u);
+//      if (sc1.forwards() > 0) {
+//        // 2) Classify the role
+//        //    w * f(t,f,s,k)
+//      }
+//      
+//      
+//      if (learn) {
+//        boolean gold = goldTFS.contains(o)
+//      }
+//    }
+//  }
+
+//  private boolean xpEdgeInGoldParse(HypEdge xpe, Uberts u) {
+//    
+//  }
+
+  // for each t:
+  // f is known from the label
+  // filter s by w_0 f(t,s), penalize FNs 30x more than FPs
+  // filter s by w_f f(t,s), penalize FNs 3x more than FPs
+  // argmax_k by w_1 f(t,f,s,k)
+
+  // Refine them with an array of length one
+  // 0 for w_0
+  // 1 for w_1
+  // 2 + abs(hash(f)) for w_f
+
+  // For filtering, if training always let through a gold item
+  Counts<String> fc = new Counts<>();
+  public FPR adHocSrlClassificationByRoleWithFiltering(RelDoc doc, boolean learn) {
+    boolean debug = true;
+    fc.increment(learn ? "inst.train" : "inst.test");
+    if (debug)
+      System.out.println("starting on " + doc.getId());
+
+    timer.start("filter-setup");
+    setupUbertsForDoc(u, doc);
+
+    Relation srl4 = u.getEdgeType("srl4");
+    NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
+    Relation role = u.getEdgeType("role");
+    NodeType fNT = u.lookupNodeType("frame", false);
+    NodeType roleNT = u.lookupNodeType("roleLabel", false);
+
+    Set<HashableHypEdge> predicted = new HashSet<>();
+    Set<HashableHypEdge> gold = new HashSet<>();
+    Set<SpanPair> tsGold = new HashSet<>();
+    Map<Span, String> goldT2F = new HashMap<>();
+    List<HypEdge.WithProps> matching = doc.match2FromFacts(srl4);
+    for (HypEdge e : matching) {
+      gold.add(new HashableHypEdge(e));
+//      if (debug)
+//        System.out.println("gold: " + e);
+      Span t = getTargetFromSrl4(e);
+      Span s = getArgFromSrl4(e);
+      tsGold.add(new SpanPair(t, s));
+      String f = (String) e.getTail(2).getValue();
+      Object old = goldT2F.put(t, f);
+      assert old == null || f.equals(old);
+    }
+
+    Map<Span, LL<Span>> xpRaw = buildXuePalmerIndex(doc);
+
+    BiConsumer<Pair<HypEdge, Uberts>, TemplateContext> srl4CtxSetup =
+        feFast.getInner().customEdgeCtxSetup;
+    timer.stop("filter-setup");
+
+    boolean goldTS = false;
+    for (Entry<Span, String> tf : goldT2F.entrySet()) {
+      fc.increment("targets");
+      Span t = tf.getKey();
+      String f = tf.getValue();
+//    for (Span t : xpRaw.keySet()) {
+//      String f = goldT2F.get(t);
+
+      List<String> roles = null;  // memo
+
+      HypNode ts = u.lookupNode(tokenIndex, String.valueOf(t.start), true);
+      HypNode te = u.lookupNode(tokenIndex, String.valueOf(t.end), true);
+      HypNode frame = u.lookupNode(fNT, f, false);
+
+      for (LL<Span> cur = xpRaw.get(t); cur != null; cur = cur.next) {
+        fc.increment("args");
+
+        timer.start("filter-stage1");
+        Span s = cur.item;
+        HypNode ss = u.lookupNode(tokenIndex, String.valueOf(s.start), true);
+        HypNode se = u.lookupNode(tokenIndex, String.valueOf(s.end), true);
+
+        // Dirty hack:
+        feFast.getInner().customEdgeCtxSetup = (eu, ctx) -> {
+          ctxHelper(ctx, t, s);
+        };
+//        feFast.getInner().customRefinements = e -> w0Ref;
+        int[] fx = feFast.featuresNoRefine(null, u);
+        Adjoints s1 = feFast.w0.score(fx, false);
+//        Adjoints s1 = feFast.getWf("pre-" + f).score(fx, false);
+//        Adjoints s1 = Adjoints.Constant.ONE;
+        s1 = Adjoints.cacheIfNeeded(s1);
+        boolean pred1 = s1.forwards() > 0;
+        timer.stop("filter-stage1");
+        if (learn) {
+          goldTS = tsGold.contains(new SpanPair(t, s));
+          if (goldTS && !pred1) {         // FN
+            fc.increment("f1-fn");
+            s1.backwards(-1.5);
+          } else if (!goldTS && pred1) {  // FP
+            fc.increment("f1-fp");
+            s1.backwards(+1);
+          } else if (!goldTS && !pred1) {
+            fc.increment("f1-tn");
+          } else {
+            fc.increment("f1-tp");
+          }
+//          pred1 |= goldTS; // always let gold spans through while training.
+          pred1 = goldTS;
+        }
+        if (pred1) {
+          // STEP TWO
+          timer.start("filter-stage2");
+          Adjoints s2 = feFast.getWf(f).score(fx, false);
+//          Adjoints s2 = feFast.getWf("const").score(fx, false);
+          s2 = Adjoints.cacheIfNeeded(s2);
+          boolean pred2 = s2.forwards() > 0;
+          timer.stop("filter-stage2");
+          if (learn) {
+            if (goldTS && !pred2) {   // FN
+              fc.increment("f2-fn");
+              s2.backwards(-1);
+            } else if (!goldTS && pred2) {                  // FP
+              fc.increment("f2-fp");
+              s2.backwards(+1);
+            } else if (!goldTS && !pred2) {
+              fc.increment("f2-tn");
+            } else {
+              fc.increment("f2-tp");
+            }
+//            pred2 |= goldTS; // always let gold spans through while training.
+            pred2 = goldTS;
+          }
+          if (pred2) {
+//            if (debug)
+//              System.out.println("made it through two filters: t=" + t + " s=" + s);
+            fc.increment("passed-two-filters");
+            timer.start("filter-stage3");
+            // STEP THREE
+            if (roles == null) {
+              roles = new ArrayList<>();
+              for (LL<HypEdge> kcur = u.getState().match(0, role, frame); kcur != null; kcur = kcur.next)
+                roles.add((String) kcur.item.getTail(1).getValue());
+            }
+            HypEdge bestKE = null;
+            HypEdge goldKE = null;
+            Adjoints bestK = null;
+            Adjoints goldK = null;
+            for (String k : roles) {
+              fc.increment("roleargs");
+              // Build an srl4
+              HypNode kn = u.lookupNode(roleNT, k, true);
+              HypNode[] tail = new HypNode[] {
+                  ts, te, frame, ss, se, kn
+              };
+              HypEdge srl4E = u.makeEdge(srl4, tail);
+              feFast.getInner().customEdgeCtxSetup = srl4CtxSetup;
+              int[] fx3 = feFast.featuresNoRefine(srl4E, u);
+              Adjoints sc3 = feFast.w1.score(fx3, false);
+              sc3 = Adjoints.cacheIfNeeded(sc3);
+//              if (debug)
+//                System.out.println("score of " + srl4E + " " + sc3.forwards());
+              if (bestK == null || sc3.forwards() > bestK.forwards()) {
+                bestK = sc3;
+                bestKE = srl4E;
+              }
+              if (u.getLabel(srl4E)) {
+                assert goldK == null;
+                goldK = sc3;
+                goldKE = srl4E;
+              }
+            }
+            bestK.forwards();
+            timer.stop("filter-stage3");
+            if (bestK.forwards() > 0) {
+              fc.increment("f3-pass");
+              HashableHypEdge hhe = new HashableHypEdge(bestKE);
+              predicted.add(hhe);
+              boolean g = u.getLabel(hhe);
+              assert g == (goldK == bestK);
+              // FP
+              if (learn) {
+                if (!g) {
+                  fc.increment("f3-fp");
+                  bestK.backwards(+1);
+                  if (goldK != null)
+                    goldK.backwards(-1);
+                } else {
+                  fc.increment("f3-tp");
+                }
+              }
+            } else {
+              fc.increment("f3-fail");
+              // FN
+              if (learn && goldK != null) {
+                fc.increment("f3-fn");
+                goldK.backwards(-1);
+              }
+            }
+          }
+        }
+      }
+    }
+    System.out.println(fc);
+    System.out.println(timer);
+    feFast.getInner().customEdgeCtxSetup = srl4CtxSetup;
+    return FPR.fromSets(gold, predicted);
+  }
+
+  private Map<Span, LL<Span>> buildXuePalmerIndex(RelDoc doc) {
+    Relation xuePalmerArgs = u.getEdgeType("xue-palmer-args");
+//    State state = u.getState();
+    Map<Span, LL<Span>> xuePalmerIndex = new HashMap<>();
+//    for (LL<HypEdge> cur = state.match2(xuePalmerArgs); cur != null; cur = cur.next) {
+//      HypEdge e = cur.item;
+    for (HypEdge.WithProps e : doc.match2FromFacts(xuePalmerArgs)) {
+      assert e.getNumTails() == 4;
+      int ts = s2i(e.getTail(0).getValue());
+      int te = s2i(e.getTail(1).getValue());
+      int ss = s2i(e.getTail(2).getValue());
+      int se = s2i(e.getTail(3).getValue());
+      Span key = Span.getSpan(ts, te);
+      Span val = Span.getSpan(ss, se);
+      xuePalmerIndex.put(key, new LL<>(val, xuePalmerIndex.get(key)));
+    }
+    return xuePalmerIndex;
+  }
+
+  public static void ctxHelper(TemplateContext ctx, Span t, Span s) {
+    ctxHelper(ctx, t, s, null, null);
+  }
+  public static void ctxHelper(TemplateContext ctx, Span t, Span s, String f, String k) {
+    assert t != null;
+    ctx.setTarget(t);
+    ctx.setSpan2(t);
+    if (f != null)
+      ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(f));
+    if (s != null) {
+      ctx.setArg(s);
+      ctx.setSpan1(s);
+    }
+    if (k != null)
+      ctx.setRoleS(k);
+    final HeadFinder hf = SemaforicHeadFinder.getInstance();
+    Sentence sent = ctx.getSentence();
+    assert sent != null;
+    ctx.setTargetHead(hf.head(t, sent));
+    ctx.setHead2(ctx.getTargetHead());
+    if (s != null && s != Span.nullSpan) {
+      ctx.setArgHead(hf.head(s, sent));
+      ctx.setHead1(ctx.getArgHead());
+    }
+  }
+
+//  public Map<Span, LL<Span>> filteredXuePalmer(RelDoc doc, Uberts u, boolean learn, List<HypEdge.WithProps> srlArgs) {
+//    State state = u.getState();
+//
+//    Map<Span, String> t2s = null; // TODO from srlArgs
+//    
+//    feFast.getInner().customEdgeCtxSetup = (eu, ctx) -> {
+//      // edge will be ???
+//      HypEdge xpEdge = eu.get1();
+//      Span t = getTargetFromXuePalmer(xpEdge);
+//      String f = t2s.get(t);
+//      ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(f));
+//      // set t, s
+//    };
+//    
+//    Relation xuePalmerArgs = u.getEdgeType("xue-palmer-args");
+//    Map<Span, LL<Span>> xuePalmerIndex = new HashMap<>();
+//    for (LL<HypEdge> cur = state.match2(xuePalmerArgs); cur != null; cur = cur.next) {
+//      HypEdge e = cur.item;
+//
+//      // First see if we want to prune this edge
+//      Adjoints sFilter = feFast.score(e, u);
+//      if (sFilter.forwards() > 0 && !learn)
+//        continue;
+//      // TODO Update by whether (t,s) was in gold parse?
+//
+//      assert e.getNumTails() == 4;
+//      int ts = s2i(e.getTail(0).getValue());
+//      int te = s2i(e.getTail(1).getValue());
+//      int ss = s2i(e.getTail(2).getValue());
+//      int se = s2i(e.getTail(3).getValue());
+//      Span key = Span.getSpan(ts, te);
+//      Span val = Span.getSpan(ss, se);
+//      xuePalmerIndex.put(key, new LL<>(val, xuePalmerIndex.get(key)));
+//    }
+//
+//    return xuePalmerIndex;
+//  }
+
+  /** shim */
+  public FPR adHocSrlClassificationByRole(RelDoc doc, boolean learn) {
+    return adHocSrlClassificationByRoleOld(doc, learn);
+//    return adHocSrlClassificationByRoleWithFiltering(doc, learn);
+  }
 
   /**
    * Setup and run inference for left-to-right span-by-span role-classification
@@ -411,7 +818,7 @@ public class UbertsPipeline {
    * @param learn should only be false on the test set when you don't want to
    * use progressive validation (which, sadly, is the standard thing to do).
    */
-  public FPR adHocSrlClassificationByRole(RelDoc doc, boolean learn) {
+  public FPR adHocSrlClassificationByRoleOld(RelDoc doc, boolean learn) {
     boolean debug = false;
     if (debug)
       Log.info("starting...");
@@ -629,9 +1036,6 @@ public class UbertsPipeline {
     int skippedDocs = 0;
     long features = 0;
 
-    FPR trainPerf = new FPR();
-    FPR devPerf = new FPR();
-    FPR testPerf = new FPR();
     int maxInstances = config.getInt("maxInstances", 0);
     Iter itr = new Iter(x, typeInf, Arrays.asList("succTok"));
     try (BufferedWriter w = FileUtil.getWriter(output)) {
@@ -643,32 +1047,9 @@ public class UbertsPipeline {
         }
         docs++;
 
-//        // For testing base memory requirements for iterating over the data.
-//        if (true) {
-//          u.clearNodes();
-//          if (docs % 1000 == 0)
-//            Log.info("docs=" + docs + " " + Describe.memoryUsage());
-//          continue;
-//        }
-
         if (maxInstances > 0 && docs >= maxInstances) {
           Log.info("exiting early since we hit maxInstances=" + maxInstances);
           break;
-        }
-
-        if (mode == Mode.LEARN) {// && u.getRandom().nextDouble() < 0.5) {
-          if (u.getRandom().nextDouble() < 0.3) {
-            feFast.useAverageWeights(true);
-            FPR perfDoc = adHocSrlClassificationByRole(doc, false);
-            testPerf.accum(perfDoc);
-            feFast.useAverageWeights(false);
-            Log.info("test(avg): " + testPerf + "   cur(" + doc.getId() +"): " + perfDoc);
-          } else {
-            FPR perfDoc = adHocSrlClassificationByRole(doc, true);
-            trainPerf.accum(perfDoc);
-            Log.info("train: " + trainPerf + "   cur(" + doc.getId() +"): " + perfDoc);
-          }
-          continue;
         }
 
         // Add all the edges that need to be there at the start of inference
@@ -683,65 +1064,56 @@ public class UbertsPipeline {
         for (Step t : traj) {
           boolean y = u.getLabel(t.edge);
 
-          // LEARNING
-          if (mode == Mode.LEARN) {
-            double score = t.score.forwards();
-            double margin = 0.1;
-            if (y && score < margin)
-              t.score.backwards(-1);
-            if (!y && score > -margin)
-              t.score.backwards(+1);
-            fpr.accum(y, score > 0);
-          } else {
-            @SuppressWarnings("unchecked")
-            WeightAdjoints<Pair<TemplateAlphabet, String>> fx =
-              (WeightAdjoints<Pair<TemplateAlphabet, String>>) t.score;
-            if (fx.getFeatures() == feSlow.SKIP) {
-              skipped++;
-              continue;
-            }
-            kept++;
-            // OUTPUT
-            if (fpre != null) {
-              // TODO a lot of overlap between features(srl2) and features(srl3)?
-              // TODO do I need to group-by (t,s) for this output format?
-              // I think the solution which satisfies both of those problems is to
-              // => only write out srl3 edges
-              // this way you know how to format the (t,s,k) fields
-              if (t.edge.getRelation().getName().equals("srl3")) {
-                Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(t.edge);
-                String k;
-                if (y) {
-                  k = fpre.lookupRole(s3.k)
-                      + "," + fpre.lookupFrameRole(s3.f, s3.k)
-                      + "," + fpre.lookupFrame(s3.f);
-                } else {
-                  k = "-1";
-                }
-                w.write(Target.toLine(new FeaturePrecomputation.Target(docid, s3.t)));
-                w.write("\t" + s3.s.shortString());
-                w.write("\t" + k);
-                for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
-                  TemplateAlphabet template = tf.get1();
-                  String feat = tf.get2();
-                  int featIdx = template.alph.lookupIndex(feat, true);
-                  w.write('\t');
-                  w.write(template.index + ":" + featIdx);
-                  features++;
-                }
-                w.newLine();
+          @SuppressWarnings("unchecked")
+          WeightList<Pair<TemplateAlphabet, String>> fx = (WeightList<Pair<TemplateAlphabet, String>>) t.score;
+//          WeightAdjoints<Pair<TemplateAlphabet, String>> fx =
+//          (WeightAdjoints<Pair<TemplateAlphabet, String>>) t.score;
+//          if (fx.getFeatures() == feSlow.SKIP) {
+//            skipped++;
+//            continue;
+//          }
+          kept++;
+          // OUTPUT
+          if (fpre != null) {
+            // TODO a lot of overlap between features(srl2) and features(srl3)?
+            // TODO do I need to group-by (t,s) for this output format?
+            // I think the solution which satisfies both of those problems is to
+            // => only write out srl3 edges
+            // this way you know how to format the (t,s,k) fields
+            if (t.edge.getRelation().getName().equals("srl3")) {
+              Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(t.edge);
+              String k;
+              if (y) {
+                k = fpre.lookupRole(s3.k)
+                    + "," + fpre.lookupFrameRole(s3.f, s3.k)
+                    + "," + fpre.lookupFrame(s3.f);
+              } else {
+                k = "-1";
               }
-            } else {
-              // Writes out tab-separated human readable features
-              String lab = y ? "+1" : "-1";
-              w.write(t.edge.getRelFileString(lab));
-              for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
+              w.write(Target.toLine(new FeaturePrecomputation.Target(docid, s3.t)));
+              w.write("\t" + s3.s.shortString());
+              w.write("\t" + k);
+//              for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
+              for (Weight<Pair<TemplateAlphabet, String>> wtf : fx) {
+                TemplateAlphabet template = tf.get1();
+                String feat = tf.get2();
+                int featIdx = template.alph.lookupIndex(feat, true);
                 w.write('\t');
-                w.write(tf.get2()); // (template,feature), but feature includes template in the name
+                w.write(template.index + ":" + featIdx);
                 features++;
               }
               w.newLine();
             }
+          } else {
+            // Writes out tab-separated human readable features
+            String lab = y ? "+1" : "-1";
+            w.write(t.edge.getRelFileString(lab));
+            for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
+              w.write('\t');
+              w.write(tf.get2()); // (template,feature), but feature includes template in the name
+              features++;
+            }
+            w.newLine();
           }
 
           if (y) posRel.increment(t.edge.getRelation().getName());
@@ -834,6 +1206,8 @@ public class UbertsPipeline {
           processed++;
           if (processed % 500 == 0)
             trainPerfWindow = new FPR();
+          if (processed % 30 == 0)
+            Log.info(Describe.memoryUsage());
         }
       }
 
@@ -852,6 +1226,8 @@ public class UbertsPipeline {
             processed++;
             Log.info("iter=" + i + " processed=" + processed + " dev: "
                 + devPerf + " cur(" + doc.getId() +"): " + perfDoc);
+            if (processed % 30 == 0)
+              Log.info(Describe.memoryUsage());
           }
         }
         feFast.useAverageWeights(false);
@@ -871,6 +1247,8 @@ public class UbertsPipeline {
           processed++;
           Log.info("iter=" + i + " processed=" + processed + " test: "
               + trainPerf + " cur(" + doc.getId() +"): " + perfDoc);
+          if (processed % 30 == 0)
+            Log.info(Describe.memoryUsage());
         }
         feFast.useAverageWeights(false);
       }

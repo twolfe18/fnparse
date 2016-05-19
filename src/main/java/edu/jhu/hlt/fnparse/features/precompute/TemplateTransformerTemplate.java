@@ -84,6 +84,7 @@ public class TemplateTransformerTemplate {
     int lines = 0;
     tAlph = new HashMap<>();
     tf2str = new HashMap<>();
+    Log.info("reading alphabet: " + bialph);
     try (BufferedReader r = FileUtil.getReader(bialph)) {
       BiAlph.Line bl = new BiAlph.Line(null, LineMode.ALPH);
       for (String line = r.readLine(); line != null; line = r.readLine()) {

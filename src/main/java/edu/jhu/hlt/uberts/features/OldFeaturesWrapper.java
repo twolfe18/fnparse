@@ -79,14 +79,33 @@ public class OldFeaturesWrapper {
   public static class Ints extends FeatureExtractionFactor<Integer> {
     private OldFeaturesWrapper inner;
     private int mask;
+    private int numBits;
 
     private AveragedPerceptronWeights theta;
 
+    // NEW
+    public AveragedPerceptronWeights w0;
+    public Map<String, AveragedPerceptronWeights> wf;
+    public AveragedPerceptronWeights w1;
+    public AveragedPerceptronWeights getWf(String f) {
+      AveragedPerceptronWeights w = wf.get(f);
+      if (w == null) {
+        w = new AveragedPerceptronWeights(1 << numBits, 0);
+        wf.put(f, w);
+      }
+      return w;
+    }
+
     public Ints(OldFeaturesWrapper inner, int numBits) {
+      this.numBits = numBits;
       mask = (1 << numBits) - 1;
       super.customRefinements = inner.customRefinements;
       this.inner = inner;
       theta = new AveragedPerceptronWeights(1 << numBits, 0);
+
+      w0 = new AveragedPerceptronWeights(1 << numBits, 0);
+      w1 = new AveragedPerceptronWeights(1 << numBits, 0);
+      wf = new HashMap<>();
     }
 
     @Override
@@ -125,6 +144,19 @@ public class OldFeaturesWrapper {
       return theta.score(f3, false);
     }
 
+    public int[] featuresNoRefine(HypEdge yhat, Uberts x) {
+      List<Pair<TemplateAlphabet, String>> f1 = inner.features(yhat, x);
+      int n = f1.size();
+      int[] f3 = new int[n];
+      for (int i = 0; i < n; i++) {
+        Pair<TemplateAlphabet, String> p = f1.get(i);
+        int t = p.get1().index;
+        int f = Hash.hash(p.get2());
+        f3[i] = Hash.mix(t, f) & mask;
+      }
+      return f3;
+    }
+
     @Override
     public List<Integer> features(HypEdge yhat, Uberts x) {
 //      List<Pair<TemplateAlphabet, String>> f1 = inner.features(yhat, x);
@@ -138,7 +170,7 @@ public class OldFeaturesWrapper {
 //        f2.add(h * T + t);
 //      }
 //      return f2;
-      throw new RuntimeException("should be going through score");
+      throw new RuntimeException("should be going through score or inner.features()");
     }
 
     public OldFeaturesWrapper getInner() {
@@ -229,31 +261,36 @@ public class OldFeaturesWrapper {
   public OldFeaturesWrapper(BasicFeatureTemplates bft) {
 
     // This should be enough to over-fit
-//    String w = "Bc256/8";
-    String w = "Word";
+////    String w = "Bc256/8";
+//    String w = "Word";
+//    String[] tempNames = new String[] {
+//        "Bc256/8-2-grams-between-Head1-and-Span2.Last",
+//        "Head1Head2-PathNgram-Basic-LEMMA-DIRECTION-len2",
+//        "Head1Head2-PathNgram-Basic-POS-DEP-len2",
+//        "Head1Head2-Path-Basic-LEMMA-DEP-t",
+//        "Span2-PosPat-FULL_POS-3-1",
+//        "Span2-First-" + w,
+//        "Span2-Last-" + w,
+//        "Span1-PosPat-FULL_POS-3-1",
+//        "Span1-First-" + w,
+//        "Span1-Last-" + w,
+//        "Span1-Width-Div2",
+//        "Head1-Child-Basic-" + w,
+//        "Head1-Parent-Basic-" + w,
+//        "Head1-Grandparent-Basic-" + w,
+//        "Head1-RootPath-Basic-POS-DEP-t",
+//        "Head1-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
+//        "Head2-RootPath-Basic-POS-DEP-t",
+//        "Head2-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
+//        "Head2-Child-Basic-" + w,
+//        "Head2-Parent-Basic-" + w,
+//        "Head2-Grandparent-Basic-" + w,
+//    };
+
     String[] tempNames = new String[] {
-        "Bc256/8-2-grams-between-Head1-and-Span2.Last",
-        "Head1Head2-PathNgram-Basic-LEMMA-DIRECTION-len2",
-        "Head1Head2-PathNgram-Basic-POS-DEP-len2",
-        "Head1Head2-Path-Basic-LEMMA-DEP-t",
-        "Span2-PosPat-FULL_POS-3-1",
-        "Span2-First-" + w,
-        "Span2-Last-" + w,
-        "Span1-PosPat-FULL_POS-3-1",
-        "Span1-First-" + w,
-        "Span1-Last-" + w,
-        "Span1-Width-Div2",
-        "Head1-Child-Basic-" + w,
-        "Head1-Parent-Basic-" + w,
-        "Head1-Grandparent-Basic-" + w,
-        "Head1-RootPath-Basic-POS-DEP-t",
-        "Head1-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
-        "Head2-RootPath-Basic-POS-DEP-t",
-        "Head2-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
-        "Head2-Child-Basic-" + w,
-        "Head2-Parent-Basic-" + w,
-        "Head2-Grandparent-Basic-" + w,
+        "lexPredArg", "lexArgMod", "lexPredMod",
     };
+
     Template[] temps = new Template[tempNames.length];
     for (int i = 0; i < temps.length; i++) {
       temps[i] = bft.getBasicTemplate(tempNames[i]);
@@ -268,20 +305,20 @@ public class OldFeaturesWrapper {
 //    Template arg = bft.getBasicTemplate("arg");            // fires for nullSpan vs someSpan
 //    Template frame = bft.getBasicTemplate("frameRoleArg");  // fires (frame,role) if someSpan
 
-    customRefinements = e -> {
-      assert e.getNumTails() == 6;
-      if (UbertsPipeline.isNullSpan(e))
-        return new int[] {0};
-//      String f = (String) e.getTail(2).getValue();
-//      String k = (String) e.getTail(5).getValue();
-      HypNode f = e.getTail(2);
-      HypNode k = e.getTail(5);
-      int mask = (1<<14)-1;
-      int ff = (f.hashCode() & mask) * 2 + 0;
-      int kk = (k.hashCode() & mask) * 2 + 1;
-//      return new int[] {1, 2 + ff, 2 + kk};
-      return new int[] {1, 2 + (k.hashCode() & mask)};
-    };
+//    customRefinements = e -> {
+//      assert e.getNumTails() == 6;
+//      if (UbertsPipeline.isNullSpan(e))
+//        return new int[] {0};
+////      String f = (String) e.getTail(2).getValue();
+////      String k = (String) e.getTail(5).getValue();
+//      HypNode f = e.getTail(2);
+//      HypNode k = e.getTail(5);
+//      int mask = (1<<14)-1;
+//      int ff = (f.hashCode() & mask) * 2 + 0;
+//      int kk = (k.hashCode() & mask) * 2 + 1;
+////      return new int[] {1, 2 + ff, 2 + kk};
+//      return new int[] {1, 2 + (k.hashCode() & mask)};
+//    };
 
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
     // UNIGRAMS
@@ -527,6 +564,13 @@ public class OldFeaturesWrapper {
         s = s3.s;
         ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(s3.f));
         ctx.setRoleS(s3.k);
+        break;
+      case "srl4":
+        t = UbertsPipeline.getTargetFromSrl4(yhat);
+        s = UbertsPipeline.getArgFromSrl4(yhat);
+        String f = (String) yhat.getTail(2).getValue();
+        ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(f));
+        ctx.setRoleS((String) yhat.getTail(5).getValue());
         break;
       default:
         skipped.increment(yhat.getRelation().getName());
