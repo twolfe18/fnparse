@@ -1001,7 +1001,6 @@ public class TransitionGeneratorForwardsParser {
   /**
    * @deprecated Use parse2
    */
-
   public LHS parse(Rule r) {
     assert false : "use parse2, this is old and broken code";
 
@@ -1114,8 +1113,10 @@ public class TransitionGeneratorForwardsParser {
     LHS lhs = g3.getLHS();
 
     TG tg = new TG(lhs, r, u);
-    Log.info("rule: " + r);
-    Log.info("pat:\n\t" + StringUtils.join("\n\t", lhs.getPath()));
+    if (DEBUG) {
+      Log.info("rule: " + r);
+      Log.info("pat:\n\t" + StringUtils.join("\n\t", lhs.getPath()));
+    }
     return new Pair<>(lhs.getPath(), tg);
   }
 

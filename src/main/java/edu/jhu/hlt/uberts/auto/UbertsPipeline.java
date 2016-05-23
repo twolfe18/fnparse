@@ -1095,6 +1095,7 @@ public class UbertsPipeline {
               w.write("\t" + k);
 //              for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
               for (Weight<Pair<TemplateAlphabet, String>> wtf : fx) {
+                Pair<TemplateAlphabet, String> tf = null;   // TODO I don't know how we got here...
                 TemplateAlphabet template = tf.get1();
                 String feat = tf.get2();
                 int featIdx = template.alph.lookupIndex(feat, true);
@@ -1108,7 +1109,9 @@ public class UbertsPipeline {
             // Writes out tab-separated human readable features
             String lab = y ? "+1" : "-1";
             w.write(t.edge.getRelFileString(lab));
-            for (Pair<TemplateAlphabet, String> tf : fx.getFeatures()) {
+//            List<Pair<TemplateAlphabet, String>> foo = fx.getFeatures();
+            List<Pair<TemplateAlphabet, String>> foo = null;  // TODO IDFK...
+            for (Pair<TemplateAlphabet, String> tf : foo) {
               w.write('\t');
               w.write(tf.get2()); // (template,feature), but feature includes template in the name
               features++;

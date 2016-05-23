@@ -256,17 +256,17 @@ public class TNode {
     if (DEBUG) {
       System.out.println();
       System.out.println("START MATCH: after " + newEdge
-          + " was added, numTrieNodes=" + trie.getNumNodes()
-          + " numStateNodes=" + u.getState().getNumNodes());
+          + " was added, numTrieNodes=" + trie.getNumNodes());
+//          + " numStateNodes=" + u.getState().getNumNodes());
     }
     HNode cur = new HNode(newEdge.getHead());
 //    HNode cur = new HNode(newEdge);
     GraphTraversalTrace gtt = new GraphTraversalTrace();
-    match(u, cur, gtt, trie);
+    match(u, cur, gtt, trie, new HashSet<>());
     if (DEBUG) {
       System.out.println("END MATCH: after " + newEdge
-          + " was added, numTrieNodes=" + trie.getNumNodes()
-          + " numStateNodes=" + u.getState().getNumNodes());
+          + " was added, numTrieNodes=" + trie.getNumNodes());
+//          + " numStateNodes=" + u.getState().getNumNodes());
       System.out.println();
     }
   }
@@ -276,7 +276,20 @@ public class TNode {
       return "null";
     return children.keySet().toString();
   }
-  private static void match(Uberts u, HNode cur, GraphTraversalTrace traversal, TNode trie) {
+
+  /**
+   * @param u
+   * @param cur is the last HNode that we came from, and thus must enforce
+   * equality with by traversing out of.
+   * @param traversal
+   * @param trie
+   * @param crossed is the set of (directed) edges in the state hypergraph which
+   * have already been crossed. You should never need to cross an edge twice. An
+   * edge can be thought of as a binding of a functor's argument; observing this
+   * twice is not necessary since its value is known after being seen once and
+   * cannot change.
+   */
+  private static void match(Uberts u, HNode cur, GraphTraversalTrace traversal, TNode trie, Set<StateEdge> crossed) {
 
     if (DEBUG) {
       System.out.println("TRACE cur=" + cur);
@@ -298,31 +311,39 @@ public class TNode {
       HNode r = traversal.stack.pop();
       if (DEBUG)
         System.out.println("TRACE: GOTO_PARENT, r=" + r);
-      match(u, traversal.stack.peek(), traversal, childTrie);
+      match(u, traversal.stack.peek(), traversal, childTrie, crossed);
       traversal.stack.push(r);
     }
 
-    // Intersect nodes that follow cur with trie.children.keys()
     if (cur == null) {
+      // This happens when we have a rule with disconnected functors
+      // (no common arguments), e.g. R1(a,b) & R2(c,d) => R3(a,b,c,d).
+      // Cur means the last node we left and must enforce equality with,
+      // which will be null after we match R1 and are about to match R2.
       // This means that we are free to start anywhere on the graph,
-      // intersection degenerates to just trie.children.keys()
+      // check all possible continuations in trie.children.keys()
+      int n = 0;
       for (TKey poss : trie.children.keySet()) {
+        n++;
         switch (poss.mode) {
         case TKey.RELATION:
           for (LL<HypEdge> ll = state.match2(poss.relationType); ll != null; ll = ll.next)
-            tryMatch(poss, u, new HNode(ll.item), traversal, trie);
+            tryMatch(poss, u, new HNode(ll.item), traversal, trie, crossed);
           break;
         case TKey.NODE_TYPE:
           throw new RuntimeException("implement me!");
         case TKey.NODE_VALUE:
           HypNode maybeExists = u.lookupNode(poss.nodeType, poss.nodeValue, false);
           if (maybeExists != null)
-            tryMatch(poss, u, new HNode(maybeExists), traversal, trie);
+            tryMatch(poss, u, new HNode(maybeExists), traversal, trie, crossed);
           break;
         default:
           throw new RuntimeException();
         }
       }
+      if (DEBUG)
+        System.out.println("tried " + n + " keys in the trie");
+
     } else {
       int edges = 0;
       for (StateEdge p : state.neighbors2(cur)) {
@@ -338,35 +359,52 @@ public class TNode {
         edges++;
         HNode n = p.getTarget();
         assert n != null : "p=" + p;
-        if (traversal.visited.contains(n)) {
+
+        // Check that we're not going in loops
+//        if (traversal.visited.contains(n)) {
+//          // This is wrong: suppose n:HNode is a Relation/HypEdge node.
+//          // You could visit it multiple times to reach various arguments.
+//          if (DEBUG)
+//            System.out.println("skipping visited node: " + n);
+//          continue;
+//        }
+        if (!crossed.add(p)) {
+          // You can never cross an edge in the state graph more than once.
+          // An edge represents a binding of an argument to a functor.
+          // It can only be bound once. Any subsequent times could only
+          // verify that the value is still the same. But, the compilation
+          // process to produce TKey paths does this statically.
           if (DEBUG)
-            System.out.println("skipping visited node: " + n);
+            System.out.println("skipping edge since we've crossed it once already: " + p);
           continue;
         }
+
         TKey key;
         if (n.isNode()) {
           HypNode node = n.getNode();
           // Match both value and type
           key = new TKey(p.argPos, node.getNodeType(), node.getValue());
-          tryMatch(key, u, n, traversal, trie);
+          tryMatch(key, u, n, traversal, trie, crossed);
           // Match just type
           key = new TKey(p.argPos, node.getNodeType());
-          tryMatch(key, u, n, traversal, trie);
+          tryMatch(key, u, n, traversal, trie, crossed);
         } else {
           HypEdge edge = n.getEdge();
           key = new TKey(p.argPos, edge.getRelation());
-          tryMatch(key, u, n, traversal, trie);
+          tryMatch(key, u, n, traversal, trie, crossed);
         }
       }
       if (DEBUG)
         System.out.println("checked " + edges + " edges adjacent to " + cur);
     }
+    if (DEBUG)
+      System.out.println("TRACE returning from cur=" + cur);
   }
 
   /**
    * @param keyConstructedFromState should not have a name set!
    */
-  private static void tryMatch(TKey keyConstructedFromState, Uberts u, HNode n, GraphTraversalTrace traversal, TNode trie) {
+  private static void tryMatch(TKey keyConstructedFromState, Uberts u, HNode n, GraphTraversalTrace traversal, TNode trie, Set<StateEdge> crossed) {
     if (DEBUG) {
       System.out.println("keyFromState=" + keyConstructedFromState);
     }
@@ -379,7 +417,7 @@ public class TNode {
       traversal.visited.add(n);
       if (n.isEdge())
         traversal.boundVals.add(n);
-      match(u, n, traversal, childTrie);
+      match(u, n, traversal, childTrie, crossed);
       traversal.stack.pop();
       traversal.visited.remove(n);
       if (n.isEdge())

@@ -12,6 +12,12 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 
+/**
+ * Holds a set of labels. Has some extra functionality like the inner Perf class
+ * which can report {@link FPR} by {@link Relation}.
+ *
+ * @author travis
+ */
 public class Labels {
 
   private Set<HashableHypEdge> edges;

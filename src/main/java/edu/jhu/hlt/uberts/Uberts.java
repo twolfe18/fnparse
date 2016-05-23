@@ -494,6 +494,9 @@ public class Uberts {
     n.getValue().gf = gf;
   }
 
+  public void addTransitionGenerator(Pair<List<TKey>, ? extends TransitionGenerator> p) {
+    addTransitionGenerator(p.get1(), p.get2());
+  }
   public void addTransitionGenerator(List<TKey> lhs, TransitionGenerator tg) {
     TKey[] lhsA = new TKey[lhs.size()];
     for (int i = 0; i < lhsA.length; i++)
