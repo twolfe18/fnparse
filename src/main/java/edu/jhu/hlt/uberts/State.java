@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -161,8 +162,31 @@ public class State {
     @Override
     public List<StateEdge> neighbors2(HNode node) {
       List<StateEdge> l = new ArrayList<>();
-      l.addAll(regularEdges.neighbors2(node));
-      l.addAll(schemaEdges.neighbors2(node));
+
+      if (node.isEdge()) {
+        // For HypEdge -> HypNode edges, we can generate these by looking at
+        // just the HypEdge (arguments are known). Does not need to look at any
+        // edge indices/views.
+        HypEdge e = node.getRight();
+        l.add(new StateEdge(e.getHead(), e, HEAD_ARG_POS, false));
+        for (int i = 0; i < e.getNumTails(); i++)
+          l.add(new StateEdge(e.getTail(i), e, i, false));
+        return l;
+      }
+
+//      System.out.println("neighbors2 regularEdges:");
+      List<StateEdge> l1 = regularEdges.neighbors2(node);
+      l.addAll(l1);
+
+//      System.out.println("neighbors2 schemaEdges:");
+      List<StateEdge> l2 = schemaEdges.neighbors2(node);
+      l.addAll(l2);
+
+      // DEBUGGING
+      Set<StateEdge> uniq = new HashSet<>();
+      for (StateEdge se : l)
+        assert uniq.add(se) : "duplicate edge: " + se;
+
       return l;
     }
   }
@@ -324,20 +348,33 @@ public class State {
    */
   public List<StateEdge> neighbors2(HNode node) {
     List<StateEdge> a = new ArrayList<>();
-    if (node.isLeft()) {
-      HypNode n = node.getLeft();
-//      if (n.getNodeType().getName().equals("tokenIndex"))
-//        Log.info("check this");
+    if (node.isNode()) {
+      HypNode n = node.getNode();
       LL<HypEdge>[] allArgs = primaryViewReg.get(n);
       for (int i = 0; allArgs != null && i < allArgs.length; i++)
         for (LL<HypEdge> cur = allArgs[i]; cur != null; cur = cur.next)
           a.add(new StateEdge(n, cur.item, i, true));
     } else {
+      // For HypEdge -> HypNode edges, we can generate these by looking at
+      // just the HypEdge (arguments are known). Does not need to look at any
+      // edge indices/views.
       HypEdge e = node.getRight();
       a.add(new StateEdge(e.getHead(), e, HEAD_ARG_POS, false));
       for (int i = 0; i < e.getNumTails(); i++)
         a.add(new StateEdge(e.getTail(i), e, i, false));
     }
+
+    // DEBUGGING:
+    Set<StateEdge> uniq = new HashSet<>();
+//    Set<String> uniq2 = new HashSet<>();
+    for (StateEdge se : a) {
+//      System.out.println("neighbors2 checking: " + se);
+      assert uniq.add(se);
+//      assert uniq2.add(se.toString()) : se.toString();
+    }
+//    System.out.println("neighbors2 uniq.size=: " + uniq.size());
+//    System.out.println("neighbors2 uniq2.size=: " + uniq2.size());
+
     return a;
   }
 }
