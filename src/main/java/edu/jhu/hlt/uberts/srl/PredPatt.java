@@ -41,6 +41,10 @@ import edu.jhu.prim.tuple.Pair;
  * at 0, s is the first token of the sentence, and e is the last. Or if each
  * document should have its own indices: sentence(i,d,s,e) where d is a doc id.
  *
+ * @deprecated I'm not going to call pred-patt, I will assume it is run first.
+ * So I will either get target (and maybe arg) locations from either Concrete
+ * or a relations file.
+ *
  * @author travis
  */
 public class PredPatt {

@@ -13,9 +13,11 @@ import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
+import edu.stanford.nlp.util.StringUtils;
 
 /**
  * A trie which stores graph fragments.
@@ -24,6 +26,7 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class TNode {
   public static boolean DEBUG = false;
+  public static boolean COARSE_DEBUG = false;
 
   // Singleton, both NodeType and Relation are null
   public static final TKey GOTO_PARENT = new TKey();
@@ -191,6 +194,7 @@ public class TNode {
     TransitionGenerator tg;
     GlobalFactor gf;
     Uberts u;
+    Rule r;
   }
 
   private TKey key;
@@ -253,20 +257,18 @@ public class TNode {
   }
 
   public static void match(Uberts u, HypEdge newEdge, TNode trie) {
-    if (DEBUG) {
+    if (DEBUG || COARSE_DEBUG) {
       System.out.println();
       System.out.println("START MATCH: after " + newEdge
           + " was added, numTrieNodes=" + trie.getNumNodes());
-//          + " numStateNodes=" + u.getState().getNumNodes());
     }
     HNode cur = new HNode(newEdge.getHead());
 //    HNode cur = new HNode(newEdge);
     GraphTraversalTrace gtt = new GraphTraversalTrace();
     match(u, cur, gtt, trie, new HashSet<>());
-    if (DEBUG) {
+    if (DEBUG || COARSE_DEBUG) {
       System.out.println("END MATCH: after " + newEdge
           + " was added, numTrieNodes=" + trie.getNumNodes());
-//          + " numStateNodes=" + u.getState().getNumNodes());
       System.out.println();
     }
   }
@@ -291,9 +293,10 @@ public class TNode {
    */
   private static void match(Uberts u, HNode cur, GraphTraversalTrace traversal, TNode trie, Set<StateEdge> crossed) {
 
-    if (DEBUG) {
+    if (DEBUG || COARSE_DEBUG) {
       System.out.println("TRACE cur=" + cur);
-      System.out.println("childKeys: " + trie.dbgChildKeys());
+      if (DEBUG)
+        System.out.println("childKeys: " + trie.dbgChildKeys());
     }
 
     State state = u.getState();
@@ -309,7 +312,7 @@ public class TNode {
     TNode childTrie;
     if ((childTrie = trie.getChild(GOTO_PARENT)) != null) {
       HNode r = traversal.stack.pop();
-      if (DEBUG)
+      if (DEBUG || COARSE_DEBUG)
         System.out.println("TRACE: GOTO_PARENT, r=" + r);
       match(u, traversal.stack.peek(), traversal, childTrie, crossed);
       traversal.stack.push(r);
@@ -346,7 +349,10 @@ public class TNode {
 
     } else {
       int edges = 0;
-      for (StateEdge p : state.neighbors2(cur)) {
+      List<StateEdge> sEdges = state.neighbors2(cur);
+      if (COARSE_DEBUG)
+        System.out.println("considering edges:\n\t" + StringUtils.join(sEdges, "\n\t"));
+      for (StateEdge p : sEdges) {
         if (DEBUG)
           System.out.println("trying edge: " + p);
         /*
@@ -368,6 +374,7 @@ public class TNode {
 //            System.out.println("skipping visited node: " + n);
 //          continue;
 //        }
+        boolean remove = false;
         if (!crossed.add(p)) {
           // You can never cross an edge in the state graph more than once.
           // An edge represents a binding of an argument to a functor.
@@ -377,6 +384,10 @@ public class TNode {
           if (DEBUG)
             System.out.println("skipping edge since we've crossed it once already: " + p);
           continue;
+        } else {
+          if (DEBUG)
+            System.out.println("crossing edge for the first and only time: " + p);
+          remove = true;
         }
 
         TKey key;
@@ -393,11 +404,14 @@ public class TNode {
           key = new TKey(p.argPos, edge.getRelation());
           tryMatch(key, u, n, traversal, trie, crossed);
         }
+
+        if (remove)
+          crossed.remove(p);
       }
       if (DEBUG)
         System.out.println("checked " + edges + " edges adjacent to " + cur);
     }
-    if (DEBUG)
+    if (DEBUG || COARSE_DEBUG)
       System.out.println("TRACE returning from cur=" + cur);
   }
 
@@ -437,8 +451,8 @@ public class TNode {
 //    Log.info(traversal.boundVals);
     // NOTE: Both of these operations don't mutate the State, only Agenda
     if (tval.tg != null) {
-      if (Uberts.COARSE_EVENT_LOGGING)
-        Log.info("state match: " + tval.tg);
+      if (Uberts.COARSE_EVENT_LOGGING || COARSE_DEBUG)
+        System.out.println("state match: " + tval.r);
       for (Pair<HypEdge, Adjoints> p : tval.tg.generate(traversal))
         tval.u.addEdgeToAgenda(p);
     }

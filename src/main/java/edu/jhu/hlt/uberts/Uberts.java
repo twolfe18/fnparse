@@ -88,6 +88,9 @@ public class Uberts {
   public void clearLabels() {
     goldEdges = null;
   }
+  public Labels getLabels() {
+    return goldEdges;
+  }
   public void addLabel(HypEdge e) {
     if (goldEdges == null)
       goldEdges = new Labels();
@@ -404,6 +407,9 @@ public class Uberts {
     String[] toks = line.split("\\s+");
     String command = toks[0];
     switch (command) {
+    case "startdoc":
+      Log.warn("skipping multi-doc line: " + line);
+      break;
     case "def":
       relName = toks[1];
       NodeType[] argTypes = new NodeType[toks.length - 2];
@@ -486,29 +492,31 @@ public class Uberts {
     return nt;
   }
 
-  public void addGlobalFactor(TKey[] lhs, GlobalFactor gf) {
+  public TNode addGlobalFactor(TKey[] lhs, GlobalFactor gf) {
     TNode n = trie.lookup(lhs, true);
     n.getValue().u = this;
     if (n.getValue().gf != null)
       gf = new GlobalFactor.Composite(gf, n.getValue().gf);
     n.getValue().gf = gf;
+    return n;
   }
 
-  public void addTransitionGenerator(Pair<List<TKey>, ? extends TransitionGenerator> p) {
-    addTransitionGenerator(p.get1(), p.get2());
+  public TNode addTransitionGenerator(Pair<List<TKey>, ? extends TransitionGenerator> p) {
+    return addTransitionGenerator(p.get1(), p.get2());
   }
-  public void addTransitionGenerator(List<TKey> lhs, TransitionGenerator tg) {
+  public TNode addTransitionGenerator(List<TKey> lhs, TransitionGenerator tg) {
     TKey[] lhsA = new TKey[lhs.size()];
     for (int i = 0; i < lhsA.length; i++)
       lhsA[i] = lhs.get(i);
-    addTransitionGenerator(lhsA, tg);
+    return addTransitionGenerator(lhsA, tg);
   }
-  public void addTransitionGenerator(TKey[] lhs, TransitionGenerator tg) {
+  public TNode addTransitionGenerator(TKey[] lhs, TransitionGenerator tg) {
     TNode n = trie.lookup(lhs, true);
     n.getValue().u = this;
     if (n.getValue().tg != null)
       tg = new TransitionGenerator.Composite(tg, n.getValue().tg);
     n.getValue().tg = tg;
+    return n;
   }
 
   private boolean nodesContains(HypNode n) {
@@ -534,7 +542,7 @@ public class Uberts {
 
   public void addEdgeToState(HypEdge e) {
     if (DEBUG || COARSE_EVENT_LOGGING)
-      Log.info(e.toString());
+      System.out.println("Uberts addEdgeToState: " + e.toString());
     assert nodesContains(e);
     state.add(e);
     TNode.match(this, e, trie);

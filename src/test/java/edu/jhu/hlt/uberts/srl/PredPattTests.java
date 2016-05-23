@@ -18,6 +18,11 @@ import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.srl.PredPatt.Target;
 
+/**
+ * {@link PredPatt} is currently not used.
+ *
+ * @author travis
+ */
 public class PredPattTests {
   private Uberts u;
   private NodeType tokenIndex;

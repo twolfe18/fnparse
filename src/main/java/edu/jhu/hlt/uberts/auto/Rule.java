@@ -42,6 +42,25 @@ public class Rule {
 
   public String comment;
 
+  /**
+   * Returns a N rules, where N is the number of functors in the LHS of the
+   * given rule. Produces a rule in which each functor is the first fact checked.
+   */
+  public static List<Rule> allLhsOrders(Rule r) {
+    List<Rule> rules = new ArrayList<>();
+    Term[] lhs;
+    for (int i = 0; i < r.lhs.length; i++) {
+      lhs = new Term[r.lhs.length];
+      lhs[0] = r.lhs[i];
+      for (int j = 0, c = 1; j < r.lhs.length; j++) {
+        if (j == i) continue;
+        lhs[c++] = r.lhs[j];
+      }
+      rules.add(new Rule(lhs, r.rhs));
+    }
+    return rules;
+  }
+
   public Rule(Term[] lhs, Term rhs) {
     this.lhs = lhs;
     this.rhs = rhs;

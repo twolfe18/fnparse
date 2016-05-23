@@ -46,6 +46,8 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
     public List<RelLine> items;
     public List<HypEdge.WithProps> facts;
     public RelDoc(RelLine def) {
+      if (!def.tokens[0].equals("startdoc"))
+        throw new IllegalArgumentException("ManyDocRelation files must start with startdoc, not: " + def.toLine());
       this.def = def;
       this.items = new ArrayList<>();
       this.facts = new ArrayList<>();
@@ -126,6 +128,10 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
     // Load up the current item
     this.nextDesc = itr.next();
     next();
+  }
+
+  public RelationFileIterator getWrapped() {
+    return itr;
   }
 
   @Override

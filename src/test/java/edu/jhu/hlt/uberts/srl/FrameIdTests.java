@@ -29,6 +29,12 @@ import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
 
+/**
+ * @deprecated This was designed to make use of PredPatt and a bunch of other
+ * defunct machinery.
+ *
+ * @author travis
+ */
 public class FrameIdTests {
 
   private List<PredPatt.Target> targets;

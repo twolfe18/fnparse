@@ -63,6 +63,8 @@ public class TransitionGeneratorBackwardsParser {
     // break if this is false. True requires a lot of memory.
     public boolean lookupHypNodes = true;
 
+    public boolean onlyReadXYFacts = true;
+
     public Iter(Iterator<RelDoc> wrapped, Uberts u, Collection<Rule> untypedRules) {
       this(wrapped, u, untypedRules, null);
     }
@@ -114,11 +116,15 @@ public class TransitionGeneratorBackwardsParser {
             mask |= HypEdge.IS_X;
           if (l.isY())
             mask |= HypEdge.IS_Y;
+          if (onlyReadXYFacts && mask == 0) {
+            counts.increment("input-lines-skipped");
+            continue;
+          }
           d.facts.add(new HypEdge.WithProps(e, mask));
         }
       }
       d.items.clear();
-      counts.update("facts-input", d.facts.size());
+      counts.update("input-facts", d.facts.size());
 
       // Expand
       for (int i = 0; i < d.facts.size(); i++) {
@@ -235,45 +241,6 @@ public class TransitionGeneratorBackwardsParser {
   }
 
   /**
-   * A very simple run of the backwards generation.
-   * This example DOES NOT include cases with LHS terms which contain variables
-   * not bound on the RHS, e.g.
-   *   event1(ts,te) & lemma(ts,lemma) & frameTriage(lemma,frame) => event2(ts,te,frame)
-   * Where this method will necessarily fail.
-   */
-  public static void demo() {
-    // e.g. event2(t,f) & srl2(t,s) & role(f,k) => srl3(t,f,s,k)
-    NodeType spanNT = new NodeType("span");
-    NodeType frameNT = new NodeType("frame");
-    NodeType roleNT = new NodeType("role");
-    Relation event2 = new Relation("event2", spanNT, frameNT);
-    Relation srl2 = new Relation("srl2", spanNT, spanNT);
-    Relation role = new Relation("role", frameNT, roleNT);
-    Relation srl3 = new Relation("srl3", spanNT, frameNT, spanNT, roleNT);
-    Term event2Term = new Term(event2, "t", "f");
-    Term srl2Term = new Term(srl2, "t", "s");
-    Term roleTerm = new Term(role, "f", "k");
-    Term srl3Term = new Term(srl3, "t", "f", "s", "k");
-    Rule r = new Rule(Arrays.asList(event2Term, srl2Term, roleTerm), srl3Term);
-    System.out.println("rule: " + r);
-
-    TransitionGeneratorBackwardsParser tgp = new TransitionGeneratorBackwardsParser();
-    tgp.add(r);
-
-    HypNode[] srl3FactArgs = new HypNode[4];
-    srl3FactArgs[0] = new HypNode(spanNT, "3-5");           // t
-    srl3FactArgs[1] = new HypNode(frameNT, "Commerce_buy"); // f
-    srl3FactArgs[2] = new HypNode(spanNT, "0-3");           // s
-    srl3FactArgs[3] = new HypNode(roleNT, "Buyer");         // k
-    HypEdge srl3Fact = new HypEdge(srl3, null, srl3FactArgs);
-
-    List<HypEdge> assumed = tgp.expand(srl3Fact);
-    System.out.println("fact: " + srl3Fact);
-    for (HypEdge e : assumed)
-      System.out.println("gen: " + e);
-  }
-
-  /**
    * Expands a set of necessary facts according to a transition system to
    * add implied labels for intermediate Relations introduced by the transition
    * system.
@@ -297,8 +264,12 @@ public class TransitionGeneratorBackwardsParser {
     // srl4(ts,te,f,ss,se,k), but DOES NOT NEED to have definitions for
     // intermediate relations like srl2(event1head,srl1head) which are inferred
     // from the grammar (next step).
-    for (String defFileName : config.getString("defs").split(","))
-      u.readRelData(new File(defFileName));
+    if (config.containsKey("defs")) {
+      for (File defFile : config.getExistingFiles("defs"))
+        u.readRelData(defFile);
+    } else {
+      Log.warn("no relation definitions, assuming they're inline with facts");
+    }
     if (DEBUG)
       Log.info("defined: " + u.getAllEdgeTypes());
 
