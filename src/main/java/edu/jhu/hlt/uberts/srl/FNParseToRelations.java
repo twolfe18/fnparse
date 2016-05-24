@@ -111,7 +111,7 @@ public class FNParseToRelations {
     for (int i = 0; i < n; i++) {
       write(w, "x", "word2", i, s.getWord(i));
       write(w, "x", "pos2", i, s.getPos(i));
-      write(w, "x", "lemma2", i, s.getLemma(i));
+      write(w, "x", "lemma2", i, s.getLemma(i).toLowerCase());
       if ((iw = s.getWnWord(i)) != null && (is = iw.getSynset()) != null)
         write(w, "x", "wnss2", i, is.getID());
     }

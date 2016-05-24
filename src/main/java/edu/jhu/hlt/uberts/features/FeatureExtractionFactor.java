@@ -111,16 +111,34 @@ public abstract class FeatureExtractionFactor<T> {
     numInstances++;
   }
 
-  public List<Pair<Relation, Weight<T>>> getWeights() {
-    throw new RuntimeException("re-implement me");
-//    List<Pair<Relation, Weight<T>>> l = new ArrayList<>();
-//    for (Map.Entry<Relation, Map<T, Weight<T>>> x : theta.entrySet()) {
-//      Relation r = x.getKey();
-//      for (Weight<T> w : x.getValue().values())
-//        l.add(new Pair<>(r, w));
+//  public Object getWeights() {
+//    assert theta2Special.size() == 0;
+//    return theta2;
+//  }
+  public List<Weight<Pair<Integer, T>>> getWeights() {
+    assert theta2Special.size() == 0;
+    List<Weight<Pair<Integer, T>>> l = new ArrayList<>();
+    for (IntObjectHashMap<Weight<Pair<Integer, T>>> x : theta2.values()) {
+      IntObjectHashMap<Weight<Pair<Integer, T>>>.Iterator itr = x.iterator();
+      while (itr.hasNext()) {
+        itr.advance();
+        l.add(itr.value());
+      }
+    }
+    return l;
+  }
+//  public List<Pair<T, Weight<T>>> getWeights() {
+//    if (theta2Special.size() > 0)
+//      throw new RuntimeException("re-implement me");
+//    List<Pair<T, Weight<T>>> l = new ArrayList<>();
+//    for (Entry<T, IntObjectHashMap<Weight<Pair<Integer, T>>>> x : theta2.entrySet()) {
+//      T r = x.getKey();
+//      x.getValue().iterator();
+////      for (Weight<Pair<Integer, T>> w : x.getValue().values())
+////        l.add(new Pair<>(r, w));
 //    }
 //    return l;
-  }
+//  }
 
   public static class Oracle extends FeatureExtractionFactor<String> {
     private Set<String> relevant;

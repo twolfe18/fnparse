@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Random;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
-import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.UbertsOraclePipeline;
 import edu.jhu.hlt.uberts.auto.UbertsPipeline;
@@ -42,15 +41,23 @@ public class OracleSrlTest {
 
 //    TNode.DEBUG = true;
 //    Uberts.COARSE_EVENT_LOGGING = true;
-    u.showOracleTrajDiagnostics = true;
+    u.showTrajDiagnostics = true;
 
+    // Train
+    pipe.train = true;
+    pipe.predict = false;
     try (RelationFileIterator rels = new RelationFileIterator(multiRels, false);
         ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
       pipe.runInference(many);
     }
 
-    Labels y = u.getLabels();
-    System.out.println(y.getRelCounts());
+    // Test
+    pipe.train = false;
+    pipe.predict = true;
+    try (RelationFileIterator rels = new RelationFileIterator(multiRels, false);
+        ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
+      pipe.runInference(many);
+    }
   }
 
   public static void main(String[] args) throws IOException {

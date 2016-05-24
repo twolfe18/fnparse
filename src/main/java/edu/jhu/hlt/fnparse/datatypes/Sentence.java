@@ -265,29 +265,32 @@ public class Sentence implements HasId, Serializable {
     return new LexicalUnit(tokens[i], pos[i]);
   }
 
+  public static IWord tryGetWnWord(String word, String ptbPosTag) {
+    edu.mit.jwi.item.POS tag = WordNetPosUtil.ptb2wordNet(ptbPosTag);
+    if (tag == null)
+      return null;
+    String w = word.trim().replace("_", "");
+    if (w.length() == 0)
+      return null;
+    TargetPruningData tpd = TargetPruningData.getInstance();
+    WordnetStemmer stemmer = tpd.getStemmer();
+    List<String> stems = stemmer.findStems(w, tag);
+    if (stems == null || stems.size() == 0)
+      return null;
+    IRAMDictionary dict = tpd.getWordnetDict();
+    IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
+    if (ti == null || ti.getWordIDs().isEmpty())
+      return null;
+    IWordID t = ti.getWordIDs().get(0);
+    return dict.getWord(t);
+  }
+
   private transient IWord[] wnWords = null;
   public IWord getWnWord(int i) {
     if (wnWords == null) {
       wnWords = new IWord[tokens.length];
-      TargetPruningData tpd = TargetPruningData.getInstance();
-      IRAMDictionary dict = tpd.getWordnetDict();
-      WordnetStemmer stemmer = tpd.getStemmer();
-      for (int idx = 0; idx < tokens.length; idx++) {
-        edu.mit.jwi.item.POS tag = WordNetPosUtil.ptb2wordNet(getPos(idx));
-        if (tag == null)
-          continue;
-        String w = getWord(idx).trim().replace("_", "");
-        if (w.length() == 0)
-          continue;
-        List<String> stems = stemmer.findStems(w, tag);
-        if (stems == null || stems.size() == 0)
-          continue;
-        IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
-        if (ti == null || ti.getWordIDs().isEmpty())
-          continue;
-        IWordID t = ti.getWordIDs().get(0);
-        wnWords[idx] = dict.getWord(t);
-      }
+      for (int idx = 0; idx < tokens.length; idx++)
+        wnWords[idx] = tryGetWnWord(getWord(idx), getPos(idx));
     }
     return wnWords[i];
   }

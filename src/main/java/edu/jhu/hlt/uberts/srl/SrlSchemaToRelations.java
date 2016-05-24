@@ -23,7 +23,7 @@ import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
-import edu.jhu.prim.tuple.Pair;
+import edu.mit.jwi.item.IWord;
 
 /**
  * Writes out special relations to disk such as:
@@ -37,38 +37,35 @@ import edu.jhu.prim.tuple.Pair;
 public class SrlSchemaToRelations {
 
   public static void buildFrameTriageRelationPB(FrameIndex fi, File to) throws IOException {
-    NodeType lemma = new NodeType("lemma");
-    NodeType frame = new NodeType("frame");
-    Relation frameTriage2 = new Relation("frameTriage2", lemma, frame);
-    Log.info("writing " + frameTriage2 + " to " + to.getPath());
+    Set<String> seen = new HashSet<>();
     try (BufferedWriter w = FileUtil.getWriter(to)) {
       // Relation definition
-      w.write(frameTriage2.getDefinitionString());
+      w.write("def frameTriage lemma pos synset frame");
       w.newLine();
       // Instances
       for (Frame f : fi.allFrames()) {
-        String lemmaStr = f.getName().split("\\W+")[1];
-        HypNode lemmaNode = new HypNode(lemma, lemmaStr);
-        HypNode frameNode = new HypNode(frame, f.getName());
-        HypNode[] tail = new HypNode[] { lemmaNode, frameNode };
-        HypEdge e = new HypEdge(frameTriage2, null, tail);
-        w.write(e.getRelFileString("schema"));
-        w.newLine();
+        String frame = f.getName();   // e.g. propbank/FedEx-v-1
+        String[] ar = frame.split("\\W+");
+        String lemmaStr = ar[1].toLowerCase();
+        String pos = ar[2].toUpperCase();
+        IWord iw = Sentence.tryGetWnWord(lemmaStr, pos);
+        String wnss = iw == null ? "nil" : iw.getSynset().getID().toString();
+        String l = "schema frameTriage " + lemmaStr + " " + pos + " " + wnss + " " + frame;
+        if (seen.add(l)) {
+          w.write(l);
+          w.newLine();
+        }
       }
     }
   }
 
   public static void buildFrameTriageRelationFN(FrameIndex fi, File to) throws IOException {
-    NodeType lemmaNT = new NodeType("lemma");
-    NodeType frameNT = new NodeType("frame");
-    Relation frameTriage2 = new Relation("frameTriage2", lemmaNT, frameNT);
-    Log.info("writing " + frameTriage2 + " to " + to.getPath());
     Iterator<FNTagging> itr = FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences();
     itr = Iterators.concat(itr, FileFrameInstanceProvider.fn15trainFIP.getParsedOrTaggedSentences());
-    Set<Pair<String, String>> seenLemmaFrame = new HashSet<>();
+    Set<String> seen = new HashSet<>();
     try (BufferedWriter w = FileUtil.getWriter(to)) {
       // Relation definition
-      w.write(frameTriage2.getDefinitionString());
+      w.write("def frameTriage lemma pos synset frame");
       w.newLine();
       // Instances
       while (itr.hasNext()) {
@@ -77,14 +74,14 @@ public class SrlSchemaToRelations {
         s.lemmatize();
         for (FrameInstance fin : t.getFrameInstances()) {
           Span target = fin.getTarget();
-          String lemma = s.getLemma(target.end - 1);
+          int ti = target.end - 1;
+          String lemma = s.getLemma(ti).toLowerCase();
+          String pos = s.getPos(ti).substring(0, 1).toUpperCase();
+          String wnss = s.getWnWord(ti) == null ? "nil" : s.getWnWord(ti).getSynset().getID().toString();
           String frame = fin.getFrame().getName();
-          if (seenLemmaFrame.add(new Pair<>(lemma, frame))) {
-            HypNode lemmaNode = new HypNode(lemmaNT, lemma);
-            HypNode frameNode = new HypNode(frameNT, frame);
-            HypNode[] tail = new HypNode[] { lemmaNode, frameNode };
-            HypEdge e = new HypEdge(frameTriage2, null, tail);
-            w.write(e.getRelFileString("schema"));
+          String l = "schema frameTriage " + lemma + " " + pos + " " + wnss + " " + frame;
+          if (seen.add(l)) {
+            w.write(l);
             w.newLine();
           }
         }
@@ -94,7 +91,7 @@ public class SrlSchemaToRelations {
 
   public static void buildRoleRelation(FrameIndex fi, File to) throws IOException {
     NodeType frameNT = new NodeType("frame");
-    NodeType roleNT = new NodeType("roleLabel");
+    NodeType roleNT = new NodeType("role");
     Relation role = new Relation("role", frameNT, roleNT);
     Log.info("writing " + role + " to " + to.getPath());
     try (BufferedWriter w = FileUtil.getWriter(to)) {
@@ -126,16 +123,16 @@ public class SrlSchemaToRelations {
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
     boolean pb = config.getBoolean("propbank");
-    Log.info("propbank=" + pb);
 
     boolean overwrite = config.getBoolean("overwrite", false);
     File outdir = config.getOrMakeDir("outdir");
+    Log.info("propbank=" + pb + " outdir=" + outdir);
 
-    File frameTriage = new File(outdir, "frameTriage2.rel");
+    File frameTriage = new File(outdir, "frameTriage.rel.gz");
     if (frameTriage.isFile() && !overwrite)
       throw new RuntimeException("output exists and overwrite=false, " + frameTriage.getPath());
 
-    File role = new File(outdir, "role2.rel.gz");
+    File role = new File(outdir, "role.rel.gz");
     if (role.isFile() && !overwrite)
       throw new RuntimeException("output exists and overwrite=false, " + role.getPath());
 

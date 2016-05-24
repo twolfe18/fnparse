@@ -6,27 +6,26 @@ package edu.jhu.hlt.uberts.features;
  */
 public class Weight<T> {
 
-//  private int nUpdates = 0;     // NOT the same as c, c is stored at the top level
-//  private double theta = 0;     // w
-//  private double thetaAvg = 0;  // u
-//  private final T item;
-  private float theta = 0;
+  private int nUpdates = 0;     // NOT the same as c, c is stored at the top level
+  private double theta = 0;     // w
+  private double thetaAvg = 0;  // u
+  private final T item;
 
   public Weight(T item) {
-//    this.item = item;
-//    this.nUpdates = 0;
-//    this.theta = 0;
+    this.item = item;
+    this.nUpdates = 0;
+    this.theta = 0;
   }
 
   public void increment(double amount) {
     theta += amount;
-//    nUpdates++;
+    nUpdates++;
   }
 
   public void incrementWithAvg(double amount, int numInstances) {
     theta += amount;
-//    thetaAvg += numInstances * amount;
-//    nUpdates++;
+    thetaAvg += numInstances * amount;
+    nUpdates++;
   }
 
   public double getWeight() {
@@ -34,13 +33,11 @@ public class Weight<T> {
   }
 
   public double getAvgWeight(int numInstances) {
-//    return theta - thetaAvg / numInstances;
-    return theta;
+    return theta - thetaAvg / numInstances;
   }
 
   @Override
   public String toString() {
-//    return String.format("(%s %+.2f n=%d)", item.toString(), theta, nUpdates);
-    return "";
+    return String.format("(%s %+.2f n=%d)", item.toString(), theta, nUpdates);
   }
 }

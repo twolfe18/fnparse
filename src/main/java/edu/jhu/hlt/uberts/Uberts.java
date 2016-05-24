@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
+import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
@@ -62,7 +63,7 @@ public class Uberts {
   // Never call `new NodeType` outside of Uberts, use lookupNodeType
   private Map<String, NodeType> nodeTypes;
 
-  public boolean showOracleTrajDiagnostics = false;
+  public boolean showTrajDiagnostics = false;
 
   // Ancillary data for features which don't look at the State graph.
   // New data backend (used to be fnparse.Sentence and FNParse)
@@ -156,7 +157,7 @@ public class Uberts {
    * be added to state (others are just popped off the agenda and discarded).
    */
   public Pair<Labels.Perf, List<Step>> dbgRunInference(boolean oracle, double minScore, int actionLimit) {
-    if (COARSE_EVENT_LOGGING)
+    if (DEBUG || COARSE_EVENT_LOGGING)
       Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
     Labels.Perf perf = goldEdges.new Perf();
     List<Step> steps = new ArrayList<>();
@@ -164,14 +165,18 @@ public class Uberts {
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge best = p.get1();
       boolean y = getLabel(best);
-      if (!y && oracle)
+      if (DEBUG)
+        System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
+      if (oracle && !y)
         continue;
-      if (p.get2().forwards() < minScore)
-        break;
-      perf.add(best);
-      steps.add(new Step(p, y));
-      addEdgeToState(best);
+      if (p.get2().forwards() >= minScore || (oracle && y)) {
+        perf.add(best);
+        steps.add(new Step(p, y));
+        addEdgeToState(best);
+      }
     }
+    if (showTrajDiagnostics)
+      showTrajPerf(steps, perf);
     return new Pair<>(perf, steps);
   }
   public Pair<Labels.Perf, List<Step>> dbgRunInference() {
@@ -283,7 +288,6 @@ public class Uberts {
     timer.start(REC_ORACLE_TRAJ);
 
     Set<HashableHypEdge> uniqEdges = new HashSet<>();
-    int dedupd = 0;
 
     Labels.Perf perf = goldEdges.new Perf();
     List<Step> traj = new ArrayList<>();
@@ -295,22 +299,28 @@ public class Uberts {
         System.out.println("[recOrcl] gold=" + gold + " " + edge);
       traj.add(new Step(edge, p.get2(), gold));
       if (gold) {
-        if (dedupEdges && !uniqEdges.add(new HashableHypEdge(edge)))
-          dedupd++;
-        else
+        if (!dedupEdges || uniqEdges.add(new HashableHypEdge(edge)))
           addEdgeToState(edge);
       }
     }
 
-    if (showOracleTrajDiagnostics) {
-      Log.info("traj.size=" + traj.size() + " dedupd=" + dedupd);
-      Map<String, Double> recall = perf.recallByRel();
-      for (String relName : goldEdges.getLabeledRelationNames()) {
-        Log.info("relation=" + relName
-            + " oracleRecall=" + recall.get(relName)
-            + " n=" + goldEdges.getRelCount(relName));
-        for (HypEdge fn : perf.getFalseNegatives(relName)) {
-          System.out.println("\tfn: " + fn);
+    if (showTrajDiagnostics)
+      showTrajPerf(traj, perf);
+
+    timer.stop(REC_ORACLE_TRAJ);
+    return traj;
+  }
+
+  private void showTrajPerf(List<Step> traj, Labels.Perf perf) {
+    Log.info("traj.size=" + traj.size());
+//    Map<String, Double> recall = perf.recallByRel();
+    Map<String, FPR> pbr = perf.perfByRel();
+    for (String relName : goldEdges.getLabeledRelationNames()) {
+      Log.info("relation=" + relName
+          + " perf=" + pbr.get(relName)
+          + " n=" + goldEdges.getRelCount(relName));
+      for (HypEdge fn : perf.getFalseNegatives(relName)) {
+        System.out.println("\tfn: " + fn);
 //          if ("srl1".equals(fn.getRelation().getName())) {
 //            int i = Integer.parseInt((String) fn.getTail(0).getValue());
 //            int j = Integer.parseInt((String) fn.getTail(1).getValue());
@@ -318,12 +328,8 @@ public class Uberts {
 //          } else {
 //            System.out.println("\tfn: " + fn);
 //          }
-        }
       }
     }
-
-    timer.stop(REC_ORACLE_TRAJ);
-    return traj;
   }
 
   /**
@@ -555,7 +561,7 @@ public class Uberts {
   }
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
     if (DEBUG || COARSE_EVENT_LOGGING)
-      System.out.println("Uberts addEdgeToAgenda: " + e.toString());
+      System.out.println("Uberts addEdgeToAgenda: " + e.toString() + " " + score);
     assert nodesContains(e);
     agenda.add(e, score);
   }
