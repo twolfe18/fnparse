@@ -51,12 +51,6 @@ import edu.mit.jwi.item.IWord;
  */
 public class FNParseToRelations {
 
-  // If true, will convert things like srl3 instances to [srl1, srl2, srl3] instances
-  public boolean outputDerivedLabels = false;
-
-  // For new Hobbs models, only write out srl4 and not event*
-  public boolean srl4Mode = true;
-
   // If true, run DeterministicRolePruning.XUE_PALMER
   // It treats all width-1 spans as possible targets, plus all gold targets,
   // which it marks with a "# gold" comment (if it wasn't already included b/c
@@ -71,6 +65,10 @@ public class FNParseToRelations {
   public boolean csyn6Mode = true;
 
   public boolean includeEvent2 = false;
+
+  // If true, replace all <tokenIndex> <tokenIndex> pairs which represent spans
+  // with a single <span>
+  public boolean spansInsteadOfTokens = true;
 
   public static String norm(String x) {
     x = x.trim();
@@ -168,7 +166,11 @@ public class FNParseToRelations {
       Log.warn("skipping cons since they're not present: " + name);
       return;
     }
-    String tn = "csyn3-" + name;
+    String tn;
+    if (spansInsteadOfTokens)
+      tn = "csyn2-" + name;
+    else
+      tn = "csyn3-" + name;
     Set<HPair<Span, String>> uniq = new HashSet<>();
     for (Node n : cons.getAllConstituents()) {
       if (n.isLeaf() && skipLeaf) {
@@ -186,7 +188,10 @@ public class FNParseToRelations {
         // grep -n 'x csyn3-gold 12 16 NP' -m 3 <file>
         // 5035:x csyn3-gold 12 16 NP
         // 5036:x csyn3-gold 12 16 NP
-        write(w, "x", tn, s.start, s.end, t);
+        if (spansInsteadOfTokens)
+          write(w, "x", tn, s.shortString(), t);
+        else
+          write(w, "x", tn, s.start, s.end, t);
       }
     }
   }
@@ -196,7 +201,11 @@ public class FNParseToRelations {
       Log.warn("skipping cons since they're not present: " + name);
       return;
     }
-    String tn = "csyn6-" + name;
+    String tn;
+    if (spansInsteadOfTokens)
+      tn = "csyn5-" + name;
+    else
+      tn = "csyn6-" + name;
     boolean toposort = true;
     List<Node> nodes = cons.getAllConstituents(toposort);
 
@@ -224,8 +233,12 @@ public class FNParseToRelations {
       int h = n.getHeadToken();
       int p = n.getParent() == null ? -1 : n.getParent().id;
       String t = n.getTag();
-      if (uniq.add(new HashableIntArray(n.id, p, h, s.start, s.end, t.hashCode())))
-        write(w, "x", tn, n.id, p, h, s.start, s.end, t);
+      if (uniq.add(new HashableIntArray(n.id, p, h, s.start, s.end, t.hashCode()))) {
+        if (spansInsteadOfTokens)
+          write(w, "x", tn, n.id, p, h, s.shortString(), t);
+        else
+          write(w, "x", tn, n.id, p, h, s.start, s.end, t);
+      }
     }
   }
 
@@ -247,32 +260,33 @@ public class FNParseToRelations {
     }
     for (String t : Arrays.asList("stanford", "gold")) {
       if (csyn6Mode) {
-        w.write("def csyn6-" + t + " <csyn6id> <csyn6id> <tokenIndex> <tokenIndex> <tokenIndex> <cfgLabel> # id, parent id, head token, start token (inclusive), end token (exclusive), cfg label");
+        if (spansInsteadOfTokens)
+          w.write("def csyn5-" + t + " <csyn5id> <csyn5id> <tokenIndex> <span> <phrase> # id, parent id, head token, span (inclusive-exclusive), phrase label");
+        else
+          w.write("def csyn6-" + t + " <csyn6id> <csyn6id> <tokenIndex> <tokenIndex> <tokenIndex> <phrase> # id, parent id, head token, start token (inclusive), end token (exclusive), phrase label");
         w.newLine();
       } else {
-        w.write("def csyn3-" + t + " <tokenIndex> <tokenIndex> <cfgLabel> # start token (inclusive), end token (exclusive), cfg label");
+        if (spansInsteadOfTokens)
+          w.write("def csyn2-" + t + " <span> <phrase> # span (inclusive-exclusive), phrase label");
+        else
+          w.write("def csyn3-" + t + " <tokenIndex> <tokenIndex> <phrase> # start token (inclusive), end token (exclusive), phrase label");
         w.newLine();
       }
     }
-    if (srl4Mode) {
-      w.write("def srl4 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <roleLabel> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
+    if (spansInsteadOfTokens) {
+      w.write("def predicate2 <span> <frame>");
+      w.newLine();
+      w.write("def argument4 <span> <frame> <span> <role>");
       w.newLine();
     } else {
-      if (outputDerivedLabels) {
-        w.write("def event1 <tokenIndex> <tokenIndex> # start token (inclusive), end token (exclusive)");
-        w.newLine();
-        w.write("def event2 <tokenIndex> <tokenIndex> <frame> # start token (inclusive), end token (exclusive), frame");
-        w.newLine();
-        w.write("def srl1 <tokenIndex> <tokenIndex> # arg start tok (inc), arg end tok (exc)");
-        w.newLine();
-        w.write("def srl2 <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # pred start tok (inc), pred end tok (exc), arg start tok (inc), arg end tok (exc)");
-        w.newLine();
-      }
-      w.write("def srl3 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <roleLabel> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
+      w.write("def srl4 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <role> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
       w.newLine();
     }
     if (outputArgPruning) {
-      w.write("def xue-palmer-args <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # ts, te, ss, se");
+      if (spansInsteadOfTokens)
+        w.write("def xue-palmer-args2 <span> <span>");
+      else
+        w.write("def xue-palmer-args4 <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # ts, te, ss, se");
       w.newLine();
     }
   }
@@ -302,8 +316,10 @@ public class FNParseToRelations {
       Span s = ts.get2();
       if (t == Span.nullSpan || s == Span.nullSpan)
         continue;
-//      write(w, "x", "xue-palmer-args", t.start, t.end, s.start, s.end);
-      w.write("x xue-palmer-args " + t.start + " " + t.end + " " + s.start + " " + s.end);
+      if (spansInsteadOfTokens)
+        w.write("x xue-palmer-args2 " + t.shortString() + " " + s.shortString());
+      else
+        w.write("x xue-palmer-args4 " + t.start + " " + t.end + " " + s.start + " " + s.end);
       if (gold.contains(t))
         w.write(" # gold");
       w.newLine();
@@ -327,60 +343,38 @@ public class FNParseToRelations {
       Span t = fi.getTarget();
       Frame f = fi.getFrame();
       String fs = f.getName();
-      if (!srl4Mode)
-        write(t, fs, w);
-      int nz = 0;
+      write(t, fs, w);
       int K = f.numRoles();
       for (int k = 0; k < K; k++) {
         Span s = fi.getArgument(k);
         if (s == Span.nullSpan)
           continue;
-        nz++;
-        String ks = srl4Mode ? f.getRole(k) : f.getFrameRole(k);
+        String ks = f.getRole(k);
         write(t, fs, s, ks, w);
         for (Span cs : fi.getContinuationRoleSpans(k))
           write(t, fs, cs, ks + "/C", w);
         for (Span rs : fi.getReferenceRoleSpans(k))
           write(t, fs, rs, ks + "/R", w);
       }
-      if (nz == 0 && srl4Mode)
-        write(t, fs, w);
     }
   }
 
   private void write(Span t, String f, BufferedWriter w) throws IOException {
-//    String ts = t.start + ")" + t.end;
-    String ts = t.start + " " + t.end;
-    if (outputDerivedLabels) {
-      w.write("y event1 " + ts);
+    if (spansInsteadOfTokens) {
+      w.write("y predicate2 " + t.shortString() + " " + f);
       w.newLine();
+    } else {
+      String ts = t.start + " " + t.end;
       w.write("y event2 " + ts + " " + f);
       w.newLine();
     }
   }
 
   private void write(Span t, String f, Span s, String k, BufferedWriter w) throws IOException {
-//    String ts = t.start + ")" + t.end;
-//    String ss = s.start + ")" + s.end;
-//    String ts = t.start + " " + t.end;
-//    String ss = s.start + " " + s.end;
-    if (srl4Mode) {
+    if (spansInsteadOfTokens)
+      write(w, "y", "argument4", t.shortString(), f, s.shortString(), k);
+    else
       write(w, "y", "srl4", t.start, t.end, f, s.start, s.end, k);
-//      w.write("y srl4 " + ts + " " + f + " " + ss + " " + k);
-//      w.newLine();
-    } else {
-      if (outputDerivedLabels) {
-        write(w, "y", "srl1", s.start, s.end);
-        write(w, "y", "srl2", t.start, t.end, s.start, s.end);
-//        w.write("y srl1 " + ss);
-//        w.newLine();
-//        w.write("y srl2 " + ts + " " + ss);
-//        w.newLine();
-      }
-//      w.write("y srl3 " + ts + " " + f + " " + ss + " " + k);
-//      w.newLine();
-      write(w, "y", "srl3", t.start, t.end, f, s.start, s.end, k);
-    }
   }
 
   /**

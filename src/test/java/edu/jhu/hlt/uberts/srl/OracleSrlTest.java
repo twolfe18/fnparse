@@ -27,15 +27,23 @@ public class OracleSrlTest {
   Uberts u = new Uberts(new Random(9001));
 
   public void foo() throws IOException {
-    File p = new File("data/srl-reldata/trump-pizza");
-    File grammarFile = new File(p, "grammar.trans");
-    List<File> schemaFiles = Arrays.asList(
-        new File(p, "span-relations.def"),
-        new File(p, "schema-framenet.def"));
-    File relationDefs = new File(p, "relations.def");
 
-    // This does setup like reading in grammar and doing type inference.
-    File multiRels = new File(p, "trump-pizza-fork.backwards.xy.rel.multi");
+//    File p = new File("data/srl-reldata/trump-pizza");
+//    File grammarFile = new File(p, "grammar.trans");
+//    List<File> schemaFiles = Arrays.asList(
+//        new File(p, "span-relations.def"),
+//        new File(p, "schema-framenet.def"));
+//    File relationDefs = new File(p, "relations.def");
+//    File multiRels = new File(p, "trump-pizza-fork.backwards.xy.rel.multi");
+
+    File p = new File("data/srl-reldata/propbank");
+    File grammarFile = new File("data/srl-reldata/grammar/srl-grammar-current.trans");
+    List<File> schemaFiles = Arrays.asList(
+        new File("data/srl-reldata/util/span-250.def"),
+        new File(p, "frameTriage.rel.gz"),
+        new File(p, "role.rel.gz"));
+    File relationDefs = new File(p, "relations.def");
+    File multiRels = new File(p, "debug.facts");
 
     UbertsOraclePipeline pipe = new UbertsOraclePipeline(u, grammarFile, schemaFiles, relationDefs);
 

@@ -41,7 +41,6 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
-import edu.jhu.hlt.uberts.features.Weight;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
@@ -219,12 +218,12 @@ public abstract class UbertsPipeline {
 
     System.out.println("traj.size=" + pt.get2().size() + " actionLimit=" + actionLimit);
 
-    // Weights
-    for (TG tg : dbgTransitionGenerators) {
-      FeatureExtractionFactor.Oracle fe = (FeatureExtractionFactor.Oracle) tg.feats;
-      for (Pair<Relation, Weight<String>> p : fe.getWeights())
-        System.out.println(p.get1() + "\t" + p.get2() + "\t" + tg.getRule());
-    }
+//    // Weights
+//    for (TG tg : dbgTransitionGenerators) {
+//      FeatureExtractionFactor.Oracle fe = (FeatureExtractionFactor.Oracle) tg.feats;
+//      for (Pair<Relation, Weight<String>> p : fe.getWeights())
+//        System.out.println(p.get1() + "\t" + p.get2() + "\t" + tg.getRule());
+//    }
 
     // False negatives
     int Nfn = 0;

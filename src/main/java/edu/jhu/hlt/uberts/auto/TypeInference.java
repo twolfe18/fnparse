@@ -162,7 +162,7 @@ public class TypeInference {
     int na = t.argNames.length;
     Integer na2 = rel2NumArgs.get(t.relName);
     if (na2 != null) {
-      assert na2 == na;
+      assert na2 == na : t.relName + " used to have " + na2 + " args, now has " + na;
     } else {
       // First time seeing this argument
       rel2NumArgs.put(t.relName, na);
