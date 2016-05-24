@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -36,6 +35,7 @@ import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Step;
+import edu.jhu.hlt.uberts.TNode;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
@@ -67,6 +67,8 @@ public abstract class UbertsPipeline {
   protected Relation startDocRel;
   protected Relation doneAnnoRel;
 
+  protected Set<String> dontBackwardsGenerate;
+
   public boolean debug = false;
   public MultiTimer timer;
 
@@ -88,6 +90,9 @@ public abstract class UbertsPipeline {
     timer.put("adHocSrlClassificationByRole.prediction", new Timer("adHocSrlClassificationByRole.prediction", 30, true));
     timer.put("adHocSrlClassificationByRole.update", new Timer("adHocSrlClassificationByRole.update", 30, true));
 
+    dontBackwardsGenerate = new HashSet<>();
+    dontBackwardsGenerate.add("succTok");
+
     rules = new ArrayList<>();
     helperRelations = new ArrayList<>();
 
@@ -108,6 +113,8 @@ public abstract class UbertsPipeline {
       List<Relation> schemaRelations = u.readRelData(f);
       Log.info("read " + schemaRelations.size() + " schema relations from " + f.getPath());
       helperRelations.addAll(schemaRelations);
+      for (Relation r : schemaRelations)
+        dontBackwardsGenerate.add(r.getName());
     }
 
     Log.info("running type inference...");
@@ -154,7 +161,8 @@ public abstract class UbertsPipeline {
 
       tg.get2().feats = phi;
       dbgTransitionGenerators.add(tg.get2());
-      u.addTransitionGenerator(tg.get1(), tg.get2());
+      TNode tnode = u.addTransitionGenerator(tg.get1(), tg.get2());
+      tnode.getValue().r = rr;
     }
   }
   private List<TG> dbgTransitionGenerators = new ArrayList<>();
@@ -182,7 +190,7 @@ public abstract class UbertsPipeline {
 
 
   public void evaluate(ManyDocRelationFileIterator instances) {
-    Iter itr = new Iter(instances, typeInf, Arrays.asList("succTok"));
+    Iter itr = new Iter(instances, typeInf, dontBackwardsGenerate);
     while (itr.hasNext()) {
       RelDoc doc = itr.next();
       evaluate(doc);
@@ -391,7 +399,7 @@ public abstract class UbertsPipeline {
     int docs = 0;
     int skippedDocs = 0;
     int maxInstances = config.getInt("maxInstances", 0);
-    Iter itr = new Iter(x, typeInf, Arrays.asList("succTok"));
+    Iter itr = new Iter(x, typeInf, dontBackwardsGenerate);
     while (itr.hasNext()) {
       RelDoc doc = itr.next();
       if (dataShard != null && !dataShard.matches(doc.getId())) {

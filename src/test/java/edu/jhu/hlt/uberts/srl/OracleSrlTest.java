@@ -8,7 +8,6 @@ import java.util.Random;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.uberts.Labels;
-import edu.jhu.hlt.uberts.TNode;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.UbertsOraclePipeline;
 import edu.jhu.hlt.uberts.auto.UbertsPipeline;
@@ -31,7 +30,9 @@ public class OracleSrlTest {
   public void foo() throws IOException {
     File p = new File("data/srl-reldata/trump-pizza");
     File grammarFile = new File(p, "grammar.trans");
-    List<File> schemaFiles = Arrays.asList(new File(p, "schema.facts"));
+    List<File> schemaFiles = Arrays.asList(
+        new File(p, "span-relations.def"),
+        new File(p, "schema-framenet.def"));
     File relationDefs = new File(p, "relations.def");
 
     // This does setup like reading in grammar and doing type inference.
@@ -39,8 +40,8 @@ public class OracleSrlTest {
 
     UbertsOraclePipeline pipe = new UbertsOraclePipeline(u, grammarFile, schemaFiles, relationDefs);
 
-    TNode.DEBUG = true;
-    Uberts.COARSE_EVENT_LOGGING = true;
+//    TNode.DEBUG = true;
+//    Uberts.COARSE_EVENT_LOGGING = true;
     u.showOracleTrajDiagnostics = true;
 
     try (RelationFileIterator rels = new RelationFileIterator(multiRels, false);

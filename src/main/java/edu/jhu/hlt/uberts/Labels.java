@@ -70,9 +70,9 @@ public class Labels {
   }
 
   /**
-   * all the relation names which were observed as gold/label data.
+   * All the relation names which have gold/label facts.
    */
-  public List<String> getObservedRelationNames() {
+  public List<String> getLabeledRelationNames() {
     List<String> r = new ArrayList<>();
     r.addAll(edges2.keySet());
     Collections.sort(r);

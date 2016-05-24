@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.LL;
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.auto.Rule;
@@ -189,12 +188,12 @@ public class TNode {
   /**
    * Represents what to do once you match a graph fragment.
    */
-  static class TVal {
+  public static class TVal {
     // Each may be null
-    TransitionGenerator tg;
-    GlobalFactor gf;
-    Uberts u;
-    Rule r;
+    public TransitionGenerator tg;
+    public GlobalFactor gf;
+    public Uberts u;
+    public Rule r;
   }
 
   private TKey key;

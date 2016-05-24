@@ -4,7 +4,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -273,6 +272,12 @@ public class TransitionGeneratorBackwardsParser {
     if (DEBUG)
       Log.info("defined: " + u.getAllEdgeTypes());
 
+    Set<String> ignore = new HashSet<>();
+    ignore.add("succTok");
+    for (String ig : config.getString("ignore", "").split(","))
+      ignore.add(ig);
+    Log.info("ignoring: " + ignore);
+
     File multiRefVals = config.getExistingFile("instances");
     boolean includeProvidence = true;
     boolean dedupInputLines = true;
@@ -281,7 +286,6 @@ public class TransitionGeneratorBackwardsParser {
         ManyDocRelationFileIterator m = new ManyDocRelationFileIterator(itr, dedupInputLines);
         BufferedWriter w = FileUtil.getWriter(outfile)) {
       List<Rule> untypedRules = Rule.parseRules(grammarFile, null);
-      Collection<String> ignore = Arrays.asList("succTok");
       Iter expanded = new Iter(m, u, untypedRules, ignore);
       while (expanded.hasNext()) {
         RelDoc d = expanded.next();

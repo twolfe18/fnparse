@@ -31,6 +31,7 @@ public class UbertsOraclePipeline extends UbertsPipeline {
   public void consume(RelDoc doc) {
     boolean dedupEdges = false;
     List<Step> traj = u.recordOracleTrajectory(dedupEdges);
+    Log.info("non-schema (hidden and observed) relations: " + u.getLabels().getLabeledRelationNames());
     Log.info("oracle traj size: " + traj.size());
     for (Step s : traj) {
       System.out.println(s);

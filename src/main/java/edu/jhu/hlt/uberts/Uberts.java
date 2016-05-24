@@ -92,6 +92,8 @@ public class Uberts {
     return goldEdges;
   }
   public void addLabel(HypEdge e) {
+    if (DEBUG || COARSE_EVENT_LOGGING)
+      System.out.println("Uberts addLabel: " + e);
     if (goldEdges == null)
       goldEdges = new Labels();
     goldEdges.add(e);;
@@ -303,7 +305,7 @@ public class Uberts {
     if (showOracleTrajDiagnostics) {
       Log.info("traj.size=" + traj.size() + " dedupd=" + dedupd);
       Map<String, Double> recall = perf.recallByRel();
-      for (String relName : goldEdges.getObservedRelationNames()) {
+      for (String relName : goldEdges.getLabeledRelationNames()) {
         Log.info("relation=" + relName
             + " oracleRecall=" + recall.get(relName)
             + " n=" + goldEdges.getRelCount(relName));
@@ -552,8 +554,8 @@ public class Uberts {
     addEdgeToAgenda(p.get1(), p.get2());
   }
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
-    if (COARSE_EVENT_LOGGING)
-      Log.info(e);
+    if (DEBUG || COARSE_EVENT_LOGGING)
+      System.out.println("Uberts addEdgeToAgenda: " + e.toString());
     assert nodesContains(e);
     agenda.add(e, score);
   }

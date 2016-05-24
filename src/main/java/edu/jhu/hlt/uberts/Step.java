@@ -17,4 +17,9 @@ public class Step {
     this.score = score;
     this.gold = gold;
   }
+
+  @Override
+  public String toString() {
+    return "(Step " + edge + " score=" + score + " gold=" + gold + ")";
+  }
 }
