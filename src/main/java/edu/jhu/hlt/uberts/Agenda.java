@@ -6,6 +6,7 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,6 +18,9 @@ import edu.jhu.prim.tuple.Pair;
 public class Agenda {
   public static boolean DEBUG = false;
 
+  // Measured about 1.5x slow-down (on pure add-remove benchmark) when this is enabled.
+  public static final boolean FINE_VIEW = true;
+
   // ei == "edge index" in the heap
   // e == "edge"
   private HypEdge[] heap1;              // ei2e
@@ -25,9 +29,8 @@ public class Agenda {
   private Map<HypNode, BitSet> n2ei;    // node adjacency matrix, may contain old nodes as keys
   private Map<HypEdge, Integer> e2i;    // location of edges in heap
 
-  // TODO Can play around with more indices which may make things like AtMost1
-  // faster (can also look up by relation), but may make swap and everything else
-  // slower.
+  // Other indices
+  private Map<State.ArgVal, LinkedHashSet<HypEdge>> fineView;
 
   public Agenda() {
     this.top = 0;
@@ -36,6 +39,7 @@ public class Agenda {
     this.heap2 = new Adjoints[initSize];
     this.n2ei = new HashMap<>();
     this.e2i = new HashMap<>();
+    this.fineView = new HashMap<>();
   }
 
   public void clear() {
@@ -45,6 +49,7 @@ public class Agenda {
     this.heap2 = new Adjoints[initSize];
     this.n2ei = new HashMap<>();
     this.e2i = new HashMap<>();
+    this.fineView = new HashMap<>();
   }
 
   public List<HypEdge> getContentsInNoParticularOrder() {
@@ -70,11 +75,11 @@ public class Agenda {
       n2ei.remove(n);
   }
   /** Don't use this, its slow */
-  public Set<HypNode> nodeSet1() {
+  public Set<HypNode> dbgNodeSet1() {
     cleanN2Ei();
     return n2ei.keySet();
   }
-  public Set<HypNode> nodeSet2() {
+  public Set<HypNode> dbgNodeSet2() {
     Set<HypNode> s = new HashSet<>();
     for (int i = 0; i < top; i++) {
       HypEdge e = heap1[i];
@@ -82,6 +87,15 @@ public class Agenda {
         s.add(n);
     }
     return s;
+  }
+
+  /**
+   * Return all edges on the agenda which have type rel and have argPos matching
+   * equal to arg.
+   */
+  public Iterable<HypEdge> match(int argPos, Relation rel, HypNode arg) {
+    Iterable<HypEdge> r = fineView.get(new State.ArgVal(argPos, rel, arg));
+    return r == null ? Collections.emptyList() : r;
   }
 
   public List<HypEdge> adjacent(HypNode n) {
@@ -182,6 +196,7 @@ public class Agenda {
     int t = top++;
     if (t == heap1.length)
       grow();
+    addEdgeToFineView(edge);
     heap1[t] = edge;
     heap2[t] = score;
     e2i.put(edge, t);
@@ -309,6 +324,7 @@ public class Agenda {
       free(from);
       return;
     }
+    removeEdgeFromFineView(heap1[to]);
     n2eiSet(to, heap1[to], false);
     n2eiSet(to, heap1[from], true);
     n2eiSet(from, heap1[from], false);
@@ -319,11 +335,55 @@ public class Agenda {
     heap2[to] = heap2[from];
     heap2[from] = null;
   }
+
   private void free(int i) {
+    removeEdgeFromFineView(heap1[i]);
     n2eiSet(i, heap1[i], false);
     e2i.remove(heap1[i]);
     heap1[i] = null;
     heap2[i] = null;
+  }
+
+  private void addEdgeToFineView(HypEdge e) {
+    if (!FINE_VIEW) return;
+    boolean r;
+    Relation rel = e.getRelation();
+    int n = rel.getNumArgs();
+    for (int j = 0; j < n; j++) {
+      HypNode arg = e.getTail(j);
+      State.ArgVal a = new State.ArgVal(j, rel, arg);
+      LinkedHashSet<HypEdge> s = fineView.get(a);
+      if (s == null) {
+        s = new LinkedHashSet<>();
+        fineView.put(a, s);
+      }
+      r = s.add(e);
+      assert r;
+    }
+    State.ArgVal a = new State.ArgVal(State.HEAD_ARG_POS, rel, e.getHead());
+    LinkedHashSet<HypEdge> s = fineView.get(a);
+    if (s == null) {
+      s = new LinkedHashSet<>();
+      fineView.put(a, s);
+    }
+    r = s.add(e);
+    assert r;
+  }
+
+  private void removeEdgeFromFineView(HypEdge e) {
+    if (!FINE_VIEW) return;
+    boolean r;
+    Relation rel = e.getRelation();
+    int n = rel.getNumArgs();
+    for (int j = 0; j < n; j++) {
+      HypNode arg = e.getTail(j);
+      State.ArgVal a = new State.ArgVal(j, rel, arg);
+      r = fineView.get(a).remove(e);
+      assert r;
+    }
+    State.ArgVal a = new State.ArgVal(State.HEAD_ARG_POS, rel, e.getHead());
+    r = fineView.get(a).remove(e);
+    assert r;
   }
 
   /**

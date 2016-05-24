@@ -41,18 +41,47 @@ public class AgendaTests {
         return 0;
       }
     };
+
+    // Non-indexed way to store what the agenda represents
     List<Pair<HypEdge, Adjoints>> list = new ArrayList<>();
+
+    /**
+     * Return all edges on the agenda which have type rel and have argPos matching
+     * equal to arg.
+     */
+    public Iterable<HypEdge> match(int argPos, Relation rel, HypNode arg) {
+      List<HypEdge> l = new ArrayList<>();
+      for (Pair<HypEdge, Adjoints> p : list) {
+        HypEdge e = p.get1();
+        if (e.getRelation() == rel && e.getTail(argPos) == arg)
+          l.add(e);
+      }
+      return l;
+    }
+
     public HypEdge peek() { return list.get(0).get1(); }
+
     public Adjoints peekScore() { return list.get(0).get2(); }
+
     public Pair<HypEdge, Adjoints> peekBoth() { return list.get(0); }
+
+    @SuppressWarnings("unused")
     public HypEdge pop() { return list.remove(0).get1(); }
-    public Pair<HypEdge, Adjoints> popBoth() { return list.remove(0); }
+
+    public Pair<HypEdge, Adjoints> popBoth() {
+      return list.remove(0);
+    }
+
     public void add(HypEdge e, Adjoints a) {
       Pair<HypEdge, Adjoints> p = new Pair<>(e, a);
       list.add(p);
       Collections.sort(list, C);
     }
-    public int size() { return list.size(); }
+
+    public int size() {
+      return list.size();
+    }
+
     public void dbgShowScores() {
       for (int i = 0; i < size(); i++) {
         Pair<HypEdge, Adjoints> e = list.get(i);
@@ -165,6 +194,8 @@ public class AgendaTests {
     boolean verbose = false;
     int maxK = 25;
     int numChecks = 2000;
+//    int maxK = 15;
+//    int numChecks = 200;
     for (int K = 1; K < maxK; K++) {
       for (boolean deterministic : Arrays.asList(true, false)) {
         Log.info("K=" + K + " deterministic=" + deterministic);
@@ -175,11 +206,12 @@ public class AgendaTests {
 
           NodeType col = new NodeType("col"); // lets say its domain is [K]
           Relation r = new Relation("test", col);
+          NodeType rNT = new NodeType("witness-" + r.getName());
           DumbAgenda comp = new DumbAgenda();
           Agenda agenda = new Agenda();
           for (int i = 0; i < K; i++) {
-            HypNode head = null;
             HypNode[] tail = new HypNode[] { new HypNode(col, i) };
+            HypNode head = new HypNode(rNT, r.encodeTail(tail));
             HypEdge e = new HypEdge(r, head, tail);
             //          Adjoints a = deterministic ? deterministicScore() : randScore();
             Adjoints a = scores.getScore(i);
@@ -237,11 +269,16 @@ public class AgendaTests {
   }
 
   public void test1Helper(int K) {
+    Uberts u = new Uberts(rand);
+
     Agenda agenda = new Agenda();
     DumbAgenda dumb = new DumbAgenda();
 
-    NodeType col = new NodeType("col"); // lets say its domain is [K]
-    Relation r = new Relation("test", col);
+    NodeType col1 = u.lookupNodeType("col1", true);
+    Relation rel1 = u.addEdgeType(new Relation("rel1", col1));
+
+    NodeType col2 = u.lookupNodeType("col2", true);
+    Relation rel2 = u.addEdgeType(new Relation("rel2", col1, col2));
 
     boolean deterministic = true;
     Scores scores = new Scores(K, deterministic, rand);
@@ -250,23 +287,62 @@ public class AgendaTests {
     boolean verbose = false;
 
     for (int i = 0; i < K; i++) {
-      HypNode head = null;
-      HypNode[] tail = new HypNode[] { new HypNode(col, i) };
-      HypEdge e = new HypEdge(r, head, tail);
-      Adjoints a = scores.getScore(i);
+      // Add rel1 fact
+      HypNode[] tail1 = new HypNode[] { new HypNode(col1, i) };
+      HypEdge e1 = u.makeEdge(rel1, tail1);
+      Adjoints a1 = scores.getScore(i);
       if (verbose)
-        Log.info("about to add " + e);
+        Log.info("about to add " + e1);
+      agenda.add(e1, a1);
+      dumb.add(e1, a1);
 
-      agenda.add(e, a);
-      dumb.add(e, a);
+      // Add rel2 fact
+      HypNode[] tail2 = new HypNode[] {
+          tail1[0],
+          u.lookupNode(col2, "val-" + rand.nextInt(10), true),
+      };
+      HypEdge e2 = u.makeEdge(rel2, tail2);
+      Adjoints a2 = Adjoints.sum(a1, new Adjoints.Constant(rand.nextGaussian()));
+      if (verbose)
+        Log.info("about to add " + e2);
+      agenda.add(e2, a2); 
+      dumb.add(e2, a2); 
 
+      // Equals doesn't work for adjoints, they don't define equals, pair equals fails.
 //      assertEquals(dumb.peekBoth(), agenda.peekBoth());
-//      assertEquals(dumb.nodeSet(), agenda.nodeSet1());
-//      assertEquals(dumb.nodeSet(), agenda.nodeSet2());
+      assertEquals(dumb.nodeSet(), agenda.dbgNodeSet1());
+      assertEquals(dumb.nodeSet(), agenda.dbgNodeSet2());
 
+      // Check adjacency functionality
       n = dumb.randomNode(rand);
-      assertEquals(new HashSet<>(dumb.adjacent(n)), new HashSet<>(agenda.adjacent(n)));
+      Set<HypEdge> a = new HashSet<>(dumb.adjacent(n));
+      Set<HypEdge> b = new HashSet<>(agenda.adjacent(n));
+      if (!a.equals(b)) {
+        Log.warn("wat: n=" + n + " dumb=" + a + " agenda=" + b);
+        a = new HashSet<>(dumb.adjacent(n));
+        b = new HashSet<>(agenda.adjacent(n));
+      }
+      assertEquals(a, b);
 
+
+      // Check the match(argPos,rel,node) functionality
+      a = new HashSet<>();
+      for (HypEdge e : dumb.match(0, rel1, n))
+        a.add(e);
+      b = new HashSet<>();
+      for (HypEdge e : agenda.match(0, rel1, n))
+        b.add(e);
+      assertEquals(a, b);
+      a = new HashSet<>();
+      for (HypEdge e : dumb.match(0, rel2, n))
+        a.add(e);
+      b = new HashSet<>();
+      for (HypEdge e : agenda.match(0, rel2, n))
+        b.add(e);
+      assertEquals(a, b);
+
+
+      // Remove something
       if (rand.nextDouble() < 0.3 && dumb.size() > 1) {
 //        HypNode n = dumb.randomNode(rand);
         HypEdge edge = dumb.randomEdge(rand);
@@ -280,17 +356,26 @@ public class AgendaTests {
         Set<HypNode> dns = dumb.nodeSet();
         if (verbose) {
           Log.info("dumb.nodeSet=" + dns);
-          Log.info("agenda.nodeSet1=" + agenda.nodeSet1());
-          Log.info("agenda.nodeSet2=" + agenda.nodeSet2());
+          Log.info("agenda.nodeSet1=" + agenda.dbgNodeSet1());
+          Log.info("agenda.nodeSet2=" + agenda.dbgNodeSet2());
         }
-        assertEquals(agenda.nodeSet1(), agenda.nodeSet2());
-        assertEquals(dns, agenda.nodeSet1());
-        assertEquals(dns, agenda.nodeSet2());
+        assertEquals(agenda.dbgNodeSet1(), agenda.dbgNodeSet2());
+        assertEquals(dns, agenda.dbgNodeSet1());
+        assertEquals(dns, agenda.dbgNodeSet2());
 
         n = dumb.randomNode(rand);
         assertEquals(new HashSet<>(dumb.adjacent(n)), new HashSet<>(agenda.adjacent(n)));
       }
     }
   }
+
+//  @Test
+//  public void test2() {
+//    Agenda agenda = new Agenda();
+//    DumbAgenda dumb = new DumbAgenda();
+//    
+//    NodeType 
+//    Relation r1 = new Relation("R1", domain)
+//  }
 
 }
