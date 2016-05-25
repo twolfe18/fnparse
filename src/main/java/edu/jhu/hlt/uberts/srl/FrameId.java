@@ -234,7 +234,8 @@ public class FrameId {
     TKey[] newEvent2 = new TKey[] {
 //        new TKey(u.getEdgeType("event2")),  TODO
     };
-    u.addGlobalFactor(newEvent2, new AtMost1.RelNode1(event2, gtt -> {
+    boolean hard = true;
+    u.addGlobalFactor(newEvent2, new AtMost1.RelNode1(event2, hard, gtt -> {
       HypEdge ev2E = gtt.getBoundEdge(0);
       assert ev2E.getRelation() == event2;
       HypNode pred = ev2E.getTail(0);

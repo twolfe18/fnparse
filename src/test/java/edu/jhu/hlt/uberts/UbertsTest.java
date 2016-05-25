@@ -70,8 +70,10 @@ public class UbertsTest {
 //        new TKey(u.getEdgeType("pos")),
 //        new TKey(tokenIndex),
     };
+    boolean hard = true;
     u.addGlobalFactor(newPosLHS, new AtMost1.RelNode1(
         u.getEdgeType("pos"),
+        hard,
         gtt -> gtt.getBoundNode(1)));
     u.addTransitionGenerator(newPosLHS, new TransitionGenerator() {
       @Override

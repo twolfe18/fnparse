@@ -98,11 +98,13 @@ public class NumArgs implements GlobalFactor {
       GlobalFactorAdjoints gs = (GlobalFactorAdjoints) score;
 
       // Get the previous count from the previous Adjoints
-      if (gs.numArgs == null) {
+      Adj numArgs = (Adj) gs.getGlobalScore("numArgs");
+      if (numArgs == null) {
         String refinement = refineArgPos < 0 ? "na" : (String) e.getTail(refineArgPos).getValue();
-        gs.numArgs = this.new Adj(firesFor, refinement);
+        numArgs = this.new Adj(firesFor, refinement);
+        gs.addToGlobalScore("numArgs", numArgs);
       }
-      gs.numArgs.incrementNumCommitted();
+      numArgs.incrementNumCommitted();
       a.add(e, gs);
     }
     if (DEBUG || COARSE_DEBUG) {

@@ -188,7 +188,8 @@ public class SimpleNer {
     });
 
     // ner3(i,*,*) => !ner(j,*,*) for i!=j
-    u.addGlobalFactor(newNerLabel, new AtMost1.RelNode1(ner3, gtt -> {
+    boolean hard = true;
+    u.addGlobalFactor(newNerLabel, new AtMost1.RelNode1(ner3, hard, gtt -> {
         HypEdge e = gtt.getBoundEdge(0);
         assert e.getRelation() == ner3;
         HypNode i = e.getTail(0);

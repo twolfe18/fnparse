@@ -3,7 +3,9 @@ package edu.jhu.hlt.uberts.factor;
 import java.util.List;
 import java.util.function.Function;
 
+import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
@@ -40,12 +42,12 @@ public class AtMost1 {
    * @param mutexArg is the index of the argument describing the scope of mutual
    *        exclusion, e.g. 0 to represent t in predicate2(t,f)
    */
-  public static void add(Uberts u, Relation rel, int mutexArg) {
+  public static void add(Uberts u, Relation rel, int mutexArg, boolean hard) {
     assert mutexArg >= 0 && mutexArg < rel.getNumArgs();
     TKey[] lhs = new TKey[] {
         new TKey(State.HEAD_ARG_POS, rel),
     };
-    GlobalFactor gf = new AtMost1.RelNode1(rel, gtt -> {
+    GlobalFactor gf = new AtMost1.RelNode1(rel, hard, gtt -> {
       HypEdge pred2Fact = gtt.getBoundEdge(0);
       HypNode t = pred2Fact.getTail(mutexArg);
       return t;
@@ -60,9 +62,29 @@ public class AtMost1 {
     // And are adjacent to this node:
     private Function<GraphTraversalTrace, HypNode> getBoundNode;
 
-    public RelNode1(Relation relation, Function<GraphTraversalTrace, HypNode> getBoundNode) {
+    private AveragedPerceptronWeights constraintCost;
+    private String constraintCostName;
+    String getConstraintCostName() {
+      if (constraintCostName == null)
+        constraintCostName = "AtMost1(" + relationMatch.getName() + ")";
+      return constraintCostName;
+    }
+
+    /**
+     * @param relation
+     * @param hard true if you want the HypEdge simply removed from the agenda,
+     * otherwise a weight is learned.
+     * @param getBoundNode should be a function which finds the HypNode over which
+     * mutual exclusion is enforced. Typically this is an argument of relation.
+     */
+    public RelNode1(Relation relation, boolean hard, Function<GraphTraversalTrace, HypNode> getBoundNode) {
       this.relationMatch = relation;
       this.getBoundNode = getBoundNode;
+      if (!hard) {
+        int dimension = 1;
+        int numIntercept = 0;
+        constraintCost = new AveragedPerceptronWeights(dimension, numIntercept);
+      }
     }
 
     public void rescore(Agenda a, GraphTraversalTrace match) {
@@ -73,15 +95,37 @@ public class AtMost1 {
       for (HypEdge e : a.adjacent(observedValue)) {
         c++;
         if (e.getRelation() == relationMatch) {
-          if (DEBUG)
-            Log.info("actually removing: " + e);
           r++;
-          a.remove(e);
+          if (constraintCost != null) {
+            // Soft
+            if (DEBUG)
+              Log.info("rescoring: " + e);
+            Adjoints score = a.getScore(e);
+            a.remove(e);
+            if (!(score instanceof GlobalFactorAdjoints))
+              score = new GlobalFactorAdjoints(score);
+            GlobalFactorAdjoints gs = (GlobalFactorAdjoints) score;
+            String n = getConstraintCostName();
+            int[] features = new int[] {0};
+            boolean reindex = false;
+            gs.addToGlobalScore(n, constraintCost.score(features, reindex));
+            a.add(e, gs);
+          } else {
+            // Hard
+            if (DEBUG)
+              Log.info("removing: " + e);
+            a.remove(e);
+          }
         }
       }
       if (DEBUG || COARSE_DEBUG) {
-        Log.info("removed " + r + " of " + c + " " + relationMatch.getName()
-            + " edges adjacent to " + observedValue);
+        if (constraintCost == null) {
+          Log.info("removed " + r + " of " + c + " " + relationMatch.getName()
+          + " edges adjacent to " + observedValue);
+        } else {
+          Log.info("added " + constraintCost.getWeight(0) + " to the score of "
+              + c + " " + relationMatch + " edges adjacent to " + observedValue);
+        }
       }
     }
   }

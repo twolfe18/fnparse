@@ -66,6 +66,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static boolean pipeline = false;
   static boolean maxViolation = true;
 
+  static boolean pred2Mutex = true;
+  static boolean numArgs = true;
+
   static double costFP_srl3 = 0.25;
   static double costFP_srl2 = 0.25;
   static double costFP_event1 = 0.25;
@@ -78,6 +81,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // maxViolation=true  n=5   pipeline=false  cFP=1   F(predicate2)=86.5 F(argument4)=14.0
   // maxViolation=true  n=5   pipeline=true   cFP=1/4 F(predicate2)=46.8  says the same when I go to 0.125 or 0.0125
   // maxViolation=true  n=5   pipeline=false  cFP=1   F(predicate2)=86.5 F(argument4)=14.0
+  // +numArgs F(predicate2)=90.7 F(argument4)=33.0
+  // Surprising that +numArgs improves F(predicate2), presumably because you get more training examples not wasted
+  // +pred2Mutex +numArgs F(predicate2)=100 F(argument4)=13.3 ...interesting
+  // +pred2Mutex(SOFT) +numArgs F(predicate2)=88.7 F(argument4)=36.7
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties.init(args);
@@ -164,23 +171,24 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
 
     // First attempt at adding back global factors
-    boolean global = false;
-    if (global)
-      AtMost1.add(u, u.getEdgeType("predicate2"), 0 /* t in predicate2(t,f) */);
+    if (pred2Mutex) {
+      boolean hard = false;
+      AtMost1.add(u, u.getEdgeType("predicate2"), 0 /* t in predicate2(t,f) */, hard);
+    }
 
     numArgsArg4 = new NumArgs(u.getEdgeType("argument4"), 0, 1);
     numArgsArg4.storeExactFeatureIndices();
-    if (global)
+    if (numArgs)
       u.addGlobalFactor(numArgsArg4.getTrigger(u), numArgsArg4);
 
     numArgsArg3 = new NumArgs(u.getEdgeType("srl3"), 0, -1);
     numArgsArg3.storeExactFeatureIndices();
-    if (global)
+    if (numArgs)
       u.addGlobalFactor(numArgsArg3.getTrigger(u), numArgsArg3);
 
     numArgsArg2 = new NumArgs(u.getEdgeType("srl2"), 0, -1);
     numArgsArg2.storeExactFeatureIndices();
-    if (global)
+    if (numArgs)
       u.addGlobalFactor(numArgsArg2.getTrigger(u), numArgsArg2);
   }
 

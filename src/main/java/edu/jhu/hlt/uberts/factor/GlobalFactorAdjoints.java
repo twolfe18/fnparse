@@ -1,5 +1,8 @@
 package edu.jhu.hlt.uberts.factor;
 
+import java.util.LinkedHashMap;
+import java.util.Map.Entry;
+
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
@@ -12,27 +15,37 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  * @author travis
  */
 public class GlobalFactorAdjoints implements Adjoints {
-  NumArgs.Adj numArgs;
-  Adjoints argLocAllArgs;
-  Adjoints argLocPairwise;
-  Adjoints roleCooc;
-  Adjoints localScore;
+
+  private Adjoints localScore;
+  private LinkedHashMap<String, Adjoints> globalScores;
 
   public GlobalFactorAdjoints(Adjoints localScore) {
     this.localScore = localScore;
+    this.globalScores = new LinkedHashMap<>();
+  }
+
+  public Adjoints getGlobalScore(String name) {
+    return globalScores.get(name);
+  }
+
+  /** returns the sum represented by name */
+  public Adjoints addToGlobalScore(String name, Adjoints a) {
+    Adjoints p = globalScores.get(name);
+    if (p == null) {
+      globalScores.put(name, a);
+      return a;
+    } else {
+      Adjoints s = Adjoints.sum(a, p);
+      globalScores.put(name, s);
+      return s;
+    }
   }
 
   @Override
   public double forwards() {
     double f = localScore.forwards();
-    if (numArgs != null)
-      f += numArgs.forwards();
-    if (argLocAllArgs != null)
-      f += argLocAllArgs.forwards();
-    if (argLocPairwise != null)
-      f += argLocPairwise.forwards();
-    if (roleCooc != null)
-      f += roleCooc.forwards();
+    for (Adjoints a : globalScores.values())
+      f += a.forwards();
     return f;
   }
 
@@ -40,27 +53,16 @@ public class GlobalFactorAdjoints implements Adjoints {
   public void backwards(double dErr_dForwards) {
     Log.info("global backwards");
     localScore.backwards(dErr_dForwards);
-    if (numArgs != null)
-      numArgs.backwards(dErr_dForwards);
-    if (argLocAllArgs != null)
-      argLocAllArgs.backwards(dErr_dForwards);
-    if (argLocPairwise != null)
-      argLocPairwise.backwards(dErr_dForwards);
-    if (roleCooc != null)
-      roleCooc.backwards(dErr_dForwards);
+    for (Adjoints a : globalScores.values())
+      a.backwards(dErr_dForwards);
   }
 
   public String toString() {
     StringBuilder sb = new StringBuilder();
     sb.append("(GFAdj local=" + localScore);
-    if (numArgs != null)
-      sb.append(" numArgs=" + numArgs);
-    if (argLocAllArgs != null)
-      sb.append(" argLoc1=" + argLocAllArgs);
-    if (argLocPairwise != null)
-      sb.append(" argLoc2=" + argLocPairwise);
-    if (roleCooc != null)
-      sb.append(" roleCooc=" + roleCooc);
+    for (Entry<String, Adjoints> x : globalScores.entrySet())
+      sb.append(x.getKey() + "=" + x.getValue());
+    sb.append(')');
     return sb.toString();
   }
 }
