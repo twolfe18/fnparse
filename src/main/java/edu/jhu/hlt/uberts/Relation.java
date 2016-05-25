@@ -10,6 +10,9 @@ import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 /**
  * A set of tuples. Also a label that goes on {@link HypEdge}s.
  *
+ * Uses {@link java.lang.Object}s equals and hashcode since they should be
+ * de-dup-ed/alphabetized by {@link Uberts#addEdgeType(Relation)}.
+ *
  * @author travis
  */
 public class Relation {

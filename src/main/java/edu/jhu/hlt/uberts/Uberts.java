@@ -3,8 +3,10 @@ package edu.jhu.hlt.uberts;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +64,9 @@ public class Uberts {
   // Never call `new NodeType` outside of Uberts, use lookupNodeType
   private Map<String, NodeType> nodeTypes;
 
+  // Supervision (set of gold HypEdges)
+  private Labels goldEdges;
+
   public boolean showTrajDiagnostics = false;
 
   // Ancillary data for features which don't look at the State graph.
@@ -78,10 +83,6 @@ public class Uberts {
     this.doc = doc;
   }
 
-  // Supervision (set of gold HypEdges)
-  // Modules may add to this set as they register TransitionGenerators for example.
-//  private HashSet<HashableHypEdge> goldEdges;
-  private Labels goldEdges;
   /**
    * Sets the set of gold edges to null (appears as if no labels were ever provided).
    */
@@ -119,6 +120,9 @@ public class Uberts {
     nodes.clear();
   }
 
+  public Uberts(Random rand) {
+    this(rand, (edge, score) -> score.forwards());
+  }
   public Uberts(Random rand, BiFunction<HypEdge, Adjoints, Double> agendaPriority) {
     this.rand = rand;
     this.relations = new HashMap<>();
@@ -178,9 +182,7 @@ public class Uberts {
       // But maybe don't add apply it (add it to state)
       if (hitLim)
         continue;
-      if (oracle && !y)
-        continue;
-      if (p.get2().forwards() >= minScore || (oracle && y)) {
+      if ((oracle && y) || pred) {
         perf.add(best);
         addEdgeToState(best);
       }
@@ -212,6 +214,181 @@ public class Uberts {
         addEdgeToState(best);
     }
     return null;
+  }
+
+  /**
+   * Doesn't store states, but is like a List<Step> with benefits such as score
+   * and loss prefix sums.
+   */
+  public static class Traj {
+    private Map<Relation, FPR> totalLoss;
+    private Map<Relation, FPR> actionLoss;
+    private double totalScore;
+    private Step prevToCur;
+    private Traj prev;
+    public final int length;
+
+    /**
+     * @param prevToCur
+     * @param prev
+     * @param actionLoss make sure this is computed based on Commits/Prunes and
+     * not the closed world assumption used by {@link Labels.Perf}. For example,
+     * if you predicted foo(x1) (a true pos) and foo(x2) (a false pos) and there
+     * were 10 gold foo(?) facts, then by closed world FP=1,FN=9 when it should
+     * really be FP=1,FN=1.
+     */
+    public Traj(Step prevToCur, Traj prev) {
+      this.prevToCur = prevToCur;
+      this.prev = prev;
+      this.length = 1 + (prev == null ? 0 : prev.length);
+
+      // We known from prevToCur what the loss is
+      this.actionLoss = new HashMap<>();
+      FPR fpr = new FPR();
+      fpr.accum(prevToCur.gold, prevToCur.pred);
+      this.actionLoss.put(prevToCur.edge.getRelation(), fpr);
+
+      if (actionLoss != null) {
+        if (prev == null)
+          totalLoss = actionLoss;
+        else
+          totalLoss = Labels.combinePerfByRel(prev.totalLoss, actionLoss);
+      }
+
+      totalScore = prevToCur.score.forwards();
+      if (prev != null)
+        totalScore += prev.totalScore;
+    }
+
+    public Step getStep() {
+      return prevToCur;
+    }
+
+    public Traj getPrev() {
+      return prev;
+    }
+
+    public double getScorePlusLoss(Map<Relation, Double> costFP) {
+      double s = totalScore;
+      for (FPR fpr : totalLoss.values())
+        s += fpr.getFP() + fpr.getFN();
+      return s;
+    }
+
+    /**
+     * Traj looks like a0 <- a1 <- ... <- aN
+     * This returns a stack where a0 will be the first action/Step popped.
+     */
+    public Deque<Traj> reverse() {
+      Deque<Traj> stack = new ArrayDeque<>();
+      for (Traj cur = this; cur != null; cur = cur.prev)
+        stack.push(cur);
+      return stack;
+    }
+  }
+
+  /**
+   * Returns (gold trajectory, predicted trajectory).
+   *
+   * This is sort of a pun on the real max-violation algorithm. The original
+   * version assumes a transition system where states can be said to fall into
+   * a statically known (depending only on x, not actions) indexable sequence.
+   * Meaning you can talk about "the i^th action" and mean something comparable
+   * on any trajectory. This is fine if you are doing something like tagging
+   * tokens from left to right ("i^th action" means "tag of token i"), but it is
+   * not fine if some actions are pruning actions which affect the space of
+   * future actions.
+   *
+   * The pun that we use is to count up from i=0. The first actions are
+   * comparable (they add some fact starting from the initial state). After that
+   * they may not be comparable. E.g. At i=10, the oracle might be applying
+   * foo(x) & bar(y) => baz(z), but the predictor may have never built foo(x) or
+   * bar(y) based on earlier choices/mistakes, so asking the predictor to apply
+   * the baz(z) rule may be a bad idea.
+   *
+   * If the oracle produces a length N trajectory, and the predictor length M,
+   * we take the max-violator over length min(N,M) prefixes.
+   *
+   * See http://www.aclweb.org/anthology/N12-1015
+   */
+  public Pair<Traj, Traj> maxViolationPerceptron(Map<Relation, Double> costFP) {
+
+    timer.start("duplicate-state");
+    State s0 = state.duplicate();
+    timer.stop("duplicate-state");
+
+    timer.start("duplicate-agenda");
+    Agenda a0 = agenda.duplicate();
+    timer.stop("duplicate-agenda");
+
+    // Oracle
+    Traj t1 = null;
+    {
+      while (agenda.size() > 0) {
+        Pair<HypEdge, Adjoints> p = agenda.popBoth();
+        HypEdge best = p.get1();
+        boolean y = getLabel(best);
+        boolean yhat = p.get2().forwards() > 0;
+        if (DEBUG)
+          System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
+
+        // Always record the action
+        Step s = new Step(p, y, yhat);
+        t1 = new Traj(s, t1);
+//        System.out.println("MV oracle, y=" + s.gold + " yhat=" + s.pred + " " + s.edge);
+
+        // But maybe don't add apply it (add it to state)
+        if (y)
+          addEdgeToState(best);
+      }
+    }
+    assert t1 != null : "oracle took no steps?";
+
+    // Predictions
+    state = s0;
+    agenda = a0;
+    Traj t2 = null;
+    {
+      // We can stop the trajectory earlier if it goes longer than the oracle,
+      // which is likely to happen.
+      while (agenda.size() > 0 && (t2 == null || t2.length < t1.length)) {
+        Pair<HypEdge, Adjoints> p = agenda.popBoth();
+        HypEdge best = p.get1();
+        boolean y = getLabel(best);
+        boolean yhat = p.get2().forwards() > 0;
+        if (DEBUG)
+          System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
+
+        // Always record the action
+        Step s = new Step(p, y, yhat);
+        t2 = new Traj(s, t2);
+//        System.out.println("MV pred, y=" + s.gold + " yhat=" + s.pred + " " + s.edge);
+
+        // But maybe don't add apply it (add it to state)
+        if (yhat)
+          addEdgeToState(best);
+      }
+    }
+
+    // TODO Return (state,agenda) back to how they were?
+    // We kept a copy around anyway...
+
+    // Compute the max-violator
+    Pair<Traj, Traj> best = null;
+    double bestViolation = 0;
+    Deque<Traj> t1r = t1.reverse();
+    Deque<Traj> t2r = t2.reverse();
+    while (!t1r.isEmpty() && !t2r.isEmpty()) {
+      Traj t1cur = t1r.pop();
+      Traj t2cur = t2r.pop();
+      double violation =  t2cur.getScorePlusLoss(costFP) - t1cur.totalScore;
+      if (violation > bestViolation) {
+        bestViolation = violation;
+        best = new Pair<>(t1cur, t2cur);
+      }
+    }
+
+    return best;
   }
 
   /**
@@ -346,13 +523,12 @@ public class Uberts {
 
   private void showTrajPerf(List<Step> traj, Labels.Perf perf) {
     Log.info("traj.size=" + traj.size());
-//    Map<String, Double> recall = perf.recallByRel();
-    Map<String, FPR> pbr = perf.perfByRel();
-    for (String relName : goldEdges.getLabeledRelationNames()) {
-      Log.info("relation=" + relName
-          + " perf=" + pbr.get(relName)
-          + " n=" + goldEdges.getRelCount(relName));
-      for (HypEdge fn : perf.getFalseNegatives(relName)) {
+    Map<Relation, FPR> pbr = perf.perfByRel2();
+    for (Relation rel : goldEdges.getLabeledRelation()) {
+      Log.info("relation=" + rel.getName()
+          + " perf=" + pbr.get(rel)
+          + " n=" + goldEdges.getRelCount(rel.getName()));
+      for (HypEdge fn : perf.getFalseNegatives(rel)) {
         System.out.println("\tfn: " + fn);
 //          if ("srl1".equals(fn.getRelation().getName())) {
 //            int i = Integer.parseInt((String) fn.getTail(0).getValue());

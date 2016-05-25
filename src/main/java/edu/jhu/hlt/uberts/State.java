@@ -3,11 +3,13 @@ package edu.jhu.hlt.uberts;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.LL;
@@ -65,6 +67,7 @@ public class State {
   public static class Split extends State {
     private State regularEdges;
     private State schemaEdges;
+    private boolean ownSchemaEdges = true;
 
     public Split() {
       this.regularEdges = new State();
@@ -72,9 +75,19 @@ public class State {
     }
 
     @Override
+    public State duplicate() {
+      Split s = new Split();
+      s.regularEdges = regularEdges.duplicate();
+      s.schemaEdges = schemaEdges;
+      s.ownSchemaEdges = false;
+      return s;
+    }
+
+    @Override
     public void clear() {
       regularEdges.clear();
       schemaEdges.clear();
+      assert ownSchemaEdges;
     }
     @Override
     public void clearNonSchema() {
@@ -104,6 +117,7 @@ public class State {
     public void add(HypEdge e) {
       if (e instanceof HypEdge.WithProps
           && ((HypEdge.WithProps) e).hasProperty(HypEdge.IS_SCHEMA)) {
+        assert ownSchemaEdges;
         schemaEdges.add(e);
       } else {
         regularEdges.add(e);
@@ -196,38 +210,53 @@ public class State {
     }
   }
 
-  private Map<HypNode, LL<HypEdge>[]> primaryViewReg;
-  private Map<ArgVal, LL<HypEdge>> fineViewReg;
-  private Map<Relation, LL<HypEdge>> relViewReg;
-  private List<HypEdge> edgesReg;
+  private Map<HypNode, LL<HypEdge>[]> primaryView;
+  private Map<ArgVal, LL<HypEdge>> fineView;
+  private Map<Relation, LL<HypEdge>> relView;
+  private List<HypEdge> edges;
   private MultiTimer timer;
 
   public State() {
-    this.primaryViewReg = new HashMap<>();
-    this.fineViewReg = new HashMap<>();
-    this.relViewReg = new HashMap<>();
-    this.edgesReg = new ArrayList<>();
+    this.primaryView = new HashMap<>();
+    this.fineView = new HashMap<>();
+    this.relView = new HashMap<>();
+    this.edges = new ArrayList<>();
     this.timer = new MultiTimer();
     this.timer.put("clearNonSchema", new Timer("clearNonSchema", 30, true));
   }
 
+  public State duplicate() {
+    State c = new State();
+//    c.primaryView.putAll(primaryView);
+    for (Entry<HypNode, LL<HypEdge>[]> x : primaryView.entrySet()) {
+      LL<HypEdge>[] val = x.getValue();
+      LL<HypEdge>[] valCopy = Arrays.copyOf(val, val.length);
+      c.primaryView.put(x.getKey(), valCopy);
+    }
+    c.fineView.putAll(fineView);
+    c.relView.putAll(relView);
+    c.edges.addAll(edges);
+    c.timer = timer;
+    return c;
+  }
+
   public void clear() {
-    primaryViewReg.clear();
-    fineViewReg.clear();
-    relViewReg.clear();
-    edgesReg.size();
+    primaryView.clear();
+    fineView.clear();
+    relView.clear();
+    edges.size();
   }
 
   public void clearNonSchema() {
     if (DEBUG) {
-      Log.info("edges=" + edgesReg.size() + " nodes=" + fineViewReg.size() + " args=" + primaryViewReg.size());
+      Log.info("edges=" + edges.size() + " nodes=" + fineView.size() + " args=" + primaryView.size());
     }
     timer.start("clearNonSchema");
-    List<HypEdge> temp = edgesReg;
-    primaryViewReg.clear();
-    fineViewReg.clear();
-    relViewReg.clear();
-    edgesReg = new ArrayList<>();
+    List<HypEdge> temp = edges;
+    primaryView.clear();
+    fineView.clear();
+    relView.clear();
+    edges = new ArrayList<>();
     for (HypEdge e : temp) {
       if (e instanceof HypEdge.WithProps &&
           ((HypEdge.WithProps)e).hasProperty(HypEdge.IS_SCHEMA)) {
@@ -238,10 +267,10 @@ public class State {
   }
 
   public int getNumNodes() {
-    return primaryViewReg.size();
+    return primaryView.size();
   }
   public int getNumEdges() {
-    return edgesReg.size();
+    return edges.size();
   }
 
   /**
@@ -253,7 +282,7 @@ public class State {
     writeEdges(w, Collections.emptySet());
   }
   public void writeEdges(BufferedWriter w, Set<Relation> skip) throws IOException {
-    List<HypEdge> el = new ArrayList<>(edgesReg);
+    List<HypEdge> el = new ArrayList<>(edges);
     try {
       Collections.sort(el, HypEdge.BY_RELATION_THEN_TAIL);
     } catch (ClassCastException cce) {
@@ -266,14 +295,14 @@ public class State {
   }
 
   public void add(HypEdge e) {
-    edgesReg.add(e);
+    edges.add(e);
     add(HEAD_ARG_POS, e.getHead(), e);
     int n = e.getNumTails();
     for (int i = 0; i < n; i++)
       add(i, e.getTail(i), e);
 
     Relation key = e.getRelation();
-    relViewReg.put(key, new LL<>(e, relViewReg.get(key)));
+    relView.put(key, new LL<>(e, relView.get(key)));
 
     if (DEBUG) {
       Log.info("just added to State: " + e);
@@ -288,10 +317,10 @@ public class State {
 
   @SuppressWarnings("unchecked")
   private void add(int argPos, HypNode n, HypEdge e) {
-    LL<HypEdge>[] es = primaryViewReg.get(n);
+    LL<HypEdge>[] es = primaryView.get(n);
     if (es == null) {
       es = new LL[MAX_ARGS];
-      primaryViewReg.put(n, es);
+      primaryView.put(n, es);
     }
     // Unique values?
     if (CHECK_UNIQ) {
@@ -301,17 +330,17 @@ public class State {
     es[argPos] = new LL<>(e, es[argPos]);
 
     ArgVal key2 = new ArgVal(argPos, e.getRelation(), n);
-    LL<HypEdge> es2 = fineViewReg.get(key2);
+    LL<HypEdge> es2 = fineView.get(key2);
     // Unique values?
     if (CHECK_UNIQ) {
       for (LL<HypEdge> cur = es2; cur != null; cur = cur.next)
         assert !cur.item.equals(e);
     }
-    fineViewReg.put(key2, new LL<>(e, es2));
+    fineView.put(key2, new LL<>(e, es2));
 
     if (DEBUG) {
-      int p = primaryViewReg.size();
-      int f = fineViewReg.size();
+      int p = primaryView.size();
+      int f = fineView.size();
       int z = CHECK_UNIQ ? 50000 : 500000;
       if ((p+f) % z == 0 && es2 == null)
         Log.info("nodes=" + f + " args=" + p + " curFact=" + e);
@@ -320,7 +349,7 @@ public class State {
 
   /** May return null */
   public LL<HypEdge> match(int argPos, Relation rel, HypNode arg) {
-    return fineViewReg.get(new ArgVal(argPos, rel, arg));
+    return fineView.get(new ArgVal(argPos, rel, arg));
   }
 
   /** May return null */
@@ -333,7 +362,7 @@ public class State {
 
   public List<HypEdge> neighbors(int argPos, HypNode n) {
     List<HypEdge> el = new ArrayList<>();
-    LL<HypEdge>[] allPos = primaryViewReg.get(n);
+    LL<HypEdge>[] allPos = primaryView.get(n);
     for (int i = 0; i < allPos.length; i++)
       for (LL<HypEdge> cur = allPos[i]; cur != null; cur = cur.next)
         el.add(cur.item);
@@ -342,7 +371,7 @@ public class State {
 
   public LL<HypEdge> match2(Relation rel) {
     assert rel != null;
-    return relViewReg.get(rel);
+    return relView.get(rel);
   }
 
   /**
@@ -354,11 +383,16 @@ public class State {
   public List<StateEdge> neighbors2(HNode node) {
     List<StateEdge> a = new ArrayList<>();
     if (node.isNode()) {
+      Set<StateEdge> uniq = new HashSet<>();  // DEBUGGING
       HypNode n = node.getNode();
-      LL<HypEdge>[] allArgs = primaryViewReg.get(n);
-      for (int i = 0; allArgs != null && i < allArgs.length; i++)
-        for (LL<HypEdge> cur = allArgs[i]; cur != null; cur = cur.next)
-          a.add(new StateEdge(n, cur.item, i, true));
+      LL<HypEdge>[] allArgs = primaryView.get(n);
+      for (int i = 0; allArgs != null && i < allArgs.length; i++) {
+        for (LL<HypEdge> cur = allArgs[i]; cur != null; cur = cur.next) {
+          StateEdge se = new StateEdge(n, cur.item, i, true);
+          a.add(se);
+          assert uniq.add(se) : "duplicate edge? se=" + se + " node=" + node;
+        }
+      }
     } else {
       // For HypEdge -> HypNode edges, we can generate these by looking at
       // just the HypEdge (arguments are known). Does not need to look at any
@@ -368,18 +402,6 @@ public class State {
       for (int i = 0; i < e.getNumTails(); i++)
         a.add(new StateEdge(e.getTail(i), e, i, false));
     }
-
-    // DEBUGGING:
-    Set<StateEdge> uniq = new HashSet<>();
-//    Set<String> uniq2 = new HashSet<>();
-    for (StateEdge se : a) {
-//      System.out.println("neighbors2 checking: " + se);
-      assert uniq.add(se);
-//      assert uniq2.add(se.toString()) : se.toString();
-    }
-//    System.out.println("neighbors2 uniq.size=: " + uniq.size());
-//    System.out.println("neighbors2 uniq2.size=: " + uniq2.size());
-
     return a;
   }
 }

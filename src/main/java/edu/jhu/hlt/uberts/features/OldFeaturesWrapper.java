@@ -264,9 +264,9 @@ public class OldFeaturesWrapper {
 //    String w = "Bc256/8";
     String w = "Word";
     String[] tempNames = new String[] {
-        "Bc256/8-2-grams-between-Head1-and-Span2.Last",
-        "Head1Head2-PathNgram-Basic-LEMMA-DIRECTION-len2",
-        "Head1Head2-PathNgram-Basic-POS-DEP-len2",
+//        "Bc256/8-2-grams-between-Head1-and-Span2.Last",
+//        "Head1Head2-PathNgram-Basic-LEMMA-DIRECTION-len2",
+//        "Head1Head2-PathNgram-Basic-POS-DEP-len2",
         "Head1Head2-Path-Basic-LEMMA-DEP-t",
         "Span2-PosPat-FULL_POS-3-1",
         "Span2-First-" + w,
@@ -279,9 +279,9 @@ public class OldFeaturesWrapper {
         "Head1-Parent-Basic-" + w,
         "Head1-Grandparent-Basic-" + w,
         "Head1-RootPath-Basic-POS-DEP-t",
-        "Head1-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
+//        "Head1-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
         "Head2-RootPath-Basic-POS-DEP-t",
-        "Head2-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
+//        "Head2-RootPathNgram-Basic-LEMMA-DIRECTION-len3",
         "Head2-Child-Basic-" + w,
         "Head2-Parent-Basic-" + w,
         "Head2-Grandparent-Basic-" + w,

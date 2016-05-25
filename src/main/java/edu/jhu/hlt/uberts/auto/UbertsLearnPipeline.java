@@ -29,7 +29,6 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
-import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -43,6 +42,7 @@ import edu.jhu.hlt.uberts.Relation.EqualityArray;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Step;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.Uberts.Traj;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.factor.AtMost1;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
@@ -63,6 +63,21 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static boolean graphFeats = false;
   static boolean templateFeats = true;
   static int trainPasses = 5;
+  static boolean pipeline = false;
+  static boolean maxViolation = true;
+
+  static double costFP_srl3 = 0.25;
+  static double costFP_srl2 = 0.25;
+  static double costFP_event1 = 0.25;
+//  static double costFP_srl3 = 1;
+//  static double costFP_srl2 = 1;
+//  static double costFP_event1 = 1;
+
+  // maxViolation=true  n=150 pipeline=false  got close to F1=1
+  // maxViolation=true  n=5   pipeline=true   cFP=1   F(predicate2)=29.0
+  // maxViolation=true  n=5   pipeline=false  cFP=1   F(predicate2)=86.5 F(argument4)=14.0
+  // maxViolation=true  n=5   pipeline=true   cFP=1/4 F(predicate2)=46.8  says the same when I go to 0.125 or 0.0125
+  // maxViolation=true  n=5   pipeline=false  cFP=1   F(predicate2)=86.5 F(argument4)=14.0
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties.init(args);
@@ -88,18 +103,27 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       relationDefs = new File(p, "relations.def");
     }
 
-    final Map<String, Double> relPrior = new HashMap<>();
-    relPrior.put("event1", 5d);
-    relPrior.put("predicate2", 4d);
-    relPrior.put("srl2", 3d);
-    relPrior.put("srl3", 2d);
-    relPrior.put("argument4", 1d);
-    BiFunction<HypEdge, Adjoints, Double> agendaPriority = (edge, score) -> {
-      double sc = score.forwards();
-      Double r = relPrior.get(edge.getRelation().getName());
-      if (r == null) r = 6d;
-      return r + 0.95 * Math.tanh(sc);
-    };
+    BiFunction<HypEdge, Adjoints, Double> agendaPriority;
+    if (pipeline) {
+      double strength = 0.5;    // 1 means full pipeline, 0 means best first
+      final Map<String, Double> relPrior = new HashMap<>();
+      relPrior.put("event1", 5 * strength);
+      relPrior.put("predicate2", 4 * strength);
+      relPrior.put("srl2", 3 * strength);
+      relPrior.put("srl3", 2 * strength);
+      relPrior.put("argument4", 1 * strength);
+      agendaPriority = (edge, score) -> {
+        double sc = score.forwards();
+        Double r = relPrior.get(edge.getRelation().getName());
+        if (r == null) {
+          assert false : "no priority for " + edge;
+          r = 6 *  strength;
+        }
+        return r + 0.95 * Math.tanh(sc);
+      };
+    } else {
+      agendaPriority = (edge, score) -> score.forwards();
+    }
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
@@ -158,44 +182,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     numArgsArg2.storeExactFeatureIndices();
     if (global)
       u.addGlobalFactor(numArgsArg2.getTrigger(u), numArgsArg2);
-  }
-
-  private void init() {
-    if (bft != null)
-      return;
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    bft = new BasicFeatureTemplates();
-    int numBits = config.getInt("numBits", 20);
-    //      File fs = new File("data/srl-reldata/feature-sets/framenet/MAP/pos-320-16_neg-320-16.fs");
-    //      File fs = new File("data/srl-reldata/feature-sets/framenet/MAP/pos-1280-16_neg-1280-16.fs");
-    //      String ts = FeatureSet.getFeatureSetString(fs);
-    // This really does work better than the others tried below :)
-    // More features != better if you don't choose carefully.
-    String ts = "";
-    if (!"none".equals(config.getString("posFsFile", "none"))) {
-      File posFsFile = config.getExistingFile("posFsFile");
-      ts += prependRefinementTemplate("roleArg", posFsFile);
-    }
-    if (!"none".equals(config.getString("negFsFile", "none"))) {
-      File negFsFile = config.getExistingFile("negFsFile");
-      if (ts.length() > 0)
-        ts += " + ";
-      ts += prependRefinementTemplate("arg", negFsFile);
-    }
-    assert ts.length() > 0 : "no features";
-    //      String ts = prependRefinementTemplate("arg", negFsFile)
-    //          + " + " + prependRefinementTemplate("argAndRoleArg", posFsFile);
-    //      File bialph = new File("data/mimic-coe/framenet/coherent-shards/alphabet.txt.gz");
-    //      File fcounts = new File("data/mimic-coe/framenet/feature-counts/all.txt.gz");
-    File bialph = config.getExistingFile("bialph");
-    File fcounts = config.getExistingFile("featureCounts");
-    try {
-      feFast = new OldFeaturesWrapper.Ints(new OldFeaturesWrapper(bft, ts, bialph, fcounts), numBits);
-      feFast.cacheAdjointsForwards = true;
-      assert feFast.getInner() != null;
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
   }
 
   @Override
@@ -303,17 +289,52 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 0)
       Log.info("starting on " + doc.getId());
 
-    // Eearly update perceptron
-    Step mistake = u.earlyUpdatePerceptron();
-    if (mistake != null) {
-      if (mistake.gold) {
-        // FN
-        assert !mistake.pred;
-        mistake.score.backwards(-1);
-      } else {
-        // FP
-        assert mistake.pred;
-        mistake.score.backwards(+1);
+    if (!maxViolation) {
+      // Eearly update perceptron
+      Step mistake = u.earlyUpdatePerceptron();
+      if (mistake != null) {
+        if (mistake.gold) {
+          // FN
+          assert !mistake.pred;
+          mistake.score.backwards(-1);
+        } else {
+          // FP
+          assert mistake.pred;
+          mistake.score.backwards(+1);
+        }
+      }
+    } else {
+      // Max-violation perceptron
+      Map<Relation, Double> costFP = new HashMap<>();
+      costFP.put(u.getEdgeType("argument4"), 1d);
+      costFP.put(u.getEdgeType("srl3"), costFP_srl3);
+      costFP.put(u.getEdgeType("srl2"), costFP_srl2);
+      costFP.put(u.getEdgeType("predicate2"), 1d);
+      costFP.put(u.getEdgeType("event1"), costFP_event1);
+      Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(costFP);
+      boolean debug = false;
+      int k = 400;
+      if (maxViolation != null) {
+        for (Traj cur = maxViolation.get1(); cur != null; cur = cur.getPrev()) {
+          Step s = cur.getStep();
+          // The score of prunes is fixed at 0, only update score(Commit)
+          if (s.gold)
+            s.score.backwards(-1);
+          if (debug) {
+            System.out.println("MV oracle, y=" + s.gold + "\tyhat=" + s.pred
+                + "\t" + s.edge + "\t" + s.score.forwards() + "\t" + StringUtils.trunc(s.score, k));
+          }
+        }
+        for (Traj cur = maxViolation.get2(); cur != null; cur = cur.getPrev()) {
+          Step s = cur.getStep();
+          // The score of prunes is fixed at 0, only update score(Commit)
+          if (!s.gold)
+            s.score.backwards(+1);
+          if (debug) {
+            System.out.println("MV pred,   y=" + s.gold + "\tyhat=" + s.pred
+                + "\t" + s.edge + "\t" + s.score.forwards() + "\t" + StringUtils.trunc(s.score, k));
+          }
+        }
       }
     }
 
@@ -347,6 +368,48 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             + StringUtils.join("\n", Labels.showPerfByRel(pf)));
       }
       System.out.println();
+    }
+  }
+
+
+  /**
+   * @deprecated
+   */
+  private void init() {
+    if (bft != null)
+      return;
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    bft = new BasicFeatureTemplates();
+    int numBits = config.getInt("numBits", 20);
+    //      File fs = new File("data/srl-reldata/feature-sets/framenet/MAP/pos-320-16_neg-320-16.fs");
+    //      File fs = new File("data/srl-reldata/feature-sets/framenet/MAP/pos-1280-16_neg-1280-16.fs");
+    //      String ts = FeatureSet.getFeatureSetString(fs);
+    // This really does work better than the others tried below :)
+    // More features != better if you don't choose carefully.
+    String ts = "";
+    if (!"none".equals(config.getString("posFsFile", "none"))) {
+      File posFsFile = config.getExistingFile("posFsFile");
+      ts += prependRefinementTemplate("roleArg", posFsFile);
+    }
+    if (!"none".equals(config.getString("negFsFile", "none"))) {
+      File negFsFile = config.getExistingFile("negFsFile");
+      if (ts.length() > 0)
+        ts += " + ";
+      ts += prependRefinementTemplate("arg", negFsFile);
+    }
+    assert ts.length() > 0 : "no features";
+    //      String ts = prependRefinementTemplate("arg", negFsFile)
+    //          + " + " + prependRefinementTemplate("argAndRoleArg", posFsFile);
+    //      File bialph = new File("data/mimic-coe/framenet/coherent-shards/alphabet.txt.gz");
+    //      File fcounts = new File("data/mimic-coe/framenet/feature-counts/all.txt.gz");
+    File bialph = config.getExistingFile("bialph");
+    File fcounts = config.getExistingFile("featureCounts");
+    try {
+      feFast = new OldFeaturesWrapper.Ints(new OldFeaturesWrapper(bft, ts, bialph, fcounts), numBits);
+      feFast.cacheAdjointsForwards = true;
+      assert feFast.getInner() != null;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
   }
 

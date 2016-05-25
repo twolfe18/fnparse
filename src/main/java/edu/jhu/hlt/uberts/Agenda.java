@@ -9,11 +9,13 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.BiFunction;
 
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.State.ArgVal;
 import edu.jhu.prim.tuple.Pair;
 
 public class Agenda {
@@ -30,11 +32,11 @@ public class Agenda {
   private Map<HypNode, BitSet> n2ei;    // node adjacency matrix, may contain old nodes as keys
   private Map<HypEdge, Integer> e2i;    // location of edges in heap
 
-  // Priority function
-  private BiFunction<HypEdge, Adjoints, Double> priority;
-
   // Other indices
   private Map<State.ArgVal, LinkedHashSet<HypEdge>> fineView;
+
+  // Priority function
+  private BiFunction<HypEdge, Adjoints, Double> priority;
 
   public Agenda(BiFunction<HypEdge, Adjoints, Double> priority) {
     this.top = 0;
@@ -45,6 +47,18 @@ public class Agenda {
     this.e2i = new HashMap<>();
     this.fineView = new HashMap<>();
     this.priority = priority;
+  }
+
+  public Agenda duplicate() {
+    Agenda c = new Agenda(priority);
+    c.heap1 = Arrays.copyOf(heap1, heap1.length);
+    c.heap2 = Arrays.copyOf(heap2, heap2.length);
+    c.top = top;
+    c.n2ei.putAll(n2ei);
+    c.e2i.putAll(e2i);
+    for (Entry<ArgVal, LinkedHashSet<HypEdge>> x : fineView.entrySet())
+      c.fineView.put(x.getKey(), new LinkedHashSet<>(x.getValue()));
+    return c;
   }
 
   public void clear() {

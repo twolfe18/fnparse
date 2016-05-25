@@ -25,7 +25,7 @@ public class Labels {
   private Counts<String> relationCounts;
 
   // Stratify by relation
-  private Map<String, Set<HashableHypEdge>> edges2;
+  private Map<Relation, Set<HashableHypEdge>> edges2;
 
   public Labels() {
     edges = new HashSet<>();
@@ -41,7 +41,7 @@ public class Labels {
     assert added;
     relationCounts.increment(e.getEdge().getRelation().getName());
 
-    String key = e.getEdge().getRelation().getName();
+    Relation key = e.getEdge().getRelation();
     Set<HashableHypEdge> s = edges2.get(key);
     if (s == null) {
       s = new HashSet<>();
@@ -75,15 +75,24 @@ public class Labels {
    */
   public List<String> getLabeledRelationNames() {
     List<String> r = new ArrayList<>();
-    r.addAll(edges2.keySet());
+    for (Relation rel : edges2.keySet())
+      r.add(rel.getName());
     Collections.sort(r);
     return r;
   }
+  /**
+   * All the relation names which have gold/label facts.
+   */
+  public List<Relation> getLabeledRelation() {
+    List<Relation> r = new ArrayList<>(edges2.keySet());
+    Collections.sort(r, Relation.BY_NAME);
+    return r;
+  }
 
-  public static Map<String, FPR> combinePerfByRel(Map<String, FPR> a, Map<String, FPR> b) {
-    Map<String, FPR> c = new HashMap<>();
+  public static <T> Map<T, FPR> combinePerfByRel(Map<T, FPR> a, Map<T, FPR> b) {
+    Map<T, FPR> c = new HashMap<>();
     // c += a
-    for (Entry<String, FPR> x : a.entrySet()) {
+    for (Entry<T, FPR> x : a.entrySet()) {
       FPR aa = x.getValue();
       FPR cc = c.get(x.getKey());
       if (cc == null) {
@@ -93,7 +102,7 @@ public class Labels {
       cc.accum(aa);
     }
     // c += b
-    for (Entry<String, FPR> x : b.entrySet()) {
+    for (Entry<T, FPR> x : b.entrySet()) {
       FPR bb = x.getValue();
       FPR cc = c.get(x.getKey());
       if (cc == null) {
@@ -128,7 +137,7 @@ public class Labels {
   public class Perf {
     Set<HashableHypEdge> seen = new HashSet<>();
     int tp = 0, fp = 0;
-    Counts<String> tpByRel, fpByRel;
+    Counts<Relation> tpByRel, fpByRel;
 
     public Perf() {
       tpByRel = new Counts<>();
@@ -142,13 +151,13 @@ public class Labels {
       if (contains(he)) {
         if (seen.add(he)) {
           tp++;
-          tpByRel.increment(e.getRelation().getName());
+          tpByRel.increment(e.getRelation());
         }
         return true;
       } else {
         if (seen.add(he)) {
           fp++;
-          fpByRel.increment(e.getRelation().getName());
+          fpByRel.increment(e.getRelation());
         }
         return false;
       }
@@ -158,13 +167,29 @@ public class Labels {
       if (edges.size() == 0)
         return Collections.emptyMap();
       Map<String, FPR> m = new HashMap<>();
-      for (String relName : edges2.keySet()) {
-        int tp = tpByRel.getCount(relName);
-        int fp = fpByRel.getCount(relName);
-        int fn = edges2.get(relName).size() - tp;
+      for (Relation rel : edges2.keySet()) {
+        int tp = tpByRel.getCount(rel);
+        int fp = fpByRel.getCount(rel);
+        int fn = edges2.get(rel).size() - tp;
         FPR perf = new FPR();
         perf.accum(tp, fp, fn);
-        Object old = m.put(relName, perf);
+        Object old = m.put(rel.getName(), perf);
+        assert old == null;
+      }
+      return m;
+    }
+
+    public Map<Relation, FPR> perfByRel2() {
+      if (edges.size() == 0)
+        return Collections.emptyMap();
+      Map<Relation, FPR> m = new HashMap<>();
+      for (Relation rel : edges2.keySet()) {
+        int tp = tpByRel.getCount(rel);
+        int fp = fpByRel.getCount(rel);
+        int fn = edges2.get(rel).size() - tp;
+        FPR perf = new FPR();
+        perf.accum(tp, fp, fn);
+        Object old = m.put(rel, perf);
         assert old == null;
       }
       return m;
@@ -180,11 +205,11 @@ public class Labels {
       if (edges.size() == 0)
         return Collections.emptyMap();
       Map<String, Double> m = new HashMap<>();
-      for (String relName : edges2.keySet()) {
-        int tp = tpByRel.getCount(relName);
-        int fp = fpByRel.getCount(relName);
+      for (Relation rel : edges2.keySet()) {
+        int tp = tpByRel.getCount(rel);
+        int fp = fpByRel.getCount(rel);
         double recall = ((double) tp) / (tp + fp);
-        Object old = m.put(relName, recall);
+        Object old = m.put(rel.getName(), recall);
         assert old == null;
       }
       return m;
@@ -200,18 +225,18 @@ public class Labels {
       if (edges.size() == 0)
         return Collections.emptyMap();
       Map<String, Double> m = new HashMap<>();
-      for (String relName : edges2.keySet()) {
-        int tp = tpByRel.getCount(relName);
-        double recall = ((double) tp) / edges2.get(relName).size();
-        Object old = m.put(relName, recall);
+      for (Relation rel : edges2.keySet()) {
+        int tp = tpByRel.getCount(rel);
+        double recall = ((double) tp) / edges2.get(rel).size();
+        Object old = m.put(rel.getName(), recall);
         assert old == null;
       }
       return m;
     }
 
-    public List<HypEdge> getFalseNegatives(String relName) {
+    public List<HypEdge> getFalseNegatives(Relation rel) {
       List<HypEdge> fn = new ArrayList<>();
-      Set<HashableHypEdge> s = edges2.get(relName);
+      Set<HashableHypEdge> s = edges2.get(rel);
       for (HashableHypEdge he : s) {
         if (!seen.contains(he))
           fn.add(he.getEdge());
@@ -221,10 +246,10 @@ public class Labels {
 
     public List<HypEdge> getFalseNegatives() {
       List<HypEdge> fn = new ArrayList<>();
-      List<String> rels = new ArrayList<>(edges2.keySet());
-      Collections.sort(rels);
-      for (String relName : rels)
-        fn.addAll(getFalseNegatives(relName));
+      List<Relation> rels = new ArrayList<>(edges2.keySet());
+      Collections.sort(rels, Relation.BY_NAME);
+      for (Relation rel : rels)
+        fn.addAll(getFalseNegatives(rel));
       return fn;
     }
   }
