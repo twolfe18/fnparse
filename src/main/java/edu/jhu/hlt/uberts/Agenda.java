@@ -10,6 +10,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -29,10 +30,13 @@ public class Agenda {
   private Map<HypNode, BitSet> n2ei;    // node adjacency matrix, may contain old nodes as keys
   private Map<HypEdge, Integer> e2i;    // location of edges in heap
 
+  // Priority function
+  private BiFunction<HypEdge, Adjoints, Double> priority;
+
   // Other indices
   private Map<State.ArgVal, LinkedHashSet<HypEdge>> fineView;
 
-  public Agenda() {
+  public Agenda(BiFunction<HypEdge, Adjoints, Double> priority) {
     this.top = 0;
     int initSize = 16;
     this.heap1 = new HypEdge[initSize];
@@ -40,6 +44,7 @@ public class Agenda {
     this.n2ei = new HashMap<>();
     this.e2i = new HashMap<>();
     this.fineView = new HashMap<>();
+    this.priority = priority;
   }
 
   public void clear() {
@@ -95,7 +100,12 @@ public class Agenda {
    */
   public Iterable<HypEdge> match(int argPos, Relation rel, HypNode arg) {
     Iterable<HypEdge> r = fineView.get(new State.ArgVal(argPos, rel, arg));
-    return r == null ? Collections.emptyList() : r;
+//    return r == null ? Collections.emptyList() : r;
+    List<HypEdge> eager = new ArrayList<>();
+    if (r != null)
+      for (HypEdge e : r)
+        eager.add(e);
+    return eager;
   }
 
   public List<HypEdge> adjacent(HypNode n) {
@@ -180,9 +190,9 @@ public class Agenda {
     if (i == top)
       return true;
     int parent = (i - 1) >>> 1;
-//    if (DEBUG)
-//      Log.info("i=" + i + " parent=" + parent + " top=" + top);
-    return heap2[parent].forwards() >= heap2[i].forwards();
+//    return heap2[parent].forwards() >= heap2[i].forwards();
+    return priority.apply(heap1[parent], heap2[parent])
+        >= priority.apply(heap1[i], heap2[i]);
   }
 
   public void add(HypEdge edge, Adjoints score) {
@@ -223,7 +233,8 @@ public class Agenda {
   public void dbgShowScores() {
     Log.info("Agenda has " + top + " items:");
     for (int i = 0; i < top; i++) {
-      System.out.printf("%d\t%+.4f\t%s\n", i, heap2[i].forwards(), heap1[i]);
+//      System.out.printf("%d\t%+.4f\t%s\n", i, heap2[i].forwards(), heap1[i]);
+      System.out.printf("%d\t%+.4f\t%s\n", i, priority.apply(heap1[i], heap2[i]), heap1[i]);
     }
   }
 
@@ -265,11 +276,14 @@ public class Agenda {
   public void siftDown(int i) {
     if (i >= top)
       return;
-    double sc = heap2[i].forwards();
+//    double sc = heap2[i].forwards();
+    double sc = priority.apply(heap1[i], heap2[i]);
     int lc = (i << 1) + 1;
     int rc = lc + 1;
-    double lcScore = lc < top ? heap2[lc].forwards() : sc;
-    double rcScore = rc < top ? heap2[rc].forwards() : sc;
+//    double lcScore = lc < top ? heap2[lc].forwards() : sc;
+//    double rcScore = rc < top ? heap2[rc].forwards() : sc;
+    double lcScore = lc < top ? priority.apply(heap1[lc], heap2[lc]) : sc;
+    double rcScore = rc < top ? priority.apply(heap1[rc], heap2[rc]) : sc;
     if (sc >= lcScore && sc >= rcScore)
       return;
     if (lcScore > rcScore) {
@@ -285,7 +299,8 @@ public class Agenda {
     assert i < top && i >= 0;
     while (i > 0) {
       int parent = (i - 1) >>> 1;
-      if (heap2[parent].forwards() >= heap2[i].forwards())
+//      if (heap2[parent].forwards() >= heap2[i].forwards())
+      if (priority.apply(heap1[parent], heap2[parent]) >= priority.apply(heap1[i], heap2[i]))
         break;
       swap(i, parent);
       i = parent;

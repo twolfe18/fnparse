@@ -8,7 +8,10 @@ import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Relation;
+import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
+import edu.jhu.hlt.uberts.TNode.TKey;
+import edu.jhu.hlt.uberts.Uberts;
 
 /**
  * Running examples:
@@ -27,6 +30,28 @@ import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
  * and then I can go look for ner edges in inersect(adjacent(tokenIndex i),adjacent(tokenIndex j))
  */
 public class AtMost1 {
+  public static boolean COARSE_DEBUG = true;
+  public static boolean DEBUG = false;
+
+  /**
+   * @param u receives the new {@link GlobalFactor}
+   * @param rel is the relation which has mutually exclusive facts,
+   *        e.g. predicate2(t,f)
+   * @param mutexArg is the index of the argument describing the scope of mutual
+   *        exclusion, e.g. 0 to represent t in predicate2(t,f)
+   */
+  public static void add(Uberts u, Relation rel, int mutexArg) {
+    assert mutexArg >= 0 && mutexArg < rel.getNumArgs();
+    TKey[] lhs = new TKey[] {
+        new TKey(State.HEAD_ARG_POS, rel),
+    };
+    GlobalFactor gf = new AtMost1.RelNode1(rel, gtt -> {
+      HypEdge pred2Fact = gtt.getBoundEdge(0);
+      HypNode t = pred2Fact.getTail(mutexArg);
+      return t;
+    });
+    u.addGlobalFactor(lhs, gf);
+  }
 
   // Hard constraint
   public static class RelNode1 implements GlobalFactor {
@@ -42,17 +67,22 @@ public class AtMost1 {
 
     public void rescore(Agenda a, GraphTraversalTrace match) {
       HypNode observedValue = getBoundNode.apply(match);
-      Log.info("removing all edges adjacent to " + observedValue + " matching " + relationMatch + " from agenda");
+      if (DEBUG)
+        Log.info("removing all edges adjacent to " + observedValue + " matching " + relationMatch + " from agenda");
       int c = 0, r = 0;
       for (HypEdge e : a.adjacent(observedValue)) {
         c++;
         if (e.getRelation() == relationMatch) {
-          Log.info("actually removing: " + e);
+          if (DEBUG)
+            Log.info("actually removing: " + e);
           r++;
           a.remove(e);
         }
       }
-      Log.info("removed " + r + " of " + c + " edges adjacent to " + observedValue);
+      if (DEBUG || COARSE_DEBUG) {
+        Log.info("removed " + r + " of " + c + " " + relationMatch.getName()
+            + " edges adjacent to " + observedValue);
+      }
     }
   }
 
@@ -72,7 +102,8 @@ public class AtMost1 {
     }
     @Override
     public void rescore(Agenda a, GraphTraversalTrace match) {
-      Log.info("INTERESTING");
+      if (DEBUG)
+        Log.info("INTERESTING");
       HypNode bound1 = getBoundNode1.apply(match);
       HypNode bound2 = getBoundNode2.apply(match);
       List<HypEdge> intersect = a.adjacent(bound1, bound2);
@@ -81,11 +112,15 @@ public class AtMost1 {
         c++;
         if (e.getRelation() == relationMatch) {
           r++;
-          Log.info("actually removing: " + e);
+          if (DEBUG)
+            Log.info("actually removing: " + e);
           a.remove(e);
         }
       }
-      Log.info("removed " + r + " of " + c + " edges adjacent to " + bound1 + " and " + bound2);
+      if (DEBUG || COARSE_DEBUG) {
+        Log.info("removed " + r + " of " + c + " " + relationMatch.getName()
+          + " edges adjacent to " + bound1 + " and " + bound2);
+      }
     }
   }
 

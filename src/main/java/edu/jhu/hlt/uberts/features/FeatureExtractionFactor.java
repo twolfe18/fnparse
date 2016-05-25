@@ -9,10 +9,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
 
-import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HNode;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -22,10 +23,11 @@ import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.StateEdge;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Arg;
+import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 
-public abstract class FeatureExtractionFactor<T> {
+public abstract class FeatureExtractionFactor<T> implements LocalFactor {
 
   // Set this to non-null values to enable.
   // When enabled, an empty list, this.SKIP will be return from features().
@@ -46,6 +48,7 @@ public abstract class FeatureExtractionFactor<T> {
 
   public abstract List<T> features(HypEdge yhat, Uberts x);
 
+  @Override
   /**
    * Returns a non-caching Adjoints.
    */
@@ -177,9 +180,9 @@ public abstract class FeatureExtractionFactor<T> {
     private Deque<String> steps;
     private int curArgs = 0;
     private int curValues = 0;
-    private int maxArgs = 4;
-    private int maxValues = 4;
-    private int minValues = 1;
+    public int maxArgs = 4;
+    public int maxValues = 4;
+    public int minValues = 1;
     private Set<String> nodeTypesIgnoreValue;
 //    private boolean lastStepIncludesValue;
 //    private Set<Arg> args;
@@ -191,6 +194,9 @@ public abstract class FeatureExtractionFactor<T> {
       seen3 = new HashSet<>();
       nodeTypesIgnoreValue = new HashSet<>();
       nodeTypesIgnoreValue.add("tokenIndex");
+      nodeTypesIgnoreValue.add("span");
+      nodeTypesIgnoreValue.add("csyn5id");
+      nodeTypesIgnoreValue.add("csyn6id");
 
       // These are relations where one arg is really a label for the rest
       // of the args. We want to allow the walks to hop over to the label node
@@ -228,6 +234,19 @@ public abstract class FeatureExtractionFactor<T> {
       return features;
     }
 
+    private Random rand = new Random(9001);
+
+    /**
+     * If there are many neighbors, this takes a random sample of a small number
+     * of neighbors to keep the branching factor down.
+     */
+    private List<StateEdge> prune(List<StateEdge> neighbors) {
+      int k = 10;
+      if (neighbors.size() < k)
+        return neighbors;
+      return ReservoirSample.sample(neighbors, k, rand);
+    }
+
     private void dfs(HNode n, State s, List<String> addTo) {
 
       assert curArgs >= 0 && curValues >= 0;
@@ -246,8 +265,9 @@ public abstract class FeatureExtractionFactor<T> {
       }
 
       List<StateEdge> nei = s.neighbors2(n);
-      if (nei.size() > 10)
-        Log.warn("lots of neighbors of " + n + ", " + nei.size());
+//      if (nei.size() > 10)
+//        Log.warn("lots of neighbors of " + n + ", " + nei.size());
+      nei = prune(nei);
       for (StateEdge se : nei) {
         assert se.getSource().equals(n) : "n=" + n + " source=" + se.getSource();
         HNode t = se.getTarget();

@@ -315,32 +315,7 @@ public abstract class TemplatedFeatures implements Serializable {
   }
 
   public static void showContext(TemplateContext ctx) {
-    Sentence s = ctx.getSentence();
-    Frame f = ctx.getFrame();
-    System.out.println("[context] stage=" + (ctx == null ? "UNSET" : ctx.getStage()));
-    System.out.println("[context] sentence=" + s);
-    System.out.println("[context] frame=" + (f == null ? "UNSET" : f.getName()));
-    System.out.println("[context] role=" + ctx.getRoleS());
-    System.out.println("[context] target=" + desc(ctx.getTarget(), ctx));
-    System.out.println("[context] targetHead=" + desc(ctx.getTargetHead(), ctx));
-    System.out.println("[context] arg = " + desc(ctx.getArg(), ctx));
-    System.out.println("[context] argHead=" + desc(ctx.getArgHead(), ctx));
-    System.out.println("[context] span1=" + desc(ctx.getSpan1(), ctx));
-    System.out.println("[context] span2=" + desc(ctx.getSpan2(), ctx));
-    System.out.println("[context] head1=" + desc(ctx.getHead1(), ctx));
-    System.out.println("[context] head2=" + desc(ctx.getHead2(), ctx));
-  }
-
-  public static String desc(int i, TemplateContext ctx) {
-    if (i == TemplateContext.UNSET)
-      return "UNSET";
-    return ctx.getSentence().getWord(i) + " @ " + i;
-  }
-
-  public static String desc(Span s, TemplateContext ctx) {
-    if (s == null)
-      return "UNSET";
-    return Describe.span(s, ctx.getSentence()) + " @ " + s.toString();
+    TemplateContext.showContext(ctx);
   }
 
   public static void showFeatures(IntDoubleUnsortedVector fv, Alphabet<String> params) {

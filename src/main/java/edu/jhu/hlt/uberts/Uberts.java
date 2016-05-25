@@ -6,11 +6,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
+import java.util.function.BiFunction;
 
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -120,10 +119,10 @@ public class Uberts {
     nodes.clear();
   }
 
-  public Uberts(Random rand) {
+  public Uberts(Random rand, BiFunction<HypEdge, Adjoints, Double> agendaPriority) {
     this.rand = rand;
     this.relations = new HashMap<>();
-    this.agenda = new Agenda();
+    this.agenda = new Agenda(agendaPriority);
 //    this.state = new State();
     this.state = new State.Split();
     this.trie = new TNode(null, null);
@@ -156,22 +155,33 @@ public class Uberts {
    * @param oracle says whether only edges which are in the gold label set should
    * be added to state (others are just popped off the agenda and discarded).
    */
-  public Pair<Labels.Perf, List<Step>> dbgRunInference(boolean oracle, double minScore, int actionLimit) {
+  public Pair<Labels.Perf, List<Step>> dbgRunInference(
+      boolean oracle,
+      double minScore,
+      int actionLimit) {
     if (DEBUG || COARSE_EVENT_LOGGING)
       Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
     Labels.Perf perf = goldEdges.new Perf();
     List<Step> steps = new ArrayList<>();
-    for (int i = 0; agenda.size() > 0 && (actionLimit <= 0 || i < actionLimit); i++) {
+    for (int i = 0; agenda.size() > 0; i++) {// && (actionLimit <= 0 || i < actionLimit); i++) {
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge best = p.get1();
       boolean y = getLabel(best);
       if (DEBUG)
         System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
+
+      // Always record the action
+      boolean hitLim = actionLimit > 0 && i >= actionLimit;
+      boolean pred = !hitLim && p.get2().forwards() > minScore;
+      steps.add(new Step(p, y, pred));
+
+      // But maybe don't add apply it (add it to state)
+      if (hitLim)
+        continue;
       if (oracle && !y)
         continue;
       if (p.get2().forwards() >= minScore || (oracle && y)) {
         perf.add(best);
-        steps.add(new Step(p, y));
         addEdgeToState(best);
       }
     }
@@ -181,6 +191,27 @@ public class Uberts {
   }
   public Pair<Labels.Perf, List<Step>> dbgRunInference() {
     return dbgRunInference(false, Double.NEGATIVE_INFINITY, 0);
+  }
+
+  /**
+   * Runs inference with the current policy until an action with some loss is
+   * taken, returning that step (or null if no mistake is made).
+   *
+   * See Collins and Roark (2004)
+   * or algorithm 5 in http://www.aclweb.org/anthology/N12-1015
+   */
+  public Step earlyUpdatePerceptron() {
+    while (agenda.size() > 0) {
+      Pair<HypEdge, Adjoints> p = agenda.popBoth();
+      HypEdge best = p.get1();
+      boolean yhat = p.get2().forwards() > 0;
+      boolean y = getLabel(best);
+      if (y != yhat)
+        return new Step(p, y, yhat);
+      if (yhat)
+        addEdgeToState(best);
+    }
+    return null;
   }
 
   /**
@@ -199,24 +230,25 @@ public class Uberts {
    * maximum size) -- just use a max size of 1.
    */
   public Pair<Labels.Perf, List<Step>> runLocalInference(boolean oracle, double minScore, int actionLimit) {
-    if (COARSE_EVENT_LOGGING)
-      Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
-    Labels.Perf perf = goldEdges.new Perf();
-    List<Step> steps = new ArrayList<>();
-    for (int i = 0; agenda.size() > 0 && (actionLimit <= 0 || i < actionLimit); i++) {
-      Pair<HypEdge, Adjoints> p = agenda.popBoth();
-      HypEdge best = p.get1();
-      boolean y = getLabel(best);
-      if (!y && oracle)
-        continue;
-      if (p.get2().forwards() < minScore)
-        break;
-      agenda.clear();
-      perf.add(best);
-      steps.add(new Step(p, y));
-      addEdgeToState(best);
-    }
-    return new Pair<>(perf, steps);
+    throw new RuntimeException("re-impelment me or use dbgRunInference");
+//    if (COARSE_EVENT_LOGGING)
+//      Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
+//    Labels.Perf perf = goldEdges.new Perf();
+//    List<Step> steps = new ArrayList<>();
+//    for (int i = 0; agenda.size() > 0 && (actionLimit <= 0 || i < actionLimit); i++) {
+//      Pair<HypEdge, Adjoints> p = agenda.popBoth();
+//      HypEdge best = p.get1();
+//      boolean y = getLabel(best);
+//      if (!y && oracle)
+//        continue;
+//      if (p.get2().forwards() < minScore)
+//        break;
+//      agenda.clear();
+//      perf.add(best);
+//      steps.add(new Step(p, y));
+//      addEdgeToState(best);
+//    }
+//    return new Pair<>(perf, steps);
   }
 
 //  /**
@@ -279,36 +311,37 @@ public class Uberts {
    * Though these duplicates are present, oracle recall is handled properly.
    */
   public List<Step> recordOracleTrajectory(boolean dedupEdges) {
-    if (COARSE_EVENT_LOGGING)
-      Log.info("starting " + dedupEdges);
-    if (goldEdges == null)
-      throw new IllegalStateException("you must add labels, goldEdges==null");
-//    if (pNegKeep < 0 || pNegKeep > 1)
-//      throw new IllegalArgumentException();
-    timer.start(REC_ORACLE_TRAJ);
-
-    Set<HashableHypEdge> uniqEdges = new HashSet<>();
-
-    Labels.Perf perf = goldEdges.new Perf();
-    List<Step> traj = new ArrayList<>();
-    while (agenda.size() > 0) {
-      Pair<HypEdge, Adjoints> p = agenda.popBoth();
-      HypEdge edge = p.get1();
-      boolean gold = perf.add(edge);
-      if (DEBUG)
-        System.out.println("[recOrcl] gold=" + gold + " " + edge);
-      traj.add(new Step(edge, p.get2(), gold));
-      if (gold) {
-        if (!dedupEdges || uniqEdges.add(new HashableHypEdge(edge)))
-          addEdgeToState(edge);
-      }
-    }
-
-    if (showTrajDiagnostics)
-      showTrajPerf(traj, perf);
-
-    timer.stop(REC_ORACLE_TRAJ);
-    return traj;
+    throw new RuntimeException("re-impelment me or use dbgRunInference");
+//    if (COARSE_EVENT_LOGGING)
+//      Log.info("starting " + dedupEdges);
+//    if (goldEdges == null)
+//      throw new IllegalStateException("you must add labels, goldEdges==null");
+////    if (pNegKeep < 0 || pNegKeep > 1)
+////      throw new IllegalArgumentException();
+//    timer.start(REC_ORACLE_TRAJ);
+//
+//    Set<HashableHypEdge> uniqEdges = new HashSet<>();
+//
+//    Labels.Perf perf = goldEdges.new Perf();
+//    List<Step> traj = new ArrayList<>();
+//    while (agenda.size() > 0) {
+//      Pair<HypEdge, Adjoints> p = agenda.popBoth();
+//      HypEdge edge = p.get1();
+//      boolean gold = perf.add(edge);
+//      if (DEBUG)
+//        System.out.println("[recOrcl] gold=" + gold + " " + edge);
+//      traj.add(new Step(edge, p.get2(), gold));
+//      if (gold) {
+//        if (!dedupEdges || uniqEdges.add(new HashableHypEdge(edge)))
+//          addEdgeToState(edge);
+//      }
+//    }
+//
+//    if (showTrajDiagnostics)
+//      showTrajPerf(traj, perf);
+//
+//    timer.stop(REC_ORACLE_TRAJ);
+//    return traj;
   }
 
   private void showTrajPerf(List<Step> traj, Labels.Perf perf) {
@@ -599,7 +632,8 @@ public class Uberts {
     return getWitnessNodeTypeName(relation.getName());
   }
   public static String getWitnessNodeTypeName(String relationName) {
-    return ("witness-" + relationName).intern();
+//    return ("witness-" + relationName).intern();
+    return "witness-" + relationName;
   }
 
   /**

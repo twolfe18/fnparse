@@ -31,7 +31,7 @@ public class State {
   public static final int HEAD_ARG_POS = MAX_ARGS - 1;
 
   /** Another way to index into edges: lookup by (relation,argument) */
-  private static class ArgVal {
+  public static class ArgVal {
     public final Relation rel;
     public final HypNode arg;
     public final int argPos;
@@ -45,6 +45,10 @@ public class State {
       this.rel = rel;
       this.arg = arg;
       this.hc = Hash.mix(argPos, rel.hashCode(), arg.hashCode());
+    }
+    @Override
+    public String toString() {
+      return "(ArgVal rel=" + rel.getName() + " pos=" + argPos + " val=" + arg + ")";
     }
     @Override
     public int hashCode() { return hc; }
@@ -129,7 +133,8 @@ public class State {
         return es.item;
       }
       es = schemaEdges.match(argPos, rel, arg);
-      assert es != null && es.next == null;
+      assert es != null : "you asked for one and there are none: " + new ArgVal(argPos, rel, arg);
+      assert es.next == null : "you asked for one and there are many: " + new ArgVal(argPos, rel, arg);
       return es.item;
     }
     @Override

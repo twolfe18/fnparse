@@ -40,7 +40,7 @@ import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
-import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
+import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
@@ -55,6 +55,7 @@ import edu.stanford.nlp.util.StringUtils;
  * @author travis
  */
 public abstract class UbertsPipeline {
+  public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
 
   protected Uberts u;
   protected List<Rule> rules;
@@ -104,26 +105,30 @@ public abstract class UbertsPipeline {
 
     // Read in the defs file which defines (and creates w.r.t. Uberts) the
     // relations which will appear in the values file.
-    Log.info("reading in relation/node type definitions...");
+    if (DEBUG > 0)
+      Log.info("reading in relation/node type definitions...");
     u.readRelData(relationDefs);
 
     Log.info("reading schema files...");
     for (File f : schemaFiles) {
       List<Relation> schemaRelations = u.readRelData(f);
-      Log.info("read " + schemaRelations.size() + " schema relations from " + f.getPath());
+      if (DEBUG > 0)
+        Log.info("read " + schemaRelations.size() + " schema relations from " + f.getPath());
       helperRelations.addAll(schemaRelations);
       for (Relation r : schemaRelations)
         dontBackwardsGenerate.add(r.getName());
     }
 
-    Log.info("running type inference...");
+    if (DEBUG > 0)
+      Log.info("running type inference...");
     this.typeInf = new TypeInference(u);
 //    this.typeInf.debug = true;
     for (Rule untypedRule : Rule.parseRules(grammarFile, null))
       typeInf.add(untypedRule);
     for (Rule typedRule : typeInf.runTypeInference()) {
       if (typedRule.comment != null && typedRule.comment.toLowerCase().contains("nopredict")) {
-        Log.info("not including in transition system because of NOPREDICT comment: " + typedRule);
+        if (DEBUG > 0)
+          Log.info("not including in transition system because of NOPREDICT comment: " + typedRule);
         continue;
       }
       addRule(typedRule);
@@ -132,7 +137,7 @@ public abstract class UbertsPipeline {
     Log.info("done");
   }
 
-  public abstract FeatureExtractionFactor<?> getScoreFor(Rule r);
+  public abstract LocalFactor getScoreFor(Rule r);
 
   public abstract void consume(RelDoc doc);
 
@@ -148,15 +153,18 @@ public abstract class UbertsPipeline {
 
   private void addRule(Rule r) {
     rules.add(r);
-    FeatureExtractionFactor<?> phi = getScoreFor(r);
+    LocalFactor phi = getScoreFor(r);
     // Add to Uberts as a TransitionGenerator
     // Create all orderings of this rule
     for (Rule rr : Rule.allLhsOrders(r)) {
       TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
       Pair<List<TKey>, TG> tg = tgfp.parse2(rr, u);
 
-      Log.info("adding: " + rr);
-      System.out.println(StringUtils.join(tg.get1(), "\n"));
+      if (DEBUG > 0) {
+        Log.info("adding: " + rr);
+        if (DEBUG > 1)
+          System.out.println(StringUtils.join(tg.get1(), "\n"));
+      }
 
       tg.get2().feats = phi;
       dbgTransitionGenerators.add(tg.get2());
@@ -381,12 +389,7 @@ public abstract class UbertsPipeline {
     runInference(x, Shard.ONLY);
   }
   /**
-   * Makes a pass over the data in the given iterator. Effects depend on
-   * {@link Mode}.
-   *
-   * NOTE: Make sure you don't add any mutual exclusion factors (e.g. AtMost1)
-   * before running this: we don't want to remove negative HypEdges which are
-   * ruled out by choosing the right one first.
+   * Calls {@link UbertsPipeline#consume(RelDoc)}
    *
    * @param dataShard may be null, meaning take all data.
    */
@@ -427,7 +430,7 @@ public abstract class UbertsPipeline {
     File xyDefsFile = config.getExistingFile("relationDefs");
     List<File> schemaFiles = config.getExistingFiles("schemaFiles");
     File grammarFile = config.getExistingFile("grammarFile");
-    Uberts u = new Uberts(new Random(9001));
+    Uberts u = new Uberts(new Random(9001), (edge, score) -> score.forwards());
     UbertsPipeline srl;
     String mode = config.getString("mode");
     if (mode.equals("learn")) {

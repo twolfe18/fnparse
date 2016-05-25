@@ -334,8 +334,13 @@ public class FNParseToRelations {
     write(y.getSentence(), w);
 
     // arg-pruning
-    if (outputArgPruning)
-      writeArgs(y, w);
+    if (outputArgPruning) {
+      try {
+        writeArgs(y, w);
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
 
     // y:
     // event1(t), event2(t,f), srl1(s), srl2(t,s), srl3(t,s,k)

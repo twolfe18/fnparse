@@ -32,7 +32,7 @@ import edu.jhu.hlt.uberts.TNode;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
-import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
+import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 
@@ -1130,8 +1130,7 @@ public class TransitionGeneratorForwardsParser {
     private LHS match;
     private Uberts u;
     private Rule rule;
-
-    public FeatureExtractionFactor<?> feats = null;
+    public LocalFactor feats = null;
 
     public TG(LHS match, Rule rule, Uberts u) {
       this.match = match;

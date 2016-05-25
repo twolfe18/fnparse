@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.Counts;
@@ -77,6 +78,50 @@ public class Labels {
     r.addAll(edges2.keySet());
     Collections.sort(r);
     return r;
+  }
+
+  public static Map<String, FPR> combinePerfByRel(Map<String, FPR> a, Map<String, FPR> b) {
+    Map<String, FPR> c = new HashMap<>();
+    // c += a
+    for (Entry<String, FPR> x : a.entrySet()) {
+      FPR aa = x.getValue();
+      FPR cc = c.get(x.getKey());
+      if (cc == null) {
+        cc = new FPR();
+        c.put(x.getKey(), cc);
+      }
+      cc.accum(aa);
+    }
+    // c += b
+    for (Entry<String, FPR> x : b.entrySet()) {
+      FPR bb = x.getValue();
+      FPR cc = c.get(x.getKey());
+      if (cc == null) {
+        cc = new FPR();
+        c.put(x.getKey(), cc);
+      }
+      cc.accum(bb);
+    }
+    return c;
+  }
+
+  public static List<String> showPerfByRel(Map<String, FPR> m) {
+    List<String> keys = new ArrayList<>(m.keySet());
+    Collections.sort(keys);
+    List<String> lines = new ArrayList<>();
+    for (String rel : keys) {
+      FPR p = m.get(rel);
+//      if (p.tpPlusFpPlusFn() == 0)
+//        continue;
+      String l = "";
+      l += String.format("tp(%s)=%d\tfp(%s)=%d\tfn(%s)=%d",
+          rel, (int) p.getTP(), rel, (int) p.getFP(), rel, (int) p.getFN());
+      l += "\t";
+      l += String.format("R(%s)=%.1f\tP(%s)=%.1f\tF(%s)=%.1f",
+          rel, p.recall()*100d, rel, p.precision()*100d, rel, p.f1()*100d);
+      lines.add(l);
+    }
+    return lines;
   }
 
   /** You add predicted edges to this and it tracks precision, recall, F1 */
