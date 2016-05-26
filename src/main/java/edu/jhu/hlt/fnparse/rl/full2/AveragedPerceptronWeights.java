@@ -187,6 +187,14 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     return this.new Adj(features, convertToIntArray);
   }
 
+  /** converts to int[] */
+  public Adjoints score2(List<Integer> features, boolean reindex) {
+    int[] a = new int[features.size()];
+    for (int i = 0; i < a.length; i++)
+      a[i] = features.get(i);
+    return score(a, reindex);
+  }
+
   public Adjoints score(int[] features, boolean reindex) {
     return this.new Adj(features, reindex);
   }

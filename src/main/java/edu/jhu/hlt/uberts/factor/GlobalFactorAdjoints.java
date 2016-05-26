@@ -28,6 +28,10 @@ public class GlobalFactorAdjoints implements Adjoints {
     return globalScores.get(name);
   }
 
+  public Adjoints replaceGlobalScore(String name, Adjoints a) {
+    return globalScores.put(name, a);
+  }
+
   /** returns the sum represented by name */
   public Adjoints addToGlobalScore(String name, Adjoints a) {
     Adjoints p = globalScores.get(name);

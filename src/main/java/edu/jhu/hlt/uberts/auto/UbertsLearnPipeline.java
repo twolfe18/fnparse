@@ -59,10 +59,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
 
   static boolean pizza = false;
-  static boolean oracleFeats = true;
+  static boolean oracleFeats = false;
   static boolean graphFeats = false;
   static boolean templateFeats = true;
-  static int trainPasses = 5;
+  static int trainPasses = 25;
   static boolean pipeline = false;
   static boolean maxViolation = true;
 
@@ -176,17 +176,17 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       AtMost1.add(u, u.getEdgeType("predicate2"), 0 /* t in predicate2(t,f) */, hard);
     }
 
-    numArgsArg4 = new NumArgs(u.getEdgeType("argument4"), 0, 1);
+    numArgsArg4 = new NumArgs(u.getEdgeType("argument4"), 0, 1, u);
     numArgsArg4.storeExactFeatureIndices();
     if (numArgs)
       u.addGlobalFactor(numArgsArg4.getTrigger(u), numArgsArg4);
 
-    numArgsArg3 = new NumArgs(u.getEdgeType("srl3"), 0, -1);
+    numArgsArg3 = new NumArgs(u.getEdgeType("srl3"), 0, -1, u);
     numArgsArg3.storeExactFeatureIndices();
     if (numArgs)
       u.addGlobalFactor(numArgsArg3.getTrigger(u), numArgsArg3);
 
-    numArgsArg2 = new NumArgs(u.getEdgeType("srl2"), 0, -1);
+    numArgsArg2 = new NumArgs(u.getEdgeType("srl2"), 0, -1, u);
     numArgsArg2.storeExactFeatureIndices();
     if (numArgs)
       u.addGlobalFactor(numArgsArg2.getTrigger(u), numArgsArg2);
