@@ -219,6 +219,9 @@ public class Uberts {
   /**
    * Doesn't store states, but is like a List<Step> with benefits such as score
    * and loss prefix sums.
+   *
+   * Used to implement update schemes which look at entire trajectories (as
+   * opposed to methods which update p(a|s)).
    */
   public static class Traj {
     private Map<Relation, FPR> totalLoss;
@@ -389,6 +392,70 @@ public class Uberts {
     }
 
     return best;
+  }
+
+
+  /**
+   * Roll in using oracle or model.
+   * At each state, output set of correct and incorrect actions.
+   *
+   * This is going to be a problem if we have Adjoints which are mutable!
+   * If not, we just collect the Adjoints for every action on the agenda, save them for an update later.
+   * Given that they mutate, we could just call backwards, but that will screw up the agenda order.
+   *
+   * New RULE:
+   * Adjoints must be immutable to use this! For global features, they cannot
+   * do things like numArgs++, since we will collect the adjoints at state_i
+   * and won't call backwards until after state_n: we can't backprop through
+   * the features of state_n even though we had a pointer to a thing we thought
+   * was state_i.
+   *
+   * Oh crap!
+   * This applies to local features too!
+   * if at state_1 we have foo(x), foo(y), and foo(z) on the agenda.
+   * suppose foo(z) is wrong, so we want to do backwards(+1, score(foo(z))),
+   * and we do this at state_1. Then we pop foo(x) to get to state_2, and foo(z)
+   * is still wrong and still on the agenda, so we do another
+   * backwards(+1, score(foo(z))).
+   * => This is fine as long as score(foo(z)) never changed (Adjoints are immutable).
+   */
+  public void daggerLike(double pOracleRollIn) {
+    
+    // Interpolate(oracle,model) Roll-in:
+    // flip a coin for which score, then argmax w.r.t. that score.
+    // Since we are making an entire run with that same score, we can just
+    // flip the heap agenda once, no need to change scores mid-inference.
+
+    // TODO Can try another way: argmax the interpolation.
+    
+    
+    throw new RuntimeException("implement me after experiments are running");
+  }
+
+  /**
+   * Holds a set of actions out of a state, where we know what all the right
+   * actions are and we know what the wrong ones are, and this is used to hold
+   * the needed information for an update (boost the prob/score of good actions
+   * and lower the prob/score of bad ones).
+   *
+   * Lets say that we have a three stage pipeline, foo(x) -> bar(x) -> baz(x),
+   * and we use pipeline agenda priority: stage(f) + tanh(score(f))
+   * It seems like we care more about the correct and incorrect foo facts at
+   * the top of the agenda more than the baz facts. Should we update those
+   * more? We could flip a coin for whether we update each, where p(update)
+   * trails off as you go down the heap (to facts which may not have had global
+   * features fire).
+   */
+  public static class AgendaSnapshot {
+    // In agenda order (by priority).
+    // Each one is either Commit(f) or Prune(f) and either right or wrong.
+    private List<Step> agendaItems;
+
+    // The hard part of this is going to be how to efficiently extract the
+    // heap items and copy them in here without duplicating the entire heap.
+    // I suppose I could have a non-destructive iterator for the agenda...
+    // BFS traversal means almost sorted...
+    // Could sort in here...
   }
 
   /**

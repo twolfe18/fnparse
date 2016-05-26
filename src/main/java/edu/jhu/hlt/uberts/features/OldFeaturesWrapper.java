@@ -622,7 +622,8 @@ public class OldFeaturesWrapper {
 //        if (skipped.getTotalCount() % 1000 == 0)
 //          Log.info("skipped: " + skipped.toString());
         Log.warn("skipped: " + skipped.toString());
-        break;
+        throw new RuntimeException("don't know how to handle: " + yhat);
+//        break;
       }
       if (s != null && s != Span.nullSpan) {
         ctx.setArg(s);

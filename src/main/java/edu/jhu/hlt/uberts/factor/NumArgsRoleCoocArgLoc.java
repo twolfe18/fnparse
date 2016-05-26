@@ -25,9 +25,8 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 
-public class NumArgs implements GlobalFactor {
-  public static boolean DEBUG = false;
-  public static boolean COARSE_DEBUG = true;
+public class NumArgsRoleCoocArgLoc implements GlobalFactor {
+  public static int DEBUG = 0;
 
   private Relation firesFor;    // e.g. argument4
   private int aggregateArgPos;  // e.g. 0 for t in argument4(t,f,s,k)
@@ -129,7 +128,7 @@ public class NumArgs implements GlobalFactor {
   /**
    * @param refinementArgPos can be <0 if you don't want a refinement
    */
-  public NumArgs(Relation firesFor, int aggregateArgPos, int refinementArgPos, Uberts u) {
+  public NumArgsRoleCoocArgLoc(Relation firesFor, int aggregateArgPos, int refinementArgPos, Uberts u) {
     this.u = u;
     this.firesFor = firesFor;
     this.aggregateArgPos = aggregateArgPos;
@@ -332,9 +331,9 @@ public class NumArgs implements GlobalFactor {
         gs.replaceGlobalScore("argLocGlobal", argLocGA);
       }
     }
-    if (DEBUG || COARSE_DEBUG) {
+    if (DEBUG > 0) {
       Log.info("rescored " + n + " " + firesFor.getName() + " relations connected to " + t);
-      if (DEBUG)
+      if (DEBUG > 1)
         for (HypEdge e : affected)
           System.out.println("\t" + e);
     }

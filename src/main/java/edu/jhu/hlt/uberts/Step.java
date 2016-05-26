@@ -4,10 +4,13 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
 
 /**
- * Represents an action taken at a state.
- *
- * TODO: May want to take pred:boolean as an argument if I decide not to use
- * 0 as the threshold for all relations.
+ * Represents either a Commit(f) or Prune(f) action taken at a state, where f
+ * is the HypEdge field. It is a Commit(f) if score > 0, and a Prune(f) otherwise.
+ * You can only back-prop an error to score if this is Commit(f) and !gold (FP)
+ * or if it is Prune(f) and gold (FN). In the first case you are lowering the
+ * score of Commit(f) and in the latter you are raising the score of Commit(f).
+ * The score of Prune(f) is fixed at 0. So this really represents two actions
+ * and one score.
  *
  * @author travis
  */
@@ -26,6 +29,22 @@ public class Step {
     this.score = score;
     this.gold = gold;
     this.pred = pred;
+  }
+
+  public boolean isCommit() {
+    return score.forwards() > 0;
+  }
+  public boolean isPrune() {
+    return !isCommit();
+  }
+  public boolean isFP() {
+    return !gold && isCommit();
+  }
+  public boolean isFN() {
+    return gold && isPrune();
+  }
+  public boolean hasLoss() {
+    return isFP() || isFN();
   }
 
   @Override

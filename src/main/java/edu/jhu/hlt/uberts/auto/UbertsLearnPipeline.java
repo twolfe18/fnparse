@@ -31,6 +31,7 @@ import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
+import edu.jhu.hlt.uberts.AgendaPriority;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
@@ -46,7 +47,7 @@ import edu.jhu.hlt.uberts.Uberts.Traj;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.factor.AtMost1;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
-import edu.jhu.hlt.uberts.factor.NumArgs;
+import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.features.WeightAdjoints;
@@ -62,7 +63,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static boolean oracleFeats = false;
   static boolean graphFeats = false;
   static boolean templateFeats = true;
-  static int trainPasses = 25;
+  static int trainPasses = 5;
   static boolean pipeline = false;
   static boolean maxViolation = true;
 
@@ -87,7 +88,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // +pred2Mutex(SOFT) +numArgs F(predicate2)=88.7 F(argument4)=36.7
 
   public static void main(String[] args) throws IOException {
-    ExperimentProperties.init(args);
+    ExperimentProperties config = ExperimentProperties.init(args);
 //    BrownClusters.DEBUG = true; // who is loading BC multiple times?
 
     File p, grammarFile, relationDefs;
@@ -110,39 +111,59 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       relationDefs = new File(p, "relations.def");
     }
 
-    BiFunction<HypEdge, Adjoints, Double> agendaPriority;
-    if (pipeline) {
-      double strength = 0.5;    // 1 means full pipeline, 0 means best first
-      final Map<String, Double> relPrior = new HashMap<>();
-      relPrior.put("event1", 5 * strength);
-      relPrior.put("predicate2", 4 * strength);
-      relPrior.put("srl2", 3 * strength);
-      relPrior.put("srl3", 2 * strength);
-      relPrior.put("argument4", 1 * strength);
-      agendaPriority = (edge, score) -> {
-        double sc = score.forwards();
-        Double r = relPrior.get(edge.getRelation().getName());
-        if (r == null) {
-          assert false : "no priority for " + edge;
-          r = 6 *  strength;
-        }
-        return r + 0.95 * Math.tanh(sc);
-      };
-    } else {
-      agendaPriority = (edge, score) -> score.forwards();
-    }
+    costFP_event1 = config.getDouble("costFP_event1", costFP_event1);
+    costFP_srl2 = config.getDouble("costFP_srl2", costFP_srl2);
+    costFP_srl3 = config.getDouble("costFP_srl3", costFP_srl3);
+    Log.info("costFP_event1=" + costFP_event1
+        + " costFP_srl2=" + costFP_srl2
+        + " costFP_srl3=" + costFP_srl3);
+
+    BiFunction<HypEdge, Adjoints, Double> agendaPriority =
+        AgendaPriority.parse(config.getString("agendaPriority", "1*easyFirst + 1*dfs"));
+//    if (pipeline) {
+//      double strength = 0.5;    // 1 means full pipeline, 0 means best first
+//      final Map<String, Double> relPrior = new HashMap<>();
+//      relPrior.put("event1", 5 * strength);
+//      relPrior.put("predicate2", 4 * strength);
+//      relPrior.put("srl2", 3 * strength);
+//      relPrior.put("srl3", 2 * strength);
+//      relPrior.put("argument4", 1 * strength);
+//      agendaPriority = (edge, score) -> {
+//        double sc = score.forwards();
+//        Double r = relPrior.get(edge.getRelation().getName());
+//        if (r == null) {
+//          assert false : "no priority for " + edge;
+//          r = 6 *  strength;
+//        }
+//        return r + 0.95 * Math.tanh(sc);
+//      };
+//    } else {
+//      agendaPriority = (edge, score) -> score.forwards();
+//    }
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
+    List<File> train = config.getExistingFiles("train.facts", Arrays.asList(new File(p, "debug.train.facts")));
+    File dev = config.getExistingFile("dev.facts", new File(p, "debug.dev.facts"));
+    File test = config.getExistingFile("test.facts", new File(p, "debug.test.facts"));
     for (int i = 0; i < trainPasses; i++) {
-      try (RelationFileIterator rels = new RelationFileIterator(new File(p, "debug.train.facts"), false);
-          ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-        pipe.runInference(many);
+      for (File f : train) {
+        Log.info("[main] pass=" + (i+1) + " of=" + trainPasses + " trainFile=" + f.getPath());
+        try (RelationFileIterator rels = new RelationFileIterator(f, false);
+            ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
+          pipe.runInference(many);
+        }
+        Log.info("[main] pass=" + (i+1) + " of=" + trainPasses + " devFile=" + dev.getPath());
+        try (RelationFileIterator rels = new RelationFileIterator(dev, false);
+            ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
+          pipe.runInference(many);
+        }
+        Log.info("[main] pass=" + (i+1) + " of=" + trainPasses + " testFile=" + test.getPath());
+        try (RelationFileIterator rels = new RelationFileIterator(test, false);
+            ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
+          pipe.runInference(many);
+        }
       }
-    }
-    try (RelationFileIterator rels = new RelationFileIterator(new File(p, "debug.test.facts"), false);
-        ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-      pipe.runInference(many);
     }
   }
 
@@ -155,9 +176,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private OldFeaturesWrapper.Ints feFast;
   private Mode mode;
 
-  private NumArgs numArgsArg4;  // argument4(t,f,s,k) with ref=f
-  private NumArgs numArgsArg3;  // srl3(predicate2(t,f),k)
-  private NumArgs numArgsArg2;  // srl2(event1(t),s)
+  private NumArgsRoleCoocArgLoc numArgsArg4;  // argument4(t,f,s,k) with ref=f
+  private NumArgsRoleCoocArgLoc numArgsArg3;  // srl3(predicate2(t,f),k)
+  private NumArgsRoleCoocArgLoc numArgsArg2;  // srl2(event1(t),s)
 
   // For now these store all performances for the last epoch (pass over data)
   private List<Map<String, FPR>> perfByRelTrain = new ArrayList<>();
@@ -176,17 +197,17 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       AtMost1.add(u, u.getEdgeType("predicate2"), 0 /* t in predicate2(t,f) */, hard);
     }
 
-    numArgsArg4 = new NumArgs(u.getEdgeType("argument4"), 0, 1, u);
+    numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, u);
     numArgsArg4.storeExactFeatureIndices();
     if (numArgs)
       u.addGlobalFactor(numArgsArg4.getTrigger(u), numArgsArg4);
 
-    numArgsArg3 = new NumArgs(u.getEdgeType("srl3"), 0, -1, u);
+    numArgsArg3 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl3"), 0, -1, u);
     numArgsArg3.storeExactFeatureIndices();
     if (numArgs)
       u.addGlobalFactor(numArgsArg3.getTrigger(u), numArgsArg3);
 
-    numArgsArg2 = new NumArgs(u.getEdgeType("srl2"), 0, -1, u);
+    numArgsArg2 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 0, -1, u);
     numArgsArg2.storeExactFeatureIndices();
     if (numArgs)
       u.addGlobalFactor(numArgsArg2.getTrigger(u), numArgsArg2);
