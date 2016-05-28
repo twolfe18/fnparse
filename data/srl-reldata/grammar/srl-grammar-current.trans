@@ -1,0 +1,105 @@
+
+# doneAnno(docid) & pos2(i,t) & succTok(i,j) => event1(i,j)
+# event1'(e,i,j) & frameTriage2(l,f) & lemma2(i,l) => event2(e,f)
+# 
+# event1'(t,i,j) & xue-palmer-args(i,j,k,l) => srl2(t,ss,se)
+# event2'(tf,t,f) & role(f,k) => srl3(tf,k)
+# srl2'(ts,t,s) & srl3'(tfk,t,f,k) => srl4(ts,tfk)
+# 
+# event1'(t,i,j) & srl2'(e2,t,s) & srl3'(s3,t,f,k) & srl4(e2,s3) => srl4-prediction(ts,te,f,ss,se,k)
+# 
+# 
+# 
+# # Multiple equality constraints:
+# # Problem: If I write a rule like event1(t,i,j) & xue-palmer-args(i,j,k,l) => srl2(t,k,l)
+# # TransitionGenerator will produce the traversal: event1 -> i -> xue-palmer-args
+# # which does not enforce the expressed constraint that j have the same value in event1 and xue-palmer-args.
+# 
+# # Options:
+# # 1) Leave what I have now, and create a second pass which checks variable equality constraints that the traversal missed.
+# # 2) Pre-proocess: Binarize/tuplify my relations
+# 
+# xue-palmer-args(i,j,k,l)
+# 	gets translated to:
+# xue-palmer-args-bin(a,b)
+# xue-palmer-args-bin-left'(a,i,j)
+# xue-palmer-args-bin-right'(b,k,l)
+# 
+# When should this transformation occur?
+# xue-palmer-args(i,j,k,l) => xue-palmer-args-bin-left(i,j)
+# xue-palmer-args(i,j,k,l) => xue-palmer-args-bin-right(k,l)
+# If I tried to combine these back, I would get cross product instead of the same items
+# 
+# I could do it all in one shot if I added support for multiple RHS terms.
+# BUT I would need to specially handle head variables...
+# 
+# 
+# Wait, why not just use a string to represent a span?
+# xue-palmer-args(i,j,k,l) => xue-palmer-args2(i-j,k-l)
+# 
+# I think I need tupling relations/functions
+# tuple'(ij, i, j)
+# 
+# pos2(i,t) & succTok(i,j) & tuple'(ij,i,j) ... nope, still need double equality
+# 
+# 
+# Perhaps I can define a special converter for NodeTypes (arguments to Relations)
+# which implements "3-4" => SpanPair(3,4) upon reading in the number
+# (rather than keeping it a string as it does now)
+# 
+# Or maybe just leave it as a string and fill out the following relations:
+# pi1 "3-4" "3"
+# pi1 "3-5" "5"
+# ...
+# pi2 "3-4" "4"
+# 
+# Spans are now primitives
+# xue-palmer-arg(i,j,k,l) => xue-palmer-args(t,s)
+# => csyn5-stanford(id, parentId, head, span, label)
+# 
+# 
+# span "3-4" "3" "4"
+# span "3-5" "3" "5"
+# ...
+# # This basically replaces succTok
+# span-w1 "3-4" "3" "4"
+# span-w1 "4-5" "4" "5"
+# ...
+# # Both have the same argument types.
+# 
+# #pos2(i,t) & succTok(i,j) => event1(i,j)
+# pos2(i,t) & span-w1(ij,i,j) => event1(ij)
+
+
+####################################################################################
+
+# doneAnno(docid) & pos2(i,t) & span-w1(ij,i,j) => event1(ij)
+# #pos2(i,t) & span-w1(ij,i,j) => event1(ij)
+# event1(t) & span-w1(t,i,j) & lemma2(i,l) & frameTriage4(l,pos,synset,f) => predicate2(t,f)
+# #event1'(e1,t) & xue-palmer-args2(t,s) => srl2(e1,s)
+# event1'(e1,t) & xue-palmer-args2(t,s) => srl2(t,s)
+# predicate2'(e2,t,f) & role2(f,k) => srl3(e2,k)
+# 
+# #srl2'(s2,e1,s) & event1'(e1,t) & srl3'(s3,e2,k) & predicate2'(e2,t,f) => argument4(t,f,s,k)
+# srl2'(s2,t,s) & srl3'(s3,e2,k) & predicate2'(e2,t,f) => argument4(t,f,s,k)
+# # OR
+# # srl2'(s2,e1,s) & event1'(e1,t) & srl3'(s3,e2,k) & predicate2'(e2,t,f) => srl4(s2,s3)
+# # srl4(s2,s3) & srl2'(s2,e1,s) & event1'(e1,t) & srl3'(s3,e2,k) & predicate2'(e2,t,f) => argument4(t,f,s,k)
+
+
+
+
+
+
+
+doneAnno(docid) & pos2(i,pos) & span-w1(t,i,j) => event1(t)
+event1(t) & span-w1(t,i,j) & lemma2(i,l) & frameTriage4(l,pos,synset,f) => predicate2(t,f)
+event1(t) & xue-palmer-args2(t,s) => srl2(t,s)
+predicate2(t,f) & role2(f,k) => srl3(t,f,k)
+srl2(t,s) & srl3(t,f,k) => argument4(t,f,s,k)
+
+# s2 = (t,s)
+# s3 = ((t,f),k)
+#event1'(e1,t) & span-w1(t,ts,te) & event2'(e2,e1,f) & srl2'(s2,e1,s) & span-w1(s,ss,se) & srl3'(s3,e2,k) & srl4(s2,s3) => srl4-prediction(ts,te,f,ss,se,k) # NOPREDICT
+
+
