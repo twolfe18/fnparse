@@ -28,6 +28,7 @@ import edu.jhu.util.Alphabet;
 public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public static int DEBUG = 0;
 
+  private Uberts u;
   private Relation firesFor;    // e.g. argument4
   private int aggregateArgPos;  // e.g. 0 for t in argument4(t,f,s,k)
   private int refineArgPos;     // e.g. 1 for f in argument4(t,f,s,k), meaning create extra conjunction feature with frame value
@@ -38,13 +39,51 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   // Each is called on f(newEdge,fOldEdge) where each argument is a firesFor Relation
   private List<PairFeat> pairwiseFeatures;
 
-  // TODO Take this as an argument
-  private Uberts u;
+  // Stats
+  private int nRescore = 0;
+  private int nEdgeRescore = 0;
 
-  public boolean numArgs = true;
-  public boolean argLocPairwise = true;
-  public boolean argLocGlobal = false;
-  public boolean roleCooc = true;
+  public static boolean numArgs = true;
+  public static boolean argLocPairwise = true;
+  public static boolean argLocGlobal = false;
+  public static boolean roleCooc = true;
+
+  @Override
+  public String getStats() {
+    String s = "nRescore=" + nRescore + " nEdgeRescore=" + nEdgeRescore;
+    nRescore = 0;
+    nEdgeRescore = 0;
+    return s;
+  }
+
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append('(');
+    String[] c = getClass().getName().split("\\.");
+    sb.append(c[c.length - 1]);
+    sb.append(' ');
+    sb.append(firesFor.getName());
+    sb.append(" agg=" + aggregateArgPos);
+    sb.append(':');
+    sb.append(firesFor.getTypeForArg(aggregateArgPos).getName());
+    if (refineArgPos >= 0) {
+      sb.append(" ref=" + refineArgPos);
+      sb.append(':');
+      sb.append(firesFor.getTypeForArg(refineArgPos).getName());
+    }
+    if (numArgs) sb.append(" +numArgs");
+    if (argLocPairwise) sb.append(" +argLocPairwise");
+    if (argLocGlobal) sb.append(" +argLocGlobal");
+    if (roleCooc) sb.append(" +roleCooc");
+    sb.append(')');
+    return sb.toString();
+  }
+
+  @Override
+  public String getName() {
+    return toString();
+  }
 
   interface PairFeat {
     String getName();
@@ -133,7 +172,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     this.firesFor = firesFor;
     this.aggregateArgPos = aggregateArgPos;
     this.refineArgPos = refinementArgPos;
-    dimension = 1<<16;
+    dimension = 1<<18;
     int numIntercept = 0;
     theta = new AveragedPerceptronWeights(dimension, numIntercept);
 
@@ -225,7 +264,6 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
   }
 
-//  static List<Integer> argLocGlobal(HypNode t, LL<HypEdge> stateEdge, HypEdge newStateEdge, HypEdge agendaEdge) {
   static List<Integer> argLocGlobal(HypNode t, LL<HypEdge> stateEdge, HypEdge agendaEdge) {
     // Gather target
     Spany target = new Spany(t);
@@ -233,14 +271,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       return Collections.emptyList();
 
     // Get the args
-//    Spany newArg = new Spany(newStateEdge);
-//    if (newArg.arg == null)
-//      return Collections.emptyList();
     Spany maybeArg = new Spany(agendaEdge);
     if (maybeArg.arg == null)
       return Collections.emptyList();
     List<Spany> allArgs = new ArrayList<>();
-//    allArgs.add(newArg);
     allArgs.add(maybeArg);
     for (LL<HypEdge> cur = stateEdge; cur != null; cur = cur.next) {
       Spany arg = new Spany(cur.item);
@@ -280,6 +314,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
   @Override
   public void rescore(Agenda a, GraphTraversalTrace match) {
+    nRescore++;
     HypEdge srl4Fact = match.getBoundEdge(0);
     HypNode t = srl4Fact.getTail(aggregateArgPos);
     Iterable<HypEdge> affected = a.match(aggregateArgPos, firesFor, t);
@@ -290,6 +325,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     int n = 0;
     for (HypEdge e : affected) {
+      nEdgeRescore++;
       n++;
       Adjoints score = a.getScore(e);
       a.remove(e);

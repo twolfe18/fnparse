@@ -195,7 +195,7 @@ public class SimpleNer {
         HypNode i = e.getTail(0);
         assert i.getNodeType() == tokenIndex;
         return i;
-    }));
+    }, "index"));
 
     // Supervision
     if (supervised) {

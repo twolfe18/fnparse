@@ -230,7 +230,8 @@ public class OldFeaturesWrapper {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-    Log.info("setup with " + features.size() + " features");
+    if (DEBUG > 0)
+      Log.info("setup with " + features.size() + " features");
 
     customRefinements = e -> {
       assert e.getNumTails() == 6;
@@ -287,6 +288,9 @@ public class OldFeaturesWrapper {
         "Head2-Grandparent-Basic-" + w,
 //        "lexPredArg", "lexArgMod", "lexPredMod",
     };
+
+    if (DEBUG > 0)
+      Log.info("using DEBUG feature set of " + tempNames.length + " templates (1,2,3 grams)");
 
     Template[] temps = new Template[tempNames.length];
     for (int i = 0; i < temps.length; i++) {

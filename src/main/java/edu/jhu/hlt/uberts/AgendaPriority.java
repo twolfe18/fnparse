@@ -4,11 +4,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
 
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
 
 public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
+  public static int DEBUG = 1;
 
   public double priority(HypEdge edge, Adjoints score);
 
@@ -18,6 +20,8 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
   }
 
   public static AgendaPriority parse(String description) {
+    if (DEBUG > 0)
+      Log.info("parsing agenda priority " + description);
     String[] toks = description.split("\\+");
     WeightedSum w = new WeightedSum();
     for (int i = 0; i < toks.length; i++) {

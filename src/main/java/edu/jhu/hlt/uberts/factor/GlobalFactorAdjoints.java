@@ -55,7 +55,6 @@ public class GlobalFactorAdjoints implements Adjoints {
 
   @Override
   public void backwards(double dErr_dForwards) {
-    Log.info("global backwards");
     localScore.backwards(dErr_dForwards);
     for (Adjoints a : globalScores.values())
       a.backwards(dErr_dForwards);

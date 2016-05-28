@@ -38,7 +38,7 @@ public class SrlSchemaToRelations {
     Set<String> seen = new HashSet<>();
     try (BufferedWriter w = FileUtil.getWriter(to)) {
       // Relation definition
-      w.write("def frameTriage4 lemma pos synset frame");
+      w.write("def frameTriage4 <lemma> <pos> <synset> <frame>");
       w.newLine();
       // Instances
       for (Frame f : fi.allFrames()) {

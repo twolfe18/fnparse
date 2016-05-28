@@ -26,6 +26,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
@@ -46,6 +47,7 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.Uberts.Traj;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.factor.AtMost1;
+import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
@@ -60,15 +62,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
 
   static boolean pizza = false;
-  static boolean oracleFeats = false;
+  static boolean oracleFeats = true;
   static boolean graphFeats = false;
-  static boolean templateFeats = true;
-  static int trainPasses = 5;
+  static boolean templateFeats = false;
   static boolean pipeline = false;
   static boolean maxViolation = true;
 
-  static boolean pred2Mutex = true;
-  static boolean numArgs = true;
+  static boolean predicate2Mutex = true;
+  static boolean enableGlobalFactors = true;
 
   static double costFP_srl3 = 0.25;
   static double costFP_srl2 = 0.25;
@@ -91,25 +92,27 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     ExperimentProperties config = ExperimentProperties.init(args);
 //    BrownClusters.DEBUG = true; // who is loading BC multiple times?
 
-    File p, grammarFile, relationDefs;
-    List<File> schemaFiles;
-    if (pizza) {
-      p = new File("data/srl-reldata/trump-pizza");
-      grammarFile = new File(p, "grammar.trans");
-      schemaFiles = Arrays.asList(
-          new File(p, "span-relations.def"),
-          new File(p, "schema-framenet.def"));
-      relationDefs = new File(p, "relations.def");
-//    File multiRels = new File(p, "trump-pizza-fork.backwards.xy.rel.multi");
-    } else {
-      p = new File("data/srl-reldata/propbank");
-      grammarFile = new File("data/srl-reldata/grammar/srl-grammar-current.trans");
-      schemaFiles = Arrays.asList(
-          new File("data/srl-reldata/util/span-250.def"),
-          new File(p, "frameTriage.rel.gz"),
-          new File(p, "role.rel.gz"));
-      relationDefs = new File(p, "relations.def");
-    }
+//    File p;
+    File grammarFile = config.getExistingFile("grammar");
+    File relationDefs = config.getExistingFile("relations");
+    List<File> schemaFiles = config.getExistingFiles("schema");
+//    if (pizza) {
+//      p = new File("data/srl-reldata/trump-pizza");
+//      grammarFile = new File(p, "grammar.trans");
+//      schemaFiles = Arrays.asList(
+//          new File(p, "span-relations.def"),
+//          new File(p, "schema-framenet.def"));
+//      relationDefs = new File(p, "relations.def");
+////    File multiRels = new File(p, "trump-pizza-fork.backwards.xy.rel.multi");
+//    } else {
+//      p = new File("data/srl-reldata/propbank");
+//      grammarFile = new File("data/srl-reldata/grammar/srl-grammar-current.trans");
+//      schemaFiles = Arrays.asList(
+//          new File("data/srl-reldata/util/span-250.def"),
+//          new File(p, "frameTriage.rel.gz"),
+//          new File(p, "role.rel.gz"));
+//      relationDefs = new File(p, "relations.def");
+//    }
 
     costFP_event1 = config.getDouble("costFP_event1", costFP_event1);
     costFP_srl2 = config.getDouble("costFP_srl2", costFP_srl2);
@@ -118,47 +121,41 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         + " costFP_srl2=" + costFP_srl2
         + " costFP_srl3=" + costFP_srl3);
 
+    predicate2Mutex = config.getBoolean("pred2Mutex", true);
+    enableGlobalFactors = !config.getBoolean("disableGlobalFactors", false);
+    Log.info("predicate2Mutex=" + predicate2Mutex + " disableGlobalFactors=" + !enableGlobalFactors);
+    NumArgsRoleCoocArgLoc.numArgs = config.getBoolean("numArgs", true);
+    NumArgsRoleCoocArgLoc.argLocPairwise = config.getBoolean("argLocPairwise", true);
+    NumArgsRoleCoocArgLoc.argLocGlobal = config.getBoolean("argLocGlobal", false);
+    NumArgsRoleCoocArgLoc.roleCooc = config.getBoolean("roleCooc", true);
+
+    // This is how many passes over ALL training files are given. If there are
+    // 10 train files, each of which is all the data shuffled in a particular
+    // way, then setting this to 3 would mean making 30 epochs.
+    int passes = config.getInt("passes", 3);
+
     BiFunction<HypEdge, Adjoints, Double> agendaPriority =
         AgendaPriority.parse(config.getString("agendaPriority", "1*easyFirst + 1*dfs"));
-//    if (pipeline) {
-//      double strength = 0.5;    // 1 means full pipeline, 0 means best first
-//      final Map<String, Double> relPrior = new HashMap<>();
-//      relPrior.put("event1", 5 * strength);
-//      relPrior.put("predicate2", 4 * strength);
-//      relPrior.put("srl2", 3 * strength);
-//      relPrior.put("srl3", 2 * strength);
-//      relPrior.put("argument4", 1 * strength);
-//      agendaPriority = (edge, score) -> {
-//        double sc = score.forwards();
-//        Double r = relPrior.get(edge.getRelation().getName());
-//        if (r == null) {
-//          assert false : "no priority for " + edge;
-//          r = 6 *  strength;
-//        }
-//        return r + 0.95 * Math.tanh(sc);
-//      };
-//    } else {
-//      agendaPriority = (edge, score) -> score.forwards();
-//    }
+
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
-    List<File> train = config.getExistingFiles("train.facts", Arrays.asList(new File(p, "debug.train.facts")));
-    File dev = config.getExistingFile("dev.facts", new File(p, "debug.dev.facts"));
-    File test = config.getExistingFile("test.facts", new File(p, "debug.test.facts"));
-    for (int i = 0; i < trainPasses; i++) {
+    List<File> train = config.getExistingFiles("train.facts");//, Arrays.asList(new File(p, "debug.train.facts")));
+    File dev = config.getExistingFile("dev.facts");//, new File(p, "debug.dev.facts"));
+    File test = config.getExistingFile("test.facts");//, new File(p, "debug.test.facts"));
+    for (int i = 0; i < passes; i++) {
       for (File f : train) {
-        Log.info("[main] pass=" + (i+1) + " of=" + trainPasses + " trainFile=" + f.getPath());
+        Log.info("[main] pass=" + (i+1) + " of=" + passes + " trainFile=" + f.getPath());
         try (RelationFileIterator rels = new RelationFileIterator(f, false);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
           pipe.runInference(many);
         }
-        Log.info("[main] pass=" + (i+1) + " of=" + trainPasses + " devFile=" + dev.getPath());
+        Log.info("[main] pass=" + (i+1) + " of=" + passes + " devFile=" + dev.getPath());
         try (RelationFileIterator rels = new RelationFileIterator(dev, false);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
           pipe.runInference(many);
         }
-        Log.info("[main] pass=" + (i+1) + " of=" + trainPasses + " testFile=" + test.getPath());
+        Log.info("[main] pass=" + (i+1) + " of=" + passes + " testFile=" + test.getPath());
         try (RelationFileIterator rels = new RelationFileIterator(test, false);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
           pipe.runInference(many);
@@ -171,14 +168,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static enum Mode {
     TRAIN, DEV, TEST,
   }
+  private Mode mode;
 
   private BasicFeatureTemplates bft;
   private OldFeaturesWrapper.Ints feFast;
-  private Mode mode;
 
-  private NumArgsRoleCoocArgLoc numArgsArg4;  // argument4(t,f,s,k) with ref=f
-  private NumArgsRoleCoocArgLoc numArgsArg3;  // srl3(predicate2(t,f),k)
-  private NumArgsRoleCoocArgLoc numArgsArg2;  // srl2(event1(t),s)
+  private NumArgsRoleCoocArgLoc numArgsArg4;
+  private NumArgsRoleCoocArgLoc numArgsArg3;
+  private NumArgsRoleCoocArgLoc numArgsArg2;
+  // These are not mutually exclusive, above are in below
+  private List<GlobalFactor> globalFactors = new ArrayList<>();
 
   // For now these store all performances for the last epoch (pass over data)
   private List<Map<String, FPR>> perfByRelTrain = new ArrayList<>();
@@ -188,50 +187,56 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
     super(u, grammarFile, schemaFiles, relationDefs);
-//    init();
 
-
-    // First attempt at adding back global factors
-    if (pred2Mutex) {
+    if (predicate2Mutex) {
       boolean hard = false;
       AtMost1.add(u, u.getEdgeType("predicate2"), 0 /* t in predicate2(t,f) */, hard);
     }
 
+    // TODO argument4(t,f,s,k) with mutexArg=s?
+    // TODO srl2(t,s) with mutexArg=s?
+
     numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, u);
     numArgsArg4.storeExactFeatureIndices();
-    if (numArgs)
+    if (enableGlobalFactors) {
+      globalFactors.add(numArgsArg4);
       u.addGlobalFactor(numArgsArg4.getTrigger(u), numArgsArg4);
+    }
 
     numArgsArg3 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl3"), 0, -1, u);
     numArgsArg3.storeExactFeatureIndices();
-    if (numArgs)
+    if (enableGlobalFactors) {
+      globalFactors.add(numArgsArg3);
       u.addGlobalFactor(numArgsArg3.getTrigger(u), numArgsArg3);
+    }
 
     numArgsArg2 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 0, -1, u);
     numArgsArg2.storeExactFeatureIndices();
-    if (numArgs)
+    if (enableGlobalFactors) {
+      globalFactors.add(numArgsArg2);
       u.addGlobalFactor(numArgsArg2.getTrigger(u), numArgsArg2);
+    }
   }
 
   @Override
   public LocalFactor getScoreFor(Rule r) {
-//    if (feFast == null)
-//      init();
-//    return feFast;
-
     LocalFactor f = new LocalFactor.Zero();
 
     if (templateFeats) {
+      Log.info("using template feats");
       if (bft == null)
         bft = new BasicFeatureTemplates();
       OldFeaturesWrapper.Strings ff = new OldFeaturesWrapper.Strings(new OldFeaturesWrapper(bft), 0d);
       f = new LocalFactor.Sum(ff, f);
     }
 
-    if (oracleFeats)
+    if (oracleFeats) {
+      Log.info("using oracle feats");
       f = new LocalFactor.Sum(new FeatureExtractionFactor.Oracle(r.rhs.relName), f);
+    }
 
     if (graphFeats) {
+      Log.info("using graph feats");
       FeatureExtractionFactor.GraphWalks gw = new FeatureExtractionFactor.GraphWalks();
       gw.maxArgs = 6;
       //    gw.maxValues = gw.maxArgs;
@@ -292,6 +297,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   @Override
   public void consume(RelDoc doc) {
+    u.stats.clear();
     switch (mode) {
     case TRAIN:
       trainNaive(doc);
@@ -306,9 +312,35 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, minScore, actionLimit);
       List<Map<String, FPR>> l = mode == Mode.DEV ? perfByRelDev : perfByRelTest;
       l.add(p.get1().perfByRel());
-      if (DEBUG > 1) {
-        System.out.println("traj.size=" + p.get2().size());
-        System.out.println(StringUtils.join("\n", Labels.showPerfByRel(l.get(l.size()-1))));
+      if (DEBUG > 0) {
+        // Show some stats about this example
+        System.out.println("trajLength=" + p.get2().size());
+        System.out.println("perDocStats: " + u.stats.toString());
+
+        // Agenda size
+        OrderStatistics<Integer> os = new OrderStatistics<>();
+        for (int i = 0; i < u.statsAgendaSizePerStep.size(); i++)
+          os.add(u.statsAgendaSizePerStep.get(i));
+        System.out.println("agendaSize: mean=" + os.getMean() + " orders=" + os.getOrdersStr());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("globalFactorStats:");
+        for (GlobalFactor gf : globalFactors) {
+          String msg = gf.getStats();
+          if (msg != null) {
+            sb.append(' ');
+            sb.append('(');
+            sb.append(gf.getName());
+            sb.append(' ');
+            sb.append(msg);
+            sb.append(')');
+          }
+        }
+        System.out.println(sb.toString());
+
+        if (DEBUG > 1) {
+          System.out.println(StringUtils.join("\n", Labels.showPerfByRel(l.get(l.size()-1))));
+        }
       }
       break;
     }

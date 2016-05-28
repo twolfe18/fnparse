@@ -74,7 +74,7 @@ public class UbertsTest {
     u.addGlobalFactor(newPosLHS, new AtMost1.RelNode1(
         u.getEdgeType("pos"),
         hard,
-        gtt -> gtt.getBoundNode(1)));
+        gtt -> gtt.getBoundNode(1), "index"));
     u.addTransitionGenerator(newPosLHS, new TransitionGenerator() {
       @Override
       public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
@@ -180,7 +180,7 @@ public class UbertsTest {
     newNerGraphFragment.getValue().gf = new AtMost1.RelNode2(
         u.getEdgeType("ner"),
         gtt -> gtt.getBoundNode(1),
-        gtt -> gtt.getBoundNode(2));  // 2 and not 3 since GOTO_PARENT doesn't bind anything
+        gtt -> gtt.getBoundNode(2), "span-start", "span-end");  // 2 and not 3 since GOTO_PARENT doesn't bind anything
   }
 
   /**

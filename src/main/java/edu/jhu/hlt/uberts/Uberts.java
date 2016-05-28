@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.function.BiFunction;
 
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -25,6 +26,7 @@ import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
+import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.HPair;
 
@@ -40,10 +42,10 @@ import edu.jhu.util.HPair;
  * @author travis
  */
 public class Uberts {
-
-  public static boolean DEBUG = false;
+  public static int DEBUG = 1;
 
   // Log things like when an edge is added to the state or a rule fires
+  /* deprecated */
   public static boolean COARSE_EVENT_LOGGING = false;
 
   public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
@@ -69,6 +71,12 @@ public class Uberts {
 
   public boolean showTrajDiagnostics = false;
 
+  // Tracks things like number of pushes and pops, can be externally read/reset
+  public Counts<String> stats = new Counts<>();
+  // i^th value is the size of the agenda after applying i actions.
+  // This must be cleared after each round of inference by the user.
+  public IntArrayList statsAgendaSizePerStep = new IntArrayList();
+
   // Ancillary data for features which don't look at the State graph.
   // New data backend (used to be fnparse.Sentence and FNParse)
   // TODO Update TemplateContext and everything in BasicFeatureTemplates.
@@ -93,7 +101,7 @@ public class Uberts {
     return goldEdges;
   }
   public void addLabel(HypEdge e) {
-    if (DEBUG || COARSE_EVENT_LOGGING)
+    if (DEBUG > 1)
       System.out.println("Uberts addLabel: " + e);
     if (goldEdges == null)
       goldEdges = new Labels();
@@ -127,7 +135,6 @@ public class Uberts {
     this.rand = rand;
     this.relations = new HashMap<>();
     this.agenda = new Agenda(agendaPriority);
-//    this.state = new State();
     this.state = new State.Split();
     this.trie = new TNode(null, null);
     this.nodes = new HashMap<>();
@@ -163,15 +170,17 @@ public class Uberts {
       boolean oracle,
       double minScore,
       int actionLimit) {
-    if (DEBUG || COARSE_EVENT_LOGGING)
+    if (DEBUG > 0)
       Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
+    statsAgendaSizePerStep.clear();
     Labels.Perf perf = goldEdges.new Perf();
     List<Step> steps = new ArrayList<>();
     for (int i = 0; agenda.size() > 0; i++) {// && (actionLimit <= 0 || i < actionLimit); i++) {
+      statsAgendaSizePerStep.add(agenda.size());
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge best = p.get1();
       boolean y = getLabel(best);
-      if (DEBUG)
+      if (DEBUG > 1)
         System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
 
       // Always record the action
@@ -203,7 +212,9 @@ public class Uberts {
    * or algorithm 5 in http://www.aclweb.org/anthology/N12-1015
    */
   public Step earlyUpdatePerceptron() {
+    statsAgendaSizePerStep.clear();
     while (agenda.size() > 0) {
+      statsAgendaSizePerStep.add(agenda.size());
       Pair<HypEdge, Adjoints> p = agenda.popBoth();
       HypEdge best = p.get1();
       boolean yhat = p.get2().forwards() > 0;
@@ -332,7 +343,7 @@ public class Uberts {
         HypEdge best = p.get1();
         boolean y = getLabel(best);
         boolean yhat = p.get2().forwards() > 0;
-        if (DEBUG)
+        if (DEBUG > 1)
           System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
 
         // Always record the action
@@ -354,12 +365,14 @@ public class Uberts {
     {
       // We can stop the trajectory earlier if it goes longer than the oracle,
       // which is likely to happen.
+      statsAgendaSizePerStep.clear();
       while (agenda.size() > 0 && (t2 == null || t2.length < t1.length)) {
+        statsAgendaSizePerStep.add(agenda.size());
         Pair<HypEdge, Adjoints> p = agenda.popBoth();
         HypEdge best = p.get1();
         boolean y = getLabel(best);
         boolean yhat = p.get2().forwards() > 0;
-        if (DEBUG)
+        if (DEBUG > 1)
           System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
 
         // Always record the action
@@ -762,13 +775,11 @@ public class Uberts {
    * types are gauranteed to be unique.
    */
   public NodeType lookupNodeType(String name, boolean allowNewNodeType) {
-//    if (DEBUG)
-//      Log.info("name=" + name + " allowNewNodeType=" + allowNewNodeType);
     NodeType nt = nodeTypes.get(name);
     if (nt == null) {
       if (!allowNewNodeType)
         throw new RuntimeException("there is no NodeType called " + name);
-      if (DEBUG)
+      if (DEBUG > 1)
         Log.info("adding NodeType for the first time: " + name);
       nt = new NodeType(name);
       nodeTypes.put(name, nt);
@@ -777,6 +788,8 @@ public class Uberts {
   }
 
   public TNode addGlobalFactor(TKey[] lhs, GlobalFactor gf) {
+    if (DEBUG > 0)
+      Log.info("adding " + Arrays.toString(lhs) + " => " + gf);
     TNode n = trie.lookup(lhs, true);
     n.getValue().u = this;
     if (n.getValue().gf != null)
@@ -816,7 +829,7 @@ public class Uberts {
     int n = e.getNumTails();
     for (int i = 0; i < n; i++) {
       if (!nodesContains(e.getTail(i))) {
-        if (DEBUG)
+        if (DEBUG > 1)
           Log.info("missing: tail[" + i + "]=" + e.getTail(i));
         return false;
       }
@@ -825,8 +838,12 @@ public class Uberts {
   }
 
   public void addEdgeToState(HypEdge e) {
-    if (DEBUG || COARSE_EVENT_LOGGING)
+    if (DEBUG > 1)
       System.out.println("Uberts addEdgeToState: " + e.toString());
+    if (stats != null) {
+      stats.increment("pop");
+      stats.increment("pop/" + e.getRelation().getName());
+    }
     assert nodesContains(e);
     state.add(e);
     TNode.match(this, e, trie);
@@ -836,8 +853,12 @@ public class Uberts {
     addEdgeToAgenda(p.get1(), p.get2());
   }
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
-    if (DEBUG || COARSE_EVENT_LOGGING)
+    if (DEBUG > 1)
       System.out.println("Uberts addEdgeToAgenda: " + e.toString() + " " + score);
+    if (stats != null) {
+      stats.increment("push");
+      stats.increment("push/" + e.getRelation().getName());
+    }
     assert nodesContains(e);
     agenda.add(e, score);
   }

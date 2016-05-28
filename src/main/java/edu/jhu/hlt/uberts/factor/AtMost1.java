@@ -32,8 +32,7 @@ import edu.jhu.hlt.uberts.Uberts;
  * and then I can go look for ner edges in inersect(adjacent(tokenIndex i),adjacent(tokenIndex j))
  */
 public class AtMost1 {
-  public static boolean COARSE_DEBUG = true;
-  public static boolean DEBUG = false;
+  public static int DEBUG = 1;
 
   /**
    * @param u receives the new {@link GlobalFactor}
@@ -43,6 +42,10 @@ public class AtMost1 {
    *        exclusion, e.g. 0 to represent t in predicate2(t,f)
    */
   public static void add(Uberts u, Relation rel, int mutexArg, boolean hard) {
+    if (DEBUG > 0) {
+      Log.info("AtMost1 " + rel.getName() + " per "
+          + rel.getTypeForArg(mutexArg).getName() + " hard=" + hard);
+    }
     assert mutexArg >= 0 && mutexArg < rel.getNumArgs();
     TKey[] lhs = new TKey[] {
         new TKey(State.HEAD_ARG_POS, rel),
@@ -51,23 +54,38 @@ public class AtMost1 {
       HypEdge pred2Fact = gtt.getBoundEdge(0);
       HypNode t = pred2Fact.getTail(mutexArg);
       return t;
-    });
+    }, rel.getTypeForArg(mutexArg).getName());
     u.addGlobalFactor(lhs, gf);
   }
 
-  // Hard constraint
   public static class RelNode1 implements GlobalFactor {
     // Prune all edges that match this:
     private Relation relationMatch;
     // And are adjacent to this node:
     private Function<GraphTraversalTrace, HypNode> getBoundNode;
+    private String boundNodeName;
+
+    private int nRescore = 0, nEdgeRescore = 0;
 
     private AveragedPerceptronWeights constraintCost;
     private String constraintCostName;
     String getConstraintCostName() {
       if (constraintCostName == null)
-        constraintCostName = "AtMost1(" + relationMatch.getName() + ")";
+        constraintCostName = getName();
       return constraintCostName;
+    }
+
+    @Override
+    public String getStats() {
+      String s = "nRescore=" + nRescore + " nEdgeRescore=" + nEdgeRescore;
+      nRescore = 0;
+      nEdgeRescore = 0;
+      return s;
+    }
+
+    @Override
+    public String getName() {
+      return "AtMost1(" + relationMatch.getName() + "," + boundNodeName + ")";
     }
 
     /**
@@ -77,9 +95,10 @@ public class AtMost1 {
      * @param getBoundNode should be a function which finds the HypNode over which
      * mutual exclusion is enforced. Typically this is an argument of relation.
      */
-    public RelNode1(Relation relation, boolean hard, Function<GraphTraversalTrace, HypNode> getBoundNode) {
+    public RelNode1(Relation relation, boolean hard, Function<GraphTraversalTrace, HypNode> getBoundNode, String nameOfBoundNode) {
       this.relationMatch = relation;
       this.getBoundNode = getBoundNode;
+      this.boundNodeName = nameOfBoundNode;
       if (!hard) {
         int dimension = 1;
         int numIntercept = 0;
@@ -89,16 +108,18 @@ public class AtMost1 {
 
     public void rescore(Agenda a, GraphTraversalTrace match) {
       HypNode observedValue = getBoundNode.apply(match);
-      if (DEBUG)
+      if (DEBUG > 1)
         Log.info("removing all edges adjacent to " + observedValue + " matching " + relationMatch + " from agenda");
+      nRescore++;
       int c = 0, r = 0;
       for (HypEdge e : a.adjacent(observedValue)) {
         c++;
         if (e.getRelation() == relationMatch) {
+          nEdgeRescore++;
           r++;
           if (constraintCost != null) {
             // Soft
-            if (DEBUG)
+            if (DEBUG > 2)
               Log.info("rescoring: " + e);
             Adjoints score = a.getScore(e);
             a.remove(e);
@@ -112,13 +133,13 @@ public class AtMost1 {
             a.add(e, gs);
           } else {
             // Hard
-            if (DEBUG)
+            if (DEBUG > 2)
               Log.info("removing: " + e);
             a.remove(e);
           }
         }
       }
-      if (DEBUG || COARSE_DEBUG) {
+      if (DEBUG > 1) {
         if (constraintCost == null) {
           Log.info("removed " + r + " of " + c + " " + relationMatch.getName()
           + " edges adjacent to " + observedValue);
@@ -137,17 +158,42 @@ public class AtMost1 {
     // And are adjacent to these nodes:
     private Function<GraphTraversalTrace, HypNode> getBoundNode1;
     private Function<GraphTraversalTrace, HypNode> getBoundNode2;
+    private String boundNode1Name;
+    private String boundNode2Name;
+    private int nRescore = 0, nEdgeRescore = 0;
+
+    @Override
+    public String getStats() {
+      String s = "nRescore=" + nRescore + " nEdgeRescore=" + nEdgeRescore;
+      nRescore = 0;
+      nEdgeRescore = 0;
+      return s;
+    }
+
+    @Override
+    public String getName() {
+      return "AtMost1(" + relationMatch.getName() + "," + boundNode1Name + "," + boundNode2Name + ")";
+    }
+
+    @Override
+    public String toString() {
+      return getName();
+    }
+
     public RelNode2(Relation relationMatch,
         Function<GraphTraversalTrace, HypNode> getBoundNode1,
-        Function<GraphTraversalTrace, HypNode> getBoundNode2) {
+        Function<GraphTraversalTrace, HypNode> getBoundNode2,
+        String boundNode1Name,
+        String boundNode2Name) {
       this.relationMatch = relationMatch;
       this.getBoundNode1 = getBoundNode1;
       this.getBoundNode2 = getBoundNode2;
+      this.boundNode1Name = boundNode1Name;
+      this.boundNode2Name = boundNode2Name;
     }
     @Override
     public void rescore(Agenda a, GraphTraversalTrace match) {
-      if (DEBUG)
-        Log.info("INTERESTING");
+      nRescore++;
       HypNode bound1 = getBoundNode1.apply(match);
       HypNode bound2 = getBoundNode2.apply(match);
       List<HypEdge> intersect = a.adjacent(bound1, bound2);
@@ -156,12 +202,13 @@ public class AtMost1 {
         c++;
         if (e.getRelation() == relationMatch) {
           r++;
-          if (DEBUG)
+          if (DEBUG > 2)
             Log.info("actually removing: " + e);
+          nEdgeRescore++;
           a.remove(e);
         }
       }
-      if (DEBUG || COARSE_DEBUG) {
+      if (DEBUG > 1) {
         Log.info("removed " + r + " of " + c + " " + relationMatch.getName()
           + " edges adjacent to " + bound1 + " and " + bound2);
       }

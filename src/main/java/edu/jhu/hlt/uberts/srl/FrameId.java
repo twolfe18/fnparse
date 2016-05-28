@@ -240,7 +240,7 @@ public class FrameId {
       assert ev2E.getRelation() == event2;
       HypNode pred = ev2E.getTail(0);
       return pred;
-    }));
+    }, "target"));
 
     Log.info("done");
   }

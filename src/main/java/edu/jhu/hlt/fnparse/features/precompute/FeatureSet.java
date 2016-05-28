@@ -26,6 +26,7 @@ import edu.jhu.hlt.tutils.StringUtils;
  * @author travis
  */
 public class FeatureSet {
+  public static int DEBUG = 1;
 
   /** Returns a set of templates (in sorted order) contained in the given feature set */
   public int[] getTemplateSet(int[][] featureSet) {
@@ -62,6 +63,8 @@ public class FeatureSet {
     return fs.toArray(new int[0][]);
   }
   public static List<String[]> getFeatureSet3(File f) {
+    if (DEBUG > 0)
+      Log.info("loading feature set from " + f.getPath());
     List<String[]> features = new ArrayList<>();
     Set<String> templates = new HashSet<>();
     String fs = getFeatureSetString(f);
@@ -70,7 +73,8 @@ public class FeatureSet {
       templates.addAll(strTemplates);
       features.add(strTemplates.toArray(new String[strTemplates.size()]));
     }
-    Log.info("[main] loaded " + features.size() + " features covering " + templates.size() + " templates");
+    if (DEBUG > 0)
+      Log.info("[main] loaded " + features.size() + " features covering " + templates.size() + " templates");
     return features;
   }
 
@@ -80,7 +84,8 @@ public class FeatureSet {
    * score, ig, hx, selectivity, arity, intTemplates, stringTemplates
    */
   public static String getFeatureSetString(File f) {
-    Log.info("[main] reading from " + f.getPath());
+    if (DEBUG > 0)
+      Log.info("[main] reading from " + f.getPath());
     if (!f.isFile())
       throw new IllegalArgumentException("not a file: " + f.getPath());
     List<String> features = new ArrayList<>();
@@ -143,7 +148,8 @@ public class FeatureSet {
       }
       features.add(intTemplates);
     }
-    Log.info("[main] loaded " + features.size() + " features covering " + templates.cardinality() + " templates");
+    if (DEBUG > 0)
+      Log.info("[main] loaded " + features.size() + " features covering " + templates.cardinality() + " templates");
     return features;
   }
 }
