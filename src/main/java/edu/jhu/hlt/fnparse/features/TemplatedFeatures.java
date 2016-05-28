@@ -7,12 +7,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
-import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
@@ -97,6 +93,13 @@ public abstract class TemplatedFeatures implements Serializable {
           return new IterableProduct(l, r);
         }
       };
+    }
+
+    public static Template prod(Template[] templates) {
+      Template t = templates[0];
+      for (int i = 1; i < templates.length; i++)
+        t = new TemplateJoin(t, templates[i]);
+      return t;
     }
   }
 

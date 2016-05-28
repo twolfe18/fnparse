@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.TemplateContext;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateJoin;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
@@ -247,6 +248,25 @@ public class OldFeaturesWrapper {
 //      return new int[] {1, 2 + ff, 2 + kk};
       return new int[] {1, 2 + (k.hashCode() & mask)};
     };
+
+    timer = new MultiTimer();
+    timer.put("convert-sentence", new Timer("convert-sentence", 100, true));
+    timer.put("compute-features", new Timer("compute-features", 10000, true));
+
+    ctx = new TemplateContext();
+    depGraphEdges = new Alphabet<>();
+    hf = new SemaforicHeadFinder();
+    skipped = new Counts<>();
+  }
+
+  public OldFeaturesWrapper(BasicFeatureTemplates bft, File featureSet) {
+    this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
+    for (String[] feat : FeatureSet.getFeatureSet3(featureSet)) {
+      String n = StringUtils.join("*", feat);
+      Template[] fts = bft.getBasicTemplates(feat);
+      Template ft = TemplateJoin.prod(fts);
+      features.add(new TemplateAlphabet(ft, n, features.size()));
+    }
 
     timer = new MultiTimer();
     timer.put("convert-sentence", new Timer("convert-sentence", 100, true));

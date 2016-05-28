@@ -121,6 +121,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         + " costFP_srl2=" + costFP_srl2
         + " costFP_srl3=" + costFP_srl3);
 
+    oracleFeats = config.getBoolean("oracleFeats", false);
+    graphFeats = config.getBoolean("graphFeats", false);
+    templateFeats = config.getBoolean("templateFeats", true);
+
     predicate2Mutex = config.getBoolean("pred2Mutex", true);
     enableGlobalFactors = !config.getBoolean("disableGlobalFactors", false);
     Log.info("predicate2Mutex=" + predicate2Mutex + " disableGlobalFactors=" + !enableGlobalFactors);
@@ -171,6 +175,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private Mode mode;
 
   private BasicFeatureTemplates bft;
+  private OldFeaturesWrapper ofw;
+  /** @deprecated */
   private OldFeaturesWrapper.Ints feFast;
 
   private NumArgsRoleCoocArgLoc numArgsArg4;
@@ -224,9 +230,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     if (templateFeats) {
       Log.info("using template feats");
-      if (bft == null)
+      if (bft == null) {
         bft = new BasicFeatureTemplates();
-      OldFeaturesWrapper.Strings ff = new OldFeaturesWrapper.Strings(new OldFeaturesWrapper(bft), 0d);
+        ExperimentProperties config = ExperimentProperties.getInstance();
+        File featureSet = config.getExistingFile("featureSet");
+        ofw = new OldFeaturesWrapper(bft, featureSet);
+      }
+      OldFeaturesWrapper.Strings ff = new OldFeaturesWrapper.Strings(ofw, 0d);
       f = new LocalFactor.Sum(ff, f);
     }
 
