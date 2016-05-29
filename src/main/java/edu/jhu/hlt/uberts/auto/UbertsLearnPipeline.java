@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -13,6 +14,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+
+import com.google.common.collect.Iterators;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -74,9 +77,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static double costFP_srl3 = 0.25;
   static double costFP_srl2 = 0.25;
   static double costFP_event1 = 0.25;
-//  static double costFP_srl3 = 1;
-//  static double costFP_srl2 = 1;
-//  static double costFP_event1 = 1;
 
   // maxViolation=true  n=150 pipeline=false  got close to F1=1
   // maxViolation=true  n=5   pipeline=true   cFP=1   F(predicate2)=29.0
@@ -144,25 +144,58 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
-    List<File> train = config.getExistingFiles("train.facts");//, Arrays.asList(new File(p, "debug.train.facts")));
-    File dev = config.getExistingFile("dev.facts");//, new File(p, "debug.dev.facts"));
-    File test = config.getExistingFile("test.facts");//, new File(p, "debug.test.facts"));
+    /*
+     * for each pass over all train data:
+     *    for each segment of size N:
+     *       train(train-segment)
+     *       eval(dev-small)  # can be the first N documents in the dev set
+     *    eval(dev)
+     *    eval(test)
+     */
+
+    // Train and dev should be shuffled. Test doesn't need to be.
+    List<File> train = config.getExistingFiles("train.facts");
+    File dev = config.getExistingFile("dev.facts");
+    File test = config.getExistingFile("test.facts");
+
+    // The ratio of miniDevSize/trainSegSize is the price of knowing how well
+    // you're doing during training. Try to minimize it to keep train times down.
+    int miniDevSize = config.getInt("miniDevSize", 300);
+    int trainSegSize = config.getInt("trainSegSize", miniDevSize * 20);
+
     for (int i = 0; i < passes; i++) {
       for (File f : train) {
         Log.info("[main] pass=" + (i+1) + " of=" + passes + " trainFile=" + f.getPath());
         try (RelationFileIterator rels = new RelationFileIterator(f, false);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-          pipe.runInference(many);
+          Iterator<List<RelDoc>> segItr = Iterators.partition(many, trainSegSize);
+          int s = 0;
+          while (segItr.hasNext()) {
+            // Train on segment
+            List<RelDoc> segment = segItr.next();
+            pipe.runInference(segment.iterator(), "train-epoch" + i + "-segment" + s);
+
+            // Evaluate on mini-dev
+            try (RelationFileIterator dr = new RelationFileIterator(dev, false);
+                ManyDocRelationFileIterator devDocs = new ManyDocRelationFileIterator(dr, true)) {
+              Iterator<RelDoc> miniDev = Iterators.limit(devDocs, miniDevSize);
+              pipe.runInference(miniDev, "dev-mini-epoch" + i + "-segment" + s);
+            }
+
+            s++;
+          }
         }
+        // Full evaluate on dev
         Log.info("[main] pass=" + (i+1) + " of=" + passes + " devFile=" + dev.getPath());
         try (RelationFileIterator rels = new RelationFileIterator(dev, false);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-          pipe.runInference(many);
+          pipe.runInference(many, "dev-full-epoch" + i);
         }
+        // Full evaluate on test
         Log.info("[main] pass=" + (i+1) + " of=" + passes + " testFile=" + test.getPath());
         try (RelationFileIterator rels = new RelationFileIterator(test, false);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-          pipe.runInference(many);
+          pipe.runInference(many, "test-full-epoch" + i);
         }
       }
     }
@@ -176,6 +209,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   private BasicFeatureTemplates bft;
   private OldFeaturesWrapper ofw;
+  private OldFeaturesWrapper.Ints2 feFast2;
   /** @deprecated */
   private OldFeaturesWrapper.Ints feFast;
 
@@ -185,11 +219,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // These are not mutually exclusive, above are in below
   private List<GlobalFactor> globalFactors = new ArrayList<>();
 
-  // For now these store all performances for the last epoch (pass over data)
-  private List<Map<String, FPR>> perfByRelTrain = new ArrayList<>();
-  private List<Map<String, FPR>> perfByRelDev = new ArrayList<>();
-  private List<Map<String, FPR>> perfByRelTest = new ArrayList<>();
-  private Counts<String> passes = new Counts<>();
+  // For now these store all performances for the last data segment
+  private List<Map<String, FPR>> perfByRel = new ArrayList<>();
+
+  // Keeps track of how frequently types of events happen
+  private Counts<String> eventCounts = new Counts<>();
+
 
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
     super(u, grammarFile, schemaFiles, relationDefs);
@@ -229,15 +264,20 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     LocalFactor f = new LocalFactor.Zero();
 
     if (templateFeats) {
+      ExperimentProperties config = ExperimentProperties.getInstance();
       Log.info("using template feats");
       if (bft == null) {
         bft = new BasicFeatureTemplates();
-        ExperimentProperties config = ExperimentProperties.getInstance();
         File featureSet = config.getExistingFile("featureSet");
         ofw = new OldFeaturesWrapper(bft, featureSet);
       }
-      OldFeaturesWrapper.Strings ff = new OldFeaturesWrapper.Strings(ofw, 0d);
-      f = new LocalFactor.Sum(ff, f);
+//      OldFeaturesWrapper.Strings ff = new OldFeaturesWrapper.Strings(ofw, 0d);
+//      f = new LocalFactor.Sum(ff, f);
+      if (feFast2 == null) {
+        int dimension = config.getInt("hashFeatDim", 1 << 18);
+        feFast2 = new OldFeaturesWrapper.Ints2(ofw, dimension);
+      }
+      f = new LocalFactor.Sum(feFast2, f);
     }
 
     if (oracleFeats) {
@@ -258,43 +298,30 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   @Override
-  public void start(ManyDocRelationFileIterator x) {
-    super.start(x);
-    File f = x.getWrapped().getFile();
-    if (f.getName().contains("test"))
+  public void start(String dataName) {
+    super.start(dataName);
+    if (dataName.contains("test"))
       mode = Mode.TEST;
-    else if (f.getName().contains("dev"))
+    else if (dataName.contains("dev"))
       mode = Mode.DEV;
-    else if (f.getName().contains("train") || f.getName().contains("debug"))
+    else if (dataName.contains("train"))
       mode = Mode.TRAIN;
     else
-      throw new RuntimeException("train, dev, or test? " + f.getName());
+      throw new RuntimeException("don't know how to handle " + dataName);
   }
 
   @Override
-  public void finish(ManyDocRelationFileIterator x) {
-    super.finish(x);
-    passes.increment(mode.toString());
-    Log.info("mode=" + mode + " passes=" + passes);
-    if (mode == Mode.DEV) {
-      Map<String, FPR> dev = new HashMap<>();
-      for (Map<String, FPR> p : perfByRelDev)
-        dev = Labels.combinePerfByRel(dev, p);
-      for (String line : Labels.showPerfByRel(dev))
-        System.out.println("dev: " + line);
-    } else if (mode == Mode.TEST) {
-      Map<String, FPR> test = new HashMap<>();
-      for (Map<String, FPR> p : perfByRelTest)
-        test = Labels.combinePerfByRel(test, p);
-      for (String line : Labels.showPerfByRel(test))
-        System.out.println("test: " + line);
-    } else if (mode == Mode.TRAIN) {
-      Map<String, FPR> train = new HashMap<>();
-      for (Map<String, FPR> p : perfByRelTrain)
-        train = Labels.combinePerfByRel(train, p);
-      for (String line : Labels.showPerfByRel(train))
-        System.out.println("train: " + line);
-    }
+  public void finish(String dataName) {
+    super.finish(dataName);
+    eventCounts.increment("pass/" + mode.toString());
+    Log.info("mode=" + mode + " dataName=" + dataName + "\t" + eventCounts.toString());
+
+    // Compute performance over last segment
+    Map<String, FPR> perf = new HashMap<>();
+    for (Map<String, FPR> p : perfByRel)
+      perf = Labels.combinePerfByRel(perf, p);
+    for (String line : Labels.showPerfByRel(perf))
+      System.out.println(dataName + ": " + line);
 
     if (DEBUG > 1) {
       Log.info("numArgsArg4 biggest weights: " + numArgsArg4.getBiggestWeights(10));
@@ -307,6 +334,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   @Override
   public void consume(RelDoc doc) {
+    eventCounts.increment("consume/" + mode.toString());
+    if (eventCounts.getTotalCount() % 500 == 0)
+      Log.info("event counts: " + eventCounts);
     u.stats.clear();
     switch (mode) {
     case TRAIN:
@@ -320,8 +350,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       double minScore = 0.0001;
       int actionLimit = 0;
       Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, minScore, actionLimit);
-      List<Map<String, FPR>> l = mode == Mode.DEV ? perfByRelDev : perfByRelTest;
-      l.add(p.get1().perfByRel());
+      perfByRel.add(p.get1().perfByRel());
       if (DEBUG > 0) {
         // Show some stats about this example
         System.out.println("trajLength=" + p.get2().size());
@@ -349,7 +378,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         System.out.println(sb.toString());
 
         if (DEBUG > 1) {
-          System.out.println(StringUtils.join("\n", Labels.showPerfByRel(l.get(l.size()-1))));
+          System.out.println(StringUtils.join("\n", Labels.showPerfByRel(perfByRel.get(perfByRel.size()-1))));
         }
       }
       break;
@@ -427,19 +456,19 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //        s.score.backwards(+1);
 //    }
 
-    // Show performance on window of most recent examples
-    int n = 3;
-    int s = perfByRelTrain.size();
-    if (s > 0 && s % n == 0) {
-      Map<String, FPR> pf = new HashMap<>();
-      for (int i = 0; i < n; i++)
-        pf = Labels.combinePerfByRel(pf, perfByRelTrain.get(s - (i+1)));
-      if (DEBUG > 0) {
-        Log.info("on the last " + n + " examples:\n"
-            + StringUtils.join("\n", Labels.showPerfByRel(pf)));
-      }
-      System.out.println();
-    }
+//    // Show performance on window of most recent examples
+//    int n = 3;
+//    int s = perfByRelTrain.size();
+//    if (s > 0 && s % n == 0) {
+//      Map<String, FPR> pf = new HashMap<>();
+//      for (int i = 0; i < n; i++)
+//        pf = Labels.combinePerfByRel(pf, perfByRelTrain.get(s - (i+1)));
+//      if (DEBUG > 0) {
+//        Log.info("on the last " + n + " examples:\n"
+//            + StringUtils.join("\n", Labels.showPerfByRel(pf)));
+//      }
+//      System.out.println();
+//    }
   }
 
 

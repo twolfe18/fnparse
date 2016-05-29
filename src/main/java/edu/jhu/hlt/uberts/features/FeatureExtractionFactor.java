@@ -23,10 +23,18 @@ import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.StateEdge;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Arg;
+import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 
+/**
+ * Stores weights for a feature function with T values. This does not take any
+ * products with the {@link Relation} of the {@link HypEdge} being scored, so
+ * you should instantiate one of these per {@link Rule} or {@link Relation}.
+ *
+ * @author travis
+ */
 public abstract class FeatureExtractionFactor<T> implements LocalFactor {
 
   // Set this to non-null values to enable.
@@ -48,18 +56,20 @@ public abstract class FeatureExtractionFactor<T> implements LocalFactor {
 
   public abstract List<T> features(HypEdge yhat, Uberts x);
 
-  @Override
   /**
    * Returns a non-caching Adjoints.
    */
+  @Override
   public Adjoints score(HypEdge yhat, Uberts x) {
 
-    WeightList<Pair<Integer, T>> weights = new WeightList<>(numInstances, useAvg);
     int[] refs;
-    if (customRefinements == null)
+    if (customRefinements == null) {
       refs = new int[] {0};
-    else
+    } else {
       refs = customRefinements.apply(yhat);
+    }
+
+    WeightList<Pair<Integer, T>> weights = new WeightList<>(numInstances, useAvg);
     for (T feat : features(yhat, x)) {
       IntObjectHashMap<Weight<Pair<Integer, T>>> m;
       if (feat instanceof Integer) {

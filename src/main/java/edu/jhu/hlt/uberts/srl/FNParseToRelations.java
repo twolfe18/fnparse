@@ -73,7 +73,7 @@ public class FNParseToRelations {
   public static String norm(String x) {
     x = x.trim();
     x = x.replaceAll("\\s+", "_");
-    x.replaceAll("#", "HASH");
+    x = x.replaceAll("#", "-HASH-");
     return x;
   }
 

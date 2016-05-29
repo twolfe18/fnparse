@@ -29,6 +29,7 @@ public class KeepDocsWithRelation extends ManyDocSplitter {
       this.keepRels.add(s);
     Log.info("keeping all documents which contain at least one fact from the "
         + "following set of relations: " + Arrays.toString(keepRelationsName));
+    Log.info("writing output to " + output.getPath());
   }
 
   @Override

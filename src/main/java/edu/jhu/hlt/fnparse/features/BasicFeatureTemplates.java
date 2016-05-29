@@ -1776,6 +1776,14 @@ public class BasicFeatureTemplates {
         return "frameInst=" + f.getName();
       }
     });
+    addLabel("frameMaybe", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        Frame f = context.getFrame();
+        if (f == null)
+          return "f=?";
+        return "f=" + f.getName();
+      }
+    });
     addLabel("frameRole", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         String f = context.getFrame() == null ? "null" : context.getFrame().getName();

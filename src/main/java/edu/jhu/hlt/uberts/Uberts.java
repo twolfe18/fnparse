@@ -404,6 +404,8 @@ public class Uberts {
       }
     }
 
+    System.out.println("bestViolation=" + bestViolation);
+
     return best;
   }
 

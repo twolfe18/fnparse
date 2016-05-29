@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -24,7 +25,6 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
-import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
@@ -141,14 +141,12 @@ public abstract class UbertsPipeline {
 
   public abstract void consume(RelDoc doc);
 
-  public void start(ManyDocRelationFileIterator x) {
-    File prov = x.getWrapped().getFile();
-    Log.info("starting on " + prov.getPath());
+  public void start(String dataName) {
+    Log.info("starting on " + dataName);
   }
 
-  public void finish(ManyDocRelationFileIterator x) {
-    File prov = x.getWrapped().getFile();
-    Log.info("finished with " + prov.getPath());
+  public void finish(String dataName) {
+    Log.info("finished with " + dataName);
   }
 
   private void addRule(Rule r) {
@@ -385,34 +383,18 @@ public abstract class UbertsPipeline {
         && srl4Edge.getTail(4).getValue().equals(NS_END);
   }
 
-  public void runInference(ManyDocRelationFileIterator x) throws IOException {
-    runInference(x, Shard.ONLY);
-  }
   /**
    * Calls {@link UbertsPipeline#consume(RelDoc)}
-   *
-   * @param dataShard may be null, meaning take all data.
    */
-  public void runInference(ManyDocRelationFileIterator x, Shard dataShard) throws IOException {
-    start(x);
-    Log.info("dataShard=" + dataShard);
-    ExperimentProperties config = ExperimentProperties.getInstance();
+  public void runInference(Iterator<RelDoc> x, String dataName) throws IOException {
+    start(dataName);
     TimeMarker tm = new TimeMarker();
     int docs = 0;
     int skippedDocs = 0;
-    int maxInstances = config.getInt("maxInstances", 0);
     Iter itr = new Iter(x, typeInf, dontBackwardsGenerate);
     while (itr.hasNext()) {
       RelDoc doc = itr.next();
-      if (dataShard != null && !dataShard.matches(doc.getId())) {
-        skippedDocs++;
-        continue;
-      }
       docs++;
-      if (maxInstances > 0 && docs >= maxInstances) {
-        Log.info("exiting early since we hit maxInstances=" + maxInstances);
-        break;
-      }
       setupUbertsForDoc(u, doc);
       consume(doc);
       if (tm.enoughTimePassed(15)) {
@@ -420,7 +402,7 @@ public abstract class UbertsPipeline {
             + " docsTotal=" + (docs+skippedDocs) + " time=" + tm.secondsSinceFirstMark());
       }
     }
-    finish(x);
+    finish(dataName);
   }
 
   public static void main(String[] args) throws IOException {
@@ -447,13 +429,14 @@ public abstract class UbertsPipeline {
       throw new RuntimeException("unknown mode: " + mode);
     }
 
-    Shard dataShard = config.getShard();
+//    Shard dataShard = config.getShard();
     boolean includeProvidence = false;
     boolean dedupInputLines = true;
     File multiXY = config.getExistingFile("inputRel");
     try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);
         ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
-      srl.runInference(x, dataShard);
+//      srl.runInference(x, dataShard);
+      srl.runInference(x, "file:" + multiXY.getPath());
     }
 
     Log.info(Describe.memoryUsage());
