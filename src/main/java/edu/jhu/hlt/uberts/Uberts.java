@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
@@ -20,9 +21,12 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.Agenda.AgendaItem;
+import edu.jhu.hlt.uberts.Agenda.LabledAgendaItem;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
+import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
@@ -177,16 +181,17 @@ public class Uberts {
     List<Step> steps = new ArrayList<>();
     for (int i = 0; agenda.size() > 0; i++) {// && (actionLimit <= 0 || i < actionLimit); i++) {
       statsAgendaSizePerStep.add(agenda.size());
-      Pair<HypEdge, Adjoints> p = agenda.popBoth();
-      HypEdge best = p.get1();
+      AgendaItem ai = agenda.popBoth2();
+      HypEdge best = ai.edge;
       boolean y = getLabel(best);
       if (DEBUG > 1)
-        System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
+        System.out.println("[dbgRunInference] popped=" + ai);
 
       // Always record the action
       boolean hitLim = actionLimit > 0 && i >= actionLimit;
-      boolean pred = !hitLim && p.get2().forwards() > minScore;
-      steps.add(new Step(p, y, pred));
+//      boolean pred = !hitLim && p.get2().forwards() > minScore;
+      boolean pred = !hitLim && ai.score.forwards() > minScore;
+      steps.add(new Step(ai, y, pred));
 
       // But maybe don't add apply it (add it to state)
       if (hitLim)
@@ -215,12 +220,12 @@ public class Uberts {
     statsAgendaSizePerStep.clear();
     while (agenda.size() > 0) {
       statsAgendaSizePerStep.add(agenda.size());
-      Pair<HypEdge, Adjoints> p = agenda.popBoth();
-      HypEdge best = p.get1();
-      boolean yhat = p.get2().forwards() > 0;
+      AgendaItem ai = agenda.popBoth2();
+      HypEdge best = ai.edge;
+      boolean yhat = ai.score.forwards() > 0;
       boolean y = getLabel(best);
       if (y != yhat)
-        return new Step(p, y, yhat);
+        return new Step(ai, y, yhat);
       if (yhat)
         addEdgeToState(best);
     }
@@ -339,15 +344,15 @@ public class Uberts {
     Traj t1 = null;
     {
       while (agenda.size() > 0) {
-        Pair<HypEdge, Adjoints> p = agenda.popBoth();
-        HypEdge best = p.get1();
+        AgendaItem ai = agenda.popBoth2();
+        HypEdge best = ai.edge;
         boolean y = getLabel(best);
-        boolean yhat = p.get2().forwards() > 0;
+        boolean yhat = ai.score.forwards() > 0;
         if (DEBUG > 1)
-          System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
+          System.out.println("[dbgRunInference] popped=" + ai);
 
         // Always record the action
-        Step s = new Step(p, y, yhat);
+        Step s = new Step(ai, y, yhat);
         t1 = new Traj(s, t1);
 //        System.out.println("MV oracle, y=" + s.gold + " yhat=" + s.pred + " " + s.edge);
 
@@ -368,15 +373,15 @@ public class Uberts {
       statsAgendaSizePerStep.clear();
       while (agenda.size() > 0 && (t2 == null || t2.length < t1.length)) {
         statsAgendaSizePerStep.add(agenda.size());
-        Pair<HypEdge, Adjoints> p = agenda.popBoth();
-        HypEdge best = p.get1();
+        AgendaItem ai = agenda.popBoth2();
+        HypEdge best = ai.edge;
         boolean y = getLabel(best);
-        boolean yhat = p.get2().forwards() > 0;
+        boolean yhat = ai.score.forwards() > 0;
         if (DEBUG > 1)
-          System.out.println("[dbgRunInference] best=" + best + " gold=" + y + " score=" + p.get2());
+          System.out.println("[dbgRunInference] popped=" + ai);
 
         // Always record the action
-        Step s = new Step(p, y, yhat);
+        Step s = new Step(ai, y, yhat);
         t2 = new Traj(s, t2);
 //        System.out.println("MV pred, y=" + s.gold + " yhat=" + s.pred + " " + s.edge);
 
@@ -414,37 +419,36 @@ public class Uberts {
    * Roll in using oracle or model.
    * At each state, output set of correct and incorrect actions.
    *
-   * This is going to be a problem if we have Adjoints which are mutable!
-   * If not, we just collect the Adjoints for every action on the agenda, save them for an update later.
-   * Given that they mutate, we could just call backwards, but that will screw up the agenda order.
-   *
-   * New RULE:
-   * Adjoints must be immutable to use this! For global features, they cannot
-   * do things like numArgs++, since we will collect the adjoints at state_i
-   * and won't call backwards until after state_n: we can't backprop through
-   * the features of state_n even though we had a pointer to a thing we thought
-   * was state_i.
-   *
-   * Oh crap!
-   * This applies to local features too!
-   * if at state_1 we have foo(x), foo(y), and foo(z) on the agenda.
-   * suppose foo(z) is wrong, so we want to do backwards(+1, score(foo(z))),
-   * and we do this at state_1. Then we pop foo(x) to get to state_2, and foo(z)
-   * is still wrong and still on the agenda, so we do another
-   * backwards(+1, score(foo(z))).
-   * => This is fine as long as score(foo(z)) never changed (Adjoints are immutable).
+   * Requires {@link NumArgsRoleCoocArgLoc#IMMUTABLE_FACTORS}=true
    */
-  public void daggerLike(double pOracleRollIn) {
-    
+  public List<AgendaSnapshot> daggerLike(double pOracleRollIn) {
     // Interpolate(oracle,model) Roll-in:
     // flip a coin for which score, then argmax w.r.t. that score.
     // Since we are making an entire run with that same score, we can just
     // flip the heap agenda once, no need to change scores mid-inference.
 
     // TODO Can try another way: argmax the interpolation.
-    
-    
-    throw new RuntimeException("implement me after experiments are running");
+
+    boolean oracleRollIn = rand.nextDouble() < pOracleRollIn;
+
+    List<AgendaSnapshot> snaps = new ArrayList<>();
+    while (agenda.size() > 0) {
+
+      // Record possible actions
+      List<LabledAgendaItem> a = new ArrayList<>();
+      for (AgendaItem ai : agenda.getContentsInNoParticularOrder())
+        a.add(ai.withLabel(getLabel(ai.edge)));
+      snaps.add(new AgendaSnapshot(a));
+
+      // Take an action
+      AgendaItem ai = agenda.popBoth2();
+      boolean y = getLabel(ai.edge);
+      boolean yhat = ai.score.forwards() > 0;
+      if ((oracleRollIn && y) || (!oracleRollIn && yhat))
+        addEdgeToState(ai.edge);
+    }
+
+    return snaps;
   }
 
   /**
@@ -464,13 +468,47 @@ public class Uberts {
   public static class AgendaSnapshot {
     // In agenda order (by priority).
     // Each one is either Commit(f) or Prune(f) and either right or wrong.
-    private List<Step> agendaItems;
+    private List<LabledAgendaItem> agendaItems;
 
     // The hard part of this is going to be how to efficiently extract the
     // heap items and copy them in here without duplicating the entire heap.
     // I suppose I could have a non-destructive iterator for the agenda...
     // BFS traversal means almost sorted...
     // Could sort in here...
+
+    public AgendaSnapshot(List<LabledAgendaItem> agendaContentsUnsorted) {
+      this.agendaItems = agendaContentsUnsorted;
+    }
+
+    public void applyUpdate(boolean updateAccordingToPriority) {
+      if (updateAccordingToPriority) {
+        agendaItems.sort(new Comparator<LabledAgendaItem>() {
+          @Override
+          public int compare(LabledAgendaItem o1, LabledAgendaItem o2) {
+            if (o1.priority > o2.priority) return -1;
+            if (o1.priority < o2.priority) return +1;
+            return 0;
+          }
+        });
+        int n = agendaItems.size();
+        double k = n / 5d;
+        for (int i = 0; i < n; i++) {
+          double m = k / (k + i);
+          LabledAgendaItem ai = agendaItems.get(i);
+          if (ai.label && ai.score.forwards() <= 0)
+            ai.score.backwards(-m);
+          if (!ai.label && ai.score.forwards() > 0)
+            ai.score.backwards(+m);
+        }
+      } else {
+        for (LabledAgendaItem ai : agendaItems) {
+          if (ai.label && ai.score.forwards() <= 0)
+            ai.score.backwards(-1);
+          if (!ai.label && ai.score.forwards() > 0)
+            ai.score.backwards(+1);
+        }
+      }
+    }
   }
 
   /**

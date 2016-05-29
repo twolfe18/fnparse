@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.function.BiFunction;
 
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.State.ArgVal;
 import edu.jhu.prim.tuple.Pair;
@@ -24,10 +25,51 @@ public class Agenda {
   // Measured about 1.5x slow-down (on pure add-remove benchmark) when this is enabled.
   public static final boolean FINE_VIEW = true;
 
+  public static class AgendaItem implements Comparable<AgendaItem> {
+    public final HypEdge edge;
+    public final Adjoints score;
+    public final double priority;
+
+    public AgendaItem(HypEdge edge, Adjoints score, double priority) {
+      assert Double.isFinite(priority);
+      assert !Double.isNaN(priority);
+      this.edge = edge;
+      this.score = Adjoints.cacheIfNeeded(score);
+      this.priority = priority;
+    }
+
+    @Override
+    public int compareTo(AgendaItem o) {
+      if (priority < o.priority) return -1;
+      if (priority > o.priority) return +1;
+      return 0;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("(AI %s p=%+.2f s=%s)", edge, priority, StringUtils.trunc(score, 200));
+    }
+
+    public LabledAgendaItem withLabel(boolean y) {
+      return new LabledAgendaItem(edge, score, priority, y);
+    }
+  }
+
+  public static class LabledAgendaItem extends AgendaItem {
+    public final boolean label;
+    public LabledAgendaItem(HypEdge edge, Adjoints score, double priority, boolean label) {
+      super(edge, score, priority);
+      this.label = label;
+    }
+    @Override
+    public String toString() {
+      return String.format("(AI %s y=%s p=%+.2f s=%s)", edge, label, priority, StringUtils.trunc(score, 200));
+    }
+  }
+
   // ei == "edge index" in the heap
   // e == "edge"
-  private HypEdge[] heap1;              // ei2e
-  private Adjoints[] heap2;
+  private AgendaItem[] heap;            // ei2e
   private int top;                      // aka size
   private Map<HypNode, BitSet> n2ei;    // node adjacency matrix, may contain old nodes as keys
   private Map<HypEdge, Integer> e2i;    // location of edges in heap
@@ -41,8 +83,7 @@ public class Agenda {
   public Agenda(BiFunction<HypEdge, Adjoints, Double> priority) {
     this.top = 0;
     int initSize = 16;
-    this.heap1 = new HypEdge[initSize];
-    this.heap2 = new Adjoints[initSize];
+    this.heap = new AgendaItem[initSize];
     this.n2ei = new HashMap<>();
     this.e2i = new HashMap<>();
     this.fineView = new HashMap<>();
@@ -51,8 +92,7 @@ public class Agenda {
 
   public Agenda duplicate() {
     Agenda c = new Agenda(priority);
-    c.heap1 = Arrays.copyOf(heap1, heap1.length);
-    c.heap2 = Arrays.copyOf(heap2, heap2.length);
+    c.heap = Arrays.copyOf(heap, heap.length);
     c.top = top;
     c.n2ei.putAll(n2ei);
     c.e2i.putAll(e2i);
@@ -63,19 +103,17 @@ public class Agenda {
 
   public void clear() {
     this.top = 0;
-    int initSize = 16;
-    this.heap1 = new HypEdge[initSize];
-    this.heap2 = new Adjoints[initSize];
+    Arrays.fill(heap, null);
     this.n2ei = new HashMap<>();
     this.e2i = new HashMap<>();
     this.fineView = new HashMap<>();
   }
 
-  public List<HypEdge> getContentsInNoParticularOrder() {
-    List<HypEdge> l = new ArrayList<>();
+  public List<AgendaItem> getContentsInNoParticularOrder() {
+    List<AgendaItem> l = new ArrayList<>();
     for (int i = 0; i < top; i++)
-      if (heap1[i] != null)
-        l.add(heap1[i]);
+      if (heap[i] != null)
+        l.add(heap[i]);
     assert l.size() == this.size();
     return l;
   }
@@ -101,7 +139,7 @@ public class Agenda {
   public Set<HypNode> dbgNodeSet2() {
     Set<HypNode> s = new HashSet<>();
     for (int i = 0; i < top; i++) {
-      HypEdge e = heap1[i];
+      HypEdge e = heap[i].edge;
       for (HypNode n : e.getNeighbors())
         s.add(n);
     }
@@ -114,7 +152,6 @@ public class Agenda {
    */
   public Iterable<HypEdge> match(int argPos, Relation rel, HypNode arg) {
     Iterable<HypEdge> r = fineView.get(new State.ArgVal(argPos, rel, arg));
-//    return r == null ? Collections.emptyList() : r;
     List<HypEdge> eager = new ArrayList<>();
     if (r != null)
       for (HypEdge e : r)
@@ -129,7 +166,7 @@ public class Agenda {
     List<HypEdge> el = new ArrayList<>();
     for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i + 1)) {
       assert i < top;
-      HypEdge e = heap1[i];
+      HypEdge e = heap[i].edge;
       assert e != null;
       el.add(e);
     }
@@ -150,7 +187,7 @@ public class Agenda {
     for (int i = bs1.nextSetBit(0); i >= 0; i = bs1.nextSetBit(i + 1)) {
       assert i < top;
       if (bs2.get(i)) {
-        HypEdge e = heap1[i];
+        HypEdge e = heap[i].edge;
         assert e != null;
         el.add(e);
       }
@@ -160,9 +197,8 @@ public class Agenda {
 
   public Adjoints getScore(HypEdge e) {
     int i = e2i.get(e);
-    assert heap1[i] == e;
-    assert heap2[i] != null;
-    return heap2[i];
+    assert heap[i].edge == e;
+    return heap[i].score;
   }
 
   public void remove(HypEdge e) {
@@ -204,9 +240,7 @@ public class Agenda {
     if (i == top)
       return true;
     int parent = (i - 1) >>> 1;
-//    return heap2[parent].forwards() >= heap2[i].forwards();
-    return priority.apply(heap1[parent], heap2[parent])
-        >= priority.apply(heap1[i], heap2[i]);
+    return heap[parent].compareTo(heap[i]) >= 0;
   }
 
   public void add(HypEdge edge, Adjoints score) {
@@ -218,11 +252,10 @@ public class Agenda {
     if (score == null)
       throw new IllegalArgumentException();
     int t = top++;
-    if (t == heap1.length)
+    if (t == heap.length)
       grow();
     addEdgeToFineView(edge);
-    heap1[t] = edge;
-    heap2[t] = score;
+    heap[t] = new AgendaItem(edge, score, priority.apply(edge, score));
     e2i.put(edge, t);
     n2eiSet(t, edge, true);
     siftUp(t);
@@ -241,63 +274,67 @@ public class Agenda {
     return top;
   }
   public int capacity() {
-    return heap1.length;
+    return heap.length;
   }
 
   public void dbgShowScores() {
     Log.info("Agenda has " + top + " items:");
-    for (int i = 0; i < top; i++) {
-//      System.out.printf("%d\t%+.4f\t%s\n", i, heap2[i].forwards(), heap1[i]);
-      System.out.printf("%d\t%+.4f\t%s\n", i, priority.apply(heap1[i], heap2[i]), heap1[i]);
-    }
+    for (int i = 0; i < top; i++)
+      System.out.println(heap[i]);
   }
 
   public Adjoints peekScore() {
     assert top > 0;
-    return heap2[0];
+    return heap[0].score;
   }
 
   public HypEdge peek() {
     assert top > 0;
-    return heap1[0];
+    return heap[0].edge;
   }
 
   public Pair<HypEdge, Adjoints> peekBoth() {
-    return new Pair<>(heap1[0], heap2[0]);
+    return new Pair<>(heap[0].edge, heap[0].score);
   }
 
   public HypEdge pop() {
     assert top > 0;
-    HypEdge e = heap1[0];
+    AgendaItem ai = heap[0];
     moveAndFree(top-1, 0);
     top--;
     if (top > 0)
       siftDown(0);
-    return e;
+    return ai.edge;
   }
 
   public Pair<HypEdge, Adjoints> popBoth() {
     assert top > 0;
-    HypEdge e = heap1[0];
-    Adjoints a = heap2[0];
+    AgendaItem ai = heap[0];
     moveAndFree(top-1, 0);
     top--;
     if (top > 0)
       siftDown(0);
-    return new Pair<>(e, a);
+    return new Pair<>(ai.edge, ai.score);
+  }
+
+  public AgendaItem popBoth2() {
+    assert top > 0;
+    AgendaItem ai = heap[0];
+    moveAndFree(top-1, 0);
+    top--;
+    if (top > 0)
+      siftDown(0);
+    return ai;
   }
 
   public void siftDown(int i) {
     if (i >= top)
       return;
-//    double sc = heap2[i].forwards();
-    double sc = priority.apply(heap1[i], heap2[i]);
+    double sc = heap[i].priority;
     int lc = (i << 1) + 1;
     int rc = lc + 1;
-//    double lcScore = lc < top ? heap2[lc].forwards() : sc;
-//    double rcScore = rc < top ? heap2[rc].forwards() : sc;
-    double lcScore = lc < top ? priority.apply(heap1[lc], heap2[lc]) : sc;
-    double rcScore = rc < top ? priority.apply(heap1[rc], heap2[rc]) : sc;
+    double lcScore = lc < top ? heap[lc].priority : sc;
+    double rcScore = rc < top ? heap[rc].priority : sc;
     if (sc >= lcScore && sc >= rcScore)
       return;
     if (lcScore > rcScore) {
@@ -313,8 +350,7 @@ public class Agenda {
     assert i < top && i >= 0;
     while (i > 0) {
       int parent = (i - 1) >>> 1;
-//      if (heap2[parent].forwards() >= heap2[i].forwards())
-      if (priority.apply(heap1[parent], heap2[parent]) >= priority.apply(heap1[i], heap2[i]))
+      if (heap[parent].compareTo(heap[i]) > 0)
         break;
       swap(i, parent);
       i = parent;
@@ -324,22 +360,16 @@ public class Agenda {
   private void swap(int i, int j) {
 //    Log.info("i=" + i + " j=" + j);
     assert i != j;
-    HypEdge ei = heap1[i];
-    HypEdge ej = heap1[j];
-    n2eiSet(i, ei, false);
-    n2eiSet(j, ej, false);
-    n2eiSet(j, ei, true);
-    n2eiSet(i, ej, true);
-    e2i.put(ei, j);
-    e2i.put(ej, i);
-    heap1[i] = ej;
-    heap1[j] = ei;
-    Adjoints ai = heap2[i];
-    Adjoints aj = heap2[j];
-    assert ai != null;
-    assert aj != null;
-    heap2[i] = aj;
-    heap2[j] = ai;
+    AgendaItem ii = heap[i];
+    AgendaItem jj = heap[j];
+    n2eiSet(i, ii.edge, false);
+    n2eiSet(j, jj.edge, false);
+    n2eiSet(j, ii.edge, true);
+    n2eiSet(i, jj.edge, true);
+    e2i.put(ii.edge, j);
+    e2i.put(jj.edge, i);
+    heap[i] = jj;
+    heap[j] = ii;
   }
 
   /**
@@ -353,24 +383,21 @@ public class Agenda {
       free(from);
       return;
     }
-    removeEdgeFromFineView(heap1[to]);
-    n2eiSet(to, heap1[to], false);
-    n2eiSet(to, heap1[from], true);
-    n2eiSet(from, heap1[from], false);
-    e2i.put(heap1[from], to);
-    e2i.remove(heap1[to]);
-    heap1[to] = heap1[from];
-    heap1[from] = null;
-    heap2[to] = heap2[from];
-    heap2[from] = null;
+    removeEdgeFromFineView(heap[to].edge);
+    n2eiSet(to, heap[to].edge, false);
+    n2eiSet(to, heap[from].edge, true);
+    n2eiSet(from, heap[from].edge, false);
+    e2i.put(heap[from].edge, to);
+    e2i.remove(heap[to].edge);
+    heap[to] = heap[from];
+    heap[from] = null;
   }
 
   private void free(int i) {
-    removeEdgeFromFineView(heap1[i]);
-    n2eiSet(i, heap1[i], false);
-    e2i.remove(heap1[i]);
-    heap1[i] = null;
-    heap2[i] = null;
+    removeEdgeFromFineView(heap[i].edge);
+    n2eiSet(i, heap[i].edge, false);
+    e2i.remove(heap[i].edge);
+    heap[i] = null;
   }
 
   private void addEdgeToFineView(HypEdge e) {
@@ -442,8 +469,7 @@ public class Agenda {
   }
 
   private void grow() {
-    int newSize = (int) (heap1.length * 1.6 + 2);
-    heap1 = Arrays.copyOf(heap1, newSize);
-    heap2 = Arrays.copyOf(heap2, newSize);
+    int newSize = (int) (heap.length * 1.6 + 2);
+    heap = Arrays.copyOf(heap, newSize);
   }
 }

@@ -19,7 +19,7 @@ public class GlobalFactorAdjoints implements Adjoints {
   private LinkedHashMap<String, Adjoints> globalScores;
 
   public GlobalFactorAdjoints(Adjoints localScore) {
-    this.localScore = localScore;
+    this.localScore = Adjoints.cacheIfNeeded(localScore);
     this.globalScores = new LinkedHashMap<>();
   }
 

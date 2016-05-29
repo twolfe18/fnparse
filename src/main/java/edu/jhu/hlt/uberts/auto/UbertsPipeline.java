@@ -86,9 +86,9 @@ public abstract class UbertsPipeline {
     this.u = u;
     timer = new MultiTimer();
     timer.put("setupUbertsForDoc", new Timer("setupUbertsForDoc", 30, true));
-    timer.put("adHocSrlClassificationByRole.setup", new Timer("adHocSrlClassificationByRole.setup", 30, true));
-    timer.put("adHocSrlClassificationByRole.prediction", new Timer("adHocSrlClassificationByRole.prediction", 30, true));
-    timer.put("adHocSrlClassificationByRole.update", new Timer("adHocSrlClassificationByRole.update", 30, true));
+//    timer.put("adHocSrlClassificationByRole.setup", new Timer("adHocSrlClassificationByRole.setup", 30, true));
+//    timer.put("adHocSrlClassificationByRole.prediction", new Timer("adHocSrlClassificationByRole.prediction", 30, true));
+//    timer.put("adHocSrlClassificationByRole.update", new Timer("adHocSrlClassificationByRole.update", 30, true));
 
     dontBackwardsGenerate = new HashSet<>();
     dontBackwardsGenerate.add("succTok");
@@ -390,7 +390,6 @@ public abstract class UbertsPipeline {
     start(dataName);
     TimeMarker tm = new TimeMarker();
     int docs = 0;
-    int skippedDocs = 0;
     Iter itr = new Iter(x, typeInf, dontBackwardsGenerate);
     while (itr.hasNext()) {
       RelDoc doc = itr.next();
@@ -398,8 +397,9 @@ public abstract class UbertsPipeline {
       setupUbertsForDoc(u, doc);
       consume(doc);
       if (tm.enoughTimePassed(15)) {
-        Log.info("docsProcessed=" + docs + " docsSkipped=" + skippedDocs
-            + " docsTotal=" + (docs+skippedDocs) + " time=" + tm.secondsSinceFirstMark());
+        Log.info("[main] dataName=" + dataName
+            + " docsProcessed=" + docs
+            + " time=" + tm.secondsSinceFirstMark());
       }
     }
     finish(dataName);
