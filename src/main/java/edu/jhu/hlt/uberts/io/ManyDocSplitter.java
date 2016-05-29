@@ -32,13 +32,18 @@ public abstract class ManyDocSplitter implements AutoCloseable {
 
   abstract File getOutputForPartition(String p);
 
+
+  /**
+   * Takes a set of ids for test, and possibly dev, and splits a many doc fact/rel
+   * file according to these ids.
+   */
   public static class TestSet extends ManyDocSplitter {
     private File testIdsFile;
     private File trainOutput, testOutput;
     private Set<String> testDocIds;
 
     // Optional: dev set
-    private File devIdsFile;
+//    private File devIdsFile;
     private File devOutput;
     private Set<String> devDocIds;
 
@@ -59,7 +64,7 @@ public abstract class ManyDocSplitter implements AutoCloseable {
 
     public void setDev(File devIdsFile, File devOutputFile) throws IOException {
       Log.info("reading dev ids from " + devIdsFile + " and writing dev output to " + devOutputFile);
-      this.devIdsFile = devIdsFile;
+//      this.devIdsFile = devIdsFile;
       this.devOutput = devOutputFile;
       this.devDocIds = new HashSet<>();
       try (BufferedReader r = FileUtil.getReader(devIdsFile)) {
@@ -90,6 +95,45 @@ public abstract class ManyDocSplitter implements AutoCloseable {
       return trainOutput;
     }
   }
+
+
+  /**
+   * Splits a many doc input file into pieces of size N, where N is provided.
+   */
+  public static class ByBlockSize extends ManyDocSplitter {
+    int written;
+    int block;
+    int blockSize;
+    File outputDir;
+    String fileNameFormat;
+    /**
+     * @param outputDir is where to put splits
+     * @param fileName should be a format string for output files with a hole for a single integer.
+     * @param blockSize
+     */
+    public ByBlockSize(File outputDir, String fileNameFormat, int blockSize) {
+      this.outputDir = outputDir;
+      this.fileNameFormat = fileNameFormat;
+      this.written = 0;
+      this.block = 0;
+      this.blockSize = blockSize;
+    }
+    @Override
+    String partition(RelDoc d) {
+      written++;
+      if (written >= blockSize) {
+        block++;
+        written = 0;
+      }
+      return String.format(fileNameFormat, block);
+    }
+    @Override
+    File getOutputForPartition(String p) {
+      return new File(outputDir, p);
+    }
+  }
+
+
 
   private Map<String, BufferedWriter> writers = new HashMap<>();
   private Counts<String> partitionCounts = new Counts<>();
@@ -148,7 +192,8 @@ public abstract class ManyDocSplitter implements AutoCloseable {
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
     String m = config.getString("mode");
-    if (m.equals("trainDevTest")) {
+    switch (m) {
+    case "trainDevTest":
       try (TestSet ts = new TestSet(config.getExistingFile("testSetIds"),
           config.getFile("trainRelOutput"),
           config.getFile("testRelOutput"))) {
@@ -158,8 +203,17 @@ public abstract class ManyDocSplitter implements AutoCloseable {
         }
         ts.split(config.getExistingFile("relInput"));
       }
-    } else {
-      throw new RuntimeException("unknown mode: " + m + " (did you mean trainDevTest?)");
+      break;
+    case "byBlockSize":
+      int bs = config.getInt("blockSize");
+      String ff = config.getString("fileNameFormat", "shard-%d.facts.gz");
+      File output = config.getFile("output");
+      try (ByBlockSize bbs = new ByBlockSize(output, ff, bs)) {
+        bbs.split(config.getExistingFile("input"));
+      }
+      break;
+    default:
+      throw new RuntimeException("unknown mode: " + m);
     }
   }
 }
