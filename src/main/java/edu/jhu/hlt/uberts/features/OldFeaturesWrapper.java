@@ -45,6 +45,7 @@ import edu.jhu.hlt.uberts.Relation.EqualityArray;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.UbertsPipeline;
+import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
@@ -59,6 +60,10 @@ import edu.jhu.util.Alphabet;
 public class OldFeaturesWrapper {
   public static int DEBUG = 1;
 
+  /**
+   * Doesn't take the product of feature with the {@link Relation} of the
+   * {@link HypEdge} being scored!
+   */
   public static class Strings extends FeatureExtractionFactor<Pair<TemplateAlphabet, String>> {
     private OldFeaturesWrapper inner;
     public Strings(OldFeaturesWrapper inner, Double pSkipNeg) {
@@ -68,8 +73,10 @@ public class OldFeaturesWrapper {
     }
     @Override
     public List<Pair<TemplateAlphabet, String>> features(HypEdge yhat, Uberts x) {
-      if (pSkipNeg != null && !x.getLabel(yhat) && x.getRandom().nextDouble() < pSkipNeg)
-        return SKIP;
+      if (pSkipNeg != null && pSkipNeg > 0) {
+        if (!x.getLabel(yhat) && x.getRandom().nextDouble() < pSkipNeg)
+          return SKIP;
+      }
       return inner.features(yhat, x);
     }
     public OldFeaturesWrapper getInner() {
@@ -179,6 +186,70 @@ public class OldFeaturesWrapper {
     }
   }
 
+  /**
+   * Tracks weights for every relation.
+   */
+  public static class Ints2 implements LocalFactor {
+    private OldFeaturesWrapper inner;
+    private Alphabet<Relation> rels;
+    private AveragedPerceptronWeights[] rel2theta;
+    private int dimension;
+//    private long nScore = 0, nScoreNoFeat = 0;
+    private Counts<String> cnt = new Counts<>();
+    private Timer timer;
+
+    /**
+     * @param inner
+     * @param dimension is how many weights per {@link Relation}
+     */
+    public Ints2(OldFeaturesWrapper inner, int dimension) {
+      this.inner = inner;
+      this.rels = new Alphabet<>();
+      this.rel2theta = new AveragedPerceptronWeights[16];
+      this.dimension = dimension;
+      this.timer = new Timer("Int2.score", 250_000, true);
+    }
+
+    @Override
+    public Adjoints score(HypEdge y, Uberts x) {
+      timer.start();
+
+      cnt.increment("score");
+      cnt.increment("score/" + y.getRelation().getName());
+      List<Pair<TemplateAlphabet, String>> fyx = inner.features(y, x);
+      if (fyx.isEmpty()) {
+        cnt.increment("score/noFeat");
+        cnt.increment("score/noFeat/" + y.getRelation().getName());
+        return Adjoints.Constant.ZERO;
+      }
+      if (cnt.getTotalCount() % 75000 == 0)
+        System.out.println("Int2 events: " + cnt.toString());
+
+      int ri = rels.lookupIndex(y.getRelation());
+      AveragedPerceptronWeights theta = rel2theta[ri];
+      if (theta == null) {
+        int numIntercept = 0;
+        theta = new AveragedPerceptronWeights(dimension, numIntercept);
+        rel2theta[ri] = theta;
+      }
+
+      int[] features = new int[fyx.size()];
+      int T = inner.getNumTemplates();
+      for (int i = 0; i < features.length; i++) {
+        Pair<TemplateAlphabet, String> fyxi = fyx.get(i);
+        int t = fyxi.get1().index;
+        assert t >= 0 && t < T;
+        int f = Hash.hash(fyxi.get2());
+        features[i] = f * T + t;
+      }
+
+      boolean reindex = true;
+      Adjoints a = theta.score(features, reindex);
+      timer.stop();
+      return a;
+    }
+  }
+
   // See TemplatedFeatures.parseTemplate(String), etc
   private edu.jhu.hlt.fnparse.features.precompute.Alphabet features;
   private Sentence sentCache;
@@ -194,6 +265,10 @@ public class OldFeaturesWrapper {
   public BiConsumer<Pair<HypEdge, Uberts>, TemplateContext> customEdgeCtxSetup = null;
 
   public Function<HypEdge, int[]> customRefinements = null;
+
+  public int getNumTemplates() {
+    return features.size();
+  }
 
   public OldFeaturesWrapper(BasicFeatureTemplates bft, BiAlph bialph, File featureSet) {
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
