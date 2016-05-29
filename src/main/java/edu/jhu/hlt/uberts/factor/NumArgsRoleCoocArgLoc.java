@@ -28,6 +28,21 @@ import edu.jhu.util.Alphabet;
 public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public static int DEBUG = 0;
 
+  /*
+   * If true, then the Adjoints for edges on the agenda are immutable.
+   * This is REQUIRED for some training methods, like daggerLike.
+   * If this is false, then some global features can be efficiently updated
+   * without allocating any new objects (e.g. globalAdjoints.numArgs++).
+   *
+   * Put another way, this class looks like:
+   * def rescore(agenda, ...):
+   *   (e,a1) = agenda.remove(...)
+   *   a2 = globalFactor(state, e)
+   *   agenda.add(e,a2)
+   * => a2 may not point to (transitively) ANY MUTABLE pieces from a1
+   */
+  public static boolean IMMUTABLE_FACTORS = true;
+
   private Uberts u;
   private Relation firesFor;    // e.g. argument4
   private int aggregateArgPos;  // e.g. 0 for t in argument4(t,f,s,k)
@@ -37,7 +52,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private Alphabet<String> featureNames;  // for debugging
 
   // Each is called on f(newEdge,fOldEdge) where each argument is a firesFor Relation
-  private List<PairFeat> pairwiseFeatures;
+  private List<PairFeat> pairwiseFeaturesFunctions;
 
   // Stats
   private int nRescore = 0;
@@ -176,14 +191,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     int numIntercept = 0;
     theta = new AveragedPerceptronWeights(dimension, numIntercept);
 
-    argLocGlobal &= firesFor.getName().equals("argument4");
-    argLocPairwise &= Arrays.asList("argument4", "srl2").contains(firesFor.getName());
+//    argLocGlobal &= firesFor.getName().equals("argument4");
+//    argLocPairwise &= Arrays.asList("argument4", "srl2").contains(firesFor.getName());
 
-    this.pairwiseFeatures = new ArrayList<>();
+    this.pairwiseFeaturesFunctions = new ArrayList<>();
     if (argLocPairwise)
-      this.pairwiseFeatures.add(ARG_LOC_PAIRWISE_FEAT);
+      this.pairwiseFeaturesFunctions.add(ARG_LOC_PAIRWISE_FEAT);
     if (roleCooc)
-      this.pairwiseFeatures.add(ROLE_COOC_FEAT);
+      this.pairwiseFeaturesFunctions.add(ROLE_COOC_FEAT);
   }
 
   /**
@@ -264,6 +279,12 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
   }
 
+  /**
+   * Compute global argLoc feature for agendaEdge
+   * @param t is the aggregate node
+   * @param stateEdge was the last edge added to the state
+   * @param agendaEdge is the edge on the agenda being re-scored
+   */
   static List<Integer> argLocGlobal(HypNode t, LL<HypEdge> stateEdge, HypEdge agendaEdge) {
     // Gather target
     Spany target = new Spany(t);
@@ -311,6 +332,104 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         Hash.mix((int) globalFeatNoT, aeh));
   }
 
+  private Adjoints rescoreMutable(HypEdge e, Adjoints oldScore, Agenda a, HypEdge srl4Fact, HypNode t, Iterable<HypEdge> affected, LL<HypEdge> existing) {
+    if (!(oldScore instanceof GlobalFactorAdjoints))
+      oldScore = new GlobalFactorAdjoints(oldScore);
+    GlobalFactorAdjoints gs = (GlobalFactorAdjoints) oldScore;
+
+    if (numArgs) {
+      String key = "numArgs";
+      NumArgAdj adj = (NumArgAdj) gs.getGlobalScore(key);
+      if (adj == null) {
+        String refinement = refineArgPos < 0 ? "na" : (String) e.getTail(refineArgPos).getValue();
+        adj = this.new NumArgAdj(firesFor, refinement);
+        gs.addToGlobalScore(key, adj);
+      }
+      adj.incrementNumCommitted();
+    }
+
+    // roleCooc and argLocPairwise
+    if (!pairwiseFeaturesFunctions.isEmpty()) {
+      String key = "pairwise";
+      PairwiseAdj pa = (PairwiseAdj) gs.getGlobalScore(key);
+      if (pa == null) {
+        pa = this.new PairwiseAdj();
+        gs.addToGlobalScore(key, pa);
+      }
+      for (PairFeat f : pairwiseFeaturesFunctions)
+        for (Integer fx : f.describe(srl4Fact, e))
+          pa.add(fx);
+    }
+
+    if (argLocGlobal) {
+      String key = "argLocGlobal";
+      List<Integer> argLocGF = argLocGlobal(t, existing, e);
+      if (!argLocGF.isEmpty()) {
+        boolean reindex = true;
+        Adjoints argLocGA = theta.score2(argLocGF, reindex);
+        gs.replaceGlobalScore(key, argLocGA);
+      }
+    }
+    return gs;
+  }
+
+  private Adjoints rescoreImmutable(HypEdge e, Adjoints oldScore, Agenda a, HypEdge srl4Fact, HypNode t, Iterable<HypEdge> affected, LL<HypEdge> existing) {
+
+    // Create new adjoints with local score
+    GlobalFactorAdjoints gs;
+    GlobalFactorAdjoints gsOld;
+    if (oldScore instanceof GlobalFactorAdjoints) {
+      gsOld = (GlobalFactorAdjoints) oldScore;
+      gs = new GlobalFactorAdjoints(gsOld.getLocalScore());
+    } else {
+      gsOld = null;
+      gs = new GlobalFactorAdjoints(oldScore);
+    }
+
+    if (numArgs) {
+      String key = "numArgs";
+      String refinement = refineArgPos < 0 ? "na" : (String) e.getTail(refineArgPos).getValue();
+      NumArgAdj adj = this.new NumArgAdj(firesFor, refinement);
+      if (gsOld != null) {
+        NumArgAdj na = (NumArgAdj) gsOld.getGlobalScore(key);
+        adj.setNumCommitted(na.numCommitted + 1);
+      } else {
+        adj.setNumCommitted(1);
+      }
+      gs.addToGlobalScore(key, adj);
+    }
+
+    // roleCooc and argLocPairwise
+    if (!pairwiseFeaturesFunctions.isEmpty()) {
+      String key = "pairwise";
+      // Compute new pairwise features
+      PairwiseAdj pa = this.new PairwiseAdj();
+      for (PairFeat f : pairwiseFeaturesFunctions)
+        for (Integer fx : f.describe(srl4Fact, e))
+          pa.add(fx);
+      if (gsOld != null) {
+        // Copy over old ones
+        // (as if all of these features were computed at this step)
+        Adjoints paOld = gsOld.getGlobalScore(key);
+        gs.addToGlobalScore(key, Adjoints.sum(pa, paOld));
+      } else {
+        // Nothing to copy
+        gs.addToGlobalScore(key, pa);
+      }
+    }
+
+    if (argLocGlobal) {
+      // Nothing old to copy, just generate new adjoints
+      String key = "argLocGlobal";
+      List<Integer> argLocGF = argLocGlobal(t, existing, e);
+      if (!argLocGF.isEmpty()) {
+        boolean reindex = true;
+        Adjoints argLocGA = theta.score2(argLocGF, reindex);
+        gs.addToGlobalScore(key, argLocGA);
+      }
+    }
+    return gs;
+  }
 
   @Override
   public void rescore(Agenda a, GraphTraversalTrace match) {
@@ -327,46 +446,19 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     for (HypEdge e : affected) {
       nEdgeRescore++;
       n++;
-      Adjoints score = a.getScore(e);
+      Adjoints oldScore = a.getScore(e);
       a.remove(e);
-      if (!(score instanceof GlobalFactorAdjoints))
-        score = new GlobalFactorAdjoints(score);
-      GlobalFactorAdjoints gs = (GlobalFactorAdjoints) score;
-
-      { // NumArgs
-        Adj adj = (Adj) gs.getGlobalScore("numArgs");
-        if (adj == null) {
-          String refinement = refineArgPos < 0 ? "na" : (String) e.getTail(refineArgPos).getValue();
-          adj = this.new Adj(firesFor, refinement);
-          gs.addToGlobalScore("numArgs", adj);
-        }
-        if (numArgs) {
-          adj.incrementNumCommitted();
-          a.add(e, gs);
-        }
+      Adjoints newScore;
+      if (IMMUTABLE_FACTORS)
+        newScore = rescoreImmutable(e, oldScore, a, srl4Fact, t, affected, existing);
+      else
+        newScore = rescoreMutable(e, oldScore, a, srl4Fact, t, affected, existing);
+      if (DEBUG > 1) {
+        System.out.println("IMMUTABLE_FACTORS=" + IMMUTABLE_FACTORS + " e=" + srl4Fact + " newScore=" + newScore + " oldScore=" + oldScore);
       }
-
-      // roleCooc and argLocPairwise
-      if (!pairwiseFeatures.isEmpty()) {
-        PairwiseAdj pa = (PairwiseAdj) gs.getGlobalScore("pairwise");
-        if (pa == null) {
-          pa = this.new PairwiseAdj();
-          gs.addToGlobalScore("pairwise", pa);
-        }
-        for (PairFeat f : pairwiseFeatures)
-          for (Integer fx : f.describe(srl4Fact, e))
-            pa.add(fx);
-      }
-
-      // ArgLoc global
-      if (argLocGlobal) {
-//        List<Integer> argLocGF = argLocGlobal(t, existing, srl4Fact, e);
-        List<Integer> argLocGF = argLocGlobal(t, existing, e);
-        boolean reindex = true;
-        Adjoints argLocGA = theta.score2(argLocGF, reindex);
-        gs.replaceGlobalScore("argLocGlobal", argLocGA);
-      }
+      a.add(e, newScore);
     }
+
     if (DEBUG > 0) {
       Log.info("rescored " + n + " " + firesFor.getName() + " relations connected to " + t);
       if (DEBUG > 1)
@@ -396,19 +488,29 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public void backwards(double dErr_dForwards) {
       aFromTheta.backwards(dErr_dForwards);
     }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append("(PA nf=" + features.size());
+      for (ProductIndex i : features)
+        sb.append(" " + i.getProdFeatureModulo(1 << 12));
+      sb.append(')');
+      return sb.toString();
+    }
   }
 
   /**
    * Stores the number of args added already and other needed details like the
    * frame and relation (type of action).
    */
-  public class Adj implements Adjoints {
+  public class NumArgAdj implements Adjoints {
     Relation rel;
     String frame;
     int numCommitted;
     Adjoints aFromTheta;
 
-    public Adj(Relation rel, String frame) {
+    public NumArgAdj(Relation rel, String frame) {
       this.rel = rel;
       this.frame = frame;
       this.numCommitted = 0;
@@ -417,6 +519,18 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public void incrementNumCommitted() {
       numCommitted++;
       aFromTheta = null;
+    }
+
+    public void setNumCommitted(int c) {
+      if (numCommitted != c) {
+        numCommitted = c;
+        aFromTheta = null;
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "(NArgs " + numCommitted + " r=" + rel.getName() + " f=" + frame + ")";
     }
 
     @Override

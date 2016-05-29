@@ -125,18 +125,21 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     graphFeats = config.getBoolean("graphFeats", false);
     templateFeats = config.getBoolean("templateFeats", true);
 
+//    NumArgsRoleCoocArgLoc.IMMUTABLE_FACTORS = true;
+//    NumArgsRoleCoocArgLoc.DEBUG = 2;
+
     predicate2Mutex = config.getBoolean("pred2Mutex", true);
     enableGlobalFactors = !config.getBoolean("disableGlobalFactors", false);
     Log.info("predicate2Mutex=" + predicate2Mutex + " disableGlobalFactors=" + !enableGlobalFactors);
     NumArgsRoleCoocArgLoc.numArgs = config.getBoolean("numArgs", true);
     NumArgsRoleCoocArgLoc.argLocPairwise = config.getBoolean("argLocPairwise", true);
-    NumArgsRoleCoocArgLoc.argLocGlobal = config.getBoolean("argLocGlobal", false);
+    NumArgsRoleCoocArgLoc.argLocGlobal = config.getBoolean("argLocGlobal", true);
     NumArgsRoleCoocArgLoc.roleCooc = config.getBoolean("roleCooc", true);
 
     // This is how many passes over ALL training files are given. If there are
     // 10 train files, each of which is all the data shuffled in a particular
     // way, then setting this to 3 would mean making 30 epochs.
-    int passes = config.getInt("passes", 3);
+    int passes = config.getInt("passes", 10);
 
     BiFunction<HypEdge, Adjoints, Double> agendaPriority =
         AgendaPriority.parse(config.getString("agendaPriority", "1*easyFirst + 1*dfs"));

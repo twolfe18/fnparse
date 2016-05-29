@@ -3,7 +3,6 @@ package edu.jhu.hlt.uberts.factor;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 /**
@@ -22,6 +21,26 @@ public class GlobalFactorAdjoints implements Adjoints {
   public GlobalFactorAdjoints(Adjoints localScore) {
     this.localScore = localScore;
     this.globalScores = new LinkedHashMap<>();
+  }
+
+  /**
+   * Assumes local features are immutable!
+   */
+  public static GlobalFactorAdjoints copy(Adjoints a) {
+    if (a instanceof GlobalFactorAdjoints) {
+      GlobalFactorAdjoints gsOld = (GlobalFactorAdjoints) a;
+      GlobalFactorAdjoints gsNew = new GlobalFactorAdjoints(gsOld.getLocalScore());
+      for (Entry<String, Adjoints> x : gsOld.globalScores.entrySet())
+        gsNew.addToGlobalScore(x.getKey(), x.getValue());
+      return gsNew;
+    } else {
+      // Assumes local features are immutable
+      return new GlobalFactorAdjoints(a);
+    }
+  }
+
+  public Adjoints getLocalScore() {
+    return localScore;
   }
 
   public Adjoints getGlobalScore(String name) {
@@ -64,7 +83,7 @@ public class GlobalFactorAdjoints implements Adjoints {
     StringBuilder sb = new StringBuilder();
     sb.append("(GFAdj local=" + localScore);
     for (Entry<String, Adjoints> x : globalScores.entrySet())
-      sb.append(x.getKey() + "=" + x.getValue());
+      sb.append(" "  + x.getKey() + "=" + x.getValue());
     sb.append(')');
     return sb.toString();
   }
