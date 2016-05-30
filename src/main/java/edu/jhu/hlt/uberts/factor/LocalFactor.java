@@ -21,6 +21,10 @@ public interface LocalFactor {
     public Adjoints score(HypEdge y, Uberts x) {
       Adjoints l = left.score(y, x);
       Adjoints r = right.score(y, x);
+      if (l == Adjoints.Constant.ZERO)
+        return r;
+      if (r == Adjoints.Constant.ZERO)
+        return l;
       return Adjoints.sum(l, r);
     }
   }

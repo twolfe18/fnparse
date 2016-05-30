@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -24,11 +25,11 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
-import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.data.BrownClusters;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Labels;
@@ -59,6 +60,8 @@ public abstract class UbertsPipeline {
 
   protected Uberts u;
   protected List<Rule> rules;
+  protected Set<Relation> rhsOfRules;
+  protected List<TG> transitionGenerators;
   protected List<Relation> helperRelations;
   protected TypeInference typeInf;
 
@@ -86,14 +89,16 @@ public abstract class UbertsPipeline {
     this.u = u;
     timer = new MultiTimer();
     timer.put("setupUbertsForDoc", new Timer("setupUbertsForDoc", 30, true));
-    timer.put("adHocSrlClassificationByRole.setup", new Timer("adHocSrlClassificationByRole.setup", 30, true));
-    timer.put("adHocSrlClassificationByRole.prediction", new Timer("adHocSrlClassificationByRole.prediction", 30, true));
-    timer.put("adHocSrlClassificationByRole.update", new Timer("adHocSrlClassificationByRole.update", 30, true));
+//    timer.put("adHocSrlClassificationByRole.setup", new Timer("adHocSrlClassificationByRole.setup", 30, true));
+//    timer.put("adHocSrlClassificationByRole.prediction", new Timer("adHocSrlClassificationByRole.prediction", 30, true));
+//    timer.put("adHocSrlClassificationByRole.update", new Timer("adHocSrlClassificationByRole.update", 30, true));
 
     dontBackwardsGenerate = new HashSet<>();
     dontBackwardsGenerate.add("succTok");
 
     rules = new ArrayList<>();
+    rhsOfRules = new HashSet<>();
+    transitionGenerators = new ArrayList<>();
     helperRelations = new ArrayList<>();
 
     // succTok(i,j)
@@ -134,6 +139,23 @@ public abstract class UbertsPipeline {
       addRule(typedRule);
     }
 
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    if (config.getBoolean("addLhsScoreToRhsScore", false)) {
+      for (TG tg : transitionGenerators) {
+        Rule r = tg.getRule();
+        for (Term lhsT : r.lhs) {
+          assert lhsT.rel != null;
+          if (rhsOfRules.contains(lhsT.rel)) {
+            if (tg.addLhsScoreToRhsScore == null)
+              tg.addLhsScoreToRhsScore = new HashSet<>();
+            tg.addLhsScoreToRhsScore.add(lhsT.rel);
+          }
+        }
+        if (tg.addLhsScoreToRhsScore != null)
+          Log.info("using lhs scores of " + tg.addLhsScoreToRhsScore + " to score rhs of " + tg.getRule());
+      }
+    }
+
     Log.info("done");
   }
 
@@ -141,18 +163,20 @@ public abstract class UbertsPipeline {
 
   public abstract void consume(RelDoc doc);
 
-  public void start(ManyDocRelationFileIterator x) {
-    File prov = x.getWrapped().getFile();
-    Log.info("starting on " + prov.getPath());
+  public void start(String dataName) {
+    Log.info("starting on " + dataName);
   }
 
-  public void finish(ManyDocRelationFileIterator x) {
-    File prov = x.getWrapped().getFile();
-    Log.info("finished with " + prov.getPath());
+  public void finish(String dataName) {
+    Log.info("finished with " + dataName);
   }
 
   private void addRule(Rule r) {
     rules.add(r);
+
+    assert r.rhs.rel != null;
+    rhsOfRules.add(r.rhs.rel);
+
     LocalFactor phi = getScoreFor(r);
     // Add to Uberts as a TransitionGenerator
     // Create all orderings of this rule
@@ -167,12 +191,11 @@ public abstract class UbertsPipeline {
       }
 
       tg.get2().feats = phi;
-      dbgTransitionGenerators.add(tg.get2());
+      transitionGenerators.add(tg.get2());
       TNode tnode = u.addTransitionGenerator(tg.get1(), tg.get2());
       tnode.getValue().r = rr;
     }
   }
-  private List<TG> dbgTransitionGenerators = new ArrayList<>();
 
   public List<Relation> getHelperRelations() {
     return helperRelations;
@@ -272,7 +295,7 @@ public abstract class UbertsPipeline {
     // Add an edge to the state specifying that we are working on this document/sentence.
     String docid = doc.def.tokens[1];
     HypNode docidN = u.lookupNode(docidNT, docid, true);
-    u.addEdgeToState(u.makeEdge(startDocRel, docidN));
+    u.addEdgeToState(u.makeEdge(startDocRel, docidN), Adjoints.Constant.ZERO);
 
     int cx = 0, cy = 0;
     assert doc.items.isEmpty();
@@ -303,7 +326,8 @@ public abstract class UbertsPipeline {
     // Add all state edges
     for (HypEdge.WithProps fact : doc.facts) {
       if (fact.hasProperty(HypEdge.IS_X)) {
-        u.addEdgeToState(fact);
+//        u.addEdgeToState(fact, Adjoints.Constant.ZERO);
+        u.addEdgeToStateNoMatch(fact, Adjoints.Constant.ZERO);
         if (debug)
           System.out.println("[exFeats] x: " + fact);
         if (this.debug && fact.hasProperty(HypEdge.IS_DERIVED))
@@ -317,7 +341,7 @@ public abstract class UbertsPipeline {
     // Put out a notification that all of the annotations have been added.
     // Up to this, most actions will be blocked.
     HypEdge d = u.makeEdge(doneAnnoRel, docidN);
-    u.addEdgeToState(d);
+    u.addEdgeToState(d, Adjoints.Constant.ZERO);
 
     if (this.debug)
       Log.info("done setup on " + docid);
@@ -385,42 +409,26 @@ public abstract class UbertsPipeline {
         && srl4Edge.getTail(4).getValue().equals(NS_END);
   }
 
-  public void runInference(ManyDocRelationFileIterator x) throws IOException {
-    runInference(x, Shard.ONLY);
-  }
   /**
    * Calls {@link UbertsPipeline#consume(RelDoc)}
-   *
-   * @param dataShard may be null, meaning take all data.
    */
-  public void runInference(ManyDocRelationFileIterator x, Shard dataShard) throws IOException {
-    start(x);
-    Log.info("dataShard=" + dataShard);
-    ExperimentProperties config = ExperimentProperties.getInstance();
+  public void runInference(Iterator<RelDoc> x, String dataName) throws IOException {
+    start(dataName);
     TimeMarker tm = new TimeMarker();
     int docs = 0;
-    int skippedDocs = 0;
-    int maxInstances = config.getInt("maxInstances", 0);
     Iter itr = new Iter(x, typeInf, dontBackwardsGenerate);
     while (itr.hasNext()) {
       RelDoc doc = itr.next();
-      if (dataShard != null && !dataShard.matches(doc.getId())) {
-        skippedDocs++;
-        continue;
-      }
       docs++;
-      if (maxInstances > 0 && docs >= maxInstances) {
-        Log.info("exiting early since we hit maxInstances=" + maxInstances);
-        break;
-      }
       setupUbertsForDoc(u, doc);
       consume(doc);
       if (tm.enoughTimePassed(15)) {
-        Log.info("docsProcessed=" + docs + " docsSkipped=" + skippedDocs
-            + " docsTotal=" + (docs+skippedDocs) + " time=" + tm.secondsSinceFirstMark());
+        Log.info("[main] dataName=" + dataName
+            + " docsProcessed=" + docs
+            + " time=" + tm.secondsSinceFirstMark());
       }
     }
-    finish(x);
+    finish(dataName);
   }
 
   public static void main(String[] args) throws IOException {
@@ -447,13 +455,14 @@ public abstract class UbertsPipeline {
       throw new RuntimeException("unknown mode: " + mode);
     }
 
-    Shard dataShard = config.getShard();
+//    Shard dataShard = config.getShard();
     boolean includeProvidence = false;
     boolean dedupInputLines = true;
     File multiXY = config.getExistingFile("inputRel");
     try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);
         ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
-      srl.runInference(x, dataShard);
+//      srl.runInference(x, dataShard);
+      srl.runInference(x, "file:" + multiXY.getPath());
     }
 
     Log.info(Describe.memoryUsage());

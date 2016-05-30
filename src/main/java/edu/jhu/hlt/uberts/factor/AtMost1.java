@@ -84,6 +84,11 @@ public class AtMost1 {
     }
 
     @Override
+    public String toString() {
+      return getName();
+    }
+
+    @Override
     public String getName() {
       return "AtMost1(" + relationMatch.getName() + "," + boundNodeName + ")";
     }

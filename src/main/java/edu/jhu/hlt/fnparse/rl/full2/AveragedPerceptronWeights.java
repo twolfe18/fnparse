@@ -9,6 +9,7 @@ import java.util.Random;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleVector;
@@ -269,6 +270,20 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     private List<ProductIndex> features2;
     private LL<ProductIndex> features3;
 
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("(AvgPctW");
+      int limit = 400;
+      if (features != null)
+        sb.append("f=" + StringUtils.trunc(Arrays.toString(features), limit));
+      if (features2 != null)
+        sb.append("f2=" + StringUtils.trunc(features2, limit));
+      if (features3 != null)
+        sb.append("f3=" + StringUtils.trunc(features3, limit));
+      sb.append(')');
+      return sb.toString();
+    }
+
     /**
      * @param features need not adhere to any dimension restrictions.
      */
@@ -294,6 +309,8 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
      * @param reindex says whether features should be taken mod dimension.
      */
     public Adj(int[] features, boolean reindex) {
+      assert reindex || numInterceptFeatures == 0
+          : "did you account for intercept features in your indexing (in addition to mod dimension)?";
       this.features = features;
       if (reindex) {
         for (int i = 0; i < features.length; i++)

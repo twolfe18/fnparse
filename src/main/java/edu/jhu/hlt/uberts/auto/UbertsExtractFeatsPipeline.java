@@ -21,7 +21,6 @@ import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.features.Weight;
 import edu.jhu.hlt.uberts.features.WeightList;
-import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
 import edu.jhu.prim.tuple.Pair;
@@ -73,8 +72,9 @@ public class UbertsExtractFeatsPipeline extends UbertsPipeline {
     return feSlow;
   }
 
-  public void start(ManyDocRelationFileIterator x) {
-    super.start(x);
+  @Override
+  public void start(String dataName) {
+    super.start(dataName);
     // This will initialize the Alphabet over frame/role names and provide
     // the code to write out features.txt.gz and template-feat-indices.txt.gz
     boolean roleMode = true;
@@ -86,8 +86,9 @@ public class UbertsExtractFeatsPipeline extends UbertsPipeline {
     }
   }
 
-  public void finish(ManyDocRelationFileIterator x) {
-    super.finish(x);
+  @Override
+  public void finish(String dataName) {
+    super.finish(dataName);
     try {
       w.close();
       fpre.saveAlphabets(fPreTemplateFeatureAlph, fPreRoleNameAlph);

@@ -49,7 +49,7 @@ public class UbertsTest {
           u.lookupNode(word, sent[i], true),
       };
       HypEdge e = u.makeEdge("word", tail);
-      u.addEdgeToState(e);
+      u.addEdgeToState(e, Adjoints.Constant.ZERO);
       tokens.add(u.lookupNode(tokenIndex, i, true));
     }
     Log.info("sent.length=" + sent.length);
@@ -102,7 +102,7 @@ public class UbertsTest {
         u.lookupNode(tokenIndex, 0, true),
         u.lookupNode(posTag, "<s>", true),
     };
-    u.addEdgeToState(u.makeEdge("pos", tail));
+    u.addEdgeToState(u.makeEdge("pos", tail), Adjoints.Constant.ZERO);
 
     Agenda a = u.getAgenda();
     for (int i = 0; a.size() > 0; i++) {
@@ -113,7 +113,7 @@ public class UbertsTest {
       if (best.getRelation() == u.getEdgeType("ner") && p.get2().forwards() < 0.5)
         continue;
       Log.info("best=" + best);
-      u.addEdgeToState(best);
+      u.addEdgeToState(best, Adjoints.Constant.ZERO);
     }
 
     // Print out the state graph
@@ -198,7 +198,7 @@ public class UbertsTest {
           u.lookupNode(tokenIndex, i, true),
           u.lookupNode(posTag, "N", true),
       };
-      u.addEdgeToState(u.makeEdge("pos", tail));
+      u.addEdgeToState(u.makeEdge("pos", tail), Adjoints.Constant.ZERO);
     }
 
     Log.info("before adding NER:");
@@ -211,7 +211,7 @@ public class UbertsTest {
     while (a.size() > 0) {
       Pair<HypEdge, Adjoints> p = a.popBoth();
       if (p.get2().forwards() > 0.5)
-        u.addEdgeToState(p.get1());
+        u.addEdgeToState(p.get1(), Adjoints.Constant.ZERO);
       else
         break;
     }

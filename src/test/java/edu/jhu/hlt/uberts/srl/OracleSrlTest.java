@@ -56,7 +56,7 @@ public class OracleSrlTest {
     pipe.predict = false;
     try (RelationFileIterator rels = new RelationFileIterator(multiRels, false);
         ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-      pipe.runInference(many);
+      pipe.runInference(many, "train");
     }
 
     // Test
@@ -64,7 +64,7 @@ public class OracleSrlTest {
     pipe.predict = true;
     try (RelationFileIterator rels = new RelationFileIterator(multiRels, false);
         ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-      pipe.runInference(many);
+      pipe.runInference(many, "test");
     }
   }
 

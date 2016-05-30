@@ -39,6 +39,8 @@ import edu.mit.jwi.item.IWord;
 
 public class BasicFeatureTemplates {
 
+  public boolean WIDE_SPAN_BAG_OF_WORDS_OPTIMIZATION = true;
+
   public static String spanPosRel(Span s1, Span s2) {
     return posRel(s1.start, s2.start)
         + "-" + posRel(s1.end, s2.end)
@@ -176,7 +178,10 @@ public class BasicFeatureTemplates {
   }
 
   public Template getBasicTemplate(String name) {
-    return basicTemplates.get(name);
+    Template t = basicTemplates.get(name);
+    if (t == null)
+      throw new RuntimeException("no template named " + name);
+    return t;
   }
   public Template[] getBasicTemplates(String[] names) {
     Template[] t = new Template[names.length];
@@ -1713,7 +1718,13 @@ public class BasicFeatureTemplates {
                 pos.sentence = context.getSentence();
                 //Collection<String> output = new ArrayList<>();
                 Collection<String> output = new HashSet<>();
-                for (int start = c1; start <= (c2 - ngram)+1; start++) {
+                int end = (c2 - ngram)+1;
+                if (WIDE_SPAN_BAG_OF_WORDS_OPTIMIZATION) {
+                  int width = (end - c1) + 1;
+                  if (width > 12)
+                    return null;
+                }
+                for (int start = c1; start <= end; start++) {
                   StringBuilder feat = new StringBuilder();
                   feat.append(name);
                   feat.append("=");
@@ -1774,6 +1785,14 @@ public class BasicFeatureTemplates {
         if (f == Frame.nullFrame)
           return null;
         return "frameInst=" + f.getName();
+      }
+    });
+    addLabel("frameMaybe", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        Frame f = context.getFrame();
+        if (f == null)
+          return "f=?";
+        return "f=" + f.getName();
       }
     });
     addLabel("frameRole", new TemplateSS() {
