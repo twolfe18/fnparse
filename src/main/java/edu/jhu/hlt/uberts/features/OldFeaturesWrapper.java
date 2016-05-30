@@ -29,6 +29,7 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
@@ -186,6 +187,64 @@ public class OldFeaturesWrapper {
     }
   }
 
+  public static class Ints3 implements LocalFactor {
+
+    public static Ints3 build(BasicFeatureTemplates bft, Relation r, ExperimentProperties config) {
+      String key = "rel2feat";
+      Map<String, String> rel2featFile = config.getMapping(key);
+      String ffn = rel2featFile.get(r.getName());
+      if (ffn == null)
+        throw new RuntimeException("no features for " + r.getName() + ", update " + key);
+      int dim = config.getInt("hashDimension", 1 << 19);
+      return new Ints3(bft, r, new File(ffn), dim);
+    }
+
+    private OldFeaturesWrapper inner;
+    private Relation rel;
+    private AveragedPerceptronWeights theta;
+//    private int dimension;
+//    private long nScore = 0, nScoreNoFeat = 0;
+    private Counts<String> cnt = new Counts<>();
+    private Timer timer;
+
+    public Ints3(BasicFeatureTemplates bft, Relation r, File featureSet, int dimension) {
+      this.inner = new OldFeaturesWrapper(bft, featureSet);
+      this.rel = r;
+//      this.dimension = dimension;
+      int numIntercept = 0;
+      this.theta = new AveragedPerceptronWeights(dimension, numIntercept);
+      this.timer = new Timer("Int3/" + rel.getName() + "/score", 250_000, true);
+    }
+    @Override
+    public Adjoints score(HypEdge y, Uberts x) {
+      timer.start();
+
+      cnt.increment("score/" + y.getRelation().getName());
+      List<Pair<TemplateAlphabet, String>> fyx = inner.features(y, x);
+      if (fyx.isEmpty()) {
+        cnt.increment("score/noFeat/" + y.getRelation().getName());
+        return Adjoints.Constant.ZERO;
+      }
+      if (cnt.getTotalCount() % 75000 == 0)
+        System.out.println("Int2 events: " + cnt.toString());
+
+      int[] features = new int[fyx.size()];
+      int T = inner.getNumTemplates();
+      for (int i = 0; i < features.length; i++) {
+        Pair<TemplateAlphabet, String> fyxi = fyx.get(i);
+        int t = fyxi.get1().index;
+        assert t >= 0 && t < T;
+        int f = Hash.hash(fyxi.get2());
+        features[i] = f * T + t;
+      }
+
+      boolean reindex = true;
+      Adjoints a = theta.score(features, reindex);
+      timer.stop();
+      return a;
+    }
+  }
+
   /**
    * Tracks weights for every relation.
    */
@@ -205,9 +264,10 @@ public class OldFeaturesWrapper {
     public Ints2(OldFeaturesWrapper inner, int dimension) {
       this.inner = inner;
       this.rels = new Alphabet<>();
+      // TODO Dynamic resizing of rel2theta
       this.rel2theta = new AveragedPerceptronWeights[16];
       this.dimension = dimension;
-      this.timer = new Timer("Int2.score", 250_000, true);
+      this.timer = new Timer("Int2/score", 250_000, true);
     }
 
     @Override
@@ -335,6 +395,8 @@ public class OldFeaturesWrapper {
   }
 
   public OldFeaturesWrapper(BasicFeatureTemplates bft, File featureSet) {
+    if (!featureSet.isFile())
+      throw new IllegalArgumentException("feature set file doesn't exist: " + featureSet);
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
     for (String[] feat : FeatureSet.getFeatureSet3(featureSet)) {
       String n = StringUtils.join("*", feat);

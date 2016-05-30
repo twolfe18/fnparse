@@ -229,6 +229,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private BasicFeatureTemplates bft;
   private OldFeaturesWrapper ofw;
   private OldFeaturesWrapper.Ints2 feFast2;
+  private List<OldFeaturesWrapper.Ints3> feFast3;
   /** @deprecated */
   private OldFeaturesWrapper.Ints feFast;
 
@@ -289,16 +290,19 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       Log.info("using template feats");
       if (bft == null) {
         bft = new BasicFeatureTemplates();
-        File featureSet = config.getExistingFile("featureSet");
-        ofw = new OldFeaturesWrapper(bft, featureSet);
+//        File featureSet = config.getExistingFile("featureSet");
+//        ofw = new OldFeaturesWrapper(bft, featureSet);
       }
-//      OldFeaturesWrapper.Strings ff = new OldFeaturesWrapper.Strings(ofw, 0d);
-//      f = new LocalFactor.Sum(ff, f);
-      if (feFast2 == null) {
-        int dimension = config.getInt("hashFeatDim", 1 << 18);
-        feFast2 = new OldFeaturesWrapper.Ints2(ofw, dimension);
-      }
-      f = new LocalFactor.Sum(feFast2, f);
+//      if (feFast2 == null) {
+//        int dimension = config.getInt("hashFeatDim", 1 << 18);
+//        feFast2 = new OldFeaturesWrapper.Ints2(ofw, dimension);
+//      }
+//      f = new LocalFactor.Sum(feFast2, f);
+      if (feFast3 == null)
+        feFast3 = new ArrayList<>();
+      OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(bft, r.rhs.rel, config);
+      feFast3.add(fe3);
+      f = new LocalFactor.Sum(fe3, f);
     }
 
     if (oracleFeats) {
@@ -388,6 +392,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           os.add(u.statsAgendaSizePerStep.get(i));
         System.out.println("agendaSize: mean=" + os.getMean() + " orders=" + os.getOrdersStr());
 
+        // Sentence length
+        LL<HypEdge> words = u.getState().match2(u.getEdgeType("word2"));
+        int nWords = 0;
+        for (LL<HypEdge> cur = words; cur != null; cur = cur.next) nWords++;
+        System.out.println("nWords=" + nWords);
+
         StringBuilder sb = new StringBuilder();
         sb.append("globalFactorStats:");
         for (GlobalFactor gf : globalFactors) {
@@ -409,6 +419,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       }
       break;
     }
+  }
+
+  public Map<Relation, Double> getCostFP() {
+    Map<Relation, Double> costFP = new HashMap<>();
+    costFP.put(u.getEdgeType("argument4"), 1d);
+    costFP.put(u.getEdgeType("srl3"), costFP_srl3);
+    costFP.put(u.getEdgeType("srl2"), costFP_srl2);
+    costFP.put(u.getEdgeType("predicate2"), 1d);
+    costFP.put(u.getEdgeType("event1"), costFP_event1);
+    return costFP;
   }
 
   private void train(RelDoc doc) {
@@ -435,13 +455,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case MAX_VIOLATION:
       timer.start("train/maxViolation");
-      Map<Relation, Double> costFP = new HashMap<>();
-      costFP.put(u.getEdgeType("argument4"), 1d);
-      costFP.put(u.getEdgeType("srl3"), costFP_srl3);
-      costFP.put(u.getEdgeType("srl2"), costFP_srl2);
-      costFP.put(u.getEdgeType("predicate2"), 1d);
-      costFP.put(u.getEdgeType("event1"), costFP_event1);
-      Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(costFP);
+      Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP());
       boolean debug = false;
       int k = 400;
       if (maxViolation != null) {
@@ -473,8 +487,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       boolean updateAccordingToPriority = false;
       double pOracleRollIn = 1.0;
       List<AgendaSnapshot> states = u.daggerLike(pOracleRollIn);
+      Map<Relation, Double> costFP = getCostFP();
       for (AgendaSnapshot s : states) {
-        s.applyUpdate(updateAccordingToPriority);
+        s.applyUpdate(updateAccordingToPriority, costFP);
       }
       timer.stop("train/dagger");
       break;

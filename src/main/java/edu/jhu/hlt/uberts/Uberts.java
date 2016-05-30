@@ -475,7 +475,7 @@ public class Uberts {
       this.agendaItems = agendaContentsUnsorted;
     }
 
-    public void applyUpdate(boolean updateAccordingToPriority) {
+    public void applyUpdate(boolean updateAccordingToPriority, Map<Relation, Double> costFP) {
       if (updateAccordingToPriority) {
         agendaItems.sort(new Comparator<LabledAgendaItem>() {
           @Override
@@ -492,15 +492,19 @@ public class Uberts {
           LabledAgendaItem ai = agendaItems.get(i);
           if (ai.label && ai.score.forwards() <= 0)
             ai.score.backwards(-m);
-          if (!ai.label && ai.score.forwards() > 0)
-            ai.score.backwards(+m);
+          if (!ai.label && ai.score.forwards() > 0) {
+            double cfp = costFP.get(ai.edge.getRelation());
+            ai.score.backwards(+m * cfp);
+          }
         }
       } else {
         for (LabledAgendaItem ai : agendaItems) {
           if (ai.label && ai.score.forwards() <= 0)
             ai.score.backwards(-1);
-          if (!ai.label && ai.score.forwards() > 0)
-            ai.score.backwards(+1);
+          if (!ai.label && ai.score.forwards() > 0) {
+            double cfp = costFP.get(ai.edge.getRelation());
+            ai.score.backwards(+1 * cfp);
+          }
         }
       }
     }
