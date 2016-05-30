@@ -39,6 +39,8 @@ import edu.mit.jwi.item.IWord;
 
 public class BasicFeatureTemplates {
 
+  public boolean WIDE_SPAN_BAG_OF_WORDS_OPTIMIZATION = false;
+
   public static String spanPosRel(Span s1, Span s2) {
     return posRel(s1.start, s2.start)
         + "-" + posRel(s1.end, s2.end)
@@ -1713,7 +1715,13 @@ public class BasicFeatureTemplates {
                 pos.sentence = context.getSentence();
                 //Collection<String> output = new ArrayList<>();
                 Collection<String> output = new HashSet<>();
-                for (int start = c1; start <= (c2 - ngram)+1; start++) {
+                int end = (c2 - ngram)+1;
+                if (WIDE_SPAN_BAG_OF_WORDS_OPTIMIZATION) {
+                  int width = (end - c1) + 1;
+                  if (width > 8)
+                    return null;
+                }
+                for (int start = c1; start <= end; start++) {
                   StringBuilder feat = new StringBuilder();
                   feat.append(name);
                   feat.append("=");
