@@ -39,7 +39,7 @@ import edu.mit.jwi.item.IWord;
 
 public class BasicFeatureTemplates {
 
-  public boolean WIDE_SPAN_BAG_OF_WORDS_OPTIMIZATION = false;
+  public boolean WIDE_SPAN_BAG_OF_WORDS_OPTIMIZATION = true;
 
   public static String spanPosRel(Span s1, Span s2) {
     return posRel(s1.start, s2.start)
@@ -178,7 +178,10 @@ public class BasicFeatureTemplates {
   }
 
   public Template getBasicTemplate(String name) {
-    return basicTemplates.get(name);
+    Template t = basicTemplates.get(name);
+    if (t == null)
+      throw new RuntimeException("no template named " + name);
+    return t;
   }
   public Template[] getBasicTemplates(String[] names) {
     Template[] t = new Template[names.length];
@@ -1718,7 +1721,7 @@ public class BasicFeatureTemplates {
                 int end = (c2 - ngram)+1;
                 if (WIDE_SPAN_BAG_OF_WORDS_OPTIMIZATION) {
                   int width = (end - c1) + 1;
-                  if (width > 8)
+                  if (width > 12)
                     return null;
                 }
                 for (int start = c1; start <= end; start++) {
