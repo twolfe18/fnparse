@@ -14,6 +14,7 @@ import java.util.Random;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 import com.google.common.collect.Iterators;
 
@@ -83,7 +84,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static boolean predicate2Mutex = true;
   static boolean enableGlobalFactors = true;
 
-  static double costFP_srl3 = 0.25;
+  static double costFP_srl3 = 0.1;
   static double costFP_srl2 = 0.25;
   static double costFP_event1 = 0.25;
 
@@ -233,6 +234,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   /** @deprecated */
   private OldFeaturesWrapper.Ints feFast;
 
+  private List<Consumer<Double>> batch = new ArrayList<>();
+  private int batchSize = 32;
+  private boolean updateAccordingToPriority = false;
+  private double pOracleRollIn = 1.0;
+
   private NumArgsRoleCoocArgLoc numArgsArg4;
   private NumArgsRoleCoocArgLoc numArgsArg3;
   private NumArgsRoleCoocArgLoc numArgsArg2;
@@ -255,6 +261,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       boolean hard = false;
       AtMost1.add(u, u.getEdgeType("predicate2"), 0 /* t in predicate2(t,f) */, hard);
     }
+
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    updateAccordingToPriority = config.getBoolean("dagger/updateAccordingToPriority", false);
+    pOracleRollIn = config.getDouble("dagger/pOracleRollIn", 1.0);
+    batchSize = config.getInt("batchSize", 32);
+    Log.info("[main] updateAccordingToPriority=" + updateAccordingToPriority);
+    Log.info("[main] pOracleRollIn=" + pOracleRollIn);
+    Log.info("[main] batchSize=" + batchSize);
 
     // TODO argument4(t,f,s,k) with mutexArg=s?
     // TODO srl2(t,s) with mutexArg=s?
@@ -352,6 +366,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Timing information
     timer.printAll(System.out);
 
+    // Memory usage
+    Log.info(Describe.memoryUsage());
+
     if (DEBUG > 1) {
       Log.info("numArgsArg4 biggest weights: " + numArgsArg4.getBiggestWeights(10));
       Log.info("numArgsArg3 biggest weights: " + numArgsArg3.getBiggestWeights(10));
@@ -378,9 +395,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       boolean oracle = false;
       double minScore = 0.0001;
       int actionLimit = 0;
+
+      timer.start("inf/" + mode);
       Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, minScore, actionLimit);
+      timer.stop("inf/" + mode);
       perfByRel.add(p.get1().perfByRel());
-      if (DEBUG > 0 && perfByRel.size() % 10 == 0) {
+
+      if (DEBUG > 0 && perfByRel.size() % 5 == 0) {
         // Show some stats about this example
         System.out.println("trajLength=" + p.get2().size());
         System.out.println("perDocStats: " + u.stats.toString());
@@ -440,94 +461,59 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     case EARLY_UPDATE:
       timer.start("train/earlyUpdate");
       Step mistake = u.earlyUpdatePerceptron();
-      if (mistake != null) {
-        if (mistake.gold) {
-          // FN
-          assert !mistake.pred;
-          mistake.score.backwards(-1);
-        } else {
-          // FP
-          assert mistake.pred;
-          mistake.score.backwards(+1);
+      batch.add(lr -> {
+        if (mistake != null) {
+          if (mistake.gold) {
+            assert !mistake.pred;
+            mistake.score.backwards(lr * -1);
+          } else {
+            assert mistake.pred;
+            mistake.score.backwards(lr * +1);
+          }
         }
-      }
+      });
       timer.stop("train/earlyUpdate");
       break;
     case MAX_VIOLATION:
       timer.start("train/maxViolation");
       Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP());
-      boolean debug = false;
-      int k = 400;
-      if (maxViolation != null) {
-        for (Traj cur = maxViolation.get1(); cur != null; cur = cur.getPrev()) {
-          Step s = cur.getStep();
-          // The score of prunes is fixed at 0, only update score(Commit)
-          if (s.gold)
-            s.score.backwards(-1);
-          if (debug) {
-            System.out.println("MV oracle, y=" + s.gold + "\tyhat=" + s.pred
-                + "\t" + s.edge + "\t" + s.score.forwards() + "\t" + StringUtils.trunc(s.score, k));
+      batch.add(lr -> {
+        if (maxViolation != null) {
+          for (Traj cur = maxViolation.get1(); cur != null; cur = cur.getPrev()) {
+            Step s = cur.getStep();
+            if (s.gold)
+              s.score.backwards(lr * -1);
+          }
+          for (Traj cur = maxViolation.get2(); cur != null; cur = cur.getPrev()) {
+            Step s = cur.getStep();
+            if (!s.gold)
+              s.score.backwards(lr * +1);
           }
         }
-        for (Traj cur = maxViolation.get2(); cur != null; cur = cur.getPrev()) {
-          Step s = cur.getStep();
-          // The score of prunes is fixed at 0, only update score(Commit)
-          if (!s.gold)
-            s.score.backwards(+1);
-          if (debug) {
-            System.out.println("MV pred,   y=" + s.gold + "\tyhat=" + s.pred
-                + "\t" + s.edge + "\t" + s.score.forwards() + "\t" + StringUtils.trunc(s.score, k));
-          }
-        }
-      }
+      });
       timer.stop("train/maxViolation");
       break;
     case DAGGER:
       timer.start("train/dagger");
-      boolean updateAccordingToPriority = false;
-      double pOracleRollIn = 1.0;
       List<AgendaSnapshot> states = u.daggerLike(pOracleRollIn);
       Map<Relation, Double> costFP = getCostFP();
-      for (AgendaSnapshot s : states) {
-        s.applyUpdate(updateAccordingToPriority, costFP);
-      }
+      batch.add(lr -> {
+        for (AgendaSnapshot s : states)
+          s.applyUpdate(lr, updateAccordingToPriority, costFP);
+      });
       timer.stop("train/dagger");
       break;
     default:
       throw new RuntimeException("implement " + trainMethod);
     }
 
-    // Jenky-ness
-//    boolean oracle = true;
-//    double minScore = 0.0001;
-//    int actionLimit = 0;
-//    Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, minScore, actionLimit);
-//    Labels.Perf perf = p.get1();
-//    Map<String, FPR> perfByRel = perf.perfByRel();
-//    perfByRelTrain.add(perfByRel);
-//    List<Step> traj = p.get2();
-//    for (Step s : traj) {
-//      if (DEBUG > 1)
-//        Log.info(s.edge + " " + s.score + " right=" + (s.gold == s.pred) + " gold=" + s.gold + " pred=" + s.pred);
-//      if (s.gold && !s.pred)
-//        s.score.backwards(-1);
-//      if (!s.gold && s.pred)
-//        s.score.backwards(+1);
-//    }
-
-//    // Show performance on window of most recent examples
-//    int n = 3;
-//    int s = perfByRelTrain.size();
-//    if (s > 0 && s % n == 0) {
-//      Map<String, FPR> pf = new HashMap<>();
-//      for (int i = 0; i < n; i++)
-//        pf = Labels.combinePerfByRel(pf, perfByRelTrain.get(s - (i+1)));
-//      if (DEBUG > 0) {
-//        Log.info("on the last " + n + " examples:\n"
-//            + StringUtils.join("\n", Labels.showPerfByRel(pf)));
-//      }
-//      System.out.println();
-//    }
+    if (batch.size() == batchSize) {
+      timer.start("train/batchApply");
+      for (Consumer<Double> u : batch)
+        u.accept(1d / batchSize);
+      batch.clear();
+      timer.stop("train/batchApply");
+    }
 
     trainTimer.stop();
   }

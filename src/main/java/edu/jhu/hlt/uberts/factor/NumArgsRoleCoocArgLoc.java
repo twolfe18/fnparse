@@ -8,6 +8,7 @@ import java.util.List;
 
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
@@ -50,6 +51,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private int dimension;
   private AveragedPerceptronWeights theta;
   private Alphabet<String> featureNames;  // for debugging
+
+  private double globalToLocalScale = 0.25;
 
   // Each is called on f(newEdge,fOldEdge) where each argument is a firesFor Relation
   private List<PairFeat> pairwiseFeaturesFunctions;
@@ -183,14 +186,17 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
    * @param refinementArgPos can be <0 if you don't want a refinement
    */
   public NumArgsRoleCoocArgLoc(Relation firesFor, int aggregateArgPos, int refinementArgPos, Uberts u) {
+    ExperimentProperties config = ExperimentProperties.getInstance();
     this.u = u;
     this.firesFor = firesFor;
     this.aggregateArgPos = aggregateArgPos;
     this.refineArgPos = refinementArgPos;
-    dimension = 1<<18;
+    dimension = config.getInt("hashDimension", 1 << 19);
     int numIntercept = 0;
     theta = new AveragedPerceptronWeights(dimension, numIntercept);
 
+    this.globalToLocalScale = config.getDouble("globalToLocalScale", 0.25);
+    Log.info("[main] globalToLocalScale=" + globalToLocalScale);
 //    argLocGlobal &= firesFor.getName().equals("argument4");
 //    argLocPairwise &= Arrays.asList("argument4", "srl2").contains(firesFor.getName());
 
@@ -334,7 +340,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
   private Adjoints rescoreMutable(HypEdge e, Adjoints oldScore, Agenda a, HypEdge srl4Fact, HypNode t, Iterable<HypEdge> affected, LL<HypEdge> existing) {
     if (!(oldScore instanceof GlobalFactorAdjoints))
-      oldScore = new GlobalFactorAdjoints(oldScore);
+      oldScore = new GlobalFactorAdjoints(oldScore, globalToLocalScale);
     GlobalFactorAdjoints gs = (GlobalFactorAdjoints) oldScore;
 
     if (numArgs) {
@@ -380,10 +386,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     GlobalFactorAdjoints gsOld;
     if (oldScore instanceof GlobalFactorAdjoints) {
       gsOld = (GlobalFactorAdjoints) oldScore;
-      gs = new GlobalFactorAdjoints(gsOld.getLocalScore());
+      gs = new GlobalFactorAdjoints(gsOld.getLocalScore(), globalToLocalScale);
     } else {
       gsOld = null;
-      gs = new GlobalFactorAdjoints(oldScore);
+      gs = new GlobalFactorAdjoints(oldScore, globalToLocalScale);
     }
 
     if (numArgs) {

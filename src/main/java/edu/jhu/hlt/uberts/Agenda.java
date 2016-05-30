@@ -31,8 +31,8 @@ public class Agenda {
     public final double priority;
 
     public AgendaItem(HypEdge edge, Adjoints score, double priority) {
-      assert Double.isFinite(priority);
-      assert !Double.isNaN(priority);
+      assert Double.isFinite(priority) : "priority=" + priority;
+      assert !Double.isNaN(priority) : "priority=" + priority;
       this.edge = edge;
       this.score = Adjoints.cacheIfNeeded(score);
       this.priority = priority;

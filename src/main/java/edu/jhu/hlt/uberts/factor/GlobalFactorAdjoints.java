@@ -17,25 +17,27 @@ public class GlobalFactorAdjoints implements Adjoints {
 
   private Adjoints localScore;
   private LinkedHashMap<String, Adjoints> globalScores;
+  private double globalToLocalScale = 0.25;
 
-  public GlobalFactorAdjoints(Adjoints localScore) {
+  public GlobalFactorAdjoints(Adjoints localScore, double globalToLocalScale) {
     this.localScore = Adjoints.cacheIfNeeded(localScore);
     this.globalScores = new LinkedHashMap<>();
+    this.globalToLocalScale = globalToLocalScale;
   }
 
   /**
    * Assumes local features are immutable!
    */
-  public static GlobalFactorAdjoints copy(Adjoints a) {
+  public static GlobalFactorAdjoints copy(Adjoints a, double globalToLocalScale) {
     if (a instanceof GlobalFactorAdjoints) {
       GlobalFactorAdjoints gsOld = (GlobalFactorAdjoints) a;
-      GlobalFactorAdjoints gsNew = new GlobalFactorAdjoints(gsOld.getLocalScore());
+      GlobalFactorAdjoints gsNew = new GlobalFactorAdjoints(gsOld.getLocalScore(), globalToLocalScale);
       for (Entry<String, Adjoints> x : gsOld.globalScores.entrySet())
         gsNew.addToGlobalScore(x.getKey(), x.getValue());
       return gsNew;
     } else {
       // Assumes local features are immutable
-      return new GlobalFactorAdjoints(a);
+      return new GlobalFactorAdjoints(a, globalToLocalScale);
     }
   }
 
@@ -68,7 +70,7 @@ public class GlobalFactorAdjoints implements Adjoints {
   public double forwards() {
     double f = localScore.forwards();
     for (Adjoints a : globalScores.values())
-      f += a.forwards();
+      f += globalToLocalScale * a.forwards();
     return f;
   }
 
@@ -76,7 +78,7 @@ public class GlobalFactorAdjoints implements Adjoints {
   public void backwards(double dErr_dForwards) {
     localScore.backwards(dErr_dForwards);
     for (Adjoints a : globalScores.values())
-      a.backwards(dErr_dForwards);
+      a.backwards(globalToLocalScale * dErr_dForwards);
   }
 
   public String toString() {

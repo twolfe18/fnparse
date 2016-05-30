@@ -226,7 +226,7 @@ public class OldFeaturesWrapper {
         return Adjoints.Constant.ZERO;
       }
       if (cnt.getTotalCount() % 75000 == 0)
-        System.out.println("Int2 events: " + cnt.toString());
+        System.out.println("Int3 events: " + cnt.toString());
 
       int[] features = new int[fyx.size()];
       int T = inner.getNumTemplates();

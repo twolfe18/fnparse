@@ -475,8 +475,14 @@ public class Uberts {
       this.agendaItems = agendaContentsUnsorted;
     }
 
-    public void applyUpdate(boolean updateAccordingToPriority, Map<Relation, Double> costFP) {
+    public void applyUpdate(double learningRate, boolean updateAccordingToPriority, Map<Relation, Double> costFP) {
       if (updateAccordingToPriority) {
+        /*
+         * priority = stage(e) + tanh(score(e))
+         *
+         * score(e) will be <0 for most y=false edges
+         * if we make the update proportional to the priority, this will mean we will be pushing down FPs more than pulling up FNs
+         */
         agendaItems.sort(new Comparator<LabledAgendaItem>() {
           @Override
           public int compare(LabledAgendaItem o1, LabledAgendaItem o2) {
@@ -485,25 +491,34 @@ public class Uberts {
             return 0;
           }
         });
+
         int n = agendaItems.size();
-        double k = n / 5d;
+        double maxP = agendaItems.get(0).priority;
+        double minP = agendaItems.get(n - 1).priority;
+        double r = (maxP - minP);
+        assert r >= 0;
+        if (r == 0)
+          r = 1e-6;
+//        double k = n / 5d;
         for (int i = 0; i < n; i++) {
-          double m = k / (k + i);
+//          double m = k / (k + i);
           LabledAgendaItem ai = agendaItems.get(i);
+          double m = (1+(ai.priority - minP)) / (1+(maxP - minP));
+          assert m > 0 && !Double.isNaN(m) && Double.isFinite(m) : "m=" + m;
           if (ai.label && ai.score.forwards() <= 0)
-            ai.score.backwards(-m);
+            ai.score.backwards(learningRate * -m);
           if (!ai.label && ai.score.forwards() > 0) {
             double cfp = costFP.get(ai.edge.getRelation());
-            ai.score.backwards(+m * cfp);
+            ai.score.backwards(learningRate * +m * cfp);
           }
         }
       } else {
         for (LabledAgendaItem ai : agendaItems) {
           if (ai.label && ai.score.forwards() <= 0)
-            ai.score.backwards(-1);
+            ai.score.backwards(learningRate * -1);
           if (!ai.label && ai.score.forwards() > 0) {
             double cfp = costFP.get(ai.edge.getRelation());
-            ai.score.backwards(+1 * cfp);
+            ai.score.backwards(learningRate * +1 * cfp);
           }
         }
       }
