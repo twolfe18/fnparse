@@ -129,7 +129,7 @@ public class AtMost1 {
             Adjoints score = a.getScore(e);
             a.remove(e);
             if (!(score instanceof GlobalFactorAdjoints))
-              score = new GlobalFactorAdjoints(score);
+              score = new GlobalFactorAdjoints(score, 1d);          // TODO take this as arg
             GlobalFactorAdjoints gs = (GlobalFactorAdjoints) score;
             String n = getConstraintCostName();
             int[] features = new int[] {0};

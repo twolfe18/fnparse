@@ -1141,7 +1141,8 @@ public class TransitionGeneratorForwardsParser {
      *   score(c) += feats(c)
      *   score(c) += 1/2 score(a) + 1/2 score(b)  if a,b in addLhsScoreToRhsScore
      */
-    Set<Relation> addLhsScoreToRhsScore = null;
+    Set<Relation> addLhsScoreToRhsScore = new HashSet<>();
+    double lhsInRhsScoreScale = 0.0;
 
     public TG(LHS match, Rule rule, Uberts u) {
       this.match = match;
@@ -1238,7 +1239,7 @@ public class TransitionGeneratorForwardsParser {
         sc = feats.score(e, u);
       }
 
-      if (addLhsScoreToRhsScore != null && !builtLhsEdges.isEmpty()) {
+      if (lhsInRhsScoreScale > 0 && !builtLhsEdges.isEmpty()) {
         double s = 1d / builtLhsEdges.size();
         Adjoints lhsScore = null;
         for (HypEdge lhsEdge : builtLhsEdges) {
@@ -1248,7 +1249,7 @@ public class TransitionGeneratorForwardsParser {
           else
             lhsScore = Adjoints.sum(new Adjoints.Scale(s, lhsSc), lhsScore);
         }
-        sc = Adjoints.sum(sc, new Adjoints.Scale(0.1, lhsScore));
+        sc = Adjoints.sum(sc, new Adjoints.Scale(lhsInRhsScoreScale, lhsScore));
       }
 
       Pair<HypEdge, Adjoints> p = new Pair<>(e, sc);
