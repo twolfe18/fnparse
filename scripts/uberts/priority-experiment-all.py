@@ -22,13 +22,17 @@ def wformat(d):
   return s
 
 if __name__ == '__main__':
-  import os, sys, subprocess
-  if len(sys.argv) != 2:
-    print 'please provide 1) a working directory and 2) a JAR file (to be copied)'
+  import os, sys, subprocess, shutil
+  if len(sys.argv) != 4:
+    print 'please provide:'
+    print '1) a working directory'
+    print '2) a feature set file'
+    print '3) a JAR file (to be copied)'
     sys.exit(1)
 
   wd = sys.argv[1]
-  jar = sys.argv[2]
+  fs = sys.argv[2]
+  jar = sys.argv[3]
 
   if not os.path.isdir(wd):
     print 'working directory doesn\'t exist:', wd
@@ -39,14 +43,22 @@ if __name__ == '__main__':
   
   p = os.path.join(wd, 'priority-experiments')
   print 'copying jar to safe place:', p
-  os.makedirs(p)
+  if not os.path.exists(p):
+    os.makedirs(p)
+  logs = os.path.join(p, 'logs')
+  if not os.path.exists(logs):
+    os.makedirs(logs)
+
   jar_stable = os.path.join(p, 'uberts.jar')
   shutil.copy(jar, jar_stable)
+
+  fs_stable = os.path.join(p, 'features.fs')
+  shutil.copy(fs, fs_stable)
 
   d = os.path.dirname(os.path.abspath(__file__))
   sc = os.path.join(d, 'priority-experiment.sh')
   for i, w in enumerate(weights()):
-    cmd = ['qsub', sc, wd, wformat(w)]
+    cmd = ['sbatch', sc, wd, wformat(w), fs_stable, jar_stable]
     print i, cmd
     subprocess.check_call(cmd)
 

@@ -1,3 +1,9 @@
+#!/bin/bash
+
+#SBATCH --nodes 1
+#SBATCH --time 48:00:00
+#SBATCH --mem 12G
+
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
@@ -32,8 +38,11 @@ WD=$1
 # see AgendaPriority.java for a list of all legal values.
 PRIORITY=$2
 
+# A file with one feature per line, of the form "template1 * template2"
+FEATURE_SET=$3
+
 # A JAR file in a location which will not change/be removed.
-JAR_STABLE=$3
+JAR_STABLE=$4
 
 
 RD=$WD/rel-data
@@ -42,20 +51,23 @@ if [[ ! -d $RD ]]; then
   exit 1
 fi
 
-TF="$RD/train.0.facts.multi"
+TF="$RD/srl.train.shuf0.facts.gz"
 for i in `seq 9`; do
-  TF="$TF,$RD/train.${i}.facts.multi"
+  TF="$TF,$RD/srl.train.shuf${i}.facts.gz"
 done
 
-java -cp $JAR -ea -server -Xmx12G \
+echo "TF=$TF"
+
+java -cp $JAR_STABLE -ea -server -Xmx12G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
-  train.facts $TF \
-  dev.facts $RD/dev.facts.multi \
-  test.facts $RD/test.facts.multi \
-  grammar $RD/grammar.trans \
-  relation $RD/relations.def \
-  schema $RD/frameTriage4.rel.gz,$RD/role2.rel.gz \
-  priority $PRIORITY
+    featureSet foo \
+    train.facts $TF \
+    dev.facts $RD/srl.dev.facts.gz \
+    test.facts $RD/srl.test.facts.gz \
+    grammar $RD/grammar.trans \
+    relations $RD/relations.def \
+    schema $RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz \
+    priority $PRIORITY
 
 echo "done at `date`, ret code $?"
 
