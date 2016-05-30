@@ -29,6 +29,7 @@ import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.data.BrownClusters;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Labels;
@@ -59,6 +60,8 @@ public abstract class UbertsPipeline {
 
   protected Uberts u;
   protected List<Rule> rules;
+  protected Set<Relation> rhsOfRules;
+  protected List<TG> transitionGenerators;
   protected List<Relation> helperRelations;
   protected TypeInference typeInf;
 
@@ -94,6 +97,8 @@ public abstract class UbertsPipeline {
     dontBackwardsGenerate.add("succTok");
 
     rules = new ArrayList<>();
+    rhsOfRules = new HashSet<>();
+    transitionGenerators = new ArrayList<>();
     helperRelations = new ArrayList<>();
 
     // succTok(i,j)
@@ -134,6 +139,23 @@ public abstract class UbertsPipeline {
       addRule(typedRule);
     }
 
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    if (config.getBoolean("addLhsScoreToRhsScore", false)) {
+      for (TG tg : transitionGenerators) {
+        Rule r = tg.getRule();
+        for (Term lhsT : r.lhs) {
+          assert lhsT.rel != null;
+          if (rhsOfRules.contains(lhsT.rel)) {
+            if (tg.addLhsScoreToRhsScore == null)
+              tg.addLhsScoreToRhsScore = new HashSet<>();
+            tg.addLhsScoreToRhsScore.add(lhsT.rel);
+          }
+        }
+        if (tg.addLhsScoreToRhsScore != null)
+          Log.info("using lhs scores of " + tg.addLhsScoreToRhsScore + " to score rhs of " + tg.getRule());
+      }
+    }
+
     Log.info("done");
   }
 
@@ -151,6 +173,10 @@ public abstract class UbertsPipeline {
 
   private void addRule(Rule r) {
     rules.add(r);
+
+    assert r.rhs.rel != null;
+    rhsOfRules.add(r.rhs.rel);
+
     LocalFactor phi = getScoreFor(r);
     // Add to Uberts as a TransitionGenerator
     // Create all orderings of this rule
@@ -165,12 +191,11 @@ public abstract class UbertsPipeline {
       }
 
       tg.get2().feats = phi;
-      dbgTransitionGenerators.add(tg.get2());
+      transitionGenerators.add(tg.get2());
       TNode tnode = u.addTransitionGenerator(tg.get1(), tg.get2());
       tnode.getValue().r = rr;
     }
   }
-  private List<TG> dbgTransitionGenerators = new ArrayList<>();
 
   public List<Relation> getHelperRelations() {
     return helperRelations;
@@ -270,7 +295,7 @@ public abstract class UbertsPipeline {
     // Add an edge to the state specifying that we are working on this document/sentence.
     String docid = doc.def.tokens[1];
     HypNode docidN = u.lookupNode(docidNT, docid, true);
-    u.addEdgeToState(u.makeEdge(startDocRel, docidN));
+    u.addEdgeToState(u.makeEdge(startDocRel, docidN), Adjoints.Constant.ZERO);
 
     int cx = 0, cy = 0;
     assert doc.items.isEmpty();
@@ -301,7 +326,8 @@ public abstract class UbertsPipeline {
     // Add all state edges
     for (HypEdge.WithProps fact : doc.facts) {
       if (fact.hasProperty(HypEdge.IS_X)) {
-        u.addEdgeToState(fact);
+//        u.addEdgeToState(fact, Adjoints.Constant.ZERO);
+        u.addEdgeToStateNoMatch(fact, Adjoints.Constant.ZERO);
         if (debug)
           System.out.println("[exFeats] x: " + fact);
         if (this.debug && fact.hasProperty(HypEdge.IS_DERIVED))
@@ -315,7 +341,7 @@ public abstract class UbertsPipeline {
     // Put out a notification that all of the annotations have been added.
     // Up to this, most actions will be blocked.
     HypEdge d = u.makeEdge(doneAnnoRel, docidN);
-    u.addEdgeToState(d);
+    u.addEdgeToState(d, Adjoints.Constant.ZERO);
 
     if (this.debug)
       Log.info("done setup on " + docid);

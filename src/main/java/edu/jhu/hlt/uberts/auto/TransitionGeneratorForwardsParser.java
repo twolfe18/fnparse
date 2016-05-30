@@ -1132,6 +1132,17 @@ public class TransitionGeneratorForwardsParser {
     private Rule rule;
     public LocalFactor feats = null;
 
+    /*
+     * If non-null, then take the score of every LHS HypEdge/fact which appears
+     * in a LHS and has a relation in this set, and add it to the score of the
+     * derived edge.
+     *
+     * in a & b => c
+     *   score(c) += feats(c)
+     *   score(c) += 1/2 score(a) + 1/2 score(b)  if a,b in addLhsScoreToRhsScore
+     */
+    Set<Relation> addLhsScoreToRhsScore = null;
+
     public TG(LHS match, Rule rule, Uberts u) {
       this.match = match;
       this.rule = rule;
@@ -1153,6 +1164,10 @@ public class TransitionGeneratorForwardsParser {
       // In the TKey[] I generated, I don't know where all the terms are
       // need: Relation -> index in GraphTraversalTrace for HypEdge
 
+      List<HypEdge> builtLhsEdges = null;
+      if (addLhsScoreToRhsScore != null)
+        builtLhsEdges = new ArrayList<>();
+
       // go through lhs, for every arg, project in to rhs with Rule.lhs2rhs
       int numRhsBound = 0;
       Rule rule = match.getRule();
@@ -1166,6 +1181,8 @@ public class TransitionGeneratorForwardsParser {
         Relation r = rule.lhs[ti].rel;
         HypEdge e = match.getBoundValue(ti, lhsValues);
         assert e.getRelation() == r;
+        if (addLhsScoreToRhsScore != null && addLhsScoreToRhsScore.contains(e.getRelation()))
+          builtLhsEdges.add(e);
 
         // Event/fact/witness variable
         int fRhsIdx = rule.lhsFact2rhs[ti];
@@ -1215,10 +1232,25 @@ public class TransitionGeneratorForwardsParser {
 
       HypEdge e = u.makeEdge(rule.rhs.rel, rhsNodes);
       Adjoints sc = Adjoints.Constant.ONE;
+
       if (feats != null) {
 //        sc = Adjoints.cacheIfNeeded(feats.score(e, u));
         sc = feats.score(e, u);
       }
+
+      if (addLhsScoreToRhsScore != null && !builtLhsEdges.isEmpty()) {
+        double s = 1d / builtLhsEdges.size();
+        Adjoints lhsScore = null;
+        for (HypEdge lhsEdge : builtLhsEdges) {
+          Adjoints lhsSc = u.getState().getScore(lhsEdge);
+          if (lhsScore == null)
+            lhsScore = new Adjoints.Scale(s, lhsSc);
+          else
+            lhsScore = Adjoints.sum(new Adjoints.Scale(s, lhsSc), lhsScore);
+        }
+        sc = Adjoints.sum(sc, new Adjoints.Scale(0.1, lhsScore));
+      }
+
       Pair<HypEdge, Adjoints> p = new Pair<>(e, sc);
 
       if (VERBOSE)

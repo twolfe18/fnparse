@@ -309,6 +309,8 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
      * @param reindex says whether features should be taken mod dimension.
      */
     public Adj(int[] features, boolean reindex) {
+      assert reindex || numInterceptFeatures == 0
+          : "did you account for intercept features in your indexing (in addition to mod dimension)?";
       this.features = features;
       if (reindex) {
         for (int i = 0; i < features.length; i++)

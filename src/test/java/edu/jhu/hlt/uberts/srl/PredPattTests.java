@@ -11,6 +11,7 @@ import org.junit.Test;
 
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
@@ -65,7 +66,7 @@ public class PredPattTests {
       HypNode tag = u.lookupNode(posTag, "tag" + (i%3), true);
       HypEdge e = u.makeEdge(posRel, idx, tag);
       Log.info("adding on " + e);
-      u.addEdgeToState(e);
+      u.addEdgeToState(e, Adjoints.Constant.ZERO);
     }
 
     // Pull the edges off the agenda

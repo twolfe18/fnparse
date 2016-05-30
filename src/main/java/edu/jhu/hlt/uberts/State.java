@@ -17,6 +17,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 /**
  * A hyper-graph representing joint NLP predictions.
@@ -106,21 +107,34 @@ public class State {
      * Uberts#readRelData(java.io.BufferedReader)}, only using "yhat" for the
      * first column. Does not write out relation definitions.
      */
+    @Override
     public void writeEdges(BufferedWriter w) throws IOException {
       regularEdges.writeEdges(w);
       schemaEdges.writeEdges(w);
     }
+    @Override
     public void writeEdges(BufferedWriter w, Set<Relation> skip) throws IOException {
       regularEdges.writeEdges(w, skip);
       schemaEdges.writeEdges(w, skip);
     }
-    public void add(HypEdge e) {
+    @Override
+    public Adjoints getScore(HypEdge e) {
       if (e instanceof HypEdge.WithProps
           && ((HypEdge.WithProps) e).hasProperty(HypEdge.IS_SCHEMA)) {
         assert ownSchemaEdges;
-        schemaEdges.add(e);
+        return schemaEdges.getScore(e);
       } else {
-        regularEdges.add(e);
+        return regularEdges.getScore(e);
+      }
+    }
+    @Override
+    public void add(HypEdge e, Adjoints score) {
+      if (e instanceof HypEdge.WithProps
+          && ((HypEdge.WithProps) e).hasProperty(HypEdge.IS_SCHEMA)) {
+        assert ownSchemaEdges;
+        schemaEdges.add(e, score);
+      } else {
+        regularEdges.add(e, score);
       }
     }
     /** May return null */
@@ -214,6 +228,7 @@ public class State {
   private Map<ArgVal, LL<HypEdge>> fineView;
   private Map<Relation, LL<HypEdge>> relView;
   private List<HypEdge> edges;
+  private HashMap<HypEdge, Adjoints> scores;
   private MultiTimer timer;
 
   public State() {
@@ -221,6 +236,7 @@ public class State {
     this.fineView = new HashMap<>();
     this.relView = new HashMap<>();
     this.edges = new ArrayList<>();
+    this.scores = new HashMap<>();
     this.timer = new MultiTimer();
     this.timer.put("clearNonSchema", new Timer("clearNonSchema", 30, true));
   }
@@ -251,19 +267,20 @@ public class State {
     if (DEBUG) {
       Log.info("edges=" + edges.size() + " nodes=" + fineView.size() + " args=" + primaryView.size());
     }
-    timer.start("clearNonSchema");
-    List<HypEdge> temp = edges;
-    primaryView.clear();
-    fineView.clear();
-    relView.clear();
-    edges = new ArrayList<>();
-    for (HypEdge e : temp) {
-      if (e instanceof HypEdge.WithProps &&
-          ((HypEdge.WithProps)e).hasProperty(HypEdge.IS_SCHEMA)) {
-        add(e);
-      }
-    }
-    timer.stop("clearNonSchema");
+    throw new RuntimeException("re-implement me or see Split");
+//    timer.start("clearNonSchema");
+//    List<HypEdge> temp = edges;
+//    primaryView.clear();
+//    fineView.clear();
+//    relView.clear();
+//    edges = new ArrayList<>();
+//    for (HypEdge e : temp) {
+//      if (e instanceof HypEdge.WithProps &&
+//          ((HypEdge.WithProps)e).hasProperty(HypEdge.IS_SCHEMA)) {
+//        add(e);
+//      }
+//    }
+//    timer.stop("clearNonSchema");
   }
 
   public int getNumNodes() {
@@ -294,8 +311,17 @@ public class State {
     }
   }
 
-  public void add(HypEdge e) {
+  public Adjoints getScore(HypEdge e) {
+    return scores.get(e);
+  }
+
+  public void add(HypEdge e, Adjoints score) {
     edges.add(e);
+
+    Adjoints old = scores.put(e, Adjoints.cacheIfNeeded(score));
+    if (old != null)
+      throw new RuntimeException("two scores for " + e + " first=" + old + " second=" + score);
+
     add(HEAD_ARG_POS, e.getHead(), e);
     int n = e.getNumTails();
     for (int i = 0; i < n; i++)

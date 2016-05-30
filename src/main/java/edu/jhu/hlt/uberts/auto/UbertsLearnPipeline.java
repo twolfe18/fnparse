@@ -33,7 +33,6 @@ import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
-import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
@@ -99,6 +98,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // +pred2Mutex(SOFT) +numArgs F(predicate2)=88.7 F(argument4)=36.7
 
   public static void main(String[] args) throws IOException {
+    Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
 //    BrownClusters.DEBUG = true; // who is loading BC multiple times?
 
@@ -217,6 +217,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         }
       }
     }
+    Log.info("[main] done at " + new java.util.Date().toString());
   }
 
   // How should the document being consumed be interpretted?
@@ -375,13 +376,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       int actionLimit = 0;
       Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, minScore, actionLimit);
       perfByRel.add(p.get1().perfByRel());
-      if (DEBUG > 0) {
+      if (DEBUG > 0 && perfByRel.size() % 10 == 0) {
         // Show some stats about this example
         System.out.println("trajLength=" + p.get2().size());
         System.out.println("perDocStats: " + u.stats.toString());
 
         // Agenda size
         OrderStatistics<Integer> os = new OrderStatistics<>();
+        assert u.statsAgendaSizePerStep.size() > 0 || p.get2().size() == 0;
         for (int i = 0; i < u.statsAgendaSizePerStep.size(); i++)
           os.add(u.statsAgendaSizePerStep.get(i));
         System.out.println("agendaSize: mean=" + os.getMean() + " orders=" + os.getOrdersStr());

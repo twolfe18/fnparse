@@ -157,7 +157,7 @@ public class Uberts {
       HypNode cur = lookupNode(tokenIndex, String.valueOf(i), true);
       HypEdge e = makeEdge(succTok, prev, cur);
       e = new HypEdge.WithProps(e, HypEdge.IS_SCHEMA);
-      addEdgeToState(e);
+      addEdgeToState(e, Adjoints.Constant.ZERO);
       prev = cur;
     }
     return succTok;
@@ -182,14 +182,12 @@ public class Uberts {
     for (int i = 0; agenda.size() > 0; i++) {// && (actionLimit <= 0 || i < actionLimit); i++) {
       statsAgendaSizePerStep.add(agenda.size());
       AgendaItem ai = agenda.popBoth2();
-      HypEdge best = ai.edge;
-      boolean y = getLabel(best);
+      boolean y = getLabel(ai.edge);
       if (DEBUG > 1)
         System.out.println("[dbgRunInference] popped=" + ai);
 
       // Always record the action
       boolean hitLim = actionLimit > 0 && i >= actionLimit;
-//      boolean pred = !hitLim && p.get2().forwards() > minScore;
       boolean pred = !hitLim && ai.score.forwards() > minScore;
       steps.add(new Step(ai, y, pred));
 
@@ -197,8 +195,8 @@ public class Uberts {
       if (hitLim)
         continue;
       if ((oracle && y) || pred) {
-        perf.add(best);
-        addEdgeToState(best);
+        perf.add(ai.edge);
+        addEdgeToState(ai);
       }
     }
     if (showTrajDiagnostics)
@@ -221,13 +219,12 @@ public class Uberts {
     while (agenda.size() > 0) {
       statsAgendaSizePerStep.add(agenda.size());
       AgendaItem ai = agenda.popBoth2();
-      HypEdge best = ai.edge;
       boolean yhat = ai.score.forwards() > 0;
-      boolean y = getLabel(best);
+      boolean y = getLabel(ai.edge);
       if (y != yhat)
         return new Step(ai, y, yhat);
       if (yhat)
-        addEdgeToState(best);
+        addEdgeToState(ai);
     }
     return null;
   }
@@ -345,8 +342,7 @@ public class Uberts {
     {
       while (agenda.size() > 0) {
         AgendaItem ai = agenda.popBoth2();
-        HypEdge best = ai.edge;
-        boolean y = getLabel(best);
+        boolean y = getLabel(ai.edge);
         boolean yhat = ai.score.forwards() > 0;
         if (DEBUG > 1)
           System.out.println("[dbgRunInference] popped=" + ai);
@@ -358,7 +354,7 @@ public class Uberts {
 
         // But maybe don't add apply it (add it to state)
         if (y)
-          addEdgeToState(best);
+          addEdgeToState(ai);
       }
     }
     assert t1 != null : "oracle took no steps?";
@@ -374,8 +370,7 @@ public class Uberts {
       while (agenda.size() > 0 && (t2 == null || t2.length < t1.length)) {
         statsAgendaSizePerStep.add(agenda.size());
         AgendaItem ai = agenda.popBoth2();
-        HypEdge best = ai.edge;
-        boolean y = getLabel(best);
+        boolean y = getLabel(ai.edge);
         boolean yhat = ai.score.forwards() > 0;
         if (DEBUG > 1)
           System.out.println("[dbgRunInference] popped=" + ai);
@@ -387,7 +382,7 @@ public class Uberts {
 
         // But maybe don't add apply it (add it to state)
         if (yhat)
-          addEdgeToState(best);
+          addEdgeToState(ai);
       }
     }
 
@@ -445,7 +440,7 @@ public class Uberts {
       boolean y = getLabel(ai.edge);
       boolean yhat = ai.score.forwards() > 0;
       if ((oracleRollIn && y) || (!oracleRollIn && yhat))
-        addEdgeToState(ai.edge);
+        addEdgeToState(ai);
     }
 
     return snaps;
@@ -776,7 +771,7 @@ public class Uberts {
       if (command.equals("y"))
         this.addLabel(e);
       else
-        this.addEdgeToState(e);
+        this.addEdgeToState(e, Adjoints.Constant.ZERO);
       break;
     default:
       throw new RuntimeException("unknown-command: " + command);
@@ -877,7 +872,10 @@ public class Uberts {
     return true;
   }
 
-  public void addEdgeToState(HypEdge e) {
+  public void addEdgeToState(AgendaItem ai) {
+    addEdgeToState(ai.edge, ai.score);
+  }
+  public void addEdgeToState(HypEdge e, Adjoints score) {
     if (DEBUG > 1)
       System.out.println("Uberts addEdgeToState: " + e.toString());
     if (stats != null) {
@@ -885,8 +883,18 @@ public class Uberts {
       stats.increment("pop/" + e.getRelation().getName());
     }
     assert nodesContains(e);
-    state.add(e);
+    state.add(e, score);
     TNode.match(this, e, trie);
+  }
+
+  /**
+   * Adds an edge to the state WITHOUT checking if any rules fire for this new
+   * fact. This is a useful optimization for setup, but make sure there is some
+   * other trigger like doneAnno(docid) which ensures that you're rules fire.
+   */
+  public void addEdgeToStateNoMatch(HypEdge e, Adjoints score) {
+    assert nodesContains(e);
+    state.add(e, score);
   }
 
   public void addEdgeToAgenda(Pair<HypEdge, Adjoints> p) {

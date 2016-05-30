@@ -258,7 +258,7 @@ public class SimpleNer {
     boolean supervised = true;
     SimpleNer ner = new SimpleNer(u, supervised);
     Log.info("numTokens=" + ner.getNumTokens());
-    u.addEdgeToState(ner.makeRootEdge());
+    u.addEdgeToState(ner.makeRootEdge(), Adjoints.Constant.ZERO);
     u.dbgRunInference();
 //    u.getState().dbgShowEdges();
   }

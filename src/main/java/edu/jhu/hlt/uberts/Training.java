@@ -56,7 +56,7 @@ public class Training {
       if (y < 1 && r <= pFollowOracle) {
         // skip
       } else {
-        u.addEdgeToState(e);
+        u.addEdgeToState(e, Adjoints.Constant.ZERO);
       }
     }
 
