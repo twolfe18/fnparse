@@ -190,13 +190,22 @@ public class OldFeaturesWrapper {
   public static class Ints3 implements LocalFactor {
 
     public static Ints3 build(BasicFeatureTemplates bft, Relation r, ExperimentProperties config) {
-      String key = "rel2feat";
-      Map<String, String> rel2featFile = config.getMapping(key);
-      String ffn = rel2featFile.get(r.getName());
-      if (ffn == null)
-        throw new RuntimeException("no features for " + r.getName() + ", update " + key);
+      // Old way: take a map of <relationName>:<featureFile>
+//      String key = "rel2feat";
+//      Map<String, String> rel2featFile = config.getMapping(key);
+//      String ffn = rel2featFile.get(r.getName());
+//      if (ffn == null)
+//        throw new RuntimeException("no features for " + r.getName() + ", update " + key);
+//      int dim = config.getInt("hashDimension", 1 << 19);
+//      return new Ints3(bft, r, new File(ffn), dim);
+
+      // New way: take a directory and then look for <dir>/<relationName>.fs
+      File dir = config.getExistingDir("featureSetDir");
+      File ff = new File(dir, r.getName() + ".fs");
+      if (!ff.isFile())
+        throw new RuntimeException("not a file: " + ff.getPath());
       int dim = config.getInt("hashDimension", 1 << 19);
-      return new Ints3(bft, r, new File(ffn), dim);
+      return new Ints3(bft, r, ff, dim);
     }
 
     private OldFeaturesWrapper inner;
