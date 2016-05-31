@@ -26,6 +26,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.data.BrownClusters;
@@ -46,7 +47,6 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.prim.tuple.Pair;
-import edu.stanford.nlp.util.StringUtils;
 
 /**
  * A super-class for implementing functionality which needs to scan over a
@@ -176,22 +176,32 @@ public abstract class UbertsPipeline {
   }
 
   private void addRule(Rule r) {
-    rules.add(r);
-
     assert r.rhs.rel != null;
+    assert r.rhs.allArgsAreTyped();
+    for (Term lt : r.lhs)
+      assert lt.allArgsAreTyped();
+
+    rules.add(r);
     rhsOfRules.add(r.rhs.rel);
 
     LocalFactor phi = getScoreFor(r);
     // Add to Uberts as a TransitionGenerator
     // Create all orderings of this rule
     for (Rule rr : Rule.allLhsOrders(r)) {
+
+      if (helperRelations.contains(rr.lhs[0].rel)) {
+        if (DEBUG > 0)
+          Log.info("not adding this rule since first Functor is schema type: " + rr);
+        continue;
+      }
+
       TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
       Pair<List<TKey>, TG> tg = tgfp.parse2(rr, u);
 
       if (DEBUG > 0) {
         Log.info("adding: " + rr);
         if (DEBUG > 1)
-          System.out.println(StringUtils.join(tg.get1(), "\n"));
+          System.out.println(StringUtils.join("\n", tg.get1()));
       }
 
       tg.get2().feats = phi;
@@ -330,7 +340,7 @@ public abstract class UbertsPipeline {
     // Add all state edges
     for (HypEdge.WithProps fact : doc.facts) {
       if (fact.hasProperty(HypEdge.IS_X)) {
-//        u.addEdgeToState(fact, Adjoints.Constant.ZERO);
+        //u.addEdgeToState(fact, Adjoints.Constant.ZERO);
         u.addEdgeToStateNoMatch(fact, Adjoints.Constant.ZERO);
         if (debug)
           System.out.println("[exFeats] x: " + fact);

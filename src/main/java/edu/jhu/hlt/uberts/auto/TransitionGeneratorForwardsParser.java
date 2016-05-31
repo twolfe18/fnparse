@@ -23,6 +23,7 @@ import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
@@ -1232,6 +1233,33 @@ public class TransitionGeneratorForwardsParser {
           + " lhsVals=" + lhsValues;
 
       HypEdge e = u.makeEdge(rule.rhs.rel, rhsNodes);
+
+      // You can end up generating the same fact many times
+      // e.g. foo(x,y) & bar(y,z) => baz(y)
+      // with foo(1,2), foo(2,2), bar(2,3), bar(2,3)
+      // generates baz(2), baz(2), baz(2), baz(2)
+      // which is very wasteful!
+      // To solve this we check if an edge is already on the agenda before
+      // computing features for a given edge.
+      HashableHypEdge hhe = new HashableHypEdge(e);
+      if (u.getAgenda().contains(hhe)) {
+        if (VERBOSE)
+          Log.info("pruning " + e + " because its already on the agenda");
+        return Collections.emptyList();
+      } else if (VERBOSE) {
+        Log.info("NOT pruning " + e + " because its on the agenda");
+      }
+      // Check the state too
+      Adjoints stateScore = u.getState().getScore(hhe);
+      if (stateScore != null) {
+        if (VERBOSE)
+          Log.info("pruning " + e + " because its already in the state");
+        return Collections.emptyList();
+      } else if (VERBOSE) {
+        Log.info("NOT pruning " + e + " because its in the state");
+      }
+
+
       Adjoints sc = Adjoints.Constant.ONE;
 
       if (feats != null) {
@@ -1243,8 +1271,9 @@ public class TransitionGeneratorForwardsParser {
         double s = 1d / builtLhsEdges.size();
         Adjoints lhsScore = null;
         for (HypEdge lhsEdge : builtLhsEdges) {
-//          Adjoints lhsSc = Adjoints.cacheIfNeeded(u.getState().getScore(lhsEdge));
-          Adjoints lhsSc = new Adjoints.Constant(u.getState().getScore(lhsEdge).forwards());
+          HashableHypEdge hLhsEdge = new HashableHypEdge(lhsEdge);
+//          Adjoints lhsSc = Adjoints.cacheIfNeeded(u.getState().getScore(hLhsEdge));
+          Adjoints lhsSc = new Adjoints.Constant(u.getState().getScore(hLhsEdge).forwards());
           if (lhsScore == null)
             lhsScore = new Adjoints.Scale(s, lhsSc);
           else

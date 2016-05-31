@@ -19,6 +19,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.prim.tuple.Pair;
 
 public class AgendaTests {
@@ -315,12 +316,20 @@ public class AgendaTests {
 
       // Check adjacency functionality
       n = dumb.randomNode(rand);
-      Set<HypEdge> a = new HashSet<>(dumb.adjacent(n));
-      Set<HypEdge> b = new HashSet<>(agenda.adjacent(n));
+      Set<HashableHypEdge> a = new HashSet<>();
+      for (HypEdge e : dumb.adjacent(n))
+        a.add(new HashableHypEdge(e));
+      Set<HashableHypEdge> b = new HashSet<>();
+      for (HypEdge e : agenda.adjacent(n))
+        b.add(new HashableHypEdge(e));
       if (!a.equals(b)) {
         Log.warn("wat: n=" + n + " dumb=" + a + " agenda=" + b);
-        a = new HashSet<>(dumb.adjacent(n));
-        b = new HashSet<>(agenda.adjacent(n));
+        a = new HashSet<>();
+        for (HypEdge e : dumb.adjacent(n))
+          a.add(new HashableHypEdge(e));
+        b = new HashSet<>();
+        for (HypEdge e : agenda.adjacent(n))
+          b.add(new HashableHypEdge(e));
       }
       assertEquals(a, b);
 
@@ -328,17 +337,17 @@ public class AgendaTests {
       // Check the match(argPos,rel,node) functionality
       a = new HashSet<>();
       for (HypEdge e : dumb.match(0, rel1, n))
-        a.add(e);
+        a.add(new HashableHypEdge(e));
       b = new HashSet<>();
       for (HypEdge e : agenda.match(0, rel1, n))
-        b.add(e);
+        b.add(new HashableHypEdge(e));
       assertEquals(a, b);
       a = new HashSet<>();
       for (HypEdge e : dumb.match(0, rel2, n))
-        a.add(e);
+        a.add(new HashableHypEdge(e));
       b = new HashSet<>();
       for (HypEdge e : agenda.match(0, rel2, n))
-        b.add(e);
+        b.add(new HashableHypEdge(e));
       assertEquals(a, b);
 
 
