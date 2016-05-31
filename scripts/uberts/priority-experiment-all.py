@@ -1,4 +1,7 @@
 
+def global_feats():
+  return ['none', 'numArg', 'argLoc', 'roleCooc', 'full']:
+
 # 17 satisfying assignments
 def weights():
   w = [0, 3, 4, 6, 12]  # sum to 12
@@ -26,7 +29,7 @@ if __name__ == '__main__':
   if len(sys.argv) != 4:
     print 'please provide:'
     print '1) a working directory'
-    print '2) a feature set file'
+    print '2) a feature set directory with <relationName>.fs files'
     print '3) a JAR file (to be copied)'
     sys.exit(1)
 
@@ -52,13 +55,18 @@ if __name__ == '__main__':
   jar_stable = os.path.join(p, 'uberts.jar')
   shutil.copy(jar, jar_stable)
 
-  fs_stable = os.path.join(p, 'features.fs')
-  shutil.copy(fs, fs_stable)
+  fs_stable = os.path.join(p, 'priority-feature-sets')
+  if not os.path.isdir(fs):
+    print 'not a feature set directory:', fs
+  shutil.copytree(fs, fs_stable)
 
   d = os.path.dirname(os.path.abspath(__file__))
   sc = os.path.join(d, 'priority-experiment.sh')
-  for i, w in enumerate(weights()):
-    cmd = ['sbatch', sc, wd, wformat(w), fs_stable, jar_stable]
-    print i, cmd
-    subprocess.check_call(cmd)
+  i = 0
+  for gf in global_feats():
+    for w in weights():
+      cmd = ['sbatch', sc, wd, wformat(w), fs_stable, gf, jar_stable]
+      print i, cmd
+      i += 1
+      #subprocess.check_call(cmd)
 

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 #SBATCH --nodes 1
-#SBATCH --time 48:00:00
-#SBATCH --mem 12G
+#SBATCH --time 72:00:00
+#SBATCH --mem 15G
 
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
-#$ -l mem_free=2G
+#$ -l mem_free=15G
 #$ -l num_proc=1
 #$ -S /bin/bash
 
@@ -38,12 +38,21 @@ WD=$1
 # see AgendaPriority.java for a list of all legal values.
 PRIORITY=$2
 
-# A file with one feature per line, of the form "template1 * template2"
-FEATURE_SET=$3
+# A directory which contains a <relationName>.fs file for every Relation.
+# Each file is the 8-column TSV format.
+FEATURE_SET_DIR=$3
+
+# Either "none", "argLoc", "roleCooc", "numArg", or "full"
+GLOBAL_FEAT_MODE=$4
 
 # A JAR file in a location which will not change/be removed.
-JAR_STABLE=$4
+JAR_STABLE=$5
 
+
+if [[ ! -d $FEATURE_SET_DIR ]]; then
+  echo "FEATURE_SET_DIR=$FEATURE_SET_DIR is not a directory"
+  exit 1
+fi
 
 RD=$WD/rel-data
 if [[ ! -d $RD ]]; then
@@ -55,19 +64,21 @@ TF="$RD/srl.train.shuf0.facts.gz"
 for i in `seq 9`; do
   TF="$TF,$RD/srl.train.shuf${i}.facts.gz"
 done
-
 echo "TF=$TF"
 
-java -cp $JAR_STABLE -ea -server -Xmx12G \
+java -cp $JAR_STABLE -ea -server -Xmx14G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
-    featureSet foo \
+    miniDevSize 300 \
+    trainSegSize 6000 \
     train.facts $TF \
     dev.facts $RD/srl.dev.facts.gz \
     test.facts $RD/srl.test.facts.gz \
     grammar $RD/grammar.trans \
     relations $RD/relations.def \
     schema $RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz \
-    priority $PRIORITY
+    priority $PRIORITY \
+    globalFeatMode $GLOBAL_FEAT_MODE \
+    featureSetDir $FEATURE_SET_DIR
 
 echo "done at `date`, ret code $?"
 

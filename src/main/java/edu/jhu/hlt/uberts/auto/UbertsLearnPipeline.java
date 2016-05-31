@@ -144,8 +144,50 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //    NumArgsRoleCoocArgLoc.DEBUG = 2;
 
     predicate2Mutex = config.getBoolean("pred2Mutex", true);
-    enableGlobalFactors = !config.getBoolean("disableGlobalFactors", false);
-    Log.info("predicate2Mutex=" + predicate2Mutex + " disableGlobalFactors=" + !enableGlobalFactors);
+    Log.info("predicate2Mutex=" + predicate2Mutex);
+
+    String gfm = config.getString("globalFeatMode");
+    Log.info("[main] globalFeatMode=" + gfm);
+    switch (gfm) {
+    case "none":
+      enableGlobalFactors = false;
+      NumArgsRoleCoocArgLoc.numArgs = false;
+      NumArgsRoleCoocArgLoc.argLocPairwise = false;
+      NumArgsRoleCoocArgLoc.argLocGlobal = false;
+      NumArgsRoleCoocArgLoc.roleCooc = false;
+      break;
+    case "argLoc":
+      enableGlobalFactors = true;
+      NumArgsRoleCoocArgLoc.numArgs = false;
+      NumArgsRoleCoocArgLoc.argLocPairwise = true;
+      NumArgsRoleCoocArgLoc.argLocGlobal = true;
+      NumArgsRoleCoocArgLoc.roleCooc = false;
+      break;
+    case "numArgs":
+      enableGlobalFactors = true;
+      NumArgsRoleCoocArgLoc.numArgs = true;
+      NumArgsRoleCoocArgLoc.argLocPairwise = false;
+      NumArgsRoleCoocArgLoc.argLocGlobal = false;
+      NumArgsRoleCoocArgLoc.roleCooc = false;
+      break;
+    case "roleCooc":
+      enableGlobalFactors = true;
+      NumArgsRoleCoocArgLoc.numArgs = false;
+      NumArgsRoleCoocArgLoc.argLocPairwise = false;
+      NumArgsRoleCoocArgLoc.argLocGlobal = false;
+      NumArgsRoleCoocArgLoc.roleCooc = true;
+      break;
+    case "full":
+      enableGlobalFactors = true;
+      NumArgsRoleCoocArgLoc.numArgs = true;
+      NumArgsRoleCoocArgLoc.argLocPairwise = true;
+      NumArgsRoleCoocArgLoc.argLocGlobal = true;
+      NumArgsRoleCoocArgLoc.roleCooc = true;
+      break;
+    default:
+      throw new RuntimeException("unknown globalFeatMode: " + gfm);
+    }
+
     NumArgsRoleCoocArgLoc.numArgs = config.getBoolean("numArgs", true);
     NumArgsRoleCoocArgLoc.argLocPairwise = config.getBoolean("argLocPairwise", true);
     NumArgsRoleCoocArgLoc.argLocGlobal = config.getBoolean("argLocGlobal", true);
