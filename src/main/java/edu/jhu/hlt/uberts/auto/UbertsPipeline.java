@@ -140,11 +140,12 @@ public abstract class UbertsPipeline {
     }
 
     ExperimentProperties config = ExperimentProperties.getInstance();
-    double lhsInRhsScoreScale = config.getDouble("lhsInRhsScoreScale", 0d);
+    double lhsInRhsScoreScale = config.getDouble("lhsInRhsScoreScale", 0);
     Log.info("[main] lhsInRhsScoreScale=" + lhsInRhsScoreScale);
     assert lhsInRhsScoreScale >= 0;
     if (lhsInRhsScoreScale > 0) {
       for (TG tg : transitionGenerators) {
+        tg.lhsInRhsScoreScale = lhsInRhsScoreScale;
         Rule r = tg.getRule();
         for (Term lhsT : r.lhs) {
           assert lhsT.rel != null;

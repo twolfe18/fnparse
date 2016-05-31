@@ -1166,7 +1166,7 @@ public class TransitionGeneratorForwardsParser {
       // need: Relation -> index in GraphTraversalTrace for HypEdge
 
       List<HypEdge> builtLhsEdges = null;
-      if (addLhsScoreToRhsScore != null)
+      if (lhsInRhsScoreScale > 0)
         builtLhsEdges = new ArrayList<>();
 
       // go through lhs, for every arg, project in to rhs with Rule.lhs2rhs
@@ -1182,7 +1182,7 @@ public class TransitionGeneratorForwardsParser {
         Relation r = rule.lhs[ti].rel;
         HypEdge e = match.getBoundValue(ti, lhsValues);
         assert e.getRelation() == r;
-        if (addLhsScoreToRhsScore != null && addLhsScoreToRhsScore.contains(e.getRelation()))
+        if (lhsInRhsScoreScale > 0 && addLhsScoreToRhsScore.contains(e.getRelation()))
           builtLhsEdges.add(e);
 
         // Event/fact/witness variable
@@ -1243,7 +1243,8 @@ public class TransitionGeneratorForwardsParser {
         double s = 1d / builtLhsEdges.size();
         Adjoints lhsScore = null;
         for (HypEdge lhsEdge : builtLhsEdges) {
-          Adjoints lhsSc = u.getState().getScore(lhsEdge);
+//          Adjoints lhsSc = Adjoints.cacheIfNeeded(u.getState().getScore(lhsEdge));
+          Adjoints lhsSc = new Adjoints.Constant(u.getState().getScore(lhsEdge).forwards());
           if (lhsScore == null)
             lhsScore = new Adjoints.Scale(s, lhsSc);
           else
