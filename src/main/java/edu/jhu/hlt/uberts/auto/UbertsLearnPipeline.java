@@ -357,43 +357,39 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] pOracleRollIn=" + pOracleRollIn);
     Log.info("[main] batchSize=" + batchSize);
 
-    if (argument4ByArg) {
+    if (argument4ByArg && enableGlobalFactors) {
       // argument4(t,f,s,k) with mutexArg=s
       NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 2, 1, u);
       a.storeExactFeatureIndices();
-      if (enableGlobalFactors) {
-        globalFactors.add(a);
-        u.addGlobalFactor(a.getTrigger(u), a);
-      }
+      globalFactors.add(a);
+      u.addGlobalFactor(a.getTrigger(u), a);
     }
 
-    if (srl2ByArg) {
+    if (srl2ByArg && enableGlobalFactors) {
       // srl2(t,s) with mutexArg=s
       NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 1, -1, u);
       a.storeExactFeatureIndices();
-      if (enableGlobalFactors) {
-        globalFactors.add(a);
-        u.addGlobalFactor(a.getTrigger(u), a);
-      }
+      globalFactors.add(a);
+      u.addGlobalFactor(a.getTrigger(u), a);
     }
 
-    numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, u);
-    numArgsArg4.storeExactFeatureIndices();
     if (enableGlobalFactors) {
+      numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, u);
+      numArgsArg4.storeExactFeatureIndices();
       globalFactors.add(numArgsArg4);
       u.addGlobalFactor(numArgsArg4.getTrigger(u), numArgsArg4);
     }
 
-    numArgsArg3 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl3"), 0, -1, u);
-    numArgsArg3.storeExactFeatureIndices();
     if (enableGlobalFactors) {
+      numArgsArg3 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl3"), 0, -1, u);
+      numArgsArg3.storeExactFeatureIndices();
       globalFactors.add(numArgsArg3);
       u.addGlobalFactor(numArgsArg3.getTrigger(u), numArgsArg3);
     }
 
-    numArgsArg2 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 0, -1, u);
-    numArgsArg2.storeExactFeatureIndices();
     if (enableGlobalFactors) {
+      numArgsArg2 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 0, -1, u);
+      numArgsArg2.storeExactFeatureIndices();
       globalFactors.add(numArgsArg2);
       u.addGlobalFactor(numArgsArg2.getTrigger(u), numArgsArg2);
     }
@@ -474,9 +470,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info(Describe.memoryUsage());
 
     if (DEBUG > 1) {
-      Log.info("numArgsArg4 biggest weights: " + numArgsArg4.getBiggestWeights(10));
-      Log.info("numArgsArg3 biggest weights: " + numArgsArg3.getBiggestWeights(10));
-      Log.info("numArgsArg2 biggest weights: " + numArgsArg2.getBiggestWeights(10));
+      if (numArgsArg4 != null)
+        Log.info("numArgsArg4 biggest weights: " + numArgsArg4.getBiggestWeights(10));
+      if (numArgsArg3 != null)
+        Log.info("numArgsArg3 biggest weights: " + numArgsArg3.getBiggestWeights(10));
+      if (numArgsArg2 != null)
+        Log.info("numArgsArg2 biggest weights: " + numArgsArg2.getBiggestWeights(10));
     }
 
     mode = null;

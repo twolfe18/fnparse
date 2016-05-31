@@ -8,6 +8,7 @@ import java.util.List;
 
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
@@ -53,6 +54,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private boolean useAvg = false;
   private Alphabet<String> featureNames;  // for debugging
 
+  private Counts<String> events = new Counts<>();
+
   private double globalToLocalScale = 0.25;
 
   // Each is called on f(newEdge,fOldEdge) where each argument is a firesFor Relation
@@ -64,7 +67,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
   public static boolean numArgs = true;
   public static boolean argLocPairwise = true;
-  public static boolean argLocGlobal = false;
+  public static boolean argLocGlobal = true;
   public static boolean roleCooc = true;
 
   public void useAverageWeights(boolean useAvg) {
@@ -104,6 +107,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     if (argLocPairwise) sb.append(" +argLocPairwise");
     if (argLocGlobal) sb.append(" +argLocGlobal");
     if (roleCooc) sb.append(" +roleCooc");
+    sb.append(" " + events.toString());
     sb.append(')');
     return sb.toString();
   }
@@ -120,7 +124,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
   static final PairFeat ROLE_COOC_FEAT = new PairFeat() {
     int salt = 15_485_863;
-    public String getName() { return "rc"; }
+    public String getName() { return "roleCoocPW"; }
     public List<Integer> describe(HypEdge stateEdge, HypEdge agendaEdge) {
       String r1 = role(stateEdge);
       if (r1 == null)
@@ -139,20 +143,28 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   };
   static final PairFeat ARG_LOC_PAIRWISE_FEAT = new PairFeat() {
     int salt = 982_451_653;
-    public String getName() { return "al"; }
+    public String getName() { return "argLocPW"; }
     public List<Integer> describe(HypEdge stateEdge, HypEdge agendaEdge) {
-      Span s1 = arg(stateEdge);
-      if (s1 == null)
-        return Collections.emptyList();
-      Span s2 = arg(agendaEdge);
-      if (s2 == null)
+      Span s1, s2;
+      int mode = 0;
+      s1 = arg(stateEdge);
+      s2 = arg(agendaEdge);
+      if (s1 == null) {
+        mode |= (1<<0);
+        s1 = target(stateEdge.getTail(0));
+      }
+      if (s2 == null) {
+        mode |= (1<<1);
+        s2 = target(agendaEdge.getTail(0));
+      }
+      if (s1 == null || s2 == null)
         return Collections.emptyList();
       int f1 = BasicFeatureTemplates.spanPosRel2(s1, s2).getProdFeatureSafe();
       int t1 = agendaEdge.getRelation().getName().hashCode();
       int t2 = stateEdge.getRelation().getName().hashCode();
       return Arrays.asList(
-          Hash.mix(salt, t1, f1),
-          Hash.mix(salt, t1, f1, t2));
+          Hash.mix(salt, mode, t1, f1),
+          Hash.mix(salt, mode, t1, f1, t2));
     }
   };
 
@@ -204,6 +216,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     dimension = config.getInt("hashDimension", 1 << 19);
     int numIntercept = 0;
     theta = new AveragedPerceptronWeights(dimension, numIntercept);
+
+    Log.info("[main] firesFor=" + firesFor.getName() + " agg=" + aggregateArgPos + " ref=" + refinementArgPos);
 
     this.globalToLocalScale = config.getDouble("globalToLocalScale", 0.25);
     Log.info("[main] globalToLocalScale=" + globalToLocalScale);
@@ -301,23 +315,34 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
    * @param stateEdge was the last edge added to the state
    * @param agendaEdge is the edge on the agenda being re-scored
    */
-  static List<Integer> argLocGlobal(HypNode t, LL<HypEdge> stateEdge, HypEdge agendaEdge) {
+  List<Integer> argLocGlobal(HypNode t, LL<HypEdge> stateEdge, HypEdge agendaEdge) {
+    events.increment("argLocGlobal");
+
     // Gather target
     Spany target = new Spany(t);
-    if (target.target == null)
+//    if (!target.hasSpan()) {
+    if (target.target == null) {
+      events.increment("argLocGlobal/failNoTarget");
       return Collections.emptyList();
+    }
 
     // Get the args
     Spany maybeArg = new Spany(agendaEdge);
-    if (maybeArg.arg == null)
+    if (!maybeArg.hasSpan()) {
+//    if (maybeArg.arg == null) {
+      events.increment("argLocGlobal/failNoArg");
       return Collections.emptyList();
+    }
     List<Spany> allArgs = new ArrayList<>();
     allArgs.add(maybeArg);
     for (LL<HypEdge> cur = stateEdge; cur != null; cur = cur.next) {
       Spany arg = new Spany(cur.item);
-      if (arg.arg == null)
+      if (arg.hasSpan()) {
+        allArgs.add(arg);
+      } else {
+        events.increment("argLocGlobal/aggNoSpan");
         return Collections.emptyList();
-      allArgs.add(arg);
+      }
     }
 
     // Sort spans left-right
@@ -331,10 +356,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     for (int i = 0; i < n; i++) {
       Spany a = allArgs.get(i);
       if (aPrev != null) {
-        long x = BasicFeatureTemplates.spanPosRel2(aPrev.arg, a.arg).getProdFeature();
+        long x = BasicFeatureTemplates.spanPosRel2(aPrev.getSpan(), a.getSpan()).getProdFeature();
         globalFeatWithT = Hash.mix64(globalFeatWithT, x);
       }
-      long x = BasicFeatureTemplates.spanPosRel2(target.target, a.arg).getProdFeature();
+      long x = BasicFeatureTemplates.spanPosRel2(target.target, a.getSpan()).getProdFeature();
       globalFeatWithT = Hash.mix64(globalFeatWithT, x);
       globalFeatNoT = Hash.mix64(globalFeatNoT, x);
       aPrev = a;
@@ -407,6 +432,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
 
     if (numArgs) {
+      events.increment("numArgs");
       String key = "numArgs";
       String refinement = refineArgPos < 0 ? "na" : (String) e.getTail(refineArgPos).getValue();
       NumArgAdj adj = this.new NumArgAdj(firesFor, refinement);
@@ -424,9 +450,16 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       String key = "pairwise";
       // Compute new pairwise features
       PairwiseAdj pa = this.new PairwiseAdj();
-      for (PairFeat f : pairwiseFeaturesFunctions)
-        for (Integer fx : f.describe(srl4Fact, e))
+      for (PairFeat f : pairwiseFeaturesFunctions) {
+        List<Integer> fxs = f.describe(srl4Fact, e);
+
+        events.increment(f.getName());
+        if (fxs.isEmpty())
+          events.increment(f.getName() + "/noFire");
+
+        for (Integer fx : fxs)
           pa.add(fx);
+      }
       if (gsOld != null) {
         // Copy over old ones
         // (as if all of these features were computed at this step)
@@ -452,6 +485,12 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         gs.addToGlobalScore(key, argLocGA);
       }
     }
+
+    if (events.getTotalCount() > 75000) {
+      System.out.println("event counts: " + toString());
+      events.clear();
+    }
+
     return gs;
   }
 
