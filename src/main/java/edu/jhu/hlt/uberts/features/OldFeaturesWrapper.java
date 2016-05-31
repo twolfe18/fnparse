@@ -202,6 +202,7 @@ public class OldFeaturesWrapper {
     private OldFeaturesWrapper inner;
     private Relation rel;
     private AveragedPerceptronWeights theta;
+    private boolean useAvg = false;
 //    private int dimension;
 //    private long nScore = 0, nScoreNoFeat = 0;
     private Counts<String> cnt = new Counts<>();
@@ -215,6 +216,12 @@ public class OldFeaturesWrapper {
       this.theta = new AveragedPerceptronWeights(dimension, numIntercept);
       this.timer = new Timer("Int3/" + rel.getName() + "/score", 250_000, true);
     }
+
+    public void useAverageWeights(boolean useAvg) {
+      Log.info("useAvg " + this.useAvg + " => " + useAvg);
+      this.useAvg = useAvg;
+    }
+
     @Override
     public Adjoints score(HypEdge y, Uberts x) {
       timer.start();
@@ -239,7 +246,11 @@ public class OldFeaturesWrapper {
       }
 
       boolean reindex = true;
-      Adjoints a = theta.score(features, reindex);
+      Adjoints a;
+      if (useAvg)
+        a = theta.averageView().score(features, reindex);
+      else
+        a = theta.score(features, reindex);
       timer.stop();
       return a;
     }

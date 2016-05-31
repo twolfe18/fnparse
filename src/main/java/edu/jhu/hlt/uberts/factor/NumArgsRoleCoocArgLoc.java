@@ -50,6 +50,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private int refineArgPos;     // e.g. 1 for f in argument4(t,f,s,k), meaning create extra conjunction feature with frame value
   private int dimension;
   private AveragedPerceptronWeights theta;
+  private boolean useAvg = false;
   private Alphabet<String> featureNames;  // for debugging
 
   private double globalToLocalScale = 0.25;
@@ -65,6 +66,11 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public static boolean argLocPairwise = true;
   public static boolean argLocGlobal = false;
   public static boolean roleCooc = true;
+
+  public void useAverageWeights(boolean useAvg) {
+    Log.info("useAvg " + this.useAvg + " => " + useAvg);
+    this.useAvg = useAvg;
+  }
 
   @Override
   public String getStats() {
@@ -372,7 +378,11 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       List<Integer> argLocGF = argLocGlobal(t, existing, e);
       if (!argLocGF.isEmpty()) {
         boolean reindex = true;
-        Adjoints argLocGA = theta.score2(argLocGF, reindex);
+        Adjoints argLocGA;
+        if (useAvg)
+          argLocGA = theta.averageView().score2(argLocGF, reindex);
+        else
+          argLocGA = theta.score2(argLocGF, reindex);
         gs.replaceGlobalScore(key, argLocGA);
       }
     }
@@ -430,7 +440,11 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       List<Integer> argLocGF = argLocGlobal(t, existing, e);
       if (!argLocGF.isEmpty()) {
         boolean reindex = true;
-        Adjoints argLocGA = theta.score2(argLocGF, reindex);
+        Adjoints argLocGA;
+        if (useAvg)
+          argLocGA = theta.averageView().score2(argLocGF, reindex);
+        else
+          argLocGA = theta.score2(argLocGF, reindex);
         gs.addToGlobalScore(key, argLocGA);
       }
     }
@@ -485,13 +499,18 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     @Override
     public double forwards() {
-      if (aFromTheta == null)
-        aFromTheta = theta.score(features, true);
+      if (aFromTheta == null) {
+        if (useAvg)
+          aFromTheta = theta.averageView().score(features, true);
+        else
+          aFromTheta = theta.score(features, true);
+      }
       return aFromTheta.forwards();
     }
 
     @Override
     public void backwards(double dErr_dForwards) {
+      assert !useAvg;
       aFromTheta.backwards(dErr_dForwards);
     }
 
@@ -543,29 +562,32 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public double forwards() {
       if (aFromTheta == null) {
         int c = Math.min(6, numCommitted);
+        int[] feats;
         if (featureNames != null) {
-          int[] feats = new int[] {
+          feats = new int[] {
               featureNames.lookupIndex(rel.getName() + ",numArgs=" + c),
               featureNames.lookupIndex(rel.getName() + ",numArgs=" + c + ",refinement=" + frame),
           };
-          boolean reindex = false;
-          aFromTheta = theta.score(feats, reindex);
         } else {
           int r = rel.hashCode();
           int f = frame.hashCode();
-          int[] feats = new int[] {
+          feats = new int[] {
               Hash.mix(r, c),
               Hash.mix(r, c, f),
           };
-          boolean reindex = true;
-          aFromTheta = theta.score(feats, reindex);
         }
+        boolean reindex = true;
+        if (useAvg)
+          aFromTheta = theta.averageView().score(feats, reindex);
+        else
+          aFromTheta = theta.score(feats, reindex);
       }
       return aFromTheta.forwards();
     }
 
     @Override
     public void backwards(double dErr_dForwards) {
+      assert !useAvg;
       aFromTheta.backwards(dErr_dForwards);
     }
   }

@@ -247,6 +247,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           }
         }
         // Full evaluate on dev
+        pipe.useAvgWeights(true);
         Log.info("[main] pass=" + (i+1) + " of=" + passes + " devFile=" + dev.getPath());
         try (RelationFileIterator rels = new RelationFileIterator(dev, false);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
@@ -258,6 +259,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
           pipe.runInference(many, "test-full-epoch" + i);
         }
+        pipe.useAvgWeights(false);
       }
     }
     Log.info("[main] done at " + new java.util.Date().toString());
@@ -295,6 +297,20 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   // How long a train/update takes
   private Timer trainTimer = new Timer("train", 1000, true);
+
+  public void useAvgWeights(boolean useAvg) {
+    for (OldFeaturesWrapper.Ints3 w : feFast3) {
+      w.useAverageWeights(useAvg);
+    }
+    for (GlobalFactor gf : globalFactors) {
+      if (gf instanceof NumArgsRoleCoocArgLoc) {
+        ((NumArgsRoleCoocArgLoc) gf).useAverageWeights(useAvg);
+      }
+    }
+    assert ofw == null;
+    assert feFast2 == null;
+    assert feFast == null;
+  }
 
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
     super(u, grammarFile, schemaFiles, relationDefs);
