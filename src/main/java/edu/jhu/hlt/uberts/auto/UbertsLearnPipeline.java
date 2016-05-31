@@ -312,6 +312,20 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     assert feFast == null;
   }
 
+  public void completedObservation() {
+    for (OldFeaturesWrapper.Ints3 w : feFast3) {
+      w.completedObservation();
+    }
+    for (GlobalFactor gf : globalFactors) {
+      if (gf instanceof NumArgsRoleCoocArgLoc) {
+        ((NumArgsRoleCoocArgLoc) gf).completedObservation();
+      }
+    }
+    assert ofw == null;
+    assert feFast2 == null;
+    assert feFast == null;
+  }
+
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
     super(u, grammarFile, schemaFiles, relationDefs);
 
@@ -570,6 +584,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       for (Consumer<Double> u : batch)
         u.accept(1d / batchSize);
       batch.clear();
+      completedObservation();
       timer.stop("train/batchApply");
     }
 

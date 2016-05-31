@@ -222,6 +222,10 @@ public class OldFeaturesWrapper {
       this.useAvg = useAvg;
     }
 
+    public void completedObservation() {
+      theta.completedObservation();
+    }
+
     @Override
     public Adjoints score(HypEdge y, Uberts x) {
       timer.start();

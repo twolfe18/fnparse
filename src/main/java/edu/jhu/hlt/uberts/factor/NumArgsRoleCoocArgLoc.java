@@ -72,6 +72,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     this.useAvg = useAvg;
   }
 
+  public void completedObservation() {
+    theta.completedObservation();
+  }
+
   @Override
   public String getStats() {
     String s = "nRescore=" + nRescore + " nEdgeRescore=" + nEdgeRescore;
