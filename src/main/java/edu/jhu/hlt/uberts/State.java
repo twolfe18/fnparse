@@ -76,6 +76,12 @@ public class State {
     }
 
     @Override
+    public String toString() {
+      return "(State.Split reg=" + regularEdges.toString()
+          + " schema=" + schemaEdges.toString() + ")";
+    }
+
+    @Override
     public State duplicate() {
       Split s = new Split();
       s.regularEdges = regularEdges.duplicate();
@@ -241,6 +247,16 @@ public class State {
     this.timer.put("clearNonSchema", new Timer("clearNonSchema", 30, true));
   }
 
+  @Override
+  public String toString() {
+    return "(State edges.size=" + edges.size()
+        + " pView.size=" + primaryView.size()
+        + " fView.size=" + fineView.size()
+        + " relView.size=" + relView.size()
+        + " scores.size=" + scores.size()
+        + ")";
+  }
+
   public State duplicate() {
     State c = new State();
 //    c.primaryView.putAll(primaryView);
@@ -261,7 +277,7 @@ public class State {
     primaryView.clear();
     fineView.clear();
     relView.clear();
-    edges.size();
+    edges.clear();
     scores.clear();
   }
 
