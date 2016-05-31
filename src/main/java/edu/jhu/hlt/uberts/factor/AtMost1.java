@@ -131,6 +131,10 @@ public class AtMost1 {
             if (!(score instanceof GlobalFactorAdjoints))
               score = new GlobalFactorAdjoints(score, 1d);          // TODO take this as arg
             GlobalFactorAdjoints gs = (GlobalFactorAdjoints) score;
+
+            if (NumArgsRoleCoocArgLoc.IMMUTABLE_FACTORS)
+              throw new RuntimeException("fix this!");
+
             String n = getConstraintCostName();
             int[] features = new int[] {0};
             boolean reindex = false;

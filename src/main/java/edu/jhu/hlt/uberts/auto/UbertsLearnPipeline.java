@@ -339,8 +339,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     super(u, grammarFile, schemaFiles, relationDefs);
 
     if (predicate2Mutex) {
-      boolean hard = false;
-      AtMost1.add(u, u.getEdgeType("predicate2"), 0 /* t in predicate2(t,f) */, hard);
+//      boolean hard = false;
+//      AtMost1.add(u, u.getEdgeType("predicate2"), 0 /* t in predicate2(t,f) */, hard);
+      NumArgsRoleCoocArgLoc p = new NumArgsRoleCoocArgLoc(u.getEdgeType("predicate2"), 0, 1, u);
+      p.storeExactFeatureIndices();
+      if (enableGlobalFactors) {
+        globalFactors.add(p);
+        u.addGlobalFactor(p.getTrigger(u), p);
+      }
     }
 
     ExperimentProperties config = ExperimentProperties.getInstance();
