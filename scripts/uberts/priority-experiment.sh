@@ -81,7 +81,7 @@ java -cp $JAR_STABLE -ea -server -Xmx14G \
     grammar $RD/grammar.trans \
     relations $RD/relations.def \
     schema $RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz \
-    priority $PRIORITY \
+    priority "$PRIORITY" \
     globalFeatMode $GLOBAL_FEAT_MODE \
     featureSetDir $FEATURE_SET_DIR
 

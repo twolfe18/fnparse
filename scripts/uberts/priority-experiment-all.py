@@ -1,6 +1,6 @@
 
 def global_feats():
-  return ['none', 'numArg', 'argLoc', 'roleCooc', 'full']:
+  return ['none', 'numArgs', 'argLoc', 'roleCooc', 'full']
 
 # 17 satisfying assignments
 def weights():
@@ -58,7 +58,7 @@ if __name__ == '__main__':
   fs_stable = os.path.join(p, 'priority-feature-sets')
   if not os.path.isdir(fs):
     print 'not a feature set directory:', fs
-  shutil.copytree(fs, fs_stable)
+    shutil.copytree(fs, fs_stable)
 
   d = os.path.dirname(os.path.abspath(__file__))
   sc = os.path.join(d, 'priority-experiment.sh')
@@ -68,5 +68,6 @@ if __name__ == '__main__':
       cmd = ['sbatch', sc, wd, wformat(w), fs_stable, gf, jar_stable]
       print i, cmd
       i += 1
-      #subprocess.check_call(cmd)
+      subprocess.check_call(cmd)
+  print 'submitted', i, 'jobs'
 

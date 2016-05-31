@@ -281,7 +281,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private List<Consumer<Double>> batch = new ArrayList<>();
   private int batchSize = 32;
   private boolean updateAccordingToPriority = false;
-  private double pOracleRollIn = 1.0;
+  private double pOracleRollIn = 0.8;
 
   private NumArgsRoleCoocArgLoc numArgsArg4;
   private NumArgsRoleCoocArgLoc numArgsArg3;
@@ -336,8 +336,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     ExperimentProperties config = ExperimentProperties.getInstance();
     updateAccordingToPriority = config.getBoolean("dagger/updateAccordingToPriority", false);
-    pOracleRollIn = config.getDouble("dagger/pOracleRollIn", 1.0);
-    batchSize = config.getInt("batchSize", 32);
+    pOracleRollIn = config.getDouble("dagger/pOracleRollIn", pOracleRollIn);
+    batchSize = config.getInt("batchSize", batchSize);
     Log.info("[main] updateAccordingToPriority=" + updateAccordingToPriority);
     Log.info("[main] pOracleRollIn=" + pOracleRollIn);
     Log.info("[main] batchSize=" + batchSize);
