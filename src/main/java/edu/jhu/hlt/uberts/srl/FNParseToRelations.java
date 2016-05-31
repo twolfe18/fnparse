@@ -349,17 +349,18 @@ public class FNParseToRelations {
       Frame f = fi.getFrame();
       String fs = f.getName();
       write(t, fs, w);
+      String fsn = SrlSchemaToRelations.norm(fs);
       int K = f.numRoles();
       for (int k = 0; k < K; k++) {
         Span s = fi.getArgument(k);
         if (s == Span.nullSpan)
           continue;
         String ks = f.getRole(k);
-        write(t, fs, s, ks, w);
+        write(t, fsn, s, ks, w);
         for (Span cs : fi.getContinuationRoleSpans(k))
-          write(t, fs, cs, ks + "/C", w);
+          write(t, fsn, cs, ks + "/C", w);
         for (Span rs : fi.getReferenceRoleSpans(k))
-          write(t, fs, rs, ks + "/R", w);
+          write(t, fsn, rs, ks + "/R", w);
       }
     }
   }

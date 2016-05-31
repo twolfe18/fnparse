@@ -26,6 +26,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.data.BrownClusters;
@@ -46,7 +47,6 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.prim.tuple.Pair;
-import edu.stanford.nlp.util.StringUtils;
 
 /**
  * A super-class for implementing functionality which needs to scan over a
@@ -191,7 +191,7 @@ public abstract class UbertsPipeline {
       if (DEBUG > 0) {
         Log.info("adding: " + rr);
         if (DEBUG > 1)
-          System.out.println(StringUtils.join(tg.get1(), "\n"));
+          System.out.println(StringUtils.join("\n", tg.get1()));
       }
 
       tg.get2().feats = phi;

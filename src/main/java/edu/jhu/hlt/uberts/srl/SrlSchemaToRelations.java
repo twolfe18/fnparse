@@ -3,6 +3,7 @@ package edu.jhu.hlt.uberts.srl;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
@@ -34,7 +35,44 @@ public class SrlSchemaToRelations {
     return FNParseToRelations.norm(x);
   }
 
+  private static String coarsenFrame(String frame) {
+    if (frame.startsWith("propbank/")) {
+      int c = frame.lastIndexOf('-');
+      String coarse = frame.substring(0, c);
+      return coarse;
+    } else if (frame.startsWith("framenet/")) {
+      return frame;
+    } else {
+      throw new RuntimeException("unknown frame: " + frame);
+    }
+  }
+
+  public static void buildCoarsenFrame(File to) throws IOException {
+    Log.info("building coarsenFrame2...");
+    Set<String> uniq = new HashSet<>();
+    try (BufferedWriter w = FileUtil.getWriter(to)) {
+      w.write("def coarsenFrame2 <frame> <frame>");
+      w.newLine();
+      for (FrameIndex fi : Arrays.asList(
+          FrameIndex.getPropbank(),
+          FrameIndex.getFrameNet())) {
+        for (Frame f : fi.allFrames()) {
+          if (f == Frame.nullFrame)
+            continue;
+          String fine = f.getName();
+          String coarse = coarsenFrame(fine);
+          String line = "schema coarsenFrame2 " + norm(fine) + " " + norm(coarse);
+          if (uniq.add(line)) {
+            w.write(line);
+            w.newLine();
+          }
+        }
+      }
+    }
+  }
+
   public static void buildFrameTriageRelationPB(FrameIndex fi, File to) throws IOException {
+    Log.info("building frameTriage4...");
     Set<String> seen = new HashSet<>();
     try (BufferedWriter w = FileUtil.getWriter(to)) {
       // Relation definition
@@ -42,6 +80,8 @@ public class SrlSchemaToRelations {
       w.newLine();
       // Instances
       for (Frame f : fi.allFrames()) {
+        if (f == Frame.nullFrame)
+          continue;
         String frame = norm(f.getName());   // e.g. propbank/FedEx-v-1
         String[] ar = frame.split("\\W+");
         String lemmaStr = norm(ar[1].toLowerCase());
@@ -58,6 +98,7 @@ public class SrlSchemaToRelations {
   }
 
   public static void buildFrameTriageRelationFN(FrameIndex fi, File to) throws IOException {
+    Log.info("building frameTriage4...");
     Iterator<FNTagging> itr = FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences();
     itr = Iterators.concat(itr, FileFrameInstanceProvider.fn15trainFIP.getParsedOrTaggedSentences());
     Set<String> seen = new HashSet<>();
@@ -88,17 +129,25 @@ public class SrlSchemaToRelations {
   }
 
   public static void buildRoleRelation(FrameIndex fi, File to) throws IOException {
+    Log.info("building role2...");
+    Set<String> uniq = new HashSet<>();
     try (BufferedWriter w = FileUtil.getWriter(to)) {
       // Relation definition
       w.write("def role2 <frame> <role>");
       w.newLine();
       // Instances
       for (Frame f : fi.allFrames()) {
+        if (f == Frame.nullFrame)
+          continue;
+        String frame = norm(coarsenFrame(f.getName()));
         int K = f.numRoles();
         for (int k = 0; k < K; k++) {
           String ks = norm(f.getRole(k));
-          w.write("schema role2 " + norm(f.getName()) + " " + ks);
-          w.newLine();
+          String line = "schema role2 " + frame + " " + ks;
+          if (uniq.add(line)) {
+            w.write(line);
+            w.newLine();
+          }
         }
       }
     }
@@ -126,6 +175,10 @@ public class SrlSchemaToRelations {
     if (role.isFile() && !overwrite)
       throw new RuntimeException("output exists and overwrite=false, " + role.getPath());
 
+    File coarsenFrame = new File(outdir, "coarsenFrame2.rel.gz");
+    if (coarsenFrame.isFile() && !overwrite)
+      throw new RuntimeException("output exists and overwrite=false, " + coarsenFrame.getPath());
+
     FrameIndex fi = pb
         ? FrameIndex.getPropbank()
         : FrameIndex.getFrameNet();
@@ -136,5 +189,9 @@ public class SrlSchemaToRelations {
       buildFrameTriageRelationFN(fi, frameTriage);
 
     buildRoleRelation(fi, role);
+
+    buildCoarsenFrame(coarsenFrame);
+
+    Log.info("done");
   }
 }
