@@ -81,6 +81,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //  static boolean maxViolation = true;
   static TrainMethod trainMethod = TrainMethod.DAGGER;
 
+  static boolean srl2ByArg = true;
+  static boolean argument4ByArg = true;
+
   static boolean predicate2Mutex = true;
   static boolean enableGlobalFactors = true;
 
@@ -132,6 +135,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         + " costFP_event1=" + costFP_event1
         + " costFP_srl2=" + costFP_srl2
         + " costFP_srl3=" + costFP_srl3);
+
+    srl2ByArg = config.getBoolean("srl2ByArg", srl2ByArg);
+    Log.info("[main] srl2ByArg=" + srl2ByArg);
+
+    argument4ByArg = config.getBoolean("argument4ByArg", argument4ByArg);
+    Log.info("[main] argument4ByArg=" + argument4ByArg);
 
     oracleFeats = config.getBoolean("oracleFeats", false);
     graphFeats = config.getBoolean("graphFeats", false);
@@ -342,8 +351,25 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] pOracleRollIn=" + pOracleRollIn);
     Log.info("[main] batchSize=" + batchSize);
 
-    // TODO argument4(t,f,s,k) with mutexArg=s?
-    // TODO srl2(t,s) with mutexArg=s?
+    if (argument4ByArg) {
+      // argument4(t,f,s,k) with mutexArg=s
+      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 2, 1, u);
+      a.storeExactFeatureIndices();
+      if (enableGlobalFactors) {
+        globalFactors.add(a);
+        u.addGlobalFactor(a.getTrigger(u), a);
+      }
+    }
+
+    if (srl2ByArg) {
+      // srl2(t,s) with mutexArg=s
+      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 1, -1, u);
+      a.storeExactFeatureIndices();
+      if (enableGlobalFactors) {
+        globalFactors.add(a);
+        u.addGlobalFactor(a.getTrigger(u), a);
+      }
+    }
 
     numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, u);
     numArgsArg4.storeExactFeatureIndices();
