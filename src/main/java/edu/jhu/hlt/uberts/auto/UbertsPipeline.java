@@ -330,7 +330,7 @@ public abstract class UbertsPipeline {
     // Add all state edges
     for (HypEdge.WithProps fact : doc.facts) {
       if (fact.hasProperty(HypEdge.IS_X)) {
-//        u.addEdgeToState(fact, Adjoints.Constant.ZERO);
+        //u.addEdgeToState(fact, Adjoints.Constant.ZERO);
         u.addEdgeToStateNoMatch(fact, Adjoints.Constant.ZERO);
         if (debug)
           System.out.println("[exFeats] x: " + fact);

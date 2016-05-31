@@ -252,6 +252,7 @@ public class State {
     c.fineView.putAll(fineView);
     c.relView.putAll(relView);
     c.edges.addAll(edges);
+    c.scores.putAll(scores);
     c.timer = timer;
     return c;
   }
@@ -261,6 +262,7 @@ public class State {
     fineView.clear();
     relView.clear();
     edges.size();
+    scores.clear();
   }
 
   public void clearNonSchema() {
