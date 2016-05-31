@@ -93,6 +93,7 @@
 
 
 doneAnno(docid) & pos2(i,pos) & span-w1(t,i,j) => event1(t)
+#pos2(i,pos) & span-w1(t,i,j) => event1(t)
 event1(t) & span-w1(t,i,j) & lemma2(i,l) & frameTriage4(l,pos,synset,f) => predicate2(t,f)
 event1(t) & xue-palmer-args2(t,s) => srl2(t,s)
 #predicate2(t,f) & role2(f,k) => srl3(t,f,k)

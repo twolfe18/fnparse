@@ -920,8 +920,12 @@ public class Uberts {
     addEdgeToAgenda(p.get1(), p.get2());
   }
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
-    if (DEBUG > 1)
-      System.out.println("Uberts addEdgeToAgenda: " + e.toString() + " " + score);
+    if (DEBUG > 2) {
+      if (DEBUG > 3)
+        System.out.println("Uberts addEdgeToAgenda: " + e.toString() + " " + score);
+      else
+        System.out.println("Uberts addEdgeToAgenda: " + e.toString());
+    }
     if (stats != null) {
       stats.increment("push");
       stats.increment("push/" + e.getRelation().getName());

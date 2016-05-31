@@ -18,6 +18,7 @@ import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 
 /**
  * A hyper-graph representing joint NLP predictions.
@@ -124,13 +125,14 @@ public class State {
       schemaEdges.writeEdges(w, skip);
     }
     @Override
-    public Adjoints getScore(HypEdge e) {
+    public Adjoints getScore(HashableHypEdge hhe) {
+      HypEdge e = hhe.getEdge();
       if (e instanceof HypEdge.WithProps
           && ((HypEdge.WithProps) e).hasProperty(HypEdge.IS_SCHEMA)) {
         assert ownSchemaEdges;
-        return schemaEdges.getScore(e);
+        return schemaEdges.getScore(hhe);
       } else {
-        return regularEdges.getScore(e);
+        return regularEdges.getScore(hhe);
       }
     }
     @Override
@@ -234,7 +236,7 @@ public class State {
   private Map<ArgVal, LL<HypEdge>> fineView;
   private Map<Relation, LL<HypEdge>> relView;
   private List<HypEdge> edges;
-  private HashMap<HypEdge, Adjoints> scores;
+  private HashMap<HashableHypEdge, Adjoints> scores;
   private MultiTimer timer;
 
   public State() {
@@ -329,14 +331,15 @@ public class State {
     }
   }
 
-  public Adjoints getScore(HypEdge e) {
+  public Adjoints getScore(HashableHypEdge e) {
     return scores.get(e);
   }
 
   public void add(HypEdge e, Adjoints score) {
     edges.add(e);
 
-    Adjoints old = scores.put(e, Adjoints.cacheIfNeeded(score));
+    HashableHypEdge hhe = new HashableHypEdge(e);
+    Adjoints old = scores.put(hhe, Adjoints.cacheIfNeeded(score));
     if (old != null)
       throw new RuntimeException("two scores for " + e + " first=" + old + " second=" + score);
 

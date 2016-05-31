@@ -176,15 +176,25 @@ public abstract class UbertsPipeline {
   }
 
   private void addRule(Rule r) {
-    rules.add(r);
-
     assert r.rhs.rel != null;
+    assert r.rhs.allArgsAreTyped();
+    for (Term lt : r.lhs)
+      assert lt.allArgsAreTyped();
+
+    rules.add(r);
     rhsOfRules.add(r.rhs.rel);
 
     LocalFactor phi = getScoreFor(r);
     // Add to Uberts as a TransitionGenerator
     // Create all orderings of this rule
     for (Rule rr : Rule.allLhsOrders(r)) {
+
+      if (helperRelations.contains(rr.lhs[0].rel)) {
+        if (DEBUG > 0)
+          Log.info("not adding this rule since first Functor is schema type: " + rr);
+        continue;
+      }
+
       TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
       Pair<List<TKey>, TG> tg = tgfp.parse2(rr, u);
 

@@ -16,6 +16,7 @@ import java.util.function.BiFunction;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.State.ArgVal;
 import edu.jhu.prim.tuple.Pair;
 
@@ -29,6 +30,7 @@ public class Agenda {
     public final HypEdge edge;
     public final Adjoints score;
     public final double priority;
+    private HashableHypEdge hashableEdge;
 
     public AgendaItem(HypEdge edge, Adjoints score, double priority) {
       assert Double.isFinite(priority) : "priority=" + priority;
@@ -36,6 +38,12 @@ public class Agenda {
       this.edge = edge;
       this.score = Adjoints.cacheIfNeeded(score);
       this.priority = priority;
+    }
+
+    public HashableHypEdge getHashableEdge() {
+      if (hashableEdge == null)
+        hashableEdge = new HashableHypEdge(edge);
+      return hashableEdge;
     }
 
     @Override
@@ -73,6 +81,8 @@ public class Agenda {
   private int top;                      // aka size
   private Map<HypNode, BitSet> n2ei;    // node adjacency matrix, may contain old nodes as keys
   private Map<HypEdge, Integer> e2i;    // location of edges in heap
+  // e2i does not merge different HypEdges which are equivalent
+  private Set<HashableHypEdge> uniq;    // supports contains(e)
 
   // Other indices
   private Map<State.ArgVal, LinkedHashSet<HypEdge>> fineView;
@@ -88,6 +98,7 @@ public class Agenda {
     this.e2i = new HashMap<>();
     this.fineView = new HashMap<>();
     this.priority = priority;
+    this.uniq = new HashSet<>();
   }
 
   public Agenda duplicate() {
@@ -96,6 +107,7 @@ public class Agenda {
     c.top = top;
     c.n2ei.putAll(n2ei);
     c.e2i.putAll(e2i);
+    c.uniq.addAll(uniq);
     for (Entry<ArgVal, LinkedHashSet<HypEdge>> x : fineView.entrySet())
       c.fineView.put(x.getKey(), new LinkedHashSet<>(x.getValue()));
     return c;
@@ -107,6 +119,7 @@ public class Agenda {
     this.n2ei = new HashMap<>();
     this.e2i = new HashMap<>();
     this.fineView = new HashMap<>();
+    this.uniq.clear();
   }
 
   public List<AgendaItem> getContentsInNoParticularOrder() {
@@ -116,6 +129,11 @@ public class Agenda {
         l.add(heap[i]);
     assert l.size() == this.size();
     return l;
+  }
+
+  public boolean contains(HashableHypEdge e) {
+//    return e2i.containsKey(e);
+    return uniq.contains(e);
   }
 
   /**
@@ -195,6 +213,10 @@ public class Agenda {
     return el;
   }
 
+  /**
+   * ONLY works if you have a {@link HypEdge} which you got from this agenda,
+   * does not use {@link HashableHypEdge}.
+   */
   public Adjoints getScore(HypEdge e) {
     int i = e2i.get(e);
     assert heap[i].edge == e;
@@ -383,6 +405,7 @@ public class Agenda {
       free(from);
       return;
     }
+    uniq.remove(heap[to].getHashableEdge());
     removeEdgeFromFineView(heap[to].edge);
     n2eiSet(to, heap[to].edge, false);
     n2eiSet(to, heap[from].edge, true);
@@ -394,6 +417,7 @@ public class Agenda {
   }
 
   private void free(int i) {
+    uniq.remove(heap[i].getHashableEdge());
     removeEdgeFromFineView(heap[i].edge);
     n2eiSet(i, heap[i].edge, false);
     e2i.remove(heap[i].edge);

@@ -274,8 +274,10 @@ public class TransitionGeneratorBackwardsParser {
 
     Set<String> ignore = new HashSet<>();
     ignore.add("succTok");
-    for (String ig : config.getString("ignore", "").split(","))
-      ignore.add(ig);
+    if (config.containsKey("ignore")) {
+      for (String ig : config.getString("ignore").split(","))
+        ignore.add(ig);
+    }
     Log.info("ignoring: " + ignore);
 
     File multiRefVals = config.getExistingFile("instances");
