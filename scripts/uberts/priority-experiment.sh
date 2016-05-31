@@ -66,8 +66,13 @@ for i in `seq 9`; do
 done
 echo "TF=$TF"
 
+FNPARSE_DATA=~/scratch/fnparse-data
+
 java -cp $JAR_STABLE -ea -server -Xmx14G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
+    data.embeddings $FNPARSE_DATA/embeddings \
+    data.wordnet $FNPARSE_DATA/wordnet/dict \
+    data.propbank.frames $FNPARSE_DATA/ontonotes-release-5.0-fixed-frames/frames \
     miniDevSize 300 \
     trainSegSize 6000 \
     train.facts $TF \
