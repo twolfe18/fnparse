@@ -33,3 +33,4 @@ scripts/having-a-laugh/*.fs
 scripts/having-a-laugh/*.txt
 .idea
 lib
+slurm-*
