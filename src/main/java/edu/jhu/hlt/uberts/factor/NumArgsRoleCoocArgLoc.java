@@ -18,6 +18,7 @@ import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.State;
@@ -29,6 +30,8 @@ import edu.jhu.util.Alphabet;
 
 public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public static int DEBUG = 0;
+
+  public static boolean GF_DEBUG = false;
 
   /*
    * If true, then the Adjoints for edges on the agenda are immutable.
@@ -69,54 +72,6 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public static boolean argLocPairwise = true;
   public static boolean argLocGlobal = true;
   public static boolean roleCooc = true;
-
-  public void useAverageWeights(boolean useAvg) {
-    Log.info("useAvg " + this.useAvg + " => " + useAvg);
-    this.useAvg = useAvg;
-  }
-
-  public void completedObservation() {
-    theta.completedObservation();
-  }
-
-  @Override
-  public String getStats() {
-    String s = "nRescore=" + nRescore + " nEdgeRescore=" + nEdgeRescore;
-    nRescore = 0;
-    nEdgeRescore = 0;
-    return s;
-  }
-
-  @Override
-  public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append('(');
-    String[] c = getClass().getName().split("\\.");
-    sb.append(c[c.length - 1]);
-    sb.append(' ');
-    sb.append(firesFor.getName());
-    sb.append(" agg=" + aggregateArgPos);
-    sb.append(':');
-    sb.append(firesFor.getTypeForArg(aggregateArgPos).getName());
-    if (refineArgPos >= 0) {
-      sb.append(" ref=" + refineArgPos);
-      sb.append(':');
-      sb.append(firesFor.getTypeForArg(refineArgPos).getName());
-    }
-    if (numArgs) sb.append(" +numArgs");
-    if (argLocPairwise) sb.append(" +argLocPairwise");
-    if (argLocGlobal) sb.append(" +argLocGlobal");
-    if (roleCooc) sb.append(" +roleCooc");
-    sb.append(" " + events.toString());
-    sb.append(')');
-    return sb.toString();
-  }
-
-  @Override
-  public String getName() {
-    return toString();
-  }
-
   interface PairFeat {
     String getName();
     List<Integer> describe(HypEdge stateEdge, HypEdge agendaEdge);
@@ -231,46 +186,6 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       this.pairwiseFeaturesFunctions.add(ROLE_COOC_FEAT);
   }
 
-  /**
-   * Call this before using this factor if you want to use an Alphabet instead
-   * of feature hashing.
-   */
-  public void storeExactFeatureIndices() {
-    if (featureNames == null)
-      featureNames = new Alphabet<>();
-  }
-
-  public List<Pair<String, Double>> getBiggestWeights(int k) {
-    if (featureNames == null)
-      throw new IllegalStateException("must call storeExactFeatureIndices to use this!");
-    List<Pair<String, Double>> l = new ArrayList<>();
-    int n = featureNames.size();
-    for (int i = 0; i < n; i++) {
-      double w = theta.getWeight(i);
-      String f = featureNames.lookupObject(i);
-      l.add(new Pair<>(f, w));
-    }
-    Collections.sort(l, new Comparator<Pair<String, Double>>() {
-      @Override
-      public int compare(Pair<String, Double> o1, Pair<String, Double> o2) {
-        double w1 = Math.abs(o1.get2());
-        double w2 = Math.abs(o2.get2());
-        if (w1 > w2) return -1;
-        if (w2 < w2) return +1;
-        return 0;
-      }
-    });
-    if (l.size() > k)
-      l = l.subList(0, k);
-    return l;
-  }
-
-  public TKey[] getTrigger(Uberts u) {
-    return new TKey[] {
-        new TKey(State.HEAD_ARG_POS, firesFor),
-    };
-  }
-
   static class Spany implements Comparable<Spany> {
     HypEdge e;
     Span arg;
@@ -315,7 +230,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
    * @param stateEdge was the last edge added to the state
    * @param agendaEdge is the edge on the agenda being re-scored
    */
-  List<Integer> argLocGlobal(HypNode t, LL<HypEdge> stateEdge, HypEdge agendaEdge) {
+  private List<Integer> argLocGlobal(HypNode t, LL<HypEdge> stateEdge, HypEdge agendaEdge) {
     events.increment("argLocGlobal");
 
     // Gather target
@@ -520,6 +435,9 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         System.out.println("IMMUTABLE_FACTORS=" + IMMUTABLE_FACTORS + " e=" + srl4Fact + " newScore=" + newScore + " oldScore=" + oldScore);
       }
       a.add(e, newScore);
+      if (GF_DEBUG && new HashableHypEdge(e).hashCode() % 20 == 0) {
+        System.out.println("[rescore] GF_DEBUG " + toString());
+      }
     }
 
     if (DEBUG > 0) {
@@ -529,6 +447,94 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
           System.out.println("\t" + e);
     }
   }
+
+  /**
+   * Call this before using this factor if you want to use an Alphabet instead
+   * of feature hashing.
+   */
+  public void storeExactFeatureIndices() {
+    if (featureNames == null)
+      featureNames = new Alphabet<>();
+  }
+
+  public List<Pair<String, Double>> getBiggestWeights(int k) {
+    if (featureNames == null)
+      throw new IllegalStateException("must call storeExactFeatureIndices to use this!");
+    List<Pair<String, Double>> l = new ArrayList<>();
+    int n = featureNames.size();
+    for (int i = 0; i < n; i++) {
+      double w = theta.getWeight(i);
+      String f = featureNames.lookupObject(i);
+      l.add(new Pair<>(f, w));
+    }
+    Collections.sort(l, new Comparator<Pair<String, Double>>() {
+      @Override
+      public int compare(Pair<String, Double> o1, Pair<String, Double> o2) {
+        double w1 = Math.abs(o1.get2());
+        double w2 = Math.abs(o2.get2());
+        if (w1 > w2) return -1;
+        if (w2 < w2) return +1;
+        return 0;
+      }
+    });
+    if (l.size() > k)
+      l = l.subList(0, k);
+    return l;
+  }
+
+  public TKey[] getTrigger(Uberts u) {
+    return new TKey[] {
+        new TKey(State.HEAD_ARG_POS, firesFor),
+    };
+  }
+
+  public void useAverageWeights(boolean useAvg) {
+    Log.info("useAvg " + this.useAvg + " => " + useAvg);
+    this.useAvg = useAvg;
+  }
+
+  public void completedObservation() {
+    theta.completedObservation();
+  }
+
+  @Override
+  public String getStats() {
+    String s = "nRescore=" + nRescore + " nEdgeRescore=" + nEdgeRescore;
+    nRescore = 0;
+    nEdgeRescore = 0;
+    return s;
+  }
+
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append('(');
+    String[] c = getClass().getName().split("\\.");
+    sb.append(c[c.length - 1]);
+    sb.append(' ');
+    sb.append(firesFor.getName());
+    sb.append(" agg=" + aggregateArgPos);
+    sb.append(':');
+    sb.append(firesFor.getTypeForArg(aggregateArgPos).getName());
+    if (refineArgPos >= 0) {
+      sb.append(" ref=" + refineArgPos);
+      sb.append(':');
+      sb.append(firesFor.getTypeForArg(refineArgPos).getName());
+    }
+    if (numArgs) sb.append(" +numArgs");
+    if (argLocPairwise) sb.append(" +argLocPairwise");
+    if (argLocGlobal) sb.append(" +argLocGlobal");
+    if (roleCooc) sb.append(" +roleCooc");
+    sb.append(" " + events.toString());
+    sb.append(')');
+    return sb.toString();
+  }
+
+  @Override
+  public String getName() {
+    return toString();
+  }
+
 
   public class PairwiseAdj implements Adjoints {
     List<ProductIndex> features = new ArrayList<>();

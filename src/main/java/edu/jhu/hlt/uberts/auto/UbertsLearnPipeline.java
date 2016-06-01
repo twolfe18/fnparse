@@ -156,29 +156,38 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     String gfm = config.getString("globalFeatMode");
     Log.info("[main] globalFeatMode=" + gfm);
-    switch (gfm) {
+    switch (gfm.toLowerCase()) {
     case "none":
+    case "off":
       enableGlobalFactors = false;
       NumArgsRoleCoocArgLoc.numArgs = false;
       NumArgsRoleCoocArgLoc.argLocPairwise = false;
       NumArgsRoleCoocArgLoc.argLocGlobal = false;
       NumArgsRoleCoocArgLoc.roleCooc = false;
       break;
-    case "argLoc":
+    case "argloc":
       enableGlobalFactors = true;
       NumArgsRoleCoocArgLoc.numArgs = false;
       NumArgsRoleCoocArgLoc.argLocPairwise = true;
       NumArgsRoleCoocArgLoc.argLocGlobal = true;
       NumArgsRoleCoocArgLoc.roleCooc = false;
       break;
-    case "numArgs":
+    case "arglocpairwise":
+      enableGlobalFactors = true;
+      NumArgsRoleCoocArgLoc.numArgs = false;
+      NumArgsRoleCoocArgLoc.argLocPairwise = true;
+      NumArgsRoleCoocArgLoc.argLocGlobal = false;
+      NumArgsRoleCoocArgLoc.roleCooc = false;
+      break;
+    case "numarg":
+    case "numargs":
       enableGlobalFactors = true;
       NumArgsRoleCoocArgLoc.numArgs = true;
       NumArgsRoleCoocArgLoc.argLocPairwise = false;
       NumArgsRoleCoocArgLoc.argLocGlobal = false;
       NumArgsRoleCoocArgLoc.roleCooc = false;
       break;
-    case "roleCooc":
+    case "rolecooc":
       enableGlobalFactors = true;
       NumArgsRoleCoocArgLoc.numArgs = false;
       NumArgsRoleCoocArgLoc.argLocPairwise = false;
@@ -186,6 +195,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       NumArgsRoleCoocArgLoc.roleCooc = true;
       break;
     case "full":
+    case "all":
       enableGlobalFactors = true;
       NumArgsRoleCoocArgLoc.numArgs = true;
       NumArgsRoleCoocArgLoc.argLocPairwise = true;
@@ -195,11 +205,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     default:
       throw new RuntimeException("unknown globalFeatMode: " + gfm);
     }
-
-    NumArgsRoleCoocArgLoc.numArgs = config.getBoolean("numArgs", true);
-    NumArgsRoleCoocArgLoc.argLocPairwise = config.getBoolean("argLocPairwise", true);
-    NumArgsRoleCoocArgLoc.argLocGlobal = config.getBoolean("argLocGlobal", true);
-    NumArgsRoleCoocArgLoc.roleCooc = config.getBoolean("roleCooc", true);
 
     // This is how many passes over ALL training files are given. If there are
     // 10 train files, each of which is all the data shuffled in a particular
