@@ -276,6 +276,8 @@ public class Agenda {
     int t = top++;
     if (t == heap.length)
       grow();
+    boolean a = uniq.add(new HashableHypEdge(edge));
+    assert a : "duplicate?: " + edge;
     addEdgeToFineView(edge);
     heap[t] = new AgendaItem(edge, score, priority.apply(edge, score));
     e2i.put(edge, t);
