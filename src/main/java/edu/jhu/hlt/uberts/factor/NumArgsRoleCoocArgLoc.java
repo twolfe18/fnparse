@@ -219,7 +219,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     Log.info("[main] firesFor=" + firesFor.getName() + " agg=" + aggregateArgPos + " ref=" + refinementArgPos);
 
-    this.globalToLocalScale = config.getDouble("globalToLocalScale", 0.25);
+    this.globalToLocalScale = config.getDouble("globalToLocalScale", globalToLocalScale);
     Log.info("[main] globalToLocalScale=" + globalToLocalScale);
 //    argLocGlobal &= firesFor.getName().equals("argument4");
 //    argLocPairwise &= Arrays.asList("argument4", "srl2").contains(firesFor.getName());
