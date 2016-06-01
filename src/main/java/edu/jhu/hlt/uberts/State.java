@@ -336,12 +336,16 @@ public class State {
   }
 
   public void add(HypEdge e, Adjoints score) {
-    edges.add(e);
 
     HashableHypEdge hhe = new HashableHypEdge(e);
     Adjoints old = scores.put(hhe, Adjoints.cacheIfNeeded(score));
-    if (old != null)
-      throw new RuntimeException("two scores for " + e + " first=" + old + " second=" + score);
+    if (old != null) {
+//      throw new RuntimeException("two scores for " + e + " first=" + old + " second=" + score);
+      Log.warn("two scores for " + e + " first=" + old + " second=" + score);
+      return;
+    }
+
+    edges.add(e);
 
     add(HEAD_ARG_POS, e.getHead(), e);
     int n = e.getNumTails();
