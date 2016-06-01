@@ -27,8 +27,8 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     for (int i = 0; i < toks.length; i++) {
       String[] wp = toks[i].trim().split("\\*");
       assert wp.length == 2;
-      double weight = Double.parseDouble(wp[0]);
-      AgendaPriority p = byName(wp[1]);
+      double weight = Double.parseDouble(wp[0].trim());
+      AgendaPriority p = byName(wp[1].trim());
       w.add(p, weight);
     }
     return w;
@@ -51,7 +51,7 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     case "bfs":
       return new Bfs();
     default:
-      throw new IllegalArgumentException("don't know aobut: " + name);
+      throw new IllegalArgumentException("don't know about: " + name);
     }
   }
 
