@@ -52,7 +52,6 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.Uberts.AgendaSnapshot;
 import edu.jhu.hlt.uberts.Uberts.Traj;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
-import edu.jhu.hlt.uberts.factor.AtMost1;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
@@ -87,9 +86,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static boolean predicate2Mutex = true;
   static boolean enableGlobalFactors = true;
 
-  static double costFP_srl3 = 0.1;
-  static double costFP_srl2 = 0.25;
-  static double costFP_event1 = 0.25;
+  static double costFP_srl3 = 1;
+  static double costFP_srl2 = 1;
+  static double costFP_event1 = 1;
 
   // maxViolation=true  n=150 pipeline=false  got close to F1=1
   // maxViolation=true  n=5   pipeline=true   cFP=1   F(predicate2)=29.0
@@ -227,6 +226,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     List<File> train = config.getExistingFiles("train.facts");
     File dev = config.getExistingFile("dev.facts");
     File test = config.getExistingFile("test.facts");
+    Log.info("[main] trainFiles=" + train);
+    Log.info("[main] devFile=" + dev.getPath());
+    Log.info("[main] testFile=" + test.getPath());
 
     // The ratio of miniDevSize/trainSegSize is the price of knowing how well
     // you're doing during training. Try to minimize it to keep train times down.
@@ -461,7 +463,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       perf = Labels.combinePerfByRel(perf, p);
     perfByRel.clear();
     for (String line : Labels.showPerfByRel(perf))
-      System.out.println(dataName + ": " + line);
+      System.out.println("[main] " + dataName + ": " + line);
 
     // Timing information
     timer.printAll(System.out);

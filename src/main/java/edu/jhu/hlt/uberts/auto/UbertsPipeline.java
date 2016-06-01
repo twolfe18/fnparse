@@ -124,6 +124,7 @@ public abstract class UbertsPipeline {
         dontBackwardsGenerate.add(r.getName());
     }
 
+    Log.info("[main] grammarFile=" + grammarFile.getPath());
     if (DEBUG > 0)
       Log.info("running type inference...");
     this.typeInf = new TypeInference(u);

@@ -205,6 +205,7 @@ public class OldFeaturesWrapper {
       if (!ff.isFile())
         throw new RuntimeException("not a file: " + ff.getPath());
       int dim = config.getInt("hashDimension", 1 << 19);
+      Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
       return new Ints3(bft, r, ff, dim);
     }
 
