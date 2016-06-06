@@ -17,8 +17,8 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
@@ -114,7 +114,7 @@ public class FeatureIGComputation {
     Counts<String> cx = new Counts<>();
     TemplateContext ctx = new TemplateContext();
 
-    HeadFinder hf = new SemaforicHeadFinder();
+    HeadFinder hf = new DependencyHeadFinder();
     BasicFeatureTemplates templateIndex = new BasicFeatureTemplates();
     List<String> templates = templateIndex.getBasicTemplateNames();
     List<String> features = products(templates, this.order);

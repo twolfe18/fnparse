@@ -25,8 +25,8 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.features.precompute.TemplateTransformerTemplate;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -365,7 +365,7 @@ public class OldFeaturesWrapper {
     }
     ctx = new TemplateContext();
     depGraphEdges = new Alphabet<>();
-    hf = new SemaforicHeadFinder();
+    hf = new DependencyHeadFinder();
     timer = new MultiTimer();
     skipped = new Counts<>();
   }
@@ -415,7 +415,7 @@ public class OldFeaturesWrapper {
 
     ctx = new TemplateContext();
     depGraphEdges = new Alphabet<>();
-    hf = new SemaforicHeadFinder();
+    hf = new DependencyHeadFinder();
     skipped = new Counts<>();
   }
 
@@ -436,7 +436,7 @@ public class OldFeaturesWrapper {
 
     ctx = new TemplateContext();
     depGraphEdges = new Alphabet<>();
-    hf = new SemaforicHeadFinder();
+    hf = new DependencyHeadFinder();
     skipped = new Counts<>();
   }
 
@@ -529,7 +529,7 @@ public class OldFeaturesWrapper {
 
     ctx = new TemplateContext();
     depGraphEdges = new Alphabet<>();
-    hf = new SemaforicHeadFinder();
+    hf = new DependencyHeadFinder();
     skipped = new Counts<>();
   }
 
@@ -813,15 +813,21 @@ public class OldFeaturesWrapper {
       }
       if (s != null && s != Span.nullSpan) {
         ctx.setArg(s);
-        ctx.setArgHead(hf.head(s, sentCache));
         ctx.setSpan1(s);
-        ctx.setHead1(ctx.getArgHead());
+        int sh = hf.head(s, sentCache);
+        if (sh >= 0) {
+          ctx.setArgHead(sh);
+          ctx.setHead1(ctx.getArgHead());
+        }
       }
       if (t != null && t != Span.nullSpan) {
         ctx.setTarget(t);
-        ctx.setTargetHead(hf.head(t, sentCache));
         ctx.setSpan2(t);
-        ctx.setHead2(ctx.getTargetHead());
+        int th = hf.head(t, sentCache);
+        if (th >= 0) {
+          ctx.setTargetHead(th);
+          ctx.setHead2(ctx.getTargetHead());
+        }
       }
     } else {
       customEdgeCtxSetup.accept(new Pair<>(yhat, x), ctx);

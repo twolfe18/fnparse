@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateSS;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
@@ -41,11 +42,76 @@ public class BasicFeatureTemplates {
 
   public boolean WIDE_SPAN_BAG_OF_WORDS_OPTIMIZATION = true;
 
+  public static String argHeadToVerbParent(Sentence s, DependencyParse d, int argHead) {
+    StringBuilder sb = new StringBuilder();
+    for (int cur = argHead; cur >= 0; cur = d.getHead(cur)) {
+      // node
+      sb.append(s.getWord(cur));
+      sb.append(',');
+      // edge
+      sb.append(d.getLabel(cur));
+      if (s.getPos(cur).startsWith("V"))
+        break;
+      else
+        sb.append(',');
+    }
+    return sb.toString();
+  }
+
+  public static String missingSubj(Sentence s, DependencyParse d, int predicateTokenIndex) {
+    int[] ci = d.getChildren(predicateTokenIndex);
+    for (int i = 0; i < ci.length; i++) {
+      String deprel = d.getLabel(ci[i]);
+      if (deprel.contains("subj"))
+        return "no";
+    }
+    return "yes";
+  }
+
+  public static String voice(Sentence s, int predicateTokenIndex) {
+    String p = s.getPos(predicateTokenIndex);
+    if (!p.startsWith("V"))
+      return "na";
+    DependencyParse d = s.getBasicDeps();
+    int[] children = d.getChildren(predicateTokenIndex);
+    for (int i = 0; i < children.length; i++) {
+      String deprel = d.getLabel(children[i]);
+      if (deprel.equals("nsubjpass"))
+        return "nsubjpass";
+    }
+    for (int i = 0; i < children.length; i++) {
+      String deprel = d.getLabel(children[i]);
+      if (deprel.contains("pass"))
+        return deprel;
+    }
+    return "active";
+  }
+
+  public static String depSet(Sentence s, DependencyParse d, int predicateTokenIndex) {
+    int[] ci = d.getChildren(predicateTokenIndex);
+    if (ci == null || ci.length == 0)
+      return "none";
+    String[] deps = new String[ci.length];
+    for (int i = 0; i < ci.length; i++)
+      deps[i]= d.getLabel(ci[i]);
+    Arrays.sort(deps);
+    StringBuilder sb = new StringBuilder(deps[0]);
+    for (int i = 1; i < deps.length; i++) {
+      sb.append(',');
+      sb.append(deps[i]);
+    }
+    return sb.toString();
+  }
+
   public static String spanPosRel(Span s1, Span s2) {
+//    return posRel(s1.start, s2.start)
+//        + "-" + posRel(s1.end, s2.end)
+//        + "-" + posRel(s1.start, s2.end)
+//        + "-" + posRel(s1.end, s2.start);
     return posRel(s1.start, s2.start)
-        + "-" + posRel(s1.end, s2.end)
-        + "-" + posRel(s1.start, s2.end)
-        + "-" + posRel(s1.end, s2.start);
+        + posRel(s1.end, s2.end)
+        + posRel(s1.start, s2.end)
+        + posRel(s1.end, s2.start);
   }
 
   public static String posRel(int i, int j) {
@@ -1426,6 +1492,129 @@ public class BasicFeatureTemplates {
             Collection<String> feats = new HashSet<>();
             for (List<NodePathPiece> p : paths)
               feats.add(name + "=" + collapse.apply(p));
+            return feats;
+          }
+        });
+      }
+    }
+
+    /* SEMAFOR FEATURES *******************************************************/
+
+    // Frame id features (paths from pred->arg heads * arg head word)
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    addTemplate("semafor/predId/plain", new Pred2ArgPaths.Feature(config, false));
+    addTemplate("semafor/predId/counts", new Pred2ArgPaths.Feature(config, true));
+
+    // Role id
+    // http://www.dipanjandas.com/files/acl2014frames.pdf
+    // table 1
+    // NOTE: This is not the same as:
+    // http://www.mitpressjournals.org/doi/pdf/10.1162/COLI_a_00163
+    for (boolean f : Arrays.asList(true, false)) {
+      for (boolean r : Arrays.asList(true, false)) {
+        String p = (f ? "frames" : "noFrames") + "/" + (r ? "roles" : "noRoles");
+        addTemplate("semafor/argId/" + p, new Template() {
+          private final boolean includeFrames = f;
+          private final boolean includeRoles = r;
+          @Override
+          public Iterable<String> extract(TemplateContext context) {
+            List<String> feats = new ArrayList<>();
+            Sentence s = context.getSentence();
+            DependencyParse d = s.getBasicDeps();
+            Span a = context.getArg();
+            int ah = context.getArgHead();
+            int p = context.getTargetHead();
+
+            if (a == null || ah < 0 || p < 0)
+              return null;
+
+            // • a bias feature
+            feats.add("bias");
+
+            // • starting word of a
+            feats.add("sw/" + s.getWord(a.start));
+
+            // • POS of the starting word of a
+            feats.add("sp/" + s.getPos(a.start));
+
+            // • ending word of a
+            feats.add("ew/" + s.getWord(a.end - 1));
+
+            // • POS of the ending word of a
+            feats.add("ep/" + s.getPos(a.end - 1));
+
+            // • head word of a
+            feats.add("hw/" + s.getWord(ah));
+
+            // • POS of the head word of a
+            feats.add("hp/" + s.getPos(ah));
+
+            // • bag of words in a
+            for (int i = a.start; i < a.end; i++)
+              feats.add("bw/" + s.getWord(i));
+
+            // • bag of POS tags in a
+            for (int i = a.start; i < a.end; i++)
+              feats.add("bp/" + s.getPos(i));
+
+            // • voice of the predicate use
+            feats.add("v/" + voice(s, p));
+
+            // • word cluster of a’s head
+            String ahc = bc256.getPath(s.getWord(ah));
+            feats.add("hc1/" + ahc);
+
+            // • word cluster of a’s head conjoined with word cluster of the predicate∗
+            String phc = bc256.getPath(s.getWord(p));
+            feats.add("hc2/" + ahc + "/" + phc);
+
+            // • dependency path between a’s head and the predicate
+            Path2 path = new Path2(p, ah, d, s);
+            String pathS = path.getPath(NodeType.WORD, EdgeType.DEP);
+            feats.add("p1/" + pathS);
+
+            // • the set of dependency labels of the predicate’s children
+            feats.add("pd/" + depSet(s, d, p));
+
+            // • dependency path conjoined with the POS tag of a’s head
+            feats.add("p2/" + pathS + "/ah" + s.getPos(ah));
+
+            // • dependency path conjoined with the word cluster of a’s head
+            feats.add("p3/" + pathS + "/ahc" + ahc);
+
+            // • position of a with respect to the predicate (before, after, overlap or identical)
+            feats.add("dir/" + spanPosRel(Span.getSpan(p, p+1), a));
+
+            // • whether the subject of the predicate is missing (missingsubj)
+            String ms = missingSubj(s, d, p);
+            feats.add("ms1/" + ms);
+
+            // • missingsubj, conjoined with the dependency path
+            feats.add("ms2/" + ms + "/" + pathS);
+
+            // • missingsubj, conjoined with the dependency path from the verb dominating the predicate to a’s head
+            feats.add("ms3/" + ms + "/" + argHeadToVerbParent(s, d, ah));
+
+            // META: conjoin with feature
+            if (includeFrames) {
+              if (context.getFrame() != null) {
+                String f = context.getFrame().getName();
+                int n = feats.size();
+                for (int i = 0; i < n; i++)
+                  feats.set(i, feats.get(i) + "/f/" + f);
+              }
+            }
+
+            // META: conjoin with role
+            if (includeRoles) {
+              String role = context.getRoleS();
+              if (role != null) {
+                int n = feats.size();
+                for (int i = 0; i < n; i++)
+                  feats.set(i, feats.get(i) + "/r/" + role);
+              }
+            }
+
             return feats;
           }
         });

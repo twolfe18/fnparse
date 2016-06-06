@@ -14,8 +14,8 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.Span;
 
@@ -36,7 +36,7 @@ public class GenerousEvaluation {
 	public static GenerousEvaluation evaluator =
 			new GenerousEvaluation(
 					Mode.ExtractHead,  // Use this because if you call this with fully parsed things it will blow up under ExpectHead
-					new SemaforicHeadFinder(),
+					new DependencyHeadFinder(),
 					false /* includeTarget */);
 
 	/**

@@ -39,8 +39,8 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGainProducts;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
@@ -1037,7 +1037,7 @@ public class CachedFeatures implements Serializable {
     boolean verbose = config.getBoolean("showFeatureMatches", true);
 
     TemplateContext ctx = new TemplateContext();
-    HeadFinder hf = new SemaforicHeadFinder();
+    HeadFinder hf = new DependencyHeadFinder();
     Random rand = new Random(9001);
     Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, this, 1, 1, rand);
     BasicFeatureTemplates ti = new BasicFeatureTemplates();

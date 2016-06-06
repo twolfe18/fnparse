@@ -13,8 +13,8 @@ import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FindReplace;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -44,7 +44,7 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
   }
   public Alphabet(BasicFeatureTemplates templateIndex, boolean addAllFromBft) {
     super();
-    this.hf = new SemaforicHeadFinder();
+    this.hf = new DependencyHeadFinder();
     this.templateName2index = new HashMap<>();
     if (addAllFromBft) {
       for (String tn : templateIndex.getBasicTemplateNames()) {
@@ -80,7 +80,7 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
     // ...
     // TODO After the iterate method below is tested, refactor this code to use it.
     this.templateName2index = new HashMap<>();
-    this.hf = new SemaforicHeadFinder();
+    this.hf = new DependencyHeadFinder();
     Log.info("reading template alphabets from " + file.getPath());
     BasicFeatureTemplates templateMap = null;
     try {

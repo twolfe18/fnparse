@@ -27,13 +27,29 @@ public interface LocalFactor {
         return l;
       return Adjoints.sum(l, r);
     }
+    @Override
+    public String toString() {
+      return "(Sum " + left + " " + right + ")";
+    }
   }
 
-
-  public static class Zero implements LocalFactor {
+  public static class Constant implements LocalFactor {
+    private Adjoints constant;
+    public Constant(double v) {
+      this.constant = new Adjoints.Constant(v);
+    }
     @Override
     public Adjoints score(HypEdge y, Uberts x) {
-      return Adjoints.Constant.ZERO;
+      return constant;
+    }
+    public String toString() {
+      return String.format("(Constant %.1f)", constant.forwards());
+    }
+  }
+
+  public static class Zero extends Constant {
+    public Zero() {
+      super(0);
     }
   }
 }

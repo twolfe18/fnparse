@@ -204,6 +204,30 @@ public class Sentence implements HasId, Serializable {
       lemmas[i] = Morphology.lemmaStatic(tokens[i], pos[i], lowercase);
   }
 
+  public static boolean isPunc(String pos) {
+    switch (pos) {
+    case ":":
+    case ",":
+    case ".":
+    case "(":
+    case ")":
+    case "''":
+    case "``":
+    case "-LRB-":
+    case "-RRB-":
+    case "$":
+    case "HYPH":
+    case "POS":
+      return true;
+    default:
+      return false;
+    }
+  }
+
+  public boolean isPunc(int i) {
+    return isPunc(pos[i]);
+  }
+
   public int size() { return tokens.length; }
 
   public String getDataset() { return dataset; }

@@ -46,15 +46,6 @@ public class SemaforicHeadFinder implements HeadFinder {
     return false;
   }
 
-  private static boolean isPunc(int i, Sentence sent) {
-    String pos = sent.getPos(i);
-    if (",".equals(pos) || "--".equals(pos) || ":".equals(pos))
-      return true;
-    if ("$".equals(pos))
-      return true;
-    return false;
-  }
-
   @Override
   public int head(Span s, Sentence sent) {
     if (s == Span.nullSpan)
@@ -72,9 +63,9 @@ public class SemaforicHeadFinder implements HeadFinder {
       return head(Span.getSpan(s.start + 1, s.end - 1), sent);
 
     // strip off leading and trailing punctuation
-    if (isPunc(s.start, sent))
+    if (sent.isPunc(s.start))
       return head(Span.getSpan(s.start + 1, s.end), sent);
-    if (isPunc(s.end - 1, sent))
+    if (sent.isPunc(s.end - 1))
       return head(Span.getSpan(s.start, s.end - 1), sent);
 
     String lastPos = sent.getPos(s.end - 1);

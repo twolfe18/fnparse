@@ -159,7 +159,7 @@ public class TemplateContext {
   }
   @SuppressWarnings("unused")
   public void setTargetHead(int head) {
-    assert head == UNSET || target == null || target.includes(head);
+    assert head == UNSET || target == null || target.includes(head) : "target=" + target + " head=" + head;
     if (DEBUG && sentence != null) {
       assert head >= 0;
       assert head < sentence.size();

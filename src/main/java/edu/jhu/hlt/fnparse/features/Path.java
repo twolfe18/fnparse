@@ -12,6 +12,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 public class Path {
 
   public static enum NodeType {
+    WORD,
     LEMMA,
     POS,
     NONE    // puts in a "*" for every head/phrase
@@ -119,27 +120,38 @@ public class Path {
   }
 
   private String getNodeNameFor(int i) {
-    if (nodeType == NodeType.LEMMA) return sent.getLemma(i);
-    else if (nodeType == NodeType.POS) return sent.getPos(i);
-    else if (nodeType == NodeType.NONE) return "*";
-    else throw new RuntimeException();
+    switch (nodeType) {
+    case WORD:
+      return sent.getWord(i);
+    case LEMMA:
+      return sent.getLemma(i);
+    case POS:
+      return sent.getPos(i);
+    case NONE:
+      return "*";
+    default:
+      throw new RuntimeException("unknown nodeType: " + nodeType);
+    }
   }
 
   private String getEdgeNameFor(int i, boolean goingUp) {
-    if(edgeType == EdgeType.DEP)
+    switch (edgeType) {
+    case DEP:
       return deps.getLabel(i) + (goingUp ? "<" : ">");
-    else if(edgeType == EdgeType.DIRECTION)
+    case DIRECTION:
       return goingUp ? "<" : ">";
-    else throw new RuntimeException();
+    default:
+      throw new RuntimeException("unknown edgeType: " + edgeType);
+    }
   }
 
   /** returns true if represents a path from a token to the root of the sentence */
   public boolean toRoot() { return toRoot; }
 
   public boolean isConnected() {
-    if(toRoot) {
+    if (toRoot) {
       assert false : "trivially true";
-    return true;
+      return true;
     }
     return connected;
   }
@@ -160,15 +172,15 @@ public class Path {
 
   /** memoizes the string so you can call more than once cheaply */
   public String getPath() {
-    if(path == null) {
+    if (path == null) {
       StringBuilder sb = new StringBuilder();
-      for(int i=0; i<upNodes.size(); i++) {
+      for (int i = 0; i < upNodes.size(); i++) {
         sb.append(upNodes.get(i));
         sb.append(upEdges.get(i));
       }
       sb.append(top);
-      if(!toRoot) {
-        for(int i=0; i<downNodes.size(); i++) {
+      if (!toRoot) {
+        for (int i = 0; i < downNodes.size(); i++) {
           sb.append(downEdges.get(i));
           sb.append(downNodes.get(i));
         }
@@ -176,6 +188,19 @@ public class Path {
       path = sb.toString();
     }
     return path;
+  }
+
+  public List<String> getEdges() {
+    List<String> e = new ArrayList<>();
+    int nUp = upNodes.size();
+    for (int i = 0; i < nUp; i++)
+      e.add(upEdges.get(i));
+    if (!toRoot) {
+      int nDown = downNodes.size();
+      for (int i = 0; i < nDown; i++)
+        e.add(downEdges.get(i));
+    }
+    return e;
   }
 
   /** prefix may be null */

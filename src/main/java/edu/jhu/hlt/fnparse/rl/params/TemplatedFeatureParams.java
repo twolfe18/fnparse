@@ -1,11 +1,12 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import edu.jhu.hlt.concrete.Dependency;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.features.TemplateContext;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -42,7 +43,7 @@ public class TemplatedFeatureParams
   public TemplatedFeatureParams(String name, String featureTemplateString, double l2Penalty) {
     super(l2Penalty);
     this.name = name;
-    headFinder = new SemaforicHeadFinder();
+    headFinder = new DependencyHeadFinder();
     setFeatures(featureTemplateString);
   }
 
@@ -50,7 +51,7 @@ public class TemplatedFeatureParams
   public TemplatedFeatureParams(String name, String featureTemplateString, double l2Penalty, int numBuckets) {
     super(l2Penalty, numBuckets);
     this.name = name;
-    headFinder = new SemaforicHeadFinder();
+    headFinder = new DependencyHeadFinder();
     setFeatures(featureTemplateString);
   }
 

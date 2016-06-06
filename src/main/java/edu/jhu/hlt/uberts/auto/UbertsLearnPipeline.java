@@ -299,6 +299,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private boolean updateAccordingToPriority = false;
   private double pOracleRollIn = 1;
 
+  private static boolean skipSrlFilterStages = true;
+
   private NumArgsRoleCoocArgLoc numArgsArg4;
   private NumArgsRoleCoocArgLoc numArgsArg3;
   private NumArgsRoleCoocArgLoc numArgsArg2;
@@ -372,7 +374,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       u.addGlobalFactor(a.getTrigger(u), a);
     }
 
-    if (srl2ByArg && enableGlobalFactors) {
+    if (srl2ByArg && enableGlobalFactors && !skipSrlFilterStages) {
       // srl2(t,s) with mutexArg=s
       NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 1, -1, u);
       a.storeExactFeatureIndices();
@@ -387,14 +389,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       u.addGlobalFactor(numArgsArg4.getTrigger(u), numArgsArg4);
     }
 
-    if (enableGlobalFactors) {
+    if (enableGlobalFactors && !skipSrlFilterStages) {
       numArgsArg3 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl3"), 0, -1, u);
       numArgsArg3.storeExactFeatureIndices();
       globalFactors.add(numArgsArg3);
       u.addGlobalFactor(numArgsArg3.getTrigger(u), numArgsArg3);
     }
 
-    if (enableGlobalFactors) {
+    if (enableGlobalFactors && !skipSrlFilterStages) {
       numArgsArg2 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 0, -1, u);
       numArgsArg2.storeExactFeatureIndices();
       globalFactors.add(numArgsArg2);
@@ -404,6 +406,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   @Override
   public LocalFactor getScoreFor(Rule r) {
+    if (skipSrlFilterStages && Arrays.asList("srl2", "srl3").contains(r.rhs.relName))
+      return new LocalFactor.Constant(0.5);
+
     LocalFactor f = new LocalFactor.Zero();
 
     if (templateFeats) {
@@ -439,6 +444,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       f = new LocalFactor.Sum(gw, f);
     }
 
+    if (DEBUG > 0)
+      Log.info("scoreFor(" + r + "): " + f);
     assert !(f instanceof LocalFactor.Zero);
     return f;
   }

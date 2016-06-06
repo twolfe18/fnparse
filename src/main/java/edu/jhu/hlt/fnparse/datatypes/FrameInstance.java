@@ -233,10 +233,14 @@ public class FrameInstance implements Serializable {
     arguments[roleIdx] = extent;
   }
 
-  public void getRealizedArgs(Collection<Span> addTo) {
+  /**
+   * Returns what it was given.
+   */
+  public <T extends Collection<Span>> T getRealizedArgs(T addTo) {
     for (int k = 0; k < arguments.length; k++)
       if (arguments[k] != Span.nullSpan)
         addTo.add(arguments[k]);
+    return addTo;
   }
 
   @Override

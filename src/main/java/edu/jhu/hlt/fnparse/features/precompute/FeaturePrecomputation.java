@@ -677,7 +677,7 @@ public abstract class FeaturePrecomputation {
     ExperimentProperties config = ExperimentProperties.getInstance();
     Iterable<FNParse> data = Collections.emptyList();
     Shard shard = ShardUtils.getShard(config);
-    Log.info("shard=" + shard);
+    Log.info("dataset=" + dataset + " addParses=" + addParses + " shard=" + shard);
 
     // You can specify Communication tar.gz files using the "concrete:" prefix
     String concretePrefix = "concrete:";

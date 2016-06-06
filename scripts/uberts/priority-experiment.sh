@@ -66,7 +66,8 @@ for i in `seq 9`; do
 done
 echo "TF=$TF"
 
-FNPARSE_DATA=~/scratch/fnparse-data
+#FNPARSE_DATA=~/scratch/fnparse-data
+FNPARSE_DATA=~/code/fnparse/toydata
 
 java -cp $JAR_STABLE -ea -server -Xmx14G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \

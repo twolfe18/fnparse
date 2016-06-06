@@ -896,7 +896,7 @@ public class Uberts {
   }
   public void addEdgeToState(HypEdge e, Adjoints score) {
     if (DEBUG > 1)
-      System.out.println("Uberts addEdgeToState: " + e.toString());
+      System.out.println("Uberts addEdgeToState: " + e.toString() + " " + score.forwards() + " " + score);
     if (stats != null) {
       stats.increment("pop");
       stats.increment("pop/" + e.getRelation().getName());
