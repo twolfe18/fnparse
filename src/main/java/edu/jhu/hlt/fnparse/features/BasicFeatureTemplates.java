@@ -1502,8 +1502,10 @@ public class BasicFeatureTemplates {
 
     // Frame id features (paths from pred->arg heads * arg head word)
     ExperimentProperties config = ExperimentProperties.getInstance();
-    addTemplate("semafor/predId/plain", new Pred2ArgPaths.Feature(config, false));
-    addTemplate("semafor/predId/counts", new Pred2ArgPaths.Feature(config, true));
+    addTemplate("semafor/predId/plain/noNullClass", new Pred2ArgPaths.Feature(config, false, false));
+    addTemplate("semafor/predId/plain/nullClass", new Pred2ArgPaths.Feature(config, false, true));
+    addTemplate("semafor/predId/counts/noNullClass", new Pred2ArgPaths.Feature(config, true, false));
+    addTemplate("semafor/predId/counts/nullClass", new Pred2ArgPaths.Feature(config, true, true));
 
     // Role id
     // http://www.dipanjandas.com/files/acl2014frames.pdf
@@ -1981,7 +1983,15 @@ public class BasicFeatureTemplates {
         Frame f = context.getFrame();
         if (f == null)
           return "f=?";
-        return "f=" + f.getName();
+        return f.getName();
+      }
+    });
+    addLabel("frameMaybeWithIntercept", new Template() {
+      public Iterable<String> extract(TemplateContext context) {
+        Frame f = context.getFrame();
+        if (f == null)
+          return Arrays.asList("f=?");
+        return Arrays.asList(f.getName(), "intercept");
       }
     });
     addLabel("frameRole", new TemplateSS() {

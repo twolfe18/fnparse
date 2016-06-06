@@ -56,7 +56,7 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public abstract class UbertsPipeline {
-  public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
+  public static int DEBUG = 2;  // 0 means off, 1 means coarse, 2+ means fine grain logging
 
   protected Uberts u;
   protected List<Rule> rules;
@@ -67,8 +67,8 @@ public abstract class UbertsPipeline {
 
   // Both of these are single arg relations and their argument is a doc id.
   protected NodeType docidNT;
-  protected Relation startDocRel;
-  protected Relation doneAnnoRel;
+  protected Relation startDocRel;   // startDoc(docid) is added when a new doc is considered, can be used as a message to dump caches
+  protected Relation doneAnnoRel;   // doneAnno(docid) is added when all pos/ner/parses have been added, good time to trigger pushing actions onto the agenda who may inspect the graph for features
 
   protected Set<String> dontBackwardsGenerate;
 
@@ -131,14 +131,24 @@ public abstract class UbertsPipeline {
 //    this.typeInf.debug = true;
     for (Rule untypedRule : Rule.parseRules(grammarFile, null))
       typeInf.add(untypedRule);
-    for (Rule typedRule : typeInf.runTypeInference()) {
+
+    List<Rule> typedRules = typeInf.runTypeInference();
+    List<Rule> temp = new ArrayList<>();
+    for (Rule typedRule : typedRules) {
       if (typedRule.comment != null && typedRule.comment.toLowerCase().contains("nopredict")) {
         if (DEBUG > 0)
           Log.info("not including in transition system because of NOPREDICT comment: " + typedRule);
         continue;
       }
-      addRule(typedRule);
+      temp.add(typedRule);
     }
+    typedRules = temp;
+    temp = null;
+
+    for (Rule r : typedRules)
+      rhsOfRules.add(r.rhs.rel);
+    for (Rule typedRule : typedRules)
+      addRule(typedRule);
 
     ExperimentProperties config = ExperimentProperties.getInstance();
     double lhsInRhsScoreScale = config.getDouble("lhsInRhsScoreScale", 0);
@@ -176,6 +186,10 @@ public abstract class UbertsPipeline {
     Log.info("finished with " + dataName);
   }
 
+  /**
+   * Order of when you calls this matters, see constructor. Notably, it depends
+   * on rhsOfRules and helperRules to be populated.
+   */
   private void addRule(Rule r) {
     assert r.rhs.rel != null;
     assert r.rhs.allArgsAreTyped();
@@ -183,16 +197,22 @@ public abstract class UbertsPipeline {
       assert lt.allArgsAreTyped();
 
     rules.add(r);
-    rhsOfRules.add(r.rhs.rel);
 
     LocalFactor phi = getScoreFor(r);
     // Add to Uberts as a TransitionGenerator
     // Create all orderings of this rule
     for (Rule rr : Rule.allLhsOrders(r)) {
 
-      if (helperRelations.contains(rr.lhs[0].rel)) {
+      Relation f = rr.lhs[0].rel;
+      if (helperRelations.contains(f)) {
         if (DEBUG > 0)
-          Log.info("not adding this rule since first Functor is schema type: " + rr);
+          Log.info("[main] not adding this rule since first Functor is schema type: " + rr);
+        continue;
+      }
+
+      if (f != doneAnnoRel && !rhsOfRules.contains(f)) {
+        if (DEBUG > 0)
+          Log.info("[main] not adding this rule since first functor is not a RHS of another rule and its not doneAnno either: " + rr);
         continue;
       }
 
@@ -200,7 +220,7 @@ public abstract class UbertsPipeline {
       Pair<List<TKey>, TG> tg = tgfp.parse2(rr, u);
 
       if (DEBUG > 0) {
-        Log.info("adding: " + rr);
+        Log.info("[main] adding: " + rr);
         if (DEBUG > 1)
           System.out.println(StringUtils.join("\n", tg.get1()));
       }

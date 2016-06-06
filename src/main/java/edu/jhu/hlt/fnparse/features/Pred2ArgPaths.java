@@ -230,16 +230,30 @@ public class Pred2ArgPaths {
     private boolean includeCountsRefinements = false;
     private boolean includePred2Pred = true;
 
-    public Feature(ExperimentProperties config) {
-      this(config.getExistingFile("pred2arg.feat.paths"), config.getBoolean("pred2arg.feat.includeCountRefinements"));
+    /*
+     * If true, then output (slower):
+     *   1*f(x) ++ y*f(x)
+     * instead of (faster):
+     *   y*f(x)
+     *
+     * This is useful when there is a null class (e.g. a target may not have a
+     * frame, but a token index always has a POS tag) and the decision rule for
+     * the null frame is whether the best score is <=0.
+     *
+     * If there is no null class, then this effectively shrinks all the weights
+     * towards each other (assuming some L_p regularization on the weights).
+     */
+    private boolean includeNullClassFeatures = true;
+
+    public Feature(ExperimentProperties config, boolean includeCountRefinements, boolean nullClassFeatures) {
+      this(config.getExistingFile("pred2arg.feat.paths"), includeCountRefinements, nullClassFeatures);
     }
 
-    public Feature(ExperimentProperties config, boolean includeCountRefinements) {
-      this(config.getExistingFile("pred2arg.feat.paths"), includeCountRefinements);
-    }
-
-    public Feature(File countAndPathTsv, boolean includeCountRefinements) {
-      Log.info("countAndPathTsv=" + countAndPathTsv.getPath() + " includeCountRefinements=" + includeCountRefinements);
+    public Feature(File countAndPathTsv, boolean includeCountRefinements, boolean nullClassFeatures) {
+      Log.info("countAndPathTsv=" + countAndPathTsv.getPath()
+          + " includeCountRefinements=" + includeCountRefinements
+          + " nullClassFeatures=" + nullClassFeatures);
+      this.includeNullClassFeatures = nullClassFeatures;
       paths = new Trie<Path2.Edge>(null);
       try (BufferedReader r = FileUtil.getReader(countAndPathTsv)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
@@ -342,8 +356,17 @@ public class Pred2ArgPaths {
       Frame f = context.getFrame();
       if (f != null) {
         int nn = feats.size();
-        for (int i = 0; i < nn; i++)
-          feats.set(i, feats.get(i) + "/" + f.getName());
+        if (includeNullClassFeatures) {
+          List<String> f2 = new ArrayList<>(nn*2);
+          for (int i = 0; i < nn; i++) {
+            f2.add(feats.get(i));
+            f2.add(feats.get(i) + "/" + f.getName());
+          }
+          feats = f2;
+        } else {
+          for (int i = 0; i < nn; i++)
+            feats.set(i, feats.get(i) + "/" + f.getName());
+        }
       }
       return feats;
     }

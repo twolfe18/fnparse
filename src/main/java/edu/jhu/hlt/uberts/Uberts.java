@@ -177,12 +177,16 @@ public class Uberts {
     if (DEBUG > 0)
       Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
     statsAgendaSizePerStep.clear();
-    Labels.Perf perf = goldEdges.new Perf();
+
+    Labels.Perf perf = null;
+    if (goldEdges != null)
+      perf = goldEdges.new Perf();
+
     List<Step> steps = new ArrayList<>();
     for (int i = 0; agenda.size() > 0; i++) {// && (actionLimit <= 0 || i < actionLimit); i++) {
       statsAgendaSizePerStep.add(agenda.size());
       AgendaItem ai = agenda.popBoth2();
-      boolean y = getLabel(ai.edge);
+      Boolean y = perf == null ? null : getLabel(ai.edge);
       if (DEBUG > 1)
         System.out.println("[dbgRunInference] popped=" + ai);
 
@@ -195,12 +199,17 @@ public class Uberts {
       if (hitLim)
         continue;
       if ((oracle && y) || pred) {
-        perf.add(ai.edge);
+        if (perf != null)
+          perf.add(ai.edge);
         addEdgeToState(ai);
       }
     }
-    if (showTrajDiagnostics)
-      showTrajPerf(steps, perf);
+    if (showTrajDiagnostics) {
+      if (perf == null)
+        Log.info("cannot show traj perf since there are no labels!");
+      else
+        showTrajPerf(steps, perf);
+    }
     return new Pair<>(perf, steps);
   }
   public Pair<Labels.Perf, List<Step>> dbgRunInference() {
@@ -1007,6 +1016,26 @@ public class Uberts {
     Object encoded = r.encodeTail(tail);
     HypNode head = lookupNode(headType, encoded, true);
     return new HypEdge(r, head, tail);
+  }
+
+  /**
+   * Given a string like "pos2(4,NNS)" or "predicate2(3-4,propbank/kill-v-1)",
+   * parse out the relation and create a new fact where every argument is
+   * represented as a string. Should really only be used for debugging/testing.
+   *
+   * @param factString will be split on commas, so arguments cannot contain commas.
+   */
+  public HypEdge dbgMakeEdge(String factString) {
+    factString = factString.trim();
+    int lp = factString.indexOf('(');
+    int rp = factString.indexOf(')');
+    assert rp == factString.length() - 1;
+    Relation r = getEdgeType(factString.substring(0, lp));
+    String[] args = factString.substring(lp + 1, rp).split(",");
+    HypNode[] tail = new HypNode[args.length];
+    for (int i = 0; i < args.length; i++)
+      tail[i] = lookupNode(r.getTypeForArg(i), args[i].trim(), true);
+    return makeEdge(r, tail);
   }
 
 }

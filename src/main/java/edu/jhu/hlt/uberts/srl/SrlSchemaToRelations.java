@@ -71,24 +71,52 @@ public class SrlSchemaToRelations {
     }
   }
 
-  public static void buildFrameTriageRelationPB(FrameIndex fi, File to) throws IOException {
+  public static void buildFrameTriageRelationPB(FrameIndex fi, BufferedWriter w, Set<String> seen) throws IOException {
     Log.info("building frameTriage4...");
-    Set<String> seen = new HashSet<>();
-    try (BufferedWriter w = FileUtil.getWriter(to)) {
-      // Relation definition
-      w.write("def frameTriage4 <lemma> <pos> <synset> <frame>");
-      w.newLine();
-      // Instances
-      for (Frame f : fi.allFrames()) {
-        if (f == Frame.nullFrame)
-          continue;
-        String frame = norm(f.getName());   // e.g. propbank/FedEx-v-1
-        String[] ar = frame.split("\\W+");
-        String lemmaStr = norm(ar[1].toLowerCase());
-        String pos = norm(ar[2].toUpperCase());
-        IWord iw = Sentence.tryGetWnWord(lemmaStr, pos);
-        String wnss = iw == null ? "nil" : norm(iw.getSynset().getID().toString());
-        String l = "schema frameTriage4 " + lemmaStr + " " + pos + " " + wnss + " " + frame;
+    for (Frame f : fi.allFrames()) {
+      if (f == Frame.nullFrame)
+        continue;
+      // e.g. f.getName() == "propbank/FedEx-v-1"
+      int s = f.getName().indexOf('/');
+      int d1 = f.getName().lastIndexOf('-');
+      int d2 = f.getName().lastIndexOf('-', d1-1);
+      String frame = norm(f.getName());
+      String lemmaStr = norm(f.getName().substring(s+1, d2));
+      String pos = norm(f.getName().substring(d2+1, d1).toUpperCase());
+
+      String senseString = f.getName().substring(d1+1);
+      try {
+        Integer.parseInt(senseString);
+      } catch (Exception e) {
+        assert senseString.equals("LV") : senseString;
+      }
+
+      IWord iw = Sentence.tryGetWnWord(lemmaStr, pos);
+      String wnss = iw == null ? "nil" : norm(iw.getSynset().getID().toString());
+      String l = "schema frameTriage4 " + lemmaStr + " " + pos + " " + wnss + " " + frame;
+      if (seen.add(l)) {
+        w.write(l);
+        w.newLine();
+      }
+    }
+  }
+
+  public static void buildFrameTriageRelationFN(FrameIndex fi, BufferedWriter w, Set<String> seen) throws IOException {
+    Log.info("building frameTriage4...");
+    Iterator<FNTagging> itr = FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences();
+    itr = Iterators.concat(itr, FileFrameInstanceProvider.fn15trainFIP.getParsedOrTaggedSentences());
+    while (itr.hasNext()) {
+      FNTagging t = itr.next();
+      Sentence s = t.getSentence();
+      s.lemmatize();
+      for (FrameInstance fin : t.getFrameInstances()) {
+        Span target = fin.getTarget();
+        int ti = target.end - 1;
+        String lemma = norm(s.getLemma(ti).toLowerCase());
+        String pos = norm(s.getPos(ti).substring(0, 1).toUpperCase());
+        String wnss = s.getWnWord(ti) == null ? "nil" : norm(s.getWnWord(ti).getSynset().getID().toString());
+        String frame = norm(fin.getFrame().getName());
+        String l = "schema frameTriage4 " + lemma + " " + pos + " " + wnss + " " + frame;
         if (seen.add(l)) {
           w.write(l);
           w.newLine();
@@ -97,57 +125,19 @@ public class SrlSchemaToRelations {
     }
   }
 
-  public static void buildFrameTriageRelationFN(FrameIndex fi, File to) throws IOException {
-    Log.info("building frameTriage4...");
-    Iterator<FNTagging> itr = FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences();
-    itr = Iterators.concat(itr, FileFrameInstanceProvider.fn15trainFIP.getParsedOrTaggedSentences());
-    Set<String> seen = new HashSet<>();
-    try (BufferedWriter w = FileUtil.getWriter(to)) {
-      // Relation definition
-      w.write("def frameTriage4 <lemma> <pos> <synset> <frame>");
-      w.newLine();
-      // Instances
-      while (itr.hasNext()) {
-        FNTagging t = itr.next();
-        Sentence s = t.getSentence();
-        s.lemmatize();
-        for (FrameInstance fin : t.getFrameInstances()) {
-          Span target = fin.getTarget();
-          int ti = target.end - 1;
-          String lemma = norm(s.getLemma(ti).toLowerCase());
-          String pos = norm(s.getPos(ti).substring(0, 1).toUpperCase());
-          String wnss = s.getWnWord(ti) == null ? "nil" : norm(s.getWnWord(ti).getSynset().getID().toString());
-          String frame = norm(fin.getFrame().getName());
-          String l = "schema frameTriage4 " + lemma + " " + pos + " " + wnss + " " + frame;
-          if (seen.add(l)) {
-            w.write(l);
-            w.newLine();
-          }
-        }
-      }
-    }
-  }
-
-  public static void buildRoleRelation(FrameIndex fi, File to) throws IOException {
+  public static void buildRoleRelation(FrameIndex fi, BufferedWriter w, Set<String> uniq) throws IOException {
     Log.info("building role2...");
-    Set<String> uniq = new HashSet<>();
-    try (BufferedWriter w = FileUtil.getWriter(to)) {
-      // Relation definition
-      w.write("def role2 <frame> <role>");
-      w.newLine();
-      // Instances
-      for (Frame f : fi.allFrames()) {
-        if (f == Frame.nullFrame)
-          continue;
-        String frame = norm(coarsenFrame(f.getName()));
-        int K = f.numRoles();
-        for (int k = 0; k < K; k++) {
-          String ks = norm(f.getRole(k));
-          String line = "schema role2 " + frame + " " + ks;
-          if (uniq.add(line)) {
-            w.write(line);
-            w.newLine();
-          }
+    for (Frame f : fi.allFrames()) {
+      if (f == Frame.nullFrame)
+        continue;
+      String frame = norm(coarsenFrame(f.getName()));
+      int K = f.numRoles();
+      for (int k = 0; k < K; k++) {
+        String ks = norm(f.getRole(k));
+        String line = "schema role2 " + frame + " " + ks;
+        if (uniq.add(line)) {
+          w.write(line);
+          w.newLine();
         }
       }
     }
@@ -161,11 +151,10 @@ public class SrlSchemaToRelations {
    */
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
-    boolean pb = config.getBoolean("propbank");
 
     boolean overwrite = config.getBoolean("overwrite", false);
     File outdir = config.getOrMakeDir("outdir");
-    Log.info("propbank=" + pb + " outdir=" + outdir);
+    Log.info("outdir=" + outdir);
 
     File frameTriage = new File(outdir, "frameTriage4.rel.gz");
     if (frameTriage.isFile() && !overwrite)
@@ -179,16 +168,25 @@ public class SrlSchemaToRelations {
     if (coarsenFrame.isFile() && !overwrite)
       throw new RuntimeException("output exists and overwrite=false, " + coarsenFrame.getPath());
 
-    FrameIndex fi = pb
-        ? FrameIndex.getPropbank()
-        : FrameIndex.getFrameNet();
+    try (BufferedWriter w = FileUtil.getWriter(frameTriage)) {
+      Set<String> seen = new HashSet<>();
+      // Relation definition
+      w.write("def frameTriage4 <lemma> <pos> <synset> <frame>");
+      w.newLine();
+      buildFrameTriageRelationPB(FrameIndex.getPropbank(), w, seen);
+      buildFrameTriageRelationFN(FrameIndex.getFrameNet(), w, seen);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
 
-    if (pb)
-      buildFrameTriageRelationPB(fi, frameTriage);
-    else
-      buildFrameTriageRelationFN(fi, frameTriage);
-
-    buildRoleRelation(fi, role);
+    try (BufferedWriter w = FileUtil.getWriter(role)) {
+      Set<String> seen = new HashSet<>();
+      // Relation definition
+      w.write("def role2 <frame> <role>");
+      w.newLine();
+      buildRoleRelation(FrameIndex.getPropbank(), w, seen);
+      buildRoleRelation(FrameIndex.getFrameNet(), w, seen);
+    }
 
     buildCoarsenFrame(coarsenFrame);
 

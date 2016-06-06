@@ -47,9 +47,6 @@ public interface LocalFactor {
     }
   }
 
-  public static class Zero extends Constant {
-    public Zero() {
-      super(0);
-    }
-  }
+  public static Constant ZERO = new Constant(0);
+  public static Constant ONE = new Constant(1);
 }

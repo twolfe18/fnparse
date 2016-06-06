@@ -409,7 +409,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (skipSrlFilterStages && Arrays.asList("srl2", "srl3").contains(r.rhs.relName))
       return new LocalFactor.Constant(0.5);
 
-    LocalFactor f = new LocalFactor.Zero();
+    LocalFactor f = LocalFactor.Constant.ZERO;
 
     if (templateFeats) {
       ExperimentProperties config = ExperimentProperties.getInstance();
@@ -446,7 +446,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     if (DEBUG > 0)
       Log.info("scoreFor(" + r + "): " + f);
-    assert !(f instanceof LocalFactor.Zero);
+    assert f != LocalFactor.Constant.ZERO;
     return f;
   }
 
@@ -561,12 +561,27 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   public Map<Relation, Double> getCostFP() {
     Map<Relation, Double> costFP = new HashMap<>();
-    costFP.put(u.getEdgeType("argument4"), 1d);
-    costFP.put(u.getEdgeType("srl3"), costFP_srl3);
-    costFP.put(u.getEdgeType("srl2"), costFP_srl2);
-    costFP.put(u.getEdgeType("predicate2"), 1d);
-    costFP.put(u.getEdgeType("event1"), costFP_event1);
+    h("argument4", 1d, costFP, u);
+    h("srl3", costFP_srl3, costFP, u);
+    h("srl2", costFP_srl2, costFP, u);
+    h("predicate2", 1d, costFP, u);
+    h("event1", costFP_event1, costFP, u);
+//    costFP.put(u.getEdgeType("argument4"), 1d);
+//    costFP.put(u.getEdgeType("srl3"), costFP_srl3);
+//    costFP.put(u.getEdgeType("srl2"), costFP_srl2);
+//    costFP.put(u.getEdgeType("predicate2"), 1d);
+//    costFP.put(u.getEdgeType("event1"), costFP_event1);
     return costFP;
+  }
+  private static void h(String name, double costFP, Map<Relation, Double> maybeAddTo, Uberts u) {
+    Relation r = u.getEdgeType(name, true);
+    if (r == null) {
+      if (DEBUG > 1)
+        Log.info("not adding costFP for " + name + " since it doesn't exist in uberts!");
+    } else {
+      Double old = maybeAddTo.put(r, costFP);
+      assert old == null;
+    }
   }
 
   private void train(RelDoc doc) {
