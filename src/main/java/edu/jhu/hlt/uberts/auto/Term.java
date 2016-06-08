@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
+import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
 
 /**
@@ -19,6 +20,28 @@ public class Term {
   // For Hobbs-style prime notation: event1'(e,i,j), factArgName="e"
   // For non-primed terms, this is null.
   public final String factArgName;
+
+  public static Term uniqArguments(Relation r) {
+    String[] args = new String[r.getNumArgs()];
+    for (int i = 0; i < args.length; i++)
+      args[i] = "a" + i;
+    return new Term(r, args);
+  }
+
+  /** Includes head position */
+  public int[] getArgIndices() {
+    int[] r = new int[argNames.length + 1];
+    r[0] = State.HEAD_ARG_POS;
+    for (int i = 1; i < r.length; i++)
+      r[i] = i-1;
+    return r;
+  }
+
+  public String getArgName(int argIdx) {
+    if (argIdx == State.HEAD_ARG_POS)
+      return Uberts.getWitnessNodeTypeName(relName);
+    return argNames[argIdx];
+  }
 
   // Needed to incrementally build relations from their names and the names
   // of their arguments.

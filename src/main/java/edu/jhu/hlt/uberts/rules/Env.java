@@ -25,9 +25,14 @@ import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.Term;
+import edu.jhu.hlt.uberts.auto.Trigger;
 
 public class Env {
 
+  /**
+   * Connects two trie nodes, enforces 0 or more constraints, and binds one or
+   * more {@link Term}s to {@link HypEdge}s.
+   */
   public static interface Edge3 {
     /** Facts which satisfy this edge (constraint) witnessed by the binding b */
     List<HypEdge> satisfy(Bindings b);
@@ -83,7 +88,10 @@ public class Env {
     }
     @Override
     public List<HypEdge> satisfy(Bindings b) {
-      return b.getState().match2(r).toList();
+      LL<HypEdge> l = b.getState().match2(r);
+      if (l == null)
+        return Collections.emptyList();
+      return l.toList();
     }
   }
 
@@ -106,12 +114,38 @@ public class Env {
     }
   }
 
-  public static class Trie3 {
+  /**
+   * Stores the triggers so that they can always be matched.
+   *
+   * NOTE: Previously a {@link Trigger} was thought of as a {@link Rule}s LHS,
+   * so when you see the r in (r,t,a), this was a mnemonic for "rule", but
+   * really refers to a Trigger's index.
+   *
+   * This lets you do two things:
+   * 1) add triggers
+   * 2) find matches with {@link Trie3#match(State, HypEdge, Consumer)}
+   *
+   * The reason to not have payloads (i.e. think of the trie as a Map) is that
+   * I don't want to support a "get" function. The key, {@link Trigger}, is
+   * not an efficient way to look up values, and I don't want implementation
+   * details about how this class stores triggers to leak through a "get/put"
+   * interface.
+   *
+   * @author travis
+   * @param <T> is the type of the payload (what you can store at the accepting states).
+   */
+  public static class Trie3<T> {
     // FOR DEBUGGING, null means don't track counts
     public static final Counts<String> EVENT_COUNTS = new Counts<>();
-    
-    private Trie3 root;
-    private Trie3 parent; // allows you to compute i from just R
+    private static void cnt(String msg) {
+      if (EVENT_COUNTS != null)
+        EVENT_COUNTS.increment(msg);
+    }
+
+    public static final int DEBUG = 1;
+
+    private Trie3<T> root;
+    private Trie3<T> parent; // allows you to compute i from just R
 
     private Term term;            // Provides variable names
     private Relation rel;         // R (view on term)
@@ -119,14 +153,14 @@ public class Env {
 
     // How to get to the next Trie3 node
     // Edge3 can be though of as constraints to check while binding the next fact.
-    List<Edge3> whatToBind;
+    private List<Edge3> whatToBind;
     // Concrete example why this map should be separate from Edge3s:
     // Rule1 = "foo(x,y) & bar(x,y) => ..."
     // Rule2 = "foo(x,z) & bar(y,z) => ..."
     // Rule1 will require an Edge3 which checks equality for both {x,y}
     // Rule2 will only require an Edge3 to check {z} equality.
     // Both Rule1 and Rule2 will end up in a state where we have just bound a bar fact/HypEdge.
-    Map<Relation, Trie3> children;
+    private Map<Relation, Trie3<T>> children;
 
     // Maps (R,i,a) <-> (ruleIdx,termIdx,argIdx)
     // Includes an (R,i,a) entry for every Trie3 node between this and ROOT.
@@ -134,13 +168,13 @@ public class Env {
     private RiaRtaBijection varMapping;
 
     // If non-null, this is an accepting state, and this is the completed rule.
-    private Rule isCompleted;
+    private Trigger complete;
 
-    public static Trie3 makeRoot() {
-      return  new Trie3(null, -1, null, null);
+    public static <T> Trie3<T> makeRoot() {
+      return  new Trie3<>(null, -1, null, null);
     }
 
-    public Trie3(Term t, int relOccurrence, Rule isCompleted, Trie3 parent) {
+    public Trie3(Term t, int relOccurrence, Trigger completed, Trie3<T> parent) {
       this.term = t;
       if (t == null) {
         // ROOT
@@ -158,13 +192,8 @@ public class Env {
       this.relOccurrence = relOccurrence;
       this.whatToBind = new ArrayList<>();  // populated as you add rules
       this.children = new HashMap<>();
-      this.isCompleted = isCompleted;
+      this.complete = completed;
       cnt("newTrieNode");
-    }
-
-    private static void cnt(String msg) {
-      if (EVENT_COUNTS != null)
-        EVENT_COUNTS.increment(msg);
     }
 
     /**
@@ -172,10 +201,12 @@ public class Env {
      * contained in this trie.
      */
     public void match(State s, HypEdge lastFact, Consumer<Match> emit) {
-      Bindings b = new Bindings(s);
-      b.add(lastFact);
-      Trie3 child = children.get(lastFact.getRelation());
-      child.match(s, b, emit);
+      Trie3<T> child = children.get(lastFact.getRelation());
+      if (child != null) {
+        Bindings b = new Bindings(s);
+        b.add(lastFact);
+        child.match(s, b, emit);
+      }
       cnt("match/root");
     }
 
@@ -184,7 +215,7 @@ public class Env {
           : "should have bound " + rel.getName() + " by the time you reached this Trie3 node";
 
       cnt("match");
-      if (isCompleted != null) {
+      if (complete != null) {
         cnt("match/emit");
         emit.accept(this.new Match(b));
       } else {
@@ -198,7 +229,7 @@ public class Env {
         for (HypEdge fact : e.satisfy(b)) {
           cnt("match/fact");
           b.add(fact);
-          Trie3 child = children.get(fact.getRelation());
+          Trie3<T> child = children.get(fact.getRelation());
           child.match(s, b, emit);
           b.remove(fact);
         }
@@ -209,87 +240,113 @@ public class Env {
      * Allows you to read bound values for a matched rule using
      * (ruleIdx,termIdx,argIdx) indices instead of the (R,i,a) indices
      * produced during search/binding.
+     *
+     * Gives access to a {@link Rule} (represents an accepting state in the trie)
+     * a {@link Bindings}, and a payload:T.
      */
-    class Match {
+    public class Match {
       private Bindings bindings;
       public Match(Bindings b) {
         this.bindings = b;
       }
       public HypNode getValue(int termIdx, int argIdx) {
-        IntTrip rta = new IntTrip(isCompleted.index, termIdx, argIdx);
+        IntTrip rta = new IntTrip(complete.getIndex(), termIdx, argIdx);
         Arg ria = root.varMapping.get(rta);
         return bindings.get(ria);
       }
       public HypEdge getValue(int termIdx) {
-        IntPair rt = new IntPair(isCompleted.index, termIdx);
+        IntPair rt = new IntPair(complete.getIndex(), termIdx);
         Ri ri = root.varMapping.get(rt);
-        return bindings.get(ri);
+        HypEdge e = bindings.get(ri);
+        assert e != null;
+        return e;
+      }
+      public HypEdge[] getValues() {
+        int n = complete.length();
+        HypEdge[] edges = new HypEdge[n];
+        for (int i = 0; i < n; i++)
+          edges[i] = getValue(i);
+        return edges;
+      }
+      public Trigger getTrigger() {
+        return complete;
       }
       @Override
       public String toString() {
         StringBuilder sb = new StringBuilder();
         sb.append("(Match ");
-        sb.append(isCompleted.toString());
-        for (int i = 0; i < isCompleted.lhs.length; i++) {
+        sb.append(complete.toString());
+        for (int i = 0; i < complete.length(); i++) {
           sb.append(' ');
           sb.append(getValue(i));
         }
-//        sb.append(" bindings=" + bindings);
         sb.append(')');
         return sb.toString();
       }
     }
 
-    public void add(Rule r) {
-      // At the root you should manually add an edge for every fact in the LHS.
-      // After that, respect the order of the LHS.
-      // NOTE: I considered keeping this logic in UbertsPipeline, but its probably
-      // best to always be correct in Uberts.
-//      add(r, new BitSet());
+    public void add(Trigger trigger) {
+      if (DEBUG > 0)
+        Log.info("ROOT trigger=" + trigger);
       assert term == null : "is this not root?";
-      int n = r.lhs.length;
-      BitSet bs = new BitSet(n);
+      int n = trigger.length();
+      BitSet lhsCovered = new BitSet(n);
+      // Add n strings, one which starts with each of the n Functor terms in
+      // the rule.
       for (int i = 0; i < n; i++) {
-        bs.set(i, true);
-        Term l = r.lhs[i];
-        Trie3 child = children.get(l.rel);
+        lhsCovered.set(i, true);
+        Term l = trigger.get(i);
+        Trie3<T> child = children.get(l.rel);
         if (child == null) {
-          child = new Trie3(l, 0, r.lhs.length == 1 ? r : null, this);
+          if (trigger.length() == 1)
+            child = new Trie3<>(l, 0, trigger, this);
+          else
+            child = new Trie3<>(l, 0, null, this);
           children.put(l.rel, child);
         }
-        child.add(r, bs);
-        bs.set(i, false);
+
+        // Add (R,i,a) <-> (r,t,a) entries for arguments of the first term
+        // chosen, since we've marked them covered here (won't be added down the stack).
+        for (int argIdx : l.getArgIndices()) {
+          Arg ria = new Arg(l.rel, 0, argIdx);
+          IntTrip rta = new IntTrip(trigger.getIndex(), i, argIdx);
+          // Update (R,i,a) <-> (r,t,a) bijection
+          if (DEBUG > 0) {
+            Log.info("adding varMapping: trigger=" + trigger + " ria=" + ria + " rta=" + rta);
+          }
+          root.varMapping.add(ria, rta);
+        }
+
+        child.add(trigger, lhsCovered);
+        lhsCovered.set(i, false);
       }
     }
 
-    private void add(Rule r, BitSet lhsCovered) {
-      if (r.index < 0)
-        throw new IllegalArgumentException("must set Rule indices");
-
+    private void add(Trigger trigger, BitSet lhsCovered) {
       // How do I know i? Which occurrence of R this is?
       // I could walk up the path, or I could pass down a map.
       // I think I'll walk up.
-      int nextLhsTermIdx = chooseNextArgPos(r, lhsCovered);
+      int nextLhsTermIdx = chooseNextArgPos(trigger, lhsCovered);
       if (nextLhsTermIdx < 0) {
         // We're done
-        assert lhsCovered.cardinality() == r.lhs.length;
+        assert lhsCovered.cardinality() == trigger.length();
         return;
       }
       assert !lhsCovered.get(nextLhsTermIdx);
-      Term nextLhsTerm = r.lhs[nextLhsTermIdx];
+      Term nextLhsTerm = trigger.get(nextLhsTermIdx);
 
       int nextLhsTermRelOccurrence = 0;
-      for (Trie3 cur = this; cur != null; cur = cur.parent)
+      for (Trie3<T> cur = this; cur != null; cur = cur.parent)
         if (nextLhsTerm.rel.equals(cur.rel))
           nextLhsTermRelOccurrence++;
 
       // Make child, will add later
-      Trie3 c = children.get(nextLhsTerm.rel);
+      Trie3<T> c = children.get(nextLhsTerm.rel);
       if (c == null) {
-        Rule isComplete = null;
-        if (lhsCovered.cardinality()+1 == r.lhs.length)
-          isComplete = r;
-        c = new Trie3(nextLhsTerm, nextLhsTermRelOccurrence, isComplete, this);
+        Trigger complete = null;
+        if (lhsCovered.cardinality()+1 == trigger.length())
+          complete = trigger;
+        c = new Trie3<>(nextLhsTerm, nextLhsTermRelOccurrence, complete, this);
         children.put(nextLhsTerm.rel, c);
       }
 
@@ -299,10 +356,13 @@ public class Env {
       for (int argIdx : nextLhsTerm.getArgIndices()) {
         // Two views on this variable
         Arg ria = new Arg(nextLhsTerm.rel, nextLhsTermRelOccurrence, argIdx);
-        IntTrip rta = new IntTrip(r.index, nextLhsTermIdx, argIdx);
+        IntTrip rta = new IntTrip(trigger.getIndex(), nextLhsTermIdx, argIdx);
 
         // Update (R,i,a) <-> (r,t,a) bijection
         // TODO This is un-necessary, can have (R,i) <-> (r,t) bijection, promote to include a trivially (identity)
+        if (DEBUG > 0) {
+          Log.info("adding varMapping: trigger=" + trigger + " ria=" + ria + " rta=" + rta);
+        }
         root.varMapping.add(ria, rta);
 
         // See if varName is already matched by a parent's (R,i)
@@ -336,7 +396,7 @@ public class Env {
 
       lhsCovered.set(nextLhsTermIdx, true);
       whatToBind.add(e);
-      c.add(r, lhsCovered);
+      c.add(trigger, lhsCovered);
       lhsCovered.set(nextLhsTermIdx, false);
     }
 
@@ -347,10 +407,10 @@ public class Env {
      * 2) how many un-bound terms could be bound by choosing this relation
      * 3) order of appearance as the rule was given (leftmost terms come first)
      */
-    private int chooseNextArgPos(Rule r, BitSet lhsCovered) {
+    private int chooseNextArgPos(Trigger t, BitSet lhsCovered) {
       Log.warn("TODO finish this implementation!");
       // Just choose the first for now
-      int n = r.lhs.length;
+      int n = t.length();
       for (int i = 0; i < n; i++) {
         if (!lhsCovered.get(i))
           return i;
@@ -366,7 +426,7 @@ public class Env {
      */
     private Arg findParentWhoDefines(Arg a) {
       String argName = term.getArgName(a.argPos);
-      for (Trie3 cur = parent; cur != null; cur = cur.parent) {
+      for (Trie3<T> cur = parent; cur != null; cur = cur.parent) {
         Term t = cur.term;
         if (t == null) {
           assert cur.parent == null;  // ROOT
@@ -422,6 +482,10 @@ public class Env {
     }
   }
 
+  /**
+   * R = Relation
+   * i = occurrence of that relation in the path from the root to a trie node
+   */
   static class Ri {
     Relation r;
     int rOccurrence;
@@ -451,6 +515,9 @@ public class Env {
     }
   }
 
+  /**
+   * (R,i,a) = Ri and an argument position in the relation
+   */
   static class Arg {
     Relation r;
     int rOccurrence;
@@ -490,7 +557,7 @@ public class Env {
 
   /**
    * explicitly: (R,i) -> HypEdge
-   * implicitly: (R,i,a) -> HypNode
+   * implicitly: (R,i,a) -> HypNode because you can look up HypNodes from a HypEdge
    */
   static class Bindings {
     private State s;
@@ -551,5 +618,4 @@ public class Env {
       rCounts.update(re.getRelation(), -1);
     }
   }
-
 }

@@ -71,29 +71,30 @@ public class UbertsTest {
 //        new TKey(tokenIndex),
     };
     boolean hard = true;
-    u.addGlobalFactor(newPosLHS, new AtMost1.RelNode1(
-        u.getEdgeType("pos"),
-        hard,
-        gtt -> gtt.getBoundNode(1), "index"));
-    u.addTransitionGenerator(newPosLHS, new TransitionGenerator() {
-      @Override
-      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
-        int i = (Integer) lhsValues.getBoundNode(1).getValue();
-        i++;
-        if (i == sent.length)
-          return Collections.emptyList();
-        List<Pair<HypEdge, Adjoints>> pos = new ArrayList<>();
-        for (HypNode pt : posTags) {
-          Log.info("adding pos(" + i + ", " + pt.getValue() + ")");
-          HypNode[] tail = new HypNode[] { tokens.get(i), pt };
-          HypEdge e = u.makeEdge("pos", tail);
-          double r = u.getRandom().nextGaussian();
-          Adjoints a = new Adjoints.Constant(r);
-          pos.add(new Pair<>(e, a));
-        }
-        return pos;
-      }
-    });
+    throw new RuntimeException("re-implement me");
+//    u.addGlobalFactor(newPosLHS, new AtMost1.RelNode1(
+//        u.getEdgeType("pos"),
+//        hard,
+//        gtt -> gtt.getBoundNode(1), "index"));
+//    u.addTransitionGenerator(newPosLHS, new TransitionGenerator() {
+//      @Override
+//      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
+//        int i = (Integer) lhsValues.getBoundNode(1).getValue();
+//        i++;
+//        if (i == sent.length)
+//          return Collections.emptyList();
+//        List<Pair<HypEdge, Adjoints>> pos = new ArrayList<>();
+//        for (HypNode pt : posTags) {
+//          Log.info("adding pos(" + i + ", " + pt.getValue() + ")");
+//          HypNode[] tail = new HypNode[] { tokens.get(i), pt };
+//          HypEdge e = u.makeEdge("pos", tail);
+//          double r = u.getRandom().nextGaussian();
+//          Adjoints a = new Adjoints.Constant(r);
+//          pos.add(new Pair<>(e, a));
+//        }
+//        return pos;
+//      }
+//    });
   }
 
   public void posTestKickoff() {
@@ -135,7 +136,9 @@ public class UbertsTest {
     // Setup the NER rule:
     // pos(j,N) => ner(i,j,PER) s.t. i<=j and (j-i)+1<=5
     int maxEntWidth = 5;
-    TNode trie = u.getGraphFragments();
+    TNode trie = null;  //u.getGraphFragments();
+    if (trie == null)
+      throw new RuntimeException("re-implement me");
     TNode newNounGraphFragment = trie.lookup(new TKey[] {
         // TODO
 //        new TKey(u.getEdgeType("pos")),
@@ -222,13 +225,15 @@ public class UbertsTest {
   }
 
   public void corefSetup() {
-    TNode cn = u.getGraphFragments().lookup(new TKey[] {
+    TNode cn = null;/*u.getGraphFragments().lookup(new TKey[] {
         // TODO
 //        new TKey(u.getEdgeType("ner")),
 //        new TKey(u.lookupNode(nerTag, "PER", true)),
 //        new TKey(u.getEdgeType("ner")),
 //        new TKey(u.getWitnessNodeType("ner")),
-    }, true);
+    }, true); */
+    if (cn == null)
+      throw new RuntimeException("re-implement me");
     cn.getValue().u = u;
     cn.getValue().tg = new TransitionGenerator() {
       @Override

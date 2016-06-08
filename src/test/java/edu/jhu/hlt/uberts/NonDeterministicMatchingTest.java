@@ -2,6 +2,7 @@ package edu.jhu.hlt.uberts;
 
 import static org.junit.Assert.*;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
@@ -10,13 +11,12 @@ import org.junit.Test;
 
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
-import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser;
 import edu.jhu.hlt.uberts.auto.TypeInference;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
-import edu.jhu.hlt.uberts.transition.TransitionGenerator;
+import edu.jhu.hlt.uberts.transition.TransGen;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -67,19 +67,26 @@ public class NonDeterministicMatchingTest {
     ti.add(untyped);
     List<Rule> typed = ti.runTypeInference();
     assertEquals(typed.size(), 1);
-    Pair<List<TKey>, TG> pair = p.parse2(typed.get(0), u);
-    System.out.println("pattern:\n\t" + StringUtils.join("\n\t", pair.get1()));
-
-//    u.addTransitionGenerator(pair);
-    TNode tnode = u.addTransitionGenerator(pair.get1(), new TransitionGenerator() {
+//    Pair<List<TKey>, TG> pair = p.parse2(typed.get(0), u);
+//    System.out.println("pattern:\n\t" + StringUtils.join("\n\t", pair.get1()));
+////    u.addTransitionGenerator(pair);
+//    TNode tnode = u.addTransitionGenerator(pair.get1(), new TransitionGenerator() {
+//      @Override
+//      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
+//        System.out.println("firing, " + lhsValues);
+//        timesFired++;
+//        return Collections.emptyList();
+//      }
+//    });
+//    tnode.getValue().r = typed.get(0);
+    u.addTransitionGenerator(typed.get(0).lhs, new TransGen() {
       @Override
-      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
-        System.out.println("firing, " + lhsValues);
+      public List<Pair<HypEdge, Adjoints>> match(HypEdge[] trigger, Uberts u) {
+        System.out.println("firing, trigger=" + Arrays.asList(trigger));
         timesFired++;
         return Collections.emptyList();
       }
     });
-    tnode.getValue().r = typed.get(0);
 
     // Add some data to catch
     int numRoles = 5;
@@ -124,14 +131,21 @@ public class NonDeterministicMatchingTest {
     ti.add(untyped);
     List<Rule> typed = ti.runTypeInference();
     assertEquals(typed.size(), 1);
-    Pair<List<TKey>, TG> pair = p.parse2(typed.get(0), u);
-    System.out.println("pattern:\n\t" + StringUtils.join("\n\t", pair.get1()));
-
-//    u.addTransitionGenerator(pair);
-    u.addTransitionGenerator(pair.get1(), new TransitionGenerator() {
+//    Pair<List<TKey>, TG> pair = p.parse2(typed.get(0), u);
+//    System.out.println("pattern:\n\t" + StringUtils.join("\n\t", pair.get1()));
+////    u.addTransitionGenerator(pair);
+//    u.addTransitionGenerator(pair.get1(), new TransitionGenerator() {
+//      @Override
+//      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
+//        System.out.println("firing, " + lhsValues);
+//        timesFired++;
+//        return Collections.emptyList();
+//      }
+//    });
+    u.addTransitionGenerator(typed.get(0).lhs, new TransGen() {
       @Override
-      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
-        System.out.println("firing, " + lhsValues);
+      public List<Pair<HypEdge, Adjoints>> match(HypEdge[] trigger, Uberts u) {
+        System.out.println("firing, trigger=" + Arrays.asList(trigger));
         timesFired++;
         return Collections.emptyList();
       }
@@ -188,11 +202,19 @@ public class NonDeterministicMatchingTest {
     Pair<List<TKey>, TG> pair = p.parse2(typed.get(0), u);
     System.out.println("pattern:\n\t" + StringUtils.join("\n\t", pair.get1()));
 
-//    u.addTransitionGenerator(pair);
-    u.addTransitionGenerator(pair.get1(), new TransitionGenerator() {
+////    u.addTransitionGenerator(pair);
+//    u.addTransitionGenerator(pair.get1(), new TransitionGenerator() {
+//      @Override
+//      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
+//        System.out.println("firing, " + lhsValues);
+//        timesFired++;
+//        return Collections.emptyList();
+//      }
+//    });
+    u.addTransitionGenerator(typed.get(0).lhs, new TransGen() {
       @Override
-      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
-        System.out.println("firing, " + lhsValues);
+      public List<Pair<HypEdge, Adjoints>> match(HypEdge[] trigger, Uberts u) {
+        System.out.println("firing, trigger=" + Arrays.asList(trigger));
         timesFired++;
         return Collections.emptyList();
       }
@@ -272,12 +294,20 @@ public class NonDeterministicMatchingTest {
 //    ti.add(Rule.parseRule("arg2(t,s) & arg3(t,f,k) => argument(t,f,s,k)", null));
 
     for (Rule typedRule : ti.runTypeInference()) {
-      Pair<List<TKey>, TG> pair = p.parse2(typedRule, u);
-      System.out.println("pattern:\n\t" + StringUtils.join("\n\t", pair.get1()));
-      u.addTransitionGenerator(pair.get1(), new TransitionGenerator() {
+//      Pair<List<TKey>, TG> pair = p.parse2(typedRule, u);
+//      System.out.println("pattern:\n\t" + StringUtils.join("\n\t", pair.get1()));
+//      u.addTransitionGenerator(pair.get1(), new TransitionGenerator() {
+//        @Override
+//        public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
+//          System.out.println("firing, " + lhsValues);
+//          timesFired++;
+//          return Collections.emptyList();
+//        }
+//      });
+      u.addTransitionGenerator(typedRule.lhs, new TransGen() {
         @Override
-        public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
-          System.out.println("firing, " + lhsValues);
+        public List<Pair<HypEdge, Adjoints>> match(HypEdge[] trigger, Uberts u) {
+          System.out.println("firing, trigger=" + Arrays.asList(trigger));
           timesFired++;
           return Collections.emptyList();
         }

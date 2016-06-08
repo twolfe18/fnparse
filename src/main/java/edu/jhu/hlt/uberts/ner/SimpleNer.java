@@ -156,46 +156,50 @@ public class SimpleNer {
     TKey[] newNerLabel = new TKey[] {
 //        new TKey(ner3), TODO
     };
-    u.addTransitionGenerator(newNerLabel, new TransitionGenerator() {
-      @Override
-      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
-        HypEdge e = lhsValues.getBoundEdge(0);
-        assert e.getRelation() == ner3;
-        assert e.getTail(0).getNodeType() == tokenIndex;
-        int i = (Integer) e.getTail(0).getValue();
-        if (i >= getNumTokens()) {
-          // We've reached the end of the document
-          return Collections.emptyList();
-        }
-        List<Pair<HypEdge, Adjoints>> newHyps = new ArrayList<>();
-        HypNode ipp = u.lookupNode(tokenIndex, i+1, true);
-        for (IdxHypNode t : nerTagValues) {
-          for (IdxHypNode b : bioluValues) {    // TODO Check previous tag to see what tags are allowable
-            HypEdge newE = u.makeEdge(ner3, ipp, t, b);
-            AveragedPerceptronWeights w = theta[t.getIndex()][b.getIndex()];
-            int[] f = features(i+1);
-            boolean reindex = true;
-            Adjoints score = w.score(f, reindex);
-
-            // Get these scores above 0 to get them selected
-            score = Adjoints.sum(score, Adjoints.Constant.ONE);
-
-            newHyps.add(new Pair<>(newE, score));
-          }
-        }
-        return newHyps;
-      }
-    });
+    if (true)
+      throw new RuntimeException("fixme");
+//    u.addTransitionGenerator(newNerLabel, new TransitionGenerator() {
+//      @Override
+//      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
+//        HypEdge e = lhsValues.getBoundEdge(0);
+//        assert e.getRelation() == ner3;
+//        assert e.getTail(0).getNodeType() == tokenIndex;
+//        int i = (Integer) e.getTail(0).getValue();
+//        if (i >= getNumTokens()) {
+//          // We've reached the end of the document
+//          return Collections.emptyList();
+//        }
+//        List<Pair<HypEdge, Adjoints>> newHyps = new ArrayList<>();
+//        HypNode ipp = u.lookupNode(tokenIndex, i+1, true);
+//        for (IdxHypNode t : nerTagValues) {
+//          for (IdxHypNode b : bioluValues) {    // TODO Check previous tag to see what tags are allowable
+//            HypEdge newE = u.makeEdge(ner3, ipp, t, b);
+//            AveragedPerceptronWeights w = theta[t.getIndex()][b.getIndex()];
+//            int[] f = features(i+1);
+//            boolean reindex = true;
+//            Adjoints score = w.score(f, reindex);
+//
+//            // Get these scores above 0 to get them selected
+//            score = Adjoints.sum(score, Adjoints.Constant.ONE);
+//
+//            newHyps.add(new Pair<>(newE, score));
+//          }
+//        }
+//        return newHyps;
+//      }
+//    });
 
     // ner3(i,*,*) => !ner(j,*,*) for i!=j
+    if (true)
+      throw new RuntimeException("fixme");
     boolean hard = true;
-    u.addGlobalFactor(newNerLabel, new AtMost1.RelNode1(ner3, hard, gtt -> {
-        HypEdge e = gtt.getBoundEdge(0);
-        assert e.getRelation() == ner3;
-        HypNode i = e.getTail(0);
-        assert i.getNodeType() == tokenIndex;
-        return i;
-    }, "index"));
+//    u.addGlobalFactor(newNerLabel, new AtMost1.RelNode1(ner3, hard, gtt -> {
+//        HypEdge e = gtt.getBoundEdge(0);
+//        assert e.getRelation() == ner3;
+//        HypNode i = e.getTail(0);
+//        assert i.getNodeType() == tokenIndex;
+//        return i;
+//    }, "index"));
 
     // Supervision
     if (supervised) {

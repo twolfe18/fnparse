@@ -24,12 +24,17 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.Agenda.LabledAgendaItem;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
-import edu.jhu.hlt.uberts.TNode.TKey;
+import edu.jhu.hlt.uberts.TNode.TVal;
+import edu.jhu.hlt.uberts.auto.Rule;
+import edu.jhu.hlt.uberts.auto.Term;
+import edu.jhu.hlt.uberts.auto.Trigger;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
+import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
-import edu.jhu.hlt.uberts.transition.TransitionGenerator;
+import edu.jhu.hlt.uberts.rules.Env.Trie3;
+import edu.jhu.hlt.uberts.transition.TransGen;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.HPair;
@@ -40,7 +45,7 @@ import edu.jhu.util.HPair;
  * lattice.
  *
  * Remember:
- * {@link TransitionGenerator} => local features
+ * {@link TransGen} => local features
  * {@link GlobalFactor} => global features and hard constraints
  *
  * @author travis
@@ -56,7 +61,38 @@ public class Uberts {
 
   private State state;
   private Agenda agenda;
-  private TNode trie;     // stores graph fragments used to match TransitionGenerators and GlobalFactors
+
+  // TNode holds TransGen (which holds LocalFeatures) and GlobalFactors
+//  private TNode trie;     // stores graph fragments used to match TransitionGenerators and GlobalFactors
+  private Trie3<TVal> trie3;  // Replacement!
+//  private Map<Rule, LocalFactor> localFactors;
+//  private Map<TermArray, TransGen> transitionGenerators;
+//  private Map<TermArray, GlobalFactor> globalFactors;
+  // Trie3.match takes Consumer<Match>
+  // Match has a Rule/Term[]/trigger
+  // TODO change Term[] to something hashable
+
+  // All of these are co-indexed
+  private Trigger[] triggers;     // first numTriggers values are non-null
+  private TransGen[] transitionGenrators; // may contain nulls
+  private GlobalFactor[] globalFactors;   // may contain nulls
+  private int numTriggers;
+
+  // What happens if we have multiple factors with the same trigger?
+  // Every time you add a Trigger->TG|GF, then we check if its a new trigger.
+  // If no, then we merge the TG|GF (they must be "summable/mergable").
+
+
+  // NOW:
+  // Trie3's responsibility is to take (State,HypEdge) -> Term[]/HypEdge[]
+  // TG/GF's responsibility is to take Term[]/HypEdge[] -> Uberts side effects
+  // addTG(Term[] trigger, TransGen)
+  // addGF(Term[] trigger, GF)
+
+  // Backwards compatibility:
+  // none, benchmark TNode vs Trie3 separately
+
+
   private Random rand;
   private MultiTimer timer;
 
@@ -140,9 +176,17 @@ public class Uberts {
     this.relations = new HashMap<>();
     this.agenda = new Agenda(agendaPriority);
     this.state = new State.Split();
-    this.trie = new TNode(null, null);
+//    this.trie = new TNode(null, null);
+    this.trie3 = Trie3.makeRoot();
     this.nodes = new HashMap<>();
     this.nodeTypes = new HashMap<>();
+
+    this.trie3 = Trie3.makeRoot();
+    int n = 16;
+    this.triggers = new Trigger[n];
+    this.transitionGenrators = new TransGen[n];
+    this.globalFactors = new GlobalFactor[n];
+    this.numTriggers = 0;
 
     this.timer = new MultiTimer();
     this.timer.put(REC_ORACLE_TRAJ, new Timer(REC_ORACLE_TRAJ, 30, true));
@@ -711,9 +755,10 @@ public class Uberts {
   public Agenda getAgenda() {
     return agenda;
   }
-  public TNode getGraphFragments() {
-    return trie;
-  }
+//  public TNode getGraphFragments() {
+////    return trie;
+//    throw new RuntimeException("leaky abstraction!");
+//  }
 
   public static String stripComment(String line) {
     int c = line.indexOf('#');
@@ -731,11 +776,14 @@ public class Uberts {
   }
 
   public List<Relation> readRelData(File f) throws IOException {
+    return readRelData(f, true);
+  }
+  public List<Relation> readRelData(File f, boolean noMatch) throws IOException {
     if (!f.isFile())
       throw new IllegalArgumentException("not a file: " + f.getPath());
     Log.info("reading rel data from: " + f.getPath());
     try (BufferedReader r = FileUtil.getReader(f)) {
-      return readRelData(r);
+      return readRelData(r, noMatch);
     }
   }
 
@@ -749,9 +797,12 @@ public class Uberts {
    * @return a list of new {@link Relation}s defined in this file/reader.
    */
   public List<Relation> readRelData(BufferedReader r) throws IOException  {
+    return readRelData(r, true);
+  }
+  public List<Relation> readRelData(BufferedReader r, boolean noMatch) throws IOException  {
     List<Relation> defs = new ArrayList<>();
     for (String line = r.readLine(); line != null; line = r.readLine()) { 
-      Relation rr = readRelData(line);
+      Relation rr = readRelData(line, noMatch);
       if (rr != null)
         defs.add(rr);
     }
@@ -759,6 +810,9 @@ public class Uberts {
   }
 
   public Relation readRelData(String line) {
+    return readRelData(line, false);
+  }
+  public Relation readRelData(String line, boolean noMatch) {
     String relName;
     Relation def = null;
     line = stripComment(line);
@@ -796,10 +850,14 @@ public class Uberts {
       HypEdge e = this.makeEdge(rel, args);
       if (command.equals("schema"))
         e = new HypEdge.WithProps(e, HypEdge.IS_SCHEMA);
-      if (command.equals("y"))
+      if (command.equals("y")) {
         this.addLabel(e);
-      else
-        this.addEdgeToState(e, Adjoints.Constant.ZERO);
+      } else {
+        if (noMatch)
+          this.addEdgeToStateNoMatch(e, Adjoints.Constant.ZERO);
+        else
+          this.addEdgeToState(e, Adjoints.Constant.ZERO);
+      }
       break;
     default:
       throw new RuntimeException("unknown-command: " + command);
@@ -850,34 +908,60 @@ public class Uberts {
     return nt;
   }
 
-  public TNode addGlobalFactor(TKey[] lhs, GlobalFactor gf) {
+  public void addGlobalFactor(Term[] terms, GlobalFactor gf) {
     if (DEBUG > 0)
-      Log.info("adding " + Arrays.toString(lhs) + " => " + gf);
-    TNode n = trie.lookup(lhs, true);
-    n.getValue().u = this;
-    if (n.getValue().gf != null)
-      gf = new GlobalFactor.Composite(gf, n.getValue().gf);
-    n.getValue().gf = gf;
-    return n;
+      Log.info("adding " + Arrays.toString(terms) + " => " + gf);
+    Trigger trigger = lookupTrigger(terms);
+    int i = trigger.getIndex();
+    if (globalFactors[i] == null)
+      globalFactors[i] = gf;
+    else
+      globalFactors[i] = new GlobalFactor.Composite(globalFactors[i], gf);
   }
 
-  public TNode addTransitionGenerator(Pair<List<TKey>, ? extends TransitionGenerator> p) {
-    return addTransitionGenerator(p.get1(), p.get2());
+  public Trigger lookupTrigger(Term[] terms) {
+    if (DEBUG > 0)
+      Log.info("terms=" + Arrays.toString(terms));
+    Trigger t = new Trigger(terms, numTriggers);
+    for (int i = 0; i < numTriggers; i++) {
+      if (t.equivalent(triggers[i])) {
+        if (DEBUG > 0)
+          Log.info("equivalent triggers: " + t + " and " + triggers[i]);
+        return triggers[i];
+      }
+    }
+    if (numTriggers == triggers.length)
+      growTriggers();
+    trie3.add(t);
+    triggers[t.getIndex()] = t;
+    numTriggers++;
+    return t;
   }
-  public TNode addTransitionGenerator(List<TKey> lhs, TransitionGenerator tg) {
-    TKey[] lhsA = new TKey[lhs.size()];
-    for (int i = 0; i < lhsA.length; i++)
-      lhsA[i] = lhs.get(i);
-    return addTransitionGenerator(lhsA, tg);
+
+  private void growTriggers() {
+    int newLength = (int) (1.6 * triggers.length + 1);
+    triggers = Arrays.copyOf(triggers, newLength);
+    globalFactors = Arrays.copyOf(globalFactors, newLength);
+    transitionGenrators = Arrays.copyOf(transitionGenrators, newLength);
   }
-  public TNode addTransitionGenerator(TKey[] lhs, TransitionGenerator tg) {
-    TNode n = trie.lookup(lhs, true);
-    n.getValue().u = this;
-    if (n.getValue().tg != null)
-      tg = new TransitionGenerator.Composite(tg, n.getValue().tg);
-    n.getValue().tg = tg;
-    return n;
+
+  public void addTransitionGenerator(Rule r, LocalFactor s) {
+    Trigger t = lookupTrigger(r.lhs);
+    addTransitionGenerator(t, new TransGen.Regular(r, s));
   }
+  public void addTransitionGenerator(Term[] t, TransGen tg) {
+    addTransitionGenerator(lookupTrigger(t), tg);
+  }
+  public void addTransitionGenerator(Trigger t, TransGen tg) {
+    if (DEBUG > 0)
+      Log.info("adding " + tg);
+    int i = t.getIndex();
+    if (transitionGenrators[i] == null)
+      transitionGenrators[i] = tg;
+    else
+      transitionGenrators[i] = new TransGen.Composite(transitionGenrators[i], tg);
+  }
+
 
   private boolean nodesContains(HypNode n) {
 //    HypNode n2 = nodes.get(new Pair<>(n.getNodeType(), n.getValue()));
@@ -900,10 +984,11 @@ public class Uberts {
     return true;
   }
 
-  public void addEdgeToState(AgendaItem ai) {
+  public AgendaItem addEdgeToState(AgendaItem ai) {
     addEdgeToState(ai.edge, ai.score);
+    return ai;
   }
-  public void addEdgeToState(HypEdge e, Adjoints score) {
+  public HypEdge addEdgeToState(HypEdge e, Adjoints score) {
     if (DEBUG > 1)
       System.out.println("Uberts addEdgeToState: " + e.toString() + " " + score.forwards() + " " + score);
     if (stats != null) {
@@ -912,7 +997,19 @@ public class Uberts {
     }
     assert nodesContains(e);
     state.add(e, score);
-    TNode.match(this, e, trie);
+    trie3.match(state, e, m -> {
+      Trigger t = m.getTrigger();
+      int ti = t.getIndex();
+      HypEdge[] values = m.getValues();
+      if (globalFactors[ti] != null)
+        globalFactors[ti].rescore3(agenda, state, values);
+      if (transitionGenrators[ti] != null) {
+        List<Pair<HypEdge, Adjoints>> edges = transitionGenrators[ti].match(values, this);
+        for (Pair<HypEdge, Adjoints> se : edges)
+          addEdgeToAgenda(se);
+      }
+    });
+    return e;
   }
 
   /**

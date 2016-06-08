@@ -25,6 +25,7 @@ import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 
@@ -411,8 +412,19 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
   @Override
   public void rescore(Agenda a, GraphTraversalTrace match) {
-    nRescore++;
     HypEdge srl4Fact = match.getBoundEdge(0);
+    metaRescore(a, srl4Fact);
+  }
+
+  @Override
+  public void rescore3(Agenda a, State s, HypEdge[] trigger) {
+    assert trigger.length == 1;
+    HypEdge srl4Fact = trigger[0];
+    metaRescore(a, srl4Fact);
+  }
+
+  private void metaRescore(Agenda a, HypEdge srl4Fact) {
+    nRescore++;
     HypNode t = srl4Fact.getTail(aggregateArgPos);
     Iterable<HypEdge> affected = a.match(aggregateArgPos, firesFor, t);
 
@@ -480,6 +492,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     if (l.size() > k)
       l = l.subList(0, k);
     return l;
+  }
+
+  public Term[] getTrigger2() {
+    return new Term[] { Term.uniqArguments(firesFor) };
   }
 
   public TKey[] getTrigger(Uberts u) {
@@ -640,4 +656,5 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       aFromTheta.backwards(dErr_dForwards);
     }
   }
+
 }

@@ -26,7 +26,6 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
-import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.data.BrownClusters;
@@ -37,8 +36,6 @@ import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Step;
-import edu.jhu.hlt.uberts.TNode;
-import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
@@ -197,39 +194,42 @@ public abstract class UbertsPipeline {
       assert lt.allArgsAreTyped();
 
     rules.add(r);
-
     LocalFactor phi = getScoreFor(r);
-    // Add to Uberts as a TransitionGenerator
-    // Create all orderings of this rule
-    for (Rule rr : Rule.allLhsOrders(r)) {
+    u.addTransitionGenerator(r, phi);
 
-      Relation f = rr.lhs[0].rel;
-      if (helperRelations.contains(f)) {
-        if (DEBUG > 0)
-          Log.info("[main] not adding this rule since first Functor is schema type: " + rr);
-        continue;
-      }
-
-      if (f != doneAnnoRel && !rhsOfRules.contains(f)) {
-        if (DEBUG > 0)
-          Log.info("[main] not adding this rule since first functor is not a RHS of another rule and its not doneAnno either: " + rr);
-        continue;
-      }
-
-      TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
-      Pair<List<TKey>, TG> tg = tgfp.parse2(rr, u);
-
-      if (DEBUG > 0) {
-        Log.info("[main] adding: " + rr);
-        if (DEBUG > 1)
-          System.out.println(StringUtils.join("\n", tg.get1()));
-      }
-
-      tg.get2().feats = phi;
-      transitionGenerators.add(tg.get2());
-      TNode tnode = u.addTransitionGenerator(tg.get1(), tg.get2());
-      tnode.getValue().r = rr;
-    }
+//    // Add to Uberts as a TransitionGenerator
+//    // Create all orderings of this rule
+//    for (Rule rr : Rule.allLhsOrders(r)) {
+//
+//      Relation f = rr.lhs[0].rel;
+//      if (helperRelations.contains(f)) {
+//        if (DEBUG > 0)
+//          Log.info("[main] not adding this rule since first Functor is schema type: " + rr);
+//        continue;
+//      }
+//
+//      if (f != doneAnnoRel && !rhsOfRules.contains(f)) {
+//        if (DEBUG > 0)
+//          Log.info("[main] not adding this rule since first functor is not a RHS of another rule and its not doneAnno either: " + rr);
+//        continue;
+//      }
+//
+//      TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
+//      Pair<List<TKey>, TG> tg = tgfp.parse2(rr, u);
+//
+//      if (DEBUG > 0) {
+//        Log.info("[main] adding: " + rr);
+//        if (DEBUG > 1)
+//          System.out.println(StringUtils.join("\n", tg.get1()));
+//      }
+//
+//      tg.get2().feats = phi;
+//      transitionGenerators.add(tg.get2());
+//      u.addTransitionGenerator(tg.get1(), tg.get2());
+////      TNode tnode = u.addTransitionGenerator(tg.get1(), tg.get2());
+////      tnode.getValue().r = rr;
+//      throw new RuntimeException("add back the ability to set the rule to rr!");
+//    }
   }
 
   public List<Relation> getHelperRelations() {

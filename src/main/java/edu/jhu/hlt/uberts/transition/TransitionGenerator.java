@@ -13,6 +13,8 @@ import edu.stanford.nlp.util.Iterables;
  * that will be added to the {@link Agenda}.
  *
  * @author travis
+ *
+ * @deprecated See {@link TransGen} instead.
  */
 public interface TransitionGenerator {
   Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues);

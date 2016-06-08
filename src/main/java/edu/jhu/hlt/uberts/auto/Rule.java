@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
@@ -39,6 +40,33 @@ public class Rule {
   // lhs2rhs[1][0] = 0, second occurrence of t in lhs => location of t in rhs
   int[][] lhs2rhs;    // [termIdx][argIdx] => location in rhs.args, or -1 if not in rhs.
   int[] lhsFact2rhs;  // [termIdx] => location in rhs.args, or -1 if the fact/witness/event variable is not used in rhs.
+
+  // Indexed by argument position in the RHS Term.
+  // Value is the (termIdx,argIdx) of a LHS variable with the same name as the RHS arg in the key.
+  private IntPair[] rhsArg2LhsTermArg;
+  public IntPair getBindingOfRhsArg(int argPos) {
+    assert argPos >= 0 && argPos < rhs.getNumArgs();
+    if (rhsArg2LhsTermArg == null) {
+      rhsArg2LhsTermArg = new IntPair[rhs.getNumArgs()];
+      outer:
+      for (int i = 0; i < rhsArg2LhsTermArg.length; i++) {
+        String varName = rhs.getArgName(i);
+        // Find where this variable is bound
+        for (int termIdx = 0; termIdx < lhs.length; termIdx++) {
+          Term lt = lhs[termIdx];
+          for (int argIdx = 0; argIdx < lt.getNumArgs(); argIdx++) {
+            if (varName.equals(lt.getArgName(argIdx))) {
+              assert lt.getArgType(argIdx) == rhs.getArgType(i);
+              rhsArg2LhsTermArg[i] = new IntPair(termIdx, argIdx);
+              continue outer;
+            }
+          }
+        }
+        throw new RuntimeException("unbound RHS argument: " + varName + " in " + rhs + " in " + this);
+      }
+    }
+    return rhsArg2LhsTermArg[argPos];
+  }
 
   public String comment;
 

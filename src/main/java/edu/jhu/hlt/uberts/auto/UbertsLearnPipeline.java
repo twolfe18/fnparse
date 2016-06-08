@@ -354,7 +354,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       p.storeExactFeatureIndices();
       if (enableGlobalFactors) {
         globalFactors.add(p);
-        u.addGlobalFactor(p.getTrigger(u), p);
+        u.addGlobalFactor(p.getTrigger2(), p);
       }
     }
 
@@ -371,7 +371,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 2, 1, u);
       a.storeExactFeatureIndices();
       globalFactors.add(a);
-      u.addGlobalFactor(a.getTrigger(u), a);
+      u.addGlobalFactor(a.getTrigger2(), a);
     }
 
     if (srl2ByArg && enableGlobalFactors && !skipSrlFilterStages) {
@@ -379,28 +379,28 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 1, -1, u);
       a.storeExactFeatureIndices();
       globalFactors.add(a);
-      u.addGlobalFactor(a.getTrigger(u), a);
+      u.addGlobalFactor(a.getTrigger2(), a);
     }
 
     if (enableGlobalFactors) {
       numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, u);
       numArgsArg4.storeExactFeatureIndices();
       globalFactors.add(numArgsArg4);
-      u.addGlobalFactor(numArgsArg4.getTrigger(u), numArgsArg4);
+      u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
     }
 
     if (enableGlobalFactors && !skipSrlFilterStages) {
       numArgsArg3 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl3"), 0, -1, u);
       numArgsArg3.storeExactFeatureIndices();
       globalFactors.add(numArgsArg3);
-      u.addGlobalFactor(numArgsArg3.getTrigger(u), numArgsArg3);
+      u.addGlobalFactor(numArgsArg3.getTrigger2(), numArgsArg3);
     }
 
     if (enableGlobalFactors && !skipSrlFilterStages) {
       numArgsArg2 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 0, -1, u);
       numArgsArg2.storeExactFeatureIndices();
       globalFactors.add(numArgsArg2);
-      u.addGlobalFactor(numArgsArg2.getTrigger(u), numArgsArg2);
+      u.addGlobalFactor(numArgsArg2.getTrigger2(), numArgsArg2);
     }
   }
 

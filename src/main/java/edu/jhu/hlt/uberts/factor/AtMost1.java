@@ -12,7 +12,7 @@ import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
-import edu.jhu.hlt.uberts.TNode.TKey;
+import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.hlt.uberts.Uberts;
 
 /**
@@ -47,9 +47,10 @@ public class AtMost1 {
           + rel.getTypeForArg(mutexArg).getName() + " hard=" + hard);
     }
     assert mutexArg >= 0 && mutexArg < rel.getNumArgs();
-    TKey[] lhs = new TKey[] {
-        new TKey(State.HEAD_ARG_POS, rel),
-    };
+//    TKey[] lhs = new TKey[] {
+//        new TKey(State.HEAD_ARG_POS, rel),
+//    };
+    Term[] lhs = new Term[] { Term.uniqArguments(rel) };
     GlobalFactor gf = new AtMost1.RelNode1(rel, hard, gtt -> {
       HypEdge pred2Fact = gtt.getBoundEdge(0);
       HypNode t = pred2Fact.getTail(mutexArg);
@@ -111,8 +112,22 @@ public class AtMost1 {
       }
     }
 
+    @Override
     public void rescore(Agenda a, GraphTraversalTrace match) {
       HypNode observedValue = getBoundNode.apply(match);
+      metaRescore(a, observedValue);
+    }
+
+    @Override
+    public void rescore3(Agenda a, State s, HypEdge[] trigger) {
+//      assert trigger.length == 1;
+//      HypEdge e = trigger[0];
+//      HypNode observedValue = e.getTail(i)
+//      metaRescore(a, observedValue);
+      throw new RuntimeException("update this, remove getBoundNode:GraphTraversalTrace->HypNode");
+    }
+
+    public void metaRescore(Agenda a, HypNode observedValue) {
       if (DEBUG > 1)
         Log.info("removing all edges adjacent to " + observedValue + " matching " + relationMatch + " from agenda");
       nRescore++;
@@ -200,6 +215,16 @@ public class AtMost1 {
       this.boundNode1Name = boundNode1Name;
       this.boundNode2Name = boundNode2Name;
     }
+
+    @Override
+    public void rescore3(Agenda a, State s, HypEdge[] trigger) {
+//      assert trigger.length == 1;
+//      HypEdge e = trigger[0];
+//      HypNode observedValue = e.getTail(i)
+//      metaRescore(a, observedValue);
+      throw new RuntimeException("update this, remove getBoundNode:GraphTraversalTrace->HypNode");
+    }
+
     @Override
     public void rescore(Agenda a, GraphTraversalTrace match) {
       nRescore++;
