@@ -46,26 +46,33 @@ public class Rule {
   private IntPair[] rhsArg2LhsTermArg;
   public IntPair getBindingOfRhsArg(int argPos) {
     assert argPos >= 0 && argPos < rhs.getNumArgs();
-    if (rhsArg2LhsTermArg == null) {
-      rhsArg2LhsTermArg = new IntPair[rhs.getNumArgs()];
-      outer:
-      for (int i = 0; i < rhsArg2LhsTermArg.length; i++) {
-        String varName = rhs.getArgName(i);
-        // Find where this variable is bound
-        for (int termIdx = 0; termIdx < lhs.length; termIdx++) {
-          Term lt = lhs[termIdx];
-          for (int argIdx = 0; argIdx < lt.getNumArgs(); argIdx++) {
-            if (varName.equals(lt.getArgName(argIdx))) {
-              assert lt.getArgType(argIdx) == rhs.getArgType(i);
-              rhsArg2LhsTermArg[i] = new IntPair(termIdx, argIdx);
-              continue outer;
-            }
+    if (rhsArg2LhsTermArg == null)
+      buildRhsArg2LhsBindings();
+    return rhsArg2LhsTermArg[argPos];
+  }
+
+  /**
+   * Ensures that all variables used on the RHS appear on the LHS, and builds
+   * a data structure mapping out these bindings.
+   */
+  public void buildRhsArg2LhsBindings() {
+    rhsArg2LhsTermArg = new IntPair[rhs.getNumArgs()];
+    outer:
+    for (int i = 0; i < rhsArg2LhsTermArg.length; i++) {
+      String varName = rhs.getArgName(i);
+      // Find where this variable is bound
+      for (int termIdx = 0; termIdx < lhs.length; termIdx++) {
+        Term lt = lhs[termIdx];
+        for (int argIdx = 0; argIdx < lt.getNumArgs(); argIdx++) {
+          if (varName.equals(lt.getArgName(argIdx))) {
+            assert lt.getArgType(argIdx) == rhs.getArgType(i);
+            rhsArg2LhsTermArg[i] = new IntPair(termIdx, argIdx);
+            continue outer;
           }
         }
-        throw new RuntimeException("unbound RHS argument: " + varName + " in " + rhs + " in " + this);
       }
+      throw new RuntimeException("unbound RHS argument: " + varName + " in " + rhs + " in " + this);
     }
-    return rhsArg2LhsTermArg[argPos];
   }
 
   public String comment;

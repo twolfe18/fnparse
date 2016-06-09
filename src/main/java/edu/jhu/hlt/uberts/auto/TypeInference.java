@@ -225,6 +225,10 @@ public class TypeInference {
   }
 
   public void add(Rule untypedRule) {
+
+    // Check that all RHS vars are bound on the LHS
+    untypedRule.buildRhsArg2LhsBindings();
+
     if (!seenRHS.add(untypedRule.rhs.relName)) {
       // TODO This is going to cause problems:
       // I currently do:
