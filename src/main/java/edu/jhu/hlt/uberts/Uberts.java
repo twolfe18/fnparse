@@ -24,7 +24,6 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.Agenda.LabledAgendaItem;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
-import edu.jhu.hlt.uberts.TNode.TVal;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.hlt.uberts.auto.Trigger;
@@ -63,14 +62,7 @@ public class Uberts {
   private Agenda agenda;
 
   // TNode holds TransGen (which holds LocalFeatures) and GlobalFactors
-//  private TNode trie;     // stores graph fragments used to match TransitionGenerators and GlobalFactors
-  private Trie3<TVal> trie3;  // Replacement!
-//  private Map<Rule, LocalFactor> localFactors;
-//  private Map<TermArray, TransGen> transitionGenerators;
-//  private Map<TermArray, GlobalFactor> globalFactors;
-  // Trie3.match takes Consumer<Match>
-  // Match has a Rule/Term[]/trigger
-  // TODO change Term[] to something hashable
+  private Trie3 trie3;
 
   // All of these are co-indexed
   private Trigger[] triggers;     // first numTriggers values are non-null
@@ -81,17 +73,6 @@ public class Uberts {
   // What happens if we have multiple factors with the same trigger?
   // Every time you add a Trigger->TG|GF, then we check if its a new trigger.
   // If no, then we merge the TG|GF (they must be "summable/mergable").
-
-
-  // NOW:
-  // Trie3's responsibility is to take (State,HypEdge) -> Term[]/HypEdge[]
-  // TG/GF's responsibility is to take Term[]/HypEdge[] -> Uberts side effects
-  // addTG(Term[] trigger, TransGen)
-  // addGF(Term[] trigger, GF)
-
-  // Backwards compatibility:
-  // none, benchmark TNode vs Trie3 separately
-
 
   private Random rand;
   private MultiTimer timer;

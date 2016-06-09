@@ -134,7 +134,7 @@ public class Env {
    * @author travis
    * @param <T> is the type of the payload (what you can store at the accepting states).
    */
-  public static class Trie3<T> {
+  public static class Trie3 {
     // FOR DEBUGGING, null means don't track counts
     public static final Counts<String> EVENT_COUNTS = new Counts<>();
     private static void cnt(String msg) {
@@ -144,8 +144,8 @@ public class Env {
 
     public static final int DEBUG = 1;
 
-    private Trie3<T> root;
-    private Trie3<T> parent; // allows you to compute i from just R
+    private Trie3 root;
+    private Trie3 parent; // allows you to compute i from just R
 
     private Term term;            // Provides variable names
     private Relation rel;         // R (view on term)
@@ -160,25 +160,25 @@ public class Env {
     // Rule1 will require an Edge3 which checks equality for both {x,y}
     // Rule2 will only require an Edge3 to check {z} equality.
     // Both Rule1 and Rule2 will end up in a state where we have just bound a bar fact/HypEdge.
-    private Map<Relation, Trie3<T>> children;
+    private Map<Relation, Trie3> children;
 
     // Maps (R,i,a) <-> (ruleIdx,termIdx,argIdx)
     // Includes an (R,i,a) entry for every Trie3 node between this and ROOT.
     // ONLY NON-NULL AT ROOT. (Global mapping, not node-specific)
-    private RiaRtaBijection varMapping;
+    private Rta2Ria varMapping;
 
     // If non-null, this is an accepting state, and this is the completed rule.
     private Trigger complete;
 
-    public static <T> Trie3<T> makeRoot() {
-      return  new Trie3<>(null, -1, null, null);
+    public static Trie3 makeRoot() {
+      return  new Trie3(null, -1, null, null);
     }
 
-    public Trie3(Term t, int relOccurrence, Trigger completed, Trie3<T> parent) {
+    public Trie3(Term t, int relOccurrence, Trigger completed, Trie3 parent) {
       this.term = t;
       if (t == null) {
         // ROOT
-        this.varMapping = new RiaRtaBijection();
+        this.varMapping = new Rta2Ria();
         assert parent == null;
         this.root = this;
       } else {
@@ -201,7 +201,7 @@ public class Env {
      * contained in this trie.
      */
     public void match(State s, HypEdge lastFact, Consumer<Match> emit) {
-      Trie3<T> child = children.get(lastFact.getRelation());
+      Trie3 child = children.get(lastFact.getRelation());
       if (child != null) {
         Bindings b = new Bindings(s);
         b.add(lastFact);
@@ -229,7 +229,7 @@ public class Env {
         for (HypEdge fact : e.satisfy(b)) {
           cnt("match/fact");
           b.add(fact);
-          Trie3<T> child = children.get(fact.getRelation());
+          Trie3 child = children.get(fact.getRelation());
           child.match(s, b, emit);
           b.remove(fact);
         }
@@ -296,12 +296,12 @@ public class Env {
       for (int i = 0; i < n; i++) {
         lhsCovered.set(i, true);
         Term l = trigger.get(i);
-        Trie3<T> child = children.get(l.rel);
+        Trie3 child = children.get(l.rel);
         if (child == null) {
           if (trigger.length() == 1)
-            child = new Trie3<>(l, 0, trigger, this);
+            child = new Trie3(l, 0, trigger, this);
           else
-            child = new Trie3<>(l, 0, null, this);
+            child = new Trie3(l, 0, null, this);
           children.put(l.rel, child);
         }
 
@@ -311,7 +311,7 @@ public class Env {
           Arg ria = new Arg(l.rel, 0, argIdx);
           IntTrip rta = new IntTrip(trigger.getIndex(), i, argIdx);
           // Update (R,i,a) <-> (r,t,a) bijection
-          if (DEBUG > 0) {
+          if (DEBUG > 1) {
             Log.info("adding varMapping: trigger=" + trigger + " ria=" + ria + " rta=" + rta);
           }
           root.varMapping.add(ria, rta);
@@ -336,17 +336,17 @@ public class Env {
       Term nextLhsTerm = trigger.get(nextLhsTermIdx);
 
       int nextLhsTermRelOccurrence = 0;
-      for (Trie3<T> cur = this; cur != null; cur = cur.parent)
+      for (Trie3 cur = this; cur != null; cur = cur.parent)
         if (nextLhsTerm.rel.equals(cur.rel))
           nextLhsTermRelOccurrence++;
 
       // Make child, will add later
-      Trie3<T> c = children.get(nextLhsTerm.rel);
+      Trie3 c = children.get(nextLhsTerm.rel);
       if (c == null) {
         Trigger complete = null;
         if (lhsCovered.cardinality()+1 == trigger.length())
           complete = trigger;
-        c = new Trie3<>(nextLhsTerm, nextLhsTermRelOccurrence, complete, this);
+        c = new Trie3(nextLhsTerm, nextLhsTermRelOccurrence, complete, this);
         children.put(nextLhsTerm.rel, c);
       }
 
@@ -426,7 +426,7 @@ public class Env {
      */
     private Arg findParentWhoDefines(Arg a) {
       String argName = term.getArgName(a.argPos);
-      for (Trie3<T> cur = parent; cur != null; cur = cur.parent) {
+      for (Trie3 cur = parent; cur != null; cur = cur.parent) {
         Term t = cur.term;
         if (t == null) {
           assert cur.parent == null;  // ROOT
@@ -440,45 +440,25 @@ public class Env {
     }
   }
 
-  public static class RiaRtaBijection {
-    private Map<Arg, IntTrip> ria2rta;
-    private Map<IntTrip, Arg> rta2ria;
-    private Map<IntPair, Ri> rt2ri;
-    private Map<Ri, IntPair> ri2rt;
-    public RiaRtaBijection() {
-      ria2rta = new HashMap<>();
-      rta2ria = new HashMap<>();
-      rt2ri = new HashMap<>();
-      ri2rt = new HashMap<>();
+  public static class Rta2Ria {
+    private Ri[][] rt2ri;
+    private Arg[][][] rta2ria;
+    public Rta2Ria() {
+      int maxRules = 32;
+      int maxTermsInRule = 16;
+      int maxArgsInTerm = 16;
+      rt2ri = new Ri[maxRules][maxTermsInRule];
+      rta2ria = new Arg[maxRules][maxTermsInRule][maxArgsInTerm];
     }
     public void add(Arg ria, IntTrip rta) {
-      Object old;
-      old = ria2rta.put(ria, rta);
-      if (old != null && !old.equals(rta))
-        throw new RuntimeException("key=" + ria + " old=" + old + " new=" + rta);
-      old = rta2ria.put(rta, ria);
-      if (old != null && !old.equals(ria))
-        throw new RuntimeException("key=" + ria + " old=" + old + " new=" + rta);
-      Ri ri = new Ri(ria.r, ria.rOccurrence);
-      IntPair rt = new IntPair(rta.first, rta.second);
-      old = ri2rt.put(ri, rt);
-      if (old != null && !old.equals(rt))
-        throw new RuntimeException();
-      old = rt2ri.put(rt, ri);
-      if (old != null && !old.equals(ri))
-        throw new RuntimeException();
+      rt2ri[rta.first][rta.second] = new Ri(ria.r, ria.rOccurrence);
+      rta2ria[rta.first][rta.second][rta.third] = ria;
     }
     public Arg get(IntTrip rta) {
-      return rta2ria.get(rta);
-    }
-    public IntTrip get(Arg ria) {
-      return ria2rta.get(ria);
+      return rta2ria[rta.first][rta.second][rta.third];
     }
     public Ri get(IntPair rt) {
-      return rt2ri.get(rt);
-    }
-    public IntPair get(Ri ri) {
-      return ri2rt.get(ri);
+      return rt2ri[rt.first][rt.second];
     }
   }
 

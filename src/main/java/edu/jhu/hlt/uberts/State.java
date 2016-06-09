@@ -136,13 +136,13 @@ public class State {
       }
     }
     @Override
-    public void add(HypEdge e, Adjoints score) {
+    public HypEdge add(HypEdge e, Adjoints score) {
       if (e instanceof HypEdge.WithProps
           && ((HypEdge.WithProps) e).hasProperty(HypEdge.IS_SCHEMA)) {
         assert ownSchemaEdges;
-        schemaEdges.add(e, score);
+        return schemaEdges.add(e, score);
       } else {
-        regularEdges.add(e, score);
+        return regularEdges.add(e, score);
       }
     }
     /** May return null */
@@ -335,14 +335,15 @@ public class State {
     return scores.get(e);
   }
 
-  public void add(HypEdge e, Adjoints score) {
+  /** returns the edge if it was added, or null if not */
+  public HypEdge add(HypEdge e, Adjoints score) {
 
     HashableHypEdge hhe = new HashableHypEdge(e);
     Adjoints old = scores.put(hhe, Adjoints.cacheIfNeeded(score));
     if (old != null) {
 //      throw new RuntimeException("two scores for " + e + " first=" + old + " second=" + score);
       Log.warn("two scores for " + e + " first=" + old + " second=" + score);
-      return;
+      return null;
     }
 
     edges.add(e);
@@ -364,6 +365,7 @@ public class State {
       }
       System.out.println();
     }
+    return e;
   }
 
   @SuppressWarnings("unchecked")

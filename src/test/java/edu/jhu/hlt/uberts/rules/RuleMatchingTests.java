@@ -5,9 +5,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-import org.junit.Before;
 import org.junit.Test;
 
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -17,6 +17,7 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser;
 import edu.jhu.hlt.uberts.auto.Trigger;
+import edu.jhu.hlt.uberts.auto.TypeInference;
 import edu.jhu.hlt.uberts.auto.UbertsPipeline;
 import edu.jhu.hlt.uberts.rules.Env.Trie3;
 
@@ -70,11 +71,11 @@ public class RuleMatchingTests {
     String rs = StringUtils.join(" & ", lhs) + " => " + rhs;
     Rule rule = Rule.parseRule(rs, u);
 
-    Trie3<String> t = Trie3.makeRoot();
+    Trie3 t = Trie3.makeRoot();
     t.add(new Trigger(rule.lhs, 0));
 
-    HypEdge last = addJohnLovesMary();
-    last = u.addEdgeToState(u.dbgMakeEdge("doneAnno(test0)"), Adjoints.Constant.ZERO);
+    addJohnLovesMary();
+    HypEdge last = u.addEdgeToState(u.dbgMakeEdge("doneAnno(test0)"), Adjoints.Constant.ZERO);
 
     State s = u.getState();
     t.match(s, last, m -> {
@@ -85,7 +86,48 @@ public class RuleMatchingTests {
 
   @Test
   public void test1() {
-    String r1 = "foo(x,y) & bar(y) => baz(x)";
-    String r2 = "bar(z) & baz(z) => quuz(z)";
+    System.out.println();
+    Log.info("starting...");
+
+    readSchemaData();
+    String rs1 = "doneAnno(docid) & pos2(i,p) & span-w1(t,i,j) => event1(t)";
+    String rs2 = "event1(t) & span-w1(t,i,j) & pos2(i,posFine) & lemma2(i,lemma)"
+        + " & coarsenPos2(posFine,posCoarse) & frameTriage4(lemma,posCoarse,synset,frame)"
+        + " => predicate2(t,frame)";
+//    String r1 = "foo(x,y) & bar(y) => baz(x)";
+//    String r2 = "bar(z) & baz(z) => quuz(z)";
+    Rule r1 = Rule.parseRule(rs1, u);
+    Rule r2 = Rule.parseRule(rs2, u);
+    TypeInference ti = new TypeInference(u);
+    ti.add(r1);
+    ti.add(r2);
+    List<Rule> typedRules = ti.runTypeInference();    // figure out types for event1(t)
+//    System.out.println(typedRules);
+    r1 = typedRules.get(0);
+    r2 = typedRules.get(1);
+    System.out.println(r1);
+    System.out.println(r2);
+
+    Trie3 t = Trie3.makeRoot();
+    System.out.println(Trie3.EVENT_COUNTS);
+    t.add(u.lookupTrigger(r1.lhs));
+    System.out.println(Trie3.EVENT_COUNTS);
+    t.add(u.lookupTrigger(r2.lhs));
+    System.out.println(Trie3.EVENT_COUNTS);
+
+    addJohnLovesMary();
+    HypEdge last = u.addEdgeToState(u.dbgMakeEdge("doneAnno(test0)"), Adjoints.Constant.ZERO);
+
+    State s = u.getState();
+    t.match(s, last, m -> {
+      System.out.println("[match] " + m);
+    });
+    System.out.println(Trie3.EVENT_COUNTS);
+
+    HypEdge ev1 = s.add(u.dbgMakeEdge("event1(1-2)"), Adjoints.Constant.ONE);
+    t.match(s, ev1, m -> {
+      System.out.println("[match after event1] " + m);
+    });
+    System.out.println(Trie3.EVENT_COUNTS);
   }
 }
