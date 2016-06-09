@@ -23,6 +23,7 @@ import edu.jhu.prim.vector.IntDoubleVector;
  */
 public class AveragedPerceptronWeights implements Serializable, ProductIndexWeights {
   private static final long serialVersionUID = 708063405325278777L;
+  public static int DEBUG = 1;
 
   public static int COUNTER_CONSTRUCT = 0;
   public static int COUNTER_FORWARDS = 0;
@@ -60,7 +61,10 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     this.dimension = dimension;
     this.numInterceptFeatures = numIntercept;
     this.passiveAgressive =
-        ExperimentProperties.getInstance().getBoolean("passiveAggressive", false);
+        ExperimentProperties.getInstance().getBoolean("passiveAggressive", true);
+    long b = (dimension * 2 * 8l) / (1l << 20);
+    if (DEBUG > 0)
+      Log.info("A dim=" + dimension + " nIntercept=" + numIntercept + " passiveAggressive=" + passiveAgressive + " size=" + b + " MB");
   }
 
   private AveragedPerceptronWeights(int dimension, int numIntercept, double c, boolean pa) {
@@ -68,6 +72,10 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     this.numInterceptFeatures = numIntercept;
     this.c = c;
     this.passiveAgressive = pa;
+    if (DEBUG > 1) {
+      long b = (dimension * 2 * 8l) / (1l << 20);
+      Log.info("B dim=" + dimension + " nIntercept=" + numIntercept + " passiveAggressive=" + passiveAgressive + " size=" + b + " MB");
+    }
   }
 
   public void gaussianFill(Random r) {

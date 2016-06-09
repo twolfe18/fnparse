@@ -228,7 +228,7 @@ public class TemplateTransformer {
     @Override
     public void run(File features) throws IOException {
 //      int hc = features.getPath().hashCode();
-      int hc = Hash.fileName(features);
+      int hc = (int) Hash.fileName(features);
       int fm = Math.floorMod(hc, numShards);
       Log.info("hc=" + hc + " fm=" + fm + " shard=" + shard + " numShards=" + numShards);
       assert fm >= 0 && fm < numShards;

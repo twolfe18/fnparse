@@ -74,6 +74,11 @@ public class Uberts {
   // Every time you add a Trigger->TG|GF, then we check if its a new trigger.
   // If no, then we merge the TG|GF (they must be "summable/mergable").
 
+  // Usually the decision function is score > 0, but for certain relations,
+  // e.g. predicate2(t,f) where we know there will be a predicate2 fact for
+  // every event1(t) fact, it may make more sense to lower the threshold.
+  private Map<Relation, Double> minScoreForPredict = new HashMap<>();
+
   private Random rand;
   private MultiTimer timer;
 
@@ -110,6 +115,13 @@ public class Uberts {
   /** @deprecated Switch to a pure State/graph-based representation! */
   public void setDocument(edu.jhu.hlt.tutils.Document doc) {
     this.doc = doc;
+  }
+
+  public void setMinScore(String relationName, double minScore) {
+    setMinScore(getEdgeType(relationName, false), minScore);
+  }
+  public void setMinScore(Relation r, double minScore) {
+    minScoreForPredict.put(r, minScore);
   }
 
   /**
@@ -197,10 +209,9 @@ public class Uberts {
    */
   public Pair<Labels.Perf, List<Step>> dbgRunInference(
       boolean oracle,
-      double minScore,
       int actionLimit) {
-    if (DEBUG > 0)
-      Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
+    if (DEBUG > 1)
+      Log.info("starting, oracle=" + oracle + " actionLimit=" + actionLimit);
     statsAgendaSizePerStep.clear();
 
     Labels.Perf perf = null;
@@ -217,7 +228,8 @@ public class Uberts {
 
       // Always record the action
       boolean hitLim = actionLimit > 0 && i >= actionLimit;
-      boolean pred = !hitLim && ai.score.forwards() > minScore;
+      double thresh = minScoreForPredict.getOrDefault(ai.edge.getRelation(), 0d);
+      boolean pred = !hitLim && ai.score.forwards() > thresh;
       steps.add(new Step(ai, y, pred));
 
       // But maybe don't add apply it (add it to state)
@@ -238,7 +250,7 @@ public class Uberts {
     return new Pair<>(perf, steps);
   }
   public Pair<Labels.Perf, List<Step>> dbgRunInference() {
-    return dbgRunInference(false, Double.NEGATIVE_INFINITY, 0);
+    return dbgRunInference(false, 0);
   }
 
   /**
@@ -471,8 +483,9 @@ public class Uberts {
 
       // Take an action
       AgendaItem ai = agenda.popBoth2();
+      double thresh = minScoreForPredict.getOrDefault(ai.edge.getRelation(), 0d);
       boolean y = getLabel(ai.edge);
-      boolean yhat = ai.score.forwards() > 0;
+      boolean yhat = ai.score.forwards() > thresh;
       if ((oracleRollIn && y) || (!oracleRollIn && yhat))
         addEdgeToState(ai);
     }

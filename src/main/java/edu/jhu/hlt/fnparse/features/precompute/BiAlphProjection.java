@@ -138,7 +138,7 @@ public class BiAlphProjection {
       });
 
       // Take your shard
-      List<File> filteredInputs = ShardUtils.shard(inputs, Hash::fileName, shard);
+      List<File> filteredInputs = ShardUtils.shard(inputs, f -> (int) Hash.fileName(f), shard);
       Log.info("filtered " + inputs.size() + " inputs down to " + filteredInputs.size());
       int i = 0;
       for (File f : filteredInputs) {

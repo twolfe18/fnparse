@@ -1,5 +1,6 @@
 package edu.jhu.hlt.uberts.features;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,6 +31,7 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
@@ -48,6 +50,7 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.UbertsPipeline;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
+import edu.jhu.prim.map.LongIntHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 
@@ -204,7 +207,7 @@ public class OldFeaturesWrapper {
       File ff = new File(dir, r.getName() + ".fs");
       if (!ff.isFile())
         throw new RuntimeException("not a file: " + ff.getPath());
-      int dim = config.getInt("hashDimension", 1 << 19);
+      int dim = 1 << config.getInt(r.getName() + ".hashBits", 22);
       Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
       return new Ints3(bft, r, ff, dim);
     }
@@ -213,18 +216,39 @@ public class OldFeaturesWrapper {
     private Relation rel;
     private AveragedPerceptronWeights theta;
     private boolean useAvg = false;
-//    private int dimension;
-//    private long nScore = 0, nScoreNoFeat = 0;
     private Counts<String> cnt = new Counts<>();
     private Timer timer;
+
+    private Alphabet<String> alph;
+    private LongIntHashMap alph2;
+
+    private BufferedWriter featStrDebug;
 
     public Ints3(BasicFeatureTemplates bft, Relation r, File featureSet, int dimension) {
       this.inner = new OldFeaturesWrapper(bft, featureSet);
       this.rel = r;
-//      this.dimension = dimension;
       int numIntercept = 0;
       this.theta = new AveragedPerceptronWeights(dimension, numIntercept);
       this.timer = new Timer("Int3/" + rel.getName() + "/score", 250_000, true);
+
+//      this.alph = new Alphabet<>();
+      this.alph2 = new LongIntHashMap();
+
+//      try {
+//        featStrDebug = FileUtil.getWriter(new File("/tmp/features.txt"));
+//      } catch (Exception e) {
+//        throw new RuntimeException(e);
+//      }
+    }
+
+    private int index(String s) {
+      long h = Hash.hash(s);
+      int i = alph2.getWithDefault(h, -1);
+      if (i < 0) {
+        i = alph2.size();
+        alph2.put(h, i);
+      }
+      return i;
     }
 
     public void useAverageWeights(boolean useAvg) {
@@ -255,8 +279,32 @@ public class OldFeaturesWrapper {
         Pair<TemplateAlphabet, String> fyxi = fyx.get(i);
         int t = fyxi.get1().index;
         assert t >= 0 && t < T;
-        int f = Hash.hash(fyxi.get2());
+
+////        String s = t + "/" + fyxi.get2();
+////        features[i] = index(s);
+//        features[i] = t + T * index(fyxi.get2());
+
+//        int f = Hash.hash(fyxi.get2());
+        int f = (int) Hash.sha256(fyxi.get2());
         features[i] = f * T + t;
+
+//        if (alph != null) {
+//          features[i] = alph.lookupIndex(t + "/" + fyxi.get2());
+//        } else {
+//          int f = Hash.hash(fyxi.get2());
+//          features[i] = f * T + t;
+//        }
+
+        if (featStrDebug != null) {
+          try {
+            featStrDebug.write(fyxi.get1().name + "/" + fyxi.get2());
+//            featStrDebug.write(t + "/" + fyxi.get2());
+//            featStrDebug.write(s);
+            featStrDebug.newLine();
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+        }
       }
 
       boolean reindex = true;

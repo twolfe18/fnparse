@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -245,6 +246,8 @@ public class Pred2ArgPaths {
      */
     private boolean includeNullClassFeatures = true;
 
+    private boolean quadratic = false;
+
     public Feature(ExperimentProperties config, boolean includeCountRefinements, boolean nullClassFeatures) {
       this(config.getExistingFile("pred2arg.feat.paths"), includeCountRefinements, nullClassFeatures);
     }
@@ -252,7 +255,8 @@ public class Pred2ArgPaths {
     public Feature(File countAndPathTsv, boolean includeCountRefinements, boolean nullClassFeatures) {
       Log.info("countAndPathTsv=" + countAndPathTsv.getPath()
           + " includeCountRefinements=" + includeCountRefinements
-          + " nullClassFeatures=" + nullClassFeatures);
+          + " nullClassFeatures=" + nullClassFeatures
+          + " quadratic=" + quadratic);
       this.includeNullClassFeatures = nullClassFeatures;
       paths = new Trie<Path2.Edge>(null);
       try (BufferedReader r = FileUtil.getReader(countAndPathTsv)) {
@@ -334,6 +338,27 @@ public class Pred2ArgPaths {
       }
     }
 
+    private void directDependents(List<String> addTo, int t, DependencyParse deps, Sentence sent) {
+      int[] ci = deps.getChildren(t);
+      for (int i = 0; i < ci.length; i++) {
+        String deprel = deps.getLabel(ci[i]);
+        addTo.add(deprel);
+        addTo.add(deprel + "/" + sent.getWord(ci[i]));
+      }
+      String deprel = deps.getLabel(t);
+      int p = deps.getHead(t);
+      addTo.add("p/" + deprel);
+      if (p >= 0) {
+        addTo.add("p/" + deprel + "/" + sent.getWord(p));
+        String gp = deps.getLabel(p);
+        addTo.add("p/" + deprel + "/" + gp);
+        int gpi = deps.getHead(p);
+        addTo.add("p/" + deprel + "/" + gp + "/" + (gpi < 0 ? "ROOT" : sent.getWord(gpi)));
+      } else {
+        addTo.add("p/" + deprel + "/ROOT");
+      }
+    }
+
     @Override
     public Iterable<String> extract(TemplateContext context) {
       int t = context.getTargetHead();
@@ -347,9 +372,9 @@ public class Pred2ArgPaths {
         feats.add("predIsPunc");
       } else {
         int n = sent.size();
-        for (int i = 0; i < n; i++) {
+        for (int i = 0; i < n; i++)
           slow(feats, t, i, deps, sent);
-        }
+        directDependents(feats, t, deps, sent);
       }
 
       // Frame refinements
@@ -367,6 +392,14 @@ public class Pred2ArgPaths {
           for (int i = 0; i < nn; i++)
             feats.set(i, feats.get(i) + "/" + f.getName());
         }
+      }
+
+      if (quadratic) {
+        Collections.sort(feats);
+        int n = feats.size();
+        for (int i = 0; i < n-1; i++)
+          for (int j = i+1; j < n; j++)
+            feats.add("q/" + feats.get(i) + "/" + feats.get(j));
       }
       return feats;
     }

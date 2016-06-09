@@ -51,11 +51,11 @@ public class UbertsOraclePipeline extends UbertsPipeline {
     if (predict) {
 //      Uberts.DEBUG = true;
       u.showTrajDiagnostics = true;
-      // oracleSaysYes and oracleSaysNo are separate features, we never learn
-      // to move oracleSaysNo weight away from 0, so some negative instances
-      // will have weigh 0 at test time.
-      double thresh = 0.001;
-      Pair<Perf, List<Step>> p = u.dbgRunInference(false, thresh, 0);
+//      // oracleSaysYes and oracleSaysNo are separate features, we never learn
+//      // to move oracleSaysNo weight away from 0, so some negative instances
+//      // will have weigh 0 at test time.
+//      double thresh = 0.001;
+      Pair<Perf, List<Step>> p = u.dbgRunInference(false, 0);
       traj = p.get2();
     } else {
       boolean dedupEdges = false;

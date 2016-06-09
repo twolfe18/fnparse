@@ -270,9 +270,8 @@ public abstract class UbertsPipeline {
     String docid = setupUbertsForDoc(u, doc);
     Log.info("evaluating on " + docid);
     boolean oracle = false;
-    double minScore = 0;
     int actionLimit = 1000;
-    Pair<Labels.Perf, List<Step>> pt = u.dbgRunInference(oracle, minScore, actionLimit);
+    Pair<Labels.Perf, List<Step>> pt = u.dbgRunInference(oracle, actionLimit);
 //    Pair<Labels.Perf, List<Step>> pt = u.runLocalInference(oracle, minScore, actionLimit);
     Labels.Perf perf = pt.get1();
     Log.info("performance on " + docid);

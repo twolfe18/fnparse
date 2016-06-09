@@ -72,8 +72,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     DAGGER,
   }
 
+  static boolean performTest = false;
+
   static boolean pizza = false;
-  static boolean oracleFeats = true;
+  static String[] oracleFeats = new String[] {};
   static boolean graphFeats = false;
   static boolean templateFeats = false;
   static boolean pipeline = false;
@@ -127,6 +129,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //      relationDefs = new File(p, "relations.def");
 //    }
 
+    performTest = config.getBoolean("performTest", performTest);
+
     costFP_event1 = config.getDouble("costFP_event1", costFP_event1);
     costFP_srl2 = config.getDouble("costFP_srl2", costFP_srl2);
     costFP_srl3 = config.getDouble("costFP_srl3", costFP_srl3);
@@ -141,7 +145,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     argument4ByArg = config.getBoolean("argument4ByArg", argument4ByArg);
     Log.info("[main] argument4ByArg=" + argument4ByArg);
 
-    oracleFeats = config.getBoolean("oracleFeats", false);
+    oracleFeats = config.getStrings("oracleFeats", oracleFeats);
     graphFeats = config.getBoolean("graphFeats", false);
     templateFeats = config.getBoolean("templateFeats", true);
 
@@ -218,6 +222,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
+//    u.setMinScore("predicate2", Double.NEGATIVE_INFINITY);
+    u.setMinScore("predicate2", -1);
+
     /*
      * for each pass over all train data:
      *    for each segment of size N:
@@ -270,10 +277,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           pipe.runInference(many, "dev-full-epoch" + i);
         }
         // Full evaluate on test
-        Log.info("[main] pass=" + (i+1) + " of=" + passes + " testFile=" + test.getPath());
-        try (RelationFileIterator rels = new RelationFileIterator(test, false);
-            ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-          pipe.runInference(many, "test-full-epoch" + i);
+        if (performTest) {
+          Log.info("[main] pass=" + (i+1) + " of=" + passes + " testFile=" + test.getPath());
+          try (RelationFileIterator rels = new RelationFileIterator(test, false);
+              ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
+            pipe.runInference(many, "test-full-epoch" + i);
+          }
         }
         pipe.useAvgWeights(false);
       }
@@ -411,6 +420,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     LocalFactor f = LocalFactor.Constant.ZERO;
 
+    if (Arrays.asList(oracleFeats).contains(r.rhs.relName)) {
+      Log.info("using oracle feats for " + r);
+//      f = new LocalFactor.Sum(new FeatureExtractionFactor.Oracle(r.rhs.relName), f);
+      return new FeatureExtractionFactor.Oracle(r.rhs.relName);
+    }
+
     if (templateFeats) {
       ExperimentProperties config = ExperimentProperties.getInstance();
       Log.info("using template feats");
@@ -429,11 +444,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(bft, r.rhs.rel, config);
       feFast3.add(fe3);
       f = new LocalFactor.Sum(fe3, f);
-    }
-
-    if (oracleFeats) {
-      Log.info("using oracle feats");
-      f = new LocalFactor.Sum(new FeatureExtractionFactor.Oracle(r.rhs.relName), f);
     }
 
     if (graphFeats) {
@@ -507,18 +517,17 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case DEV:
     case TEST:
-      if (DEBUG > 0)
-        Log.info("mode=" + mode + " doc=" + doc.getId());
+      if (DEBUG > 0 && perfByRel.size() % 25 == 0)
+        System.out.println("mode=" + mode + " doc=" + doc.getId());
       boolean oracle = false;
-      double minScore = 0.0001;
       int actionLimit = 0;
 
       timer.start("inf/" + mode);
-      Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, minScore, actionLimit);
+      Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, actionLimit);
       timer.stop("inf/" + mode);
       perfByRel.add(p.get1().perfByRel());
 
-      if (DEBUG > 0 && perfByRel.size() % 5 == 0) {
+      if (DEBUG > 0 && perfByRel.size() % 50 == 0) {
         // Show some stats about this example
         System.out.println("trajLength=" + p.get2().size());
         System.out.println("perDocStats: " + u.stats.toString());

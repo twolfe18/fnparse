@@ -142,7 +142,7 @@ public class Env {
         EVENT_COUNTS.increment(msg);
     }
 
-    public static final int DEBUG = 1;
+    public static int DEBUG = 1;
 
     private Trie3 root;
     private Trie3 parent; // allows you to compute i from just R
@@ -311,9 +311,8 @@ public class Env {
           Arg ria = new Arg(l.rel, 0, argIdx);
           IntTrip rta = new IntTrip(trigger.getIndex(), i, argIdx);
           // Update (R,i,a) <-> (r,t,a) bijection
-          if (DEBUG > 1) {
+          if (DEBUG > 1)
             Log.info("adding varMapping: trigger=" + trigger + " ria=" + ria + " rta=" + rta);
-          }
           root.varMapping.add(ria, rta);
         }
 
@@ -408,7 +407,7 @@ public class Env {
      * 3) order of appearance as the rule was given (leftmost terms come first)
      */
     private int chooseNextArgPos(Trigger t, BitSet lhsCovered) {
-      Log.warn("TODO finish this implementation!");
+      Log.warn("TODO write optimized implementation!");
       // Just choose the first for now
       int n = t.length();
       for (int i = 0; i < n; i++) {
