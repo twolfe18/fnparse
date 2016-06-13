@@ -27,9 +27,11 @@ import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.hlt.uberts.auto.Trigger;
+import edu.jhu.hlt.uberts.factor.AtLeast1Local;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
+import edu.jhu.hlt.uberts.factor.PreAgendaAddMapper;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.rules.Env.Trie3;
@@ -65,19 +67,30 @@ public class Uberts {
   private Trie3 trie3;
 
   // All of these are co-indexed
+  // What happens if we have multiple factors with the same trigger?
+  // Every time you add a Trigger->TG|GF, then we check if its a new trigger.
+  // If no, then we merge the TG|GF (they must be "summable/mergable").
   private Trigger[] triggers;     // first numTriggers values are non-null
   private TransGen[] transitionGenrators; // may contain nulls
   private GlobalFactor[] globalFactors;   // may contain nulls
   private int numTriggers;
 
-  // What happens if we have multiple factors with the same trigger?
-  // Every time you add a Trigger->TG|GF, then we check if its a new trigger.
-  // If no, then we merge the TG|GF (they must be "summable/mergable").
-
-  // Usually the decision function is score > 0, but for certain relations,
-  // e.g. predicate2(t,f) where we know there will be a predicate2 fact for
-  // every event1(t) fact, it may make more sense to lower the threshold.
+  // Usually the decision function is score > 0, this lets you use your own threshold.
+  // Assuming you have an intercept feature, this is only good for sweeping
+  // ROC curves without re-training.
+  // This was originally added for fixing the following issue: we know there
+  // will be a predicate2(t,f) fact for every event1(t) fact, but it could be
+  // the case that all predicate2(t,f) facts end up with a score below 0.
   private Map<Relation, Double> minScoreForPredict = new HashMap<>();
+
+  // TODO This will replace minScoreForPredict
+  // A set of mappers which are allowed to change the score of an edge before
+  // it gets added to the agenda.
+  // TODO For now we'll have just one, when another is needed, figure out if
+  // I should chain them together (composition) or do dispatch per-relation, or
+  // some other indexing strategy.
+  private PreAgendaAddMapper preAgendaAddMapper;
+
 
   private Random rand;
   private MultiTimer timer;
@@ -122,6 +135,15 @@ public class Uberts {
   }
   public void setMinScore(Relation r, double minScore) {
     minScoreForPredict.put(r, minScore);
+  }
+
+  /**
+   * e.g. {@link AtLeast1Local}
+   */
+  public void setPreAgendaAddMapper(PreAgendaAddMapper preAgendaAddMapper) {
+    Log.info("adding " + preAgendaAddMapper);
+    assert this.preAgendaAddMapper == null;
+    this.preAgendaAddMapper = preAgendaAddMapper;
   }
 
   /**
@@ -232,10 +254,13 @@ public class Uberts {
       boolean pred = !hitLim && ai.score.forwards() > thresh;
       steps.add(new Step(ai, y, pred));
 
+      if (!pred && "srl3".equals(ai.edge.getRelation().getName()))
+        assert false : "why? " + ai;
+
       // But maybe don't add apply it (add it to state)
       if (hitLim)
         continue;
-      if ((oracle && y) || pred) {
+      if ((oracle && y) || (!oracle && pred)) {
         if (perf != null)
           perf.add(ai.edge);
         addEdgeToState(ai);
@@ -523,6 +548,8 @@ public class Uberts {
     }
 
     public void applyUpdate(double learningRate, boolean updateAccordingToPriority, Map<Relation, Double> costFP) {
+      if (DEBUG > 1)
+        Log.info("starting, learingRate=" + learningRate + " updateAccordingToPriority=" + updateAccordingToPriority + " costFP=" + costFP);
       if (updateAccordingToPriority) {
         /*
          * priority = stage(e) + tanh(score(e))
@@ -560,12 +587,21 @@ public class Uberts {
           }
         }
       } else {
+        if (DEBUG > 2)
+          Log.info("about to scan agenda snapshot of size=" + agendaItems.size());
         for (LabledAgendaItem ai : agendaItems) {
-          if (ai.label && ai.score.forwards() <= 0)
+          if (ai.label && ai.score.forwards() <= 0) {
             ai.score.backwards(learningRate * -1);
-          if (!ai.label && ai.score.forwards() > 0) {
+            if (DEBUG > 2)
+              Log.info("FN: backwards=" + (learningRate * -1) + " " + ai);
+          } else if (!ai.label && ai.score.forwards() > 0) {
             double cfp = costFP.get(ai.edge.getRelation());
             ai.score.backwards(learningRate * +1 * cfp);
+            if (DEBUG > 2)
+              Log.info("FP: backwards=" + (learningRate * +1 * cfp) + " " + ai);
+          } else {
+            if (DEBUG > 2)
+              Log.info("fine: " + ai);
           }
         }
       }
@@ -743,16 +779,24 @@ public class Uberts {
   public Random getRandom() {
     return rand;
   }
+
   public State getState() {
     return state;
   }
+
+  /**
+   * Try not to use this, since you may get bugs if you don't use methods on
+   * this class like clearAgenda()!
+   */
   public Agenda getAgenda() {
     return agenda;
   }
-//  public TNode getGraphFragments() {
-////    return trie;
-//    throw new RuntimeException("leaky abstraction!");
-//  }
+
+  public void clearAgenda() {
+    agenda.clear();
+    if (preAgendaAddMapper != null)
+      preAgendaAddMapper.clear();
+  }
 
   public static String stripComment(String line) {
     int c = line.indexOf('#');
@@ -941,7 +985,8 @@ public class Uberts {
 
   public void addTransitionGenerator(Rule r, LocalFactor s) {
     Trigger t = lookupTrigger(r.lhs);
-    addTransitionGenerator(t, new TransGen.Regular(r, s));
+    TransGen tg = new TransGen.Regular(r, s);
+    addTransitionGenerator(t, tg);
   }
   public void addTransitionGenerator(Term[] t, TransGen tg) {
     addTransitionGenerator(lookupTrigger(t), tg);
@@ -1031,7 +1076,18 @@ public class Uberts {
       stats.increment("push/" + e.getRelation().getName());
     }
     assert nodesContains(e);
-    agenda.add(e, score);
+    HashableHypEdge hhe = new HashableHypEdge(e);
+    if (agenda.contains(hhe)) {
+      stats.increment("push/dup/agenda");
+      stats.increment("push/dup/agenda/" + e.getRelation().getName());
+    } else if (state.getScore(hhe) != null) {
+      stats.increment("push/dup/state");
+      stats.increment("push/dup/state/" + e.getRelation().getName());
+    } else {
+      if (preAgendaAddMapper != null)
+        score = preAgendaAddMapper.map(hhe, score);
+      agenda.add(hhe, score);
+    }
   }
 
   /** returns its argument */
@@ -1107,6 +1163,18 @@ public class Uberts {
     Object encoded = r.encodeTail(tail);
     HypNode head = lookupNode(headType, encoded, true);
     return new HypEdge(r, head, tail);
+  }
+
+  /**
+   * Given the head of some fact, get back the fact.
+   */
+  public HypEdge getEdgeFromHeadVar(HypNode head) {
+    // TODO this is a bit jenk, should I make encodeTail tuple up the Relation too?
+    String prefix = "witness-";
+    assert head.getNodeType().getName().startsWith(prefix);
+    String relName = head.getNodeType().getName().substring(prefix.length());
+    Relation rel = getEdgeType(relName, false);
+    return state.match1(State.HEAD_ARG_POS, rel, head);
   }
 
   /**

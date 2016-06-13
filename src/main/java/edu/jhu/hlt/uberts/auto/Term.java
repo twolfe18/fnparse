@@ -28,6 +28,15 @@ public class Term {
     return new Term(r, args);
   }
 
+  public int indexOfArg(String argName) {
+    if (factArgName != null && argName.equals(factArgName))
+      return State.HEAD_ARG_POS;
+    for (int i = 0; i < argNames.length; i++)
+      if (argName.equals(argNames[i]))
+        return i;
+    return -1;
+  }
+
   /** Includes head position */
   public int[] getArgIndices() {
     int[] r = new int[argNames.length + 1];
@@ -39,7 +48,7 @@ public class Term {
 
   public String getArgName(int argIdx) {
     if (argIdx == State.HEAD_ARG_POS)
-      return Uberts.getWitnessNodeTypeName(relName);
+      return factArgName;
     return argNames[argIdx];
   }
 

@@ -286,7 +286,7 @@ public class Env {
     }
 
     public void add(Trigger trigger) {
-      if (DEBUG > 0)
+      if (DEBUG > 1)
         Log.info("ROOT trigger=" + trigger);
       assert term == null : "is this not root?";
       int n = trigger.length();
@@ -425,6 +425,10 @@ public class Env {
      */
     private Arg findParentWhoDefines(Arg a) {
       String argName = term.getArgName(a.argPos);
+      if (argName == null) {
+        assert a.argPos == State.HEAD_ARG_POS;
+        return null;
+      }
       for (Trie3 cur = parent; cur != null; cur = cur.parent) {
         Term t = cur.term;
         if (t == null) {

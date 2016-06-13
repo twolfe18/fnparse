@@ -56,6 +56,6 @@ public class Step {
 
   @Override
   public String toString() {
-    return "(Step " + edge + " score=" + score + " gold=" + gold + ")";
+    return "(Step " + edge + " gold=" + gold + " pred=" + pred + " priority=" + priority + " score=" + score.forwards() + " " + score + ")";
   }
 }

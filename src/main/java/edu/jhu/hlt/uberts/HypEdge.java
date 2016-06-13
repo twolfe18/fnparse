@@ -258,7 +258,7 @@ public class HypEdge {
 
     @Override
     public String toString() {
-      return "(Hashable " + edge + " hc=" + hc + ")";
+      return "(Hashable " + edge + " hash=" + Long.toHexString(hc).toUpperCase() + ")";
     }
   }
 

@@ -8,6 +8,7 @@ import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
+import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
@@ -17,6 +18,12 @@ public interface TransGen {
 
   public List<Pair<HypEdge, Adjoints>> match(HypEdge[] trigger, Uberts u);
 
+  /**
+   * Creates actions from a {@link Rule}, uses a {@link LocalFactor}.
+   *
+   * Currently outputs length-1 Lists every time because it accepts HypEdge[]
+   * from Trie3. I could add a combiner phase to get them all into one list.
+   */
   public static class Regular implements TransGen {
     private Rule rule;
     private LocalFactor score;
@@ -40,7 +47,10 @@ public interface TransGen {
     HypNode[] tail = new HypNode[n];
     for (int rhsArg = 0; rhsArg < n; rhsArg++) {
       IntPair lhsBinding = rule.getBindingOfRhsArg(rhsArg);
-      tail[rhsArg] = boundLhsValues[lhsBinding.first].getTail(lhsBinding.second);
+      if (lhsBinding.second == State.HEAD_ARG_POS)
+        tail[rhsArg] = boundLhsValues[lhsBinding.first].getHead();
+      else
+        tail[rhsArg] = boundLhsValues[lhsBinding.first].getTail(lhsBinding.second);
     }
     return u.makeEdge(rule.rhs.rel, tail);
   }

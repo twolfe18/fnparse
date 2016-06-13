@@ -13,6 +13,7 @@ import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
+import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.prim.tuple.Pair;
 
@@ -63,9 +64,10 @@ public class Rule {
       // Find where this variable is bound
       for (int termIdx = 0; termIdx < lhs.length; termIdx++) {
         Term lt = lhs[termIdx];
-        for (int argIdx = 0; argIdx < lt.getNumArgs(); argIdx++) {
+        for (int argIdx : lt.getArgIndices()) {
           if (varName.equals(lt.getArgName(argIdx))) {
-            assert lt.getArgType(argIdx) == rhs.getArgType(i);
+            assert argIdx == State.HEAD_ARG_POS // TODO don't currently have a way to check types for this
+                || lt.getArgType(argIdx) == rhs.getArgType(i);
             rhsArg2LhsTermArg[i] = new IntPair(termIdx, argIdx);
             continue outer;
           }

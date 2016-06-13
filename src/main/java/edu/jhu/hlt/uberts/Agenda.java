@@ -30,7 +30,19 @@ public class Agenda {
     public final HypEdge edge;
     public final Adjoints score;
     public final double priority;
+    protected final double scoreV;
     private HashableHypEdge hashableEdge;
+
+    public AgendaItem(HashableHypEdge edge, Adjoints score, double priority) {
+      assert Double.isFinite(priority) : "priority=" + priority;
+      assert !Double.isNaN(priority) : "priority=" + priority;
+      this.edge = edge.getEdge();
+      this.hashableEdge = edge;
+      this.score = Adjoints.cacheIfNeeded(score);
+      this.priority = priority;
+      // Ensure that forwards has been computed/cached
+      scoreV = this.score.forwards();
+    }
 
     public AgendaItem(HypEdge edge, Adjoints score, double priority) {
       assert Double.isFinite(priority) : "priority=" + priority;
@@ -38,6 +50,8 @@ public class Agenda {
       this.edge = edge;
       this.score = Adjoints.cacheIfNeeded(score);
       this.priority = priority;
+      // Ensure that forwards has been computed/cached
+      scoreV = this.score.forwards();
     }
 
     public HashableHypEdge getHashableEdge() {
@@ -55,7 +69,7 @@ public class Agenda {
 
     @Override
     public String toString() {
-      return String.format("(AI %s p=%+.2f s=%s)", edge, priority, StringUtils.trunc(score, 200));
+      return String.format("(AI %s p=%+.2f s=%+.2f %s)", edge, priority, scoreV, StringUtils.trunc(score, 200));
     }
 
     public LabledAgendaItem withLabel(boolean y) {
@@ -71,7 +85,7 @@ public class Agenda {
     }
     @Override
     public String toString() {
-      return String.format("(AI %s y=%s p=%+.2f s=%s)", edge, label, priority, StringUtils.trunc(score, 200));
+      return String.format("(AI %s y=%s p=%+.2f s=%+.2f %s)", edge, label, priority, scoreV, StringUtils.trunc(score, 200));
     }
   }
 
@@ -218,12 +232,29 @@ public class Agenda {
    * does not use {@link HashableHypEdge}.
    */
   public Adjoints getScore(HypEdge e) {
-    int i = e2i.get(e);
+    Integer i = e2i.get(e);
+    if (i == null)
+      return null;
     assert heap[i].edge == e;
     return heap[i].score;
   }
 
-  public void remove(HypEdge e) {
+  public AgendaItem getScore2(HypEdge e) {
+    Integer i = e2i.get(e);
+    if (i == null)
+      return null;
+    return heap[i];
+  }
+
+  public AgendaItem remove(HashableHypEdge e) {
+    return remove(e.getEdge());
+  }
+
+  /**
+   * Only call this for edges which you know are on the agenda.
+   * See {@link Agenda#contains(HashableHypEdge)}
+   */
+  public AgendaItem remove(HypEdge e) {
 //    if (DEBUG) {
 //      Log.info("before remove " + e);
 //      dbgShowScores();
@@ -231,7 +262,7 @@ public class Agenda {
 //    }
 
     int i = e2i.get(e);
-    removeAt(i);
+    return removeAt(i);
 
 //    if (DEBUG) {
 //      Log.info("after remove " + e);
@@ -240,14 +271,16 @@ public class Agenda {
 //    }
   }
 
-  private void removeAt(int i) {
+  private AgendaItem removeAt(int i) {
     assert i < top;
     int t = --top;
+    AgendaItem old = heap[i];
     moveAndFree(t, i);
     if (parentInvariantSatisfied(i))
       siftDown(i);
     else
       siftUp(i);
+    return old;
   }
 
   public boolean parentInvariantSatisfied() {
@@ -266,9 +299,12 @@ public class Agenda {
   }
 
   public void add(HypEdge edge, Adjoints score) {
-    if (DEBUG) {
+    add(new HashableHypEdge(edge), score);
+  }
+
+  public void add(HashableHypEdge edge, Adjoints score) {
+    if (DEBUG)
       Log.info("adding " + edge + " with score " + score);
-    }
     if (edge == null)
       throw new IllegalArgumentException();
     if (score == null)
@@ -276,14 +312,14 @@ public class Agenda {
     int t = top++;
     if (t == heap.length)
       grow();
-    boolean a = uniq.add(new HashableHypEdge(edge));
+    boolean a = uniq.add(edge);
     assert a : "duplicate?: " + edge;
-    addEdgeToFineView(edge);
-    heap[t] = new AgendaItem(edge, score, priority.apply(edge, score));
-    e2i.put(edge, t);
-    n2eiSet(t, edge, true);
+    HypEdge e = edge.getEdge();
+    addEdgeToFineView(e);
+    heap[t] = new AgendaItem(edge, score, priority.apply(e, score));
+    e2i.put(e, t);
+    n2eiSet(t, e, true);
     siftUp(t);
-
 //    if (DEBUG) {
 //      Log.info("just added " + edge + " with score " + score);
 //      for (int i = 0; i < edge.getNumTails(); i++) {

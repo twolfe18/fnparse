@@ -39,6 +39,7 @@ import edu.jhu.hlt.uberts.Step;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
 import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
+import edu.jhu.hlt.uberts.factor.AtLeast1Local;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
@@ -148,6 +149,8 @@ public abstract class UbertsPipeline {
       addRule(typedRule);
 
     ExperimentProperties config = ExperimentProperties.getInstance();
+
+    // TODO Re-visit whether this is necessary, what the correct value should be
     double lhsInRhsScoreScale = config.getDouble("lhsInRhsScoreScale", 0);
     Log.info("[main] lhsInRhsScoreScale=" + lhsInRhsScoreScale);
     assert lhsInRhsScoreScale >= 0;
@@ -166,6 +169,15 @@ public abstract class UbertsPipeline {
         if (tg.addLhsScoreToRhsScore != null)
           Log.info("using lhs scores of " + tg.addLhsScoreToRhsScore + " to score rhs of " + tg.getRule());
       }
+    }
+
+    // TODO Support more than one AtLeast1Local factor
+    // each instance should look like: <term>(:<varName>)+, e.g. "predicate2(t,f):t"
+    String atl = config.getString("AtLeast1Local", "");
+    if (!atl.isEmpty()) {
+      Log.info("adding " + atl);
+      AtLeast1Local a = new AtLeast1Local(atl, u);
+      u.setPreAgendaAddMapper(a);
     }
 
     Log.info("done");

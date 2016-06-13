@@ -36,6 +36,8 @@ public class Relation {
   }
 
   public NodeType getTypeForArg(int i) {
+    if (i < 0 || i >= domain.length)
+      throw new IllegalArgumentException("this doesn't work for head arg types, i=" + i);
     return domain[i];
   }
 
