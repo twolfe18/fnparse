@@ -1,0 +1,3907 @@
+39	rcmod>
+7	rcmod>	nsubj>
+1	rcmod>	nsubj>	prep>
+2	rcmod>	advmod>
+1	rcmod>	advcl>
+2	rcmod>	dobj>
+2	rcmod>	prep>
+3634	rcmod<
+1	rcmod<	vmod>	advcl>	prep>	pobj>
+1	rcmod<	vmod>	prep>
+1	rcmod<	vmod>	prep>	pobj>
+2	rcmod<	rcmod>
+1	rcmod<	rcmod>	dep>
+1	rcmod<	rcmod>	prep>	pobj>
+2	rcmod<	rcmod<
+1	rcmod<	rcmod<	appos<	dobj<	pcomp<
+1	rcmod<	rcmod<	appos<	dobj<	pcomp<	prep<
+1	rcmod<	rcmod<	nsubj<
+1	rcmod<	rcmod<	dobj<	vmod<	dobj<	rcmod<	dep>
+1	rcmod<	rcmod<	dobj<	vmod<	dobj<	rcmod<	dep>	dep>	prep>
+29	rcmod<	pobj<
+96	rcmod<	pobj<	prep<
+7	rcmod<	pobj<	prep<	vmod<
+1	rcmod<	pobj<	prep<	vmod<	conj<
+1	rcmod<	pobj<	prep<	vmod<	nsubj<
+2	rcmod<	pobj<	prep<	vmod<	nsubj<	prep>
+1	rcmod<	pobj<	prep<	vmod<	pobj<	prep<	dep<
+1	rcmod<	pobj<	prep<	rcmod<
+1	rcmod<	pobj<	prep<	rcmod<	nsubj<
+1	rcmod<	pobj<	prep<	pobj<
+5	rcmod<	pobj<	prep<	pobj<	prep<
+1	rcmod<	pobj<	prep<	pobj<	prep<	vmod<
+1	rcmod<	pobj<	prep<	pobj<	prep<	rcmod<	pobj<	prep<
+1	rcmod<	pobj<	prep<	pobj<	prep<	parataxis>
+1	rcmod<	pobj<	prep<	pobj<	prep<	pobj<	prep<	pobj<	prep<	tmod>
+1	rcmod<	pobj<	prep<	pobj<	prep<	prep>
+1	rcmod<	pobj<	prep<	pobj<	prep<	dobj>
+1	rcmod<	pobj<	prep<	num>
+1	rcmod<	pobj<	prep<	amod<
+1	rcmod<	pobj<	prep<	amod<	nsubj<
+1	rcmod<	pobj<	prep<	amod<	prep>
+1	rcmod<	pobj<	prep<	ccomp>
+1	rcmod<	pobj<	prep<	advcl>
+1	rcmod<	pobj<	prep<	advcl<	parataxis>
+4	rcmod<	pobj<	prep<	cc>
+1	rcmod<	pobj<	prep<	dep>
+1	rcmod<	pobj<	prep<	nsubjpass<	advmod>
+3	rcmod<	pobj<	prep<	dep<
+1	rcmod<	pobj<	prep<	dep<	dep>
+1	rcmod<	pobj<	prep<	dep<	dep>	prep>
+1	rcmod<	pobj<	prep<	acomp>
+4	rcmod<	pobj<	prep<	nsubj<
+1	rcmod<	pobj<	prep<	nsubj<	dep>
+1	rcmod<	pobj<	prep<	nsubj<	advmod>
+1	rcmod<	pobj<	prep<	nsubj<	dobj>
+1	rcmod<	pobj<	prep<	tmod>
+6	rcmod<	pobj<	prep<	nsubj>
+2	rcmod<	pobj<	prep<	prep>
+2	rcmod<	pobj<	prep<	prep>	pobj>
+1	rcmod<	pobj<	prep<	conj>
+1	rcmod<	pobj<	prep<	conj<
+2	rcmod<	pobj<	prep<	conj<	conj>	prep>
+1	rcmod<	pobj<	prep<	conj<	nsubj<
+1	rcmod<	pobj<	prep<	conj<	nsubj>
+1	rcmod<	pobj<	prep<	conj<	cc>
+1	rcmod<	pobj<	prep<	appos<	dep>
+2	rcmod<	pobj<	prep<	appos<	prep>
+1	rcmod<	pobj<	prep<	parataxis<
+1	rcmod<	pobj<	prep<	xcomp<	nsubj>
+1	rcmod<	pobj<	prep<	xcomp<	ccomp<	cc>
+1	rcmod<	pobj<	prep<	xcomp<	dobj>
+1	rcmod<	pobj<	prep<	xcomp<	cc>
+2	rcmod<	pobj<	prep<	parataxis>
+1	rcmod<	pobj<	prep<	parataxis>	dobj>
+1	rcmod<	pobj<	prep<	advmod>
+1	rcmod<	pobj<	prep<	dobj<	rcmod<
+1	rcmod<	pobj<	prep<	dobj<	advcl<	advmod>
+1	rcmod<	pobj<	prep<	appos>
+20	rcmod<	pobj<	prep<	dobj>
+1	rcmod<	pobj<	prep<	advmod<	prep>
+2	rcmod<	pobj<	dep>
+1	rcmod<	pobj<	conj<	prep<
+1	rcmod<	pobj<	conj<	conj>
+1	rcmod<	pobj<	tmod>
+2	rcmod<	num>
+1	rcmod<	amod>	dep>	prep>	pobj>
+1	rcmod<	quantmod>
+1	rcmod<	ccomp<	advcl<
+1	rcmod<	ccomp<	cc>
+12	rcmod<	cc>
+65	rcmod<	dep>
+1	rcmod<	dep>	vmod>	prep>
+1	rcmod<	dep>	conj>
+1	rcmod<	dep>	rcmod>
+1	rcmod<	dep>	appos>
+2	rcmod<	dep>	prep>
+2	rcmod<	dep>	prep>	pobj>
+1	rcmod<	nsubjpass<
+1	rcmod<	nsubjpass<	dep<	dep<
+1	rcmod<	nsubjpass<	parataxis<	prep>	pobj>
+1	rcmod<	nsubjpass<	ccomp<
+1	rcmod<	nsubjpass<	dobj>
+1	rcmod<	poss>
+67	rcmod<	dep<
+7	rcmod<	dep<	dep>
+2	rcmod<	dep<	dep<
+1	rcmod<	dep<	det>
+3	rcmod<	dep<	pobj<	prep<
+1	rcmod<	dep<	pobj<	prep<	dep<
+1	rcmod<	dep<	pobj<	prep<	num>
+3	rcmod<	dep<	prep>
+1	rcmod<	dep<	prep<	parataxis>
+1	rcmod<	dep<	conj>
+2	rcmod<	dep<	aux>
+1	rcmod<	dep<	parataxis>
+1	rcmod<	dep<	advmod>
+2	rcmod<	dep<	appos>
+1	rcmod<	dep<	advcl<
+1	rcmod<	dep<	dobj>
+35	rcmod<	nsubj<
+2	rcmod<	nsubj<	vmod>
+2	rcmod<	nsubj<	dep>
+2	rcmod<	nsubj<	dep<
+1	rcmod<	nsubj<	dep<	prep>	pobj>
+1	rcmod<	nsubj<	rcmod<	appos<	conj>
+2	rcmod<	nsubj<	aux>
+12	rcmod<	nsubj<	advmod>
+1	rcmod<	nsubj<	advcl>
+1	rcmod<	nsubj<	advcl<
+5	rcmod<	nsubj<	prep>
+1	rcmod<	nsubj<	cc>
+6	rcmod<	det>
+4	rcmod<	nsubj>
+12	rcmod<	prep>
+1	rcmod<	prep>	conj>	pobj>
+133	rcmod<	prep>	pobj>
+1	rcmod<	prep>	pobj>	dep>
+3	rcmod<	prep>	pobj>	conj>
+1	rcmod<	prep>	pobj>	rcmod>
+1	rcmod<	prep>	pobj>	rcmod>	dobj>	vmod>	conj>	advcl>
+1	rcmod<	prep>	pobj>	num>
+7	rcmod<	prep>	pobj>	prep>	pobj>
+1	rcmod<	prep>	pobj>	prep>	pobj>	conj>
+1	rcmod<	prep>	pobj>	prep>	pcomp>
+1	rcmod<	prep>	pobj>	prep>	pcomp>	dobj>
+14	rcmod<	conj>
+6	rcmod<	appos<
+1	rcmod<	appos<	dep<
+1	rcmod<	appos<	pobj<	prep<	rcmod<	pobj<	prep<	cc>
+1	rcmod<	appos<	pobj<	prep<	pobj<	prep<	dobj<	cc>
+1	rcmod<	appos<	pobj<	prep<	advcl>
+15	rcmod<	conj<
+3	rcmod<	conj<	conj>
+1	rcmod<	conj<	dep>
+1	rcmod<	conj<	rcmod>
+1	rcmod<	conj<	dep<	pobj<	prep<	nsubj>
+2	rcmod<	conj<	nsubj<
+1	rcmod<	conj<	nsubj<	cc>
+1	rcmod<	conj<	pcomp<	prep<
+1	rcmod<	conj<	pobj<	prep<
+1	rcmod<	conj<	pobj<	prep<	nsubj<
+2	rcmod<	conj<	pobj<	prep<	prep>
+8	rcmod<	conj<	cc>
+1	rcmod<	parataxis<	advmod>
+1	rcmod<	parataxis<	ccomp<
+1	rcmod<	xcomp<	dep<
+1	rcmod<	xcomp<	xcomp<	ccomp<	csubj<
+1	rcmod<	xcomp<	advcl>
+1	rcmod<	parataxis>
+1	rcmod<	tmod<
+1	rcmod<	tmod<	dep<	pobj>
+2	rcmod<	tmod<	advmod>
+9	rcmod<	dobj<
+4	rcmod<	dobj<	dep>
+9	rcmod<	dobj<	vmod<
+1	rcmod<	dobj<	vmod<	nsubjpass<
+1	rcmod<	dobj<	vmod<	pobj<
+1	rcmod<	dobj<	vmod<	pobj<	prep<	advcl>
+3	rcmod<	dobj<	dep<
+1	rcmod<	dobj<	dep<	dep>
+1	rcmod<	dobj<	dep<	conj<	nsubjpass>
+1	rcmod<	dobj<	rcmod<
+1	rcmod<	dobj<	rcmod<	nsubj<	dep>
+1	rcmod<	dobj<	rcmod<	advmod>	prep>	pobj>
+1	rcmod<	dobj<	rcmod<	nn>
+10	rcmod<	dobj<	nsubj>
+1	rcmod<	dobj<	nsubj>	appos>
+1	rcmod<	dobj<	iobj>
+5	rcmod<	dobj<	prep>
+1	rcmod<	dobj<	prep>	pobj>	advmod>
+1	rcmod<	dobj<	conj>
+1	rcmod<	dobj<	conj>	advmod>
+1	rcmod<	dobj<	conj>	dobj>
+1	rcmod<	dobj<	conj<	dep>
+1	rcmod<	dobj<	conj<	ccomp<	dep>
+1	rcmod<	dobj<	conj<	ccomp<	dep>	advmod>
+1	rcmod<	dobj<	conj<	advcl<	ccomp<	parataxis>	nsubj>
+1	rcmod<	dobj<	parataxis<	acomp>
+1	rcmod<	dobj<	parataxis<	advmod>
+1	rcmod<	dobj<	parataxis<	advcl>
+1	rcmod<	dobj<	pcomp<	prep<	csubj<
+1	rcmod<	dobj<	pcomp<	prep<	dobj>
+1	rcmod<	dobj<	xcomp<
+1	rcmod<	dobj<	xcomp<	nsubj>
+1	rcmod<	dobj<	xcomp<	advcl>
+1	rcmod<	dobj<	xcomp<	ccomp<	dep<
+2	rcmod<	dobj<	parataxis>
+1	rcmod<	dobj<	parataxis>	csubj>
+1	rcmod<	dobj<	parataxis>	csubj>	prep>
+1	rcmod<	dobj<	xcomp>
+3	rcmod<	dobj<	advmod>
+1	rcmod<	dobj<	ccomp<	dep>
+1	rcmod<	dobj<	ccomp<	dep>	dep>
+1	rcmod<	dobj<	ccomp<	cc>
+3	rcmod<	dobj<	cc>
+5	rcmod<	advmod>
+8	rcmod<	appos>
+1	rcmod<	appos>	vmod>	xcomp>	dobj>
+4	rcmod<	appos>	prep>	pobj>
+1	rcmod<	appos>	prep>	pobj>	prep>	pobj>
+1	rcmod<	advmod<
+1	rcmod<	nn>
+1	punct>
+18	csubjpass>
+1	csubjpass>	ccomp>
+1	csubjpass>	xcomp>	dobj>	prep>	pobj>	appos>
+2	csubjpass>	dobj>
+1	csubjpass>	prep>	pobj>	dep>
+8	possessive<
+1	possessive<	dep>
+3	possessive<	poss<
+1	possessive<	poss<	nsubj<	cc>
+1	possessive<	poss<	amod>
+1	possessive<	nsubj<
+1	possessive<	nsubj<	advmod>
+2	possessive<	amod>
+1	possessive<	prep>
+6762	cop<
+29	cop<	vmod>
+1	cop<	vmod>	tmod>
+2	cop<	vmod>	advmod>
+1	cop<	vmod>	advcl>
+2	cop<	vmod>	prep>
+1	cop<	vmod>	prep>	pobj>	dep>
+1	cop<	vmod>	prep>	pcomp>
+1	cop<	vmod>	dobj>	prep>
+16	cop<	vmod<
+2	cop<	vmod<	dep<
+1	cop<	vmod<	nsubj<
+3	cop<	vmod<	nsubj>
+3	cop<	vmod<	pobj<	prep<
+1	cop<	vmod<	pobj<	prep<	pobj<	prep<	rcmod<	prep>
+1	cop<	vmod<	pobj<	prep<	pobj<	prep<	nsubjpass>
+2	cop<	vmod<	pobj<	prep<	dobj>
+1	cop<	vmod<	dobj<	vmod<
+2	cop<	vmod<	dobj<	nsubj>
+1	cop<	vmod<	dobj<	xcomp<	nsubj>
+4	cop<	vmod<	dobj<	iobj>
+12	cop<	vmod<	dobj>
+1	cop<	vmod<	prep>	pobj>
+51	cop<	rcmod>
+1	cop<	rcmod>	ccomp>
+1	cop<	rcmod>	xcomp>
+3	cop<	rcmod>	advcl>
+1	cop<	rcmod>	advmod>
+1	cop<	rcmod>	prep>
+381	cop<	rcmod<
+2	cop<	rcmod<	dep>
+1	cop<	rcmod<	dep>	dobj>	vmod>	dobj>
+4	cop<	rcmod<	dep<
+1	cop<	rcmod<	dep<	rcmod<	nsubj<
+3	cop<	rcmod<	appos<
+2	cop<	rcmod<	appos<	nsubj<
+2	cop<	rcmod<	conj<
+1	cop<	rcmod<	conj<	cc>
+2	cop<	rcmod<	nsubj<
+1	cop<	rcmod<	nsubj<	dep>
+1	cop<	rcmod<	nsubj<	dep<	conj<
+10	cop<	rcmod<	pobj<
+9	cop<	rcmod<	pobj<	prep<
+1	cop<	rcmod<	pobj<	prep<	vmod<
+1	cop<	rcmod<	pobj<	prep<	vmod<	nsubj<	parataxis<	advcl>
+2	cop<	rcmod<	pobj<	prep<	dep<
+1	cop<	rcmod<	pobj<	prep<	dep<	dep>
+1	cop<	rcmod<	pobj<	prep<	parataxis>
+1	cop<	rcmod<	pobj<	prep<	pobj<
+1	cop<	rcmod<	pobj<	prep<	pobj<	prep<
+1	cop<	rcmod<	pobj<	prep<	pobj<	prep<	advmod>
+1	cop<	rcmod<	pobj<	prep<	pobj<	prep<	cc>
+2	cop<	rcmod<	pobj<	prep<	dobj<	dep>
+1	cop<	rcmod<	pobj<	prep<	dobj<	rcmod<
+1	cop<	rcmod<	pobj<	prep<	ccomp<	parataxis<	dobj>
+4	cop<	rcmod<	pobj<	prep<	dobj>
+1	cop<	rcmod<	num>
+3	cop<	rcmod<	dobj<
+1	cop<	rcmod<	dobj<	vmod<
+1	cop<	rcmod<	dobj<	vmod<	dobj<	rcmod<
+1	cop<	rcmod<	dobj<	vmod<	dobj<	rcmod<	dep>
+2	cop<	rcmod<	dobj<	dep<	dobj>
+1	cop<	rcmod<	dobj<	dep<	prep>
+1	cop<	rcmod<	dobj<	rcmod<
+1	cop<	rcmod<	dobj<	iobj>	dep>
+1	cop<	rcmod<	dobj<	advcl>
+1	cop<	rcmod<	dobj<	prep>
+1	cop<	rcmod<	ccomp<	rcmod<	dep<
+8	cop<	rcmod<	prep>	pobj>
+1	cop<	rcmod<	prep>	pobj>	prep>	pobj>
+1	cop<	rcmod<	prep>	pobj>	prep>	pobj>	prep>	pobj>
+1	cop<	punct>
+26	cop<	num>
+3	cop<	npadvmod>
+779	cop<	aux>
+14	cop<	amod>
+3	cop<	pcomp<
+3	cop<	pcomp<	prep<
+1	cop<	pcomp<	prep<	vmod<	dobj<	dep<	dep<	dep>
+1	cop<	pcomp<	prep<	rcmod<
+6	cop<	pcomp<	prep<	nsubj>
+1	cop<	pcomp<	prep<	parataxis>
+1	cop<	pcomp<	prep<	parataxis>	prep>
+1	cop<	pcomp<	prep<	pobj<	prep<	nsubj>
+1	cop<	pcomp<	prep<	pobj<	prep<	nsubjpass>
+1	cop<	pcomp<	prep<	pobj<	prep<	dobj>
+2	cop<	pcomp<	prep<	dobj<	nsubj>
+1	cop<	pcomp<	prep<	dobj<	iobj>
+1	cop<	pcomp<	prep<	ccomp<	rcmod<	dep<
+2	cop<	pcomp<	prep<	dobj>
+1	cop<	pcomp<	prep<	dobj>	dep>	det>
+1	cop<	pcomp<	prep<	dobj>	prep>	pobj>
+1	cop<	pcomp<	prep<	advmod<	nsubj>
+1	cop<	pcomp<	prep<	cc>
+110	cop<	ccomp>
+6	cop<	ccomp>	dep>
+1	cop<	ccomp>	acomp>	xcomp>	prep>
+1	cop<	ccomp>	rcmod>
+3	cop<	ccomp>	discourse>
+7	cop<	ccomp>	advcl>
+1	cop<	ccomp>	prep>
+1	cop<	ccomp>	prep>	pobj>	dep>
+1	cop<	ccomp>	dobj>	vmod>	dep>	dep>
+4	cop<	quantmod>
+403	cop<	advcl>
+1	cop<	advcl>	conj>	dobj>	prep>	dep>
+1	cop<	advcl>	conj>	dobj>	prep>	prep>
+1	cop<	advcl>	ccomp>
+1	cop<	advcl>	advcl>
+3	cop<	advcl>	advmod>
+1	cop<	advcl>	advmod>	dep>
+1	cop<	advcl>	mark>
+2	cop<	advcl>	prep>
+22	cop<	ccomp<
+1	cop<	ccomp<	dep>
+1	cop<	ccomp<	vmod<
+1	cop<	ccomp<	vmod<	rcmod>
+1	cop<	ccomp<	vmod<	dep<
+3	cop<	ccomp<	vmod<	nsubj<
+2	cop<	ccomp<	dep<
+10	cop<	ccomp<	rcmod<
+1	cop<	ccomp<	rcmod<	appos<
+1	cop<	ccomp<	rcmod<	dep<
+1	cop<	ccomp<	rcmod<	pobj<	prep<	prep>
+2	cop<	ccomp<	rcmod<	cc>
+4	cop<	ccomp<	nsubj>
+3	cop<	ccomp<	prep>
+1	cop<	ccomp<	prep>	pobj>
+1	cop<	ccomp<	conj>	tmod>
+1	cop<	ccomp<	conj<	ccomp<
+1	cop<	ccomp<	conj<	dobj>
+1	cop<	ccomp<	csubj<
+1	cop<	ccomp<	csubj<	dep<	nsubj<	dep<	pobj<	prep<	cc>
+1	cop<	ccomp<	pcomp<	prep<
+1	cop<	ccomp<	pcomp<	prep<	appos<	conj<	conj>
+1	cop<	ccomp<	pcomp<	prep<	appos<	conj<	cc>
+1	cop<	ccomp<	xcomp<
+1	cop<	ccomp<	xcomp<	rcmod<	conj>
+5	cop<	ccomp<	xcomp<	prep>
+2	cop<	ccomp<	parataxis>
+1	cop<	ccomp<	ccomp>
+3	cop<	ccomp<	ccomp<
+1	cop<	ccomp<	ccomp<	amod<	nsubjpass<
+1	cop<	ccomp<	ccomp<	amod<	advmod>
+1	cop<	ccomp<	ccomp<	parataxis>
+3	cop<	ccomp<	ccomp<	dobj>
+1	cop<	ccomp<	advmod>
+1	cop<	ccomp<	advcl>
+11	cop<	ccomp<	dobj>
+1	cop<	ccomp<	advcl<
+1	cop<	ccomp<	advcl<	rcmod<	dobj<
+1	cop<	ccomp<	advcl<	pcomp<	prep<	cc>
+1	cop<	ccomp<	advcl<	dobj>
+2	cop<	ccomp<	cc>
+626	cop<	neg>
+9	cop<	advcl<
+1	cop<	advcl<	dep>
+1	cop<	advcl<	dep<	prep>
+3	cop<	advcl<	rcmod<
+4	cop<	advcl<	nsubj>
+2	cop<	advcl<	xcomp<
+1	cop<	advcl<	xcomp>	prep>	pobj>
+2	cop<	advcl<	advmod>
+1	cop<	advcl<	advmod>	prep>	tmod>
+1	cop<	advcl<	ccomp<	dep<	rcmod<	dep>
+1	cop<	advcl<	advmod<	prep>
+3	cop<	advcl<	prep>
+5	cop<	advcl<	prep>	pobj>
+1	cop<	advcl<	dobj>	prep>	pobj>
+318	cop<	cc>
+96	cop<	dep>
+1	cop<	dep>	vmod>
+1	cop<	dep>	conj>	advcl>
+1	cop<	dep>	conj>	prep>
+2	cop<	dep>	dep>
+1	cop<	dep>	dep>	rcmod>
+2	cop<	dep>	rcmod>
+1	cop<	dep>	tmod>
+1	cop<	dep>	discourse>
+1	cop<	dep>	parataxis>
+1	cop<	dep>	advmod>
+1	cop<	dep>	advcl>
+5	cop<	dep>	prep>
+1	cop<	dep>	prep>	pobj>	rcmod>
+1	cop<	dep>	cc>
+44	cop<	dep<
+2	cop<	dep<	dep>
+1	cop<	dep<	dep>	dep>
+1	cop<	dep<	dep>	xcomp>
+3	cop<	dep<	dep<
+1	cop<	dep<	dep<	dep>
+1	cop<	dep<	dep<	pobj<	prep<	ccomp<	conj<	dobj>
+2	cop<	dep<	dep<	dobj>
+1	cop<	dep<	dep<	cc>
+1	cop<	dep<	rcmod>	dep>
+2	cop<	dep<	nsubj<
+1	cop<	dep<	nsubj<	advcl>
+1	cop<	dep<	nsubj<	prep>
+1	cop<	dep<	rcmod<	dep>
+2	cop<	dep<	nsubj>
+2	cop<	dep<	pobj>
+1	cop<	dep<	pobj<	prep<	prep<
+2	cop<	dep<	pobj<	prep<	conj<	advcl>
+1	cop<	dep<	pobj<	prep<	nsubj<
+1	cop<	dep<	pobj<	prep<	pobj<	prep<	ccomp>
+1	cop<	dep<	parataxis<
+3	cop<	dep<	advmod>
+1	cop<	dep<	dobj<	iobj>
+1	cop<	dep<	appos>
+1	cop<	dep<	neg>
+1	cop<	dep<	advmod<
+1	cop<	dep<	advmod<	vmod<	xcomp<	xcomp<	dobj>
+1	cop<	dep<	advmod<	cc>
+7	cop<	dep<	dobj>
+1	cop<	dep<	advcl<
+1	cop<	dep<	advcl<	xcomp>	prep>	pobj>	vmod>	prep>	conj>
+1	cop<	dep<	cc>
+12	cop<	det>
+53	cop<	tmod>
+1	cop<	tmod>	dep>
+1	cop<	tmod>	advmod>
+5162	cop<	nsubj>
+1	cop<	nsubj>	vmod>	conj>	ccomp>	dobj>
+1	cop<	nsubj>	vmod>	dep>
+1	cop<	nsubj>	vmod>	discourse>
+2	cop<	nsubj>	vmod>	ccomp>
+1	cop<	nsubj>	vmod>	dobj>
+1	cop<	nsubj>	vmod>	dobj>	dep>	dep>	mark>
+1	cop<	nsubj>	vmod>	prep>	pcomp>	ccomp>	dobj>	prep>	pobj>	conj>
+4	cop<	nsubj>	dep>
+1	cop<	nsubj>	dep>	vmod>	prep>
+1	cop<	nsubj>	dep>	conj>	prep>	pobj>	appos>
+1	cop<	nsubj>	dep>	mark>
+2	cop<	nsubj>	dep>	appos>
+1	cop<	nsubj>	dep>	prep>	pobj>
+3	cop<	nsubj>	conj>
+1	cop<	nsubj>	conj>	vmod>	prep>	pobj>
+1	cop<	nsubj>	conj>	advmod>
+4	cop<	nsubj>	rcmod>
+1	cop<	nsubj>	rcmod>	dep>
+1	cop<	nsubj>	rcmod>	xcomp>	acomp>
+1	cop<	nsubj>	rcmod>	prep>	pobj>	conj>
+1	cop<	nsubj>	rcmod>	prep>	pobj>	rcmod>	dobj>
+1	cop<	nsubj>	det>
+23	cop<	nsubj>	advmod>
+4	cop<	nsubj>	appos>
+1	cop<	nsubj>	appos>	rcmod>	dobj>	conj>	rcmod>	nsubj>
+9	cop<	nsubj>	prep>
+6	cop<	nsubj>	prep>	pobj>
+1	cop<	nsubj>	prep>	pobj>	vmod>	dobj>
+1	cop<	nsubj>	prep>	pobj>	conj>
+1	cop<	nsubj>	prep>	pobj>	conj>	prep>	pobj>
+1	cop<	nsubj>	prep>	pobj>	dep>
+1	cop<	nsubj>	prep>	pobj>	rcmod>	advcl>	dobj>
+1	cop<	nsubj>	prep>	pobj>	prep>	pobj>	appos>
+1	cop<	nsubj>	prep>	pobj>	prep>	pobj>	prep>
+2	cop<	nsubjpass>
+1	cop<	expl>
+90	cop<	csubj>
+1	cop<	csubj>	vmod>	ccomp>	dobj>
+1	cop<	csubj>	dep>	conj>
+2	cop<	csubj>	nsubj>
+1	cop<	csubj>	nsubj>	advmod>
+1	cop<	csubj>	ccomp>	xcomp>	xcomp>
+1	cop<	csubj>	ccomp>	xcomp>	prep>	pobj>	rcmod>	ccomp>	dobj>
+1	cop<	csubj>	xcomp>	ccomp>	dobj>
+1	cop<	csubj>	xcomp>	advmod>
+1	cop<	csubj>	xcomp>	prep>	pobj>
+2	cop<	csubj>	advmod>
+1	cop<	csubj>	advmod>	prep>
+3	cop<	csubj>	dobj>
+1	cop<	csubj>	prep>	pobj>
+1	cop<	csubj>	prep>	pobj>	prep>	pcomp>	dobj>
+2	cop<	csubj>	prep>	pcomp>	dobj>
+698	cop<	prep>
+1	cop<	prep>	conj>	pobj>	dep>
+3	cop<	prep>	pobj>
+1	cop<	prep>	pobj>	vmod>
+1	cop<	prep>	pobj>	conj>	advcl>
+1	cop<	prep>	pobj>	dep>	prep>
+6	cop<	prep>	pobj>	rcmod>
+1	cop<	prep>	pobj>	rcmod>	prep>
+1	cop<	prep>	pobj>	ccomp>
+21	cop<	prep>	pobj>	prep>
+1	cop<	prep>	pobj>	prep>	pobj>	rcmod>	xcomp>	ccomp>
+3	cop<	prep>	pcomp>
+1	cop<	prep>	pcomp>	conj>
+1	cop<	prep>	pcomp>	dep>
+1	cop<	prep>	pcomp>	ccomp>	dobj>
+1	cop<	prep>	pcomp>	advmod>
+1	cop<	prep>	pcomp>	dobj>	prep>
+1	cop<	prep>	advmod>
+2	cop<	predet>
+2	cop<	conj>
+2	cop<	conj>	rcmod>
+1	cop<	conj>	pobj>	rcmod>
+1	cop<	conj>	pobj>	prep>
+1	cop<	conj>	advcl>
+2	cop<	conj>	prep>
+3	cop<	conj<
+1	cop<	conj<	dep>
+1	cop<	conj<	vmod<	xcomp<	nsubj>
+1	cop<	conj<	dep<
+1	cop<	conj<	dep<	nsubj>
+2	cop<	conj<	dep<	dobj>
+1	cop<	conj<	nsubj<
+6	cop<	conj<	rcmod<
+1	cop<	conj<	rcmod<	pobj<	prep<	nsubj>
+64	cop<	conj<	nsubj>
+4	cop<	conj<	nsubjpass>
+4	cop<	conj<	prep>
+3	cop<	conj<	prep>	pobj>
+1	cop<	conj<	conj>
+1	cop<	conj<	parataxis<	dep>
+2	cop<	conj<	parataxis<	nsubj>
+1	cop<	conj<	parataxis<	advmod>
+1	cop<	conj<	csubj<
+16	cop<	conj<	aux>
+1	cop<	conj<	xcomp<	nsubj>
+4	cop<	conj<	ccomp>	nsubj>
+1	cop<	conj<	ccomp>	aux>
+1	cop<	conj<	ccomp>	xcomp>	advmod>	advcl>	ccomp>	nsubj>
+1	cop<	conj<	ccomp>	prep>
+1	cop<	conj<	ccomp>	prep>	pcomp>	dobj>
+2	cop<	conj<	advcl>
+1	cop<	conj<	advcl>	nsubjpass>
+1	cop<	conj<	advcl>	advmod>
+8	cop<	conj<	advmod>
+1	cop<	conj<	advmod>	advmod>
+2	cop<	conj<	ccomp<	nsubj>
+1	cop<	conj<	ccomp<	xcomp<	dep<	vmod>
+3	cop<	conj<	neg>
+3	cop<	conj<	dobj>
+1	cop<	conj<	dobj>	vmod>	ccomp>	nsubjpass>
+1	cop<	conj<	dobj>	vmod>	advmod>	prep>	pobj>
+2	cop<	conj<	advcl<	nsubj>
+5	cop<	conj<	cc>
+2	cop<	conj<	cc>	advmod>
+5	cop<	parataxis<
+9	cop<	parataxis<	dep>
+1	cop<	parataxis<	vmod<	prep>	pobj>	prep>	pobj>	appos>
+2	cop<	parataxis<	rcmod<
+2	cop<	parataxis<	nsubj>
+1	cop<	parataxis<	ccomp>
+1	cop<	parataxis<	ccomp>	dobj>
+1	cop<	parataxis<	xcomp>	dobj>
+1	cop<	parataxis<	advmod>
+1	cop<	parataxis<	advcl>
+1	cop<	parataxis<	ccomp<
+1	cop<	parataxis<	neg>
+3	cop<	parataxis<	prep>
+7	cop<	parataxis<	dobj>
+1	cop<	csubj<
+21	cop<	discourse>
+1	cop<	xcomp<
+1	cop<	xcomp<	dep>	xcomp>	prep>	pobj>
+1	cop<	xcomp<	acomp<	cc>
+3	cop<	xcomp<	vmod<
+3	cop<	xcomp<	dep<
+1	cop<	xcomp<	dep<	nsubj>
+2	cop<	xcomp<	rcmod<
+1	cop<	xcomp<	rcmod<	conj>
+1	cop<	xcomp<	rcmod<	dep>
+1	cop<	xcomp<	rcmod<	pobj<	prep<
+105	cop<	xcomp<	nsubj>
+1	cop<	xcomp<	nsubj>	dep>
+1	cop<	xcomp<	nsubj>	nn>
+28	cop<	xcomp<	nsubjpass>
+1	cop<	xcomp<	nsubjpass>	rcmod>
+2	cop<	xcomp<	csubj>
+2	cop<	xcomp<	csubj>	dobj>
+4	cop<	xcomp<	prep>	pobj>
+1	cop<	xcomp<	conj<	dep>
+1	cop<	xcomp<	conj<	parataxis<	nsubj>
+5	cop<	xcomp<	conj<	nsubj>
+1	cop<	xcomp<	conj<	prep>	pcomp>	nsubj>
+1	cop<	xcomp<	conj<	prep>	pcomp>	dobj>
+1	cop<	xcomp<	pcomp<	prep<	pobj<	prep<	advmod<	xcomp<	amod<
+1	cop<	xcomp<	xcomp<	rcmod<	dep>
+1	cop<	xcomp<	xcomp<	nsubj>	nn>
+2	cop<	xcomp<	ccomp<
+1	cop<	xcomp<	ccomp<	dep<	amod<	nsubj<
+1	cop<	xcomp<	ccomp<	advmod>
+57	cop<	xcomp<	dobj>
+1	cop<	xcomp<	dobj>	det>
+1	cop<	xcomp<	advcl<	vmod<	ccomp<	rcmod<	dobj<	advcl<	ccomp<	parataxis<
+1	cop<	xcomp<	advcl<	prep>
+1	cop<	xcomp<	advcl<	prep>	pobj>
+7	cop<	parataxis>
+1	cop<	parataxis>	prep>	pobj>
+92	cop<	xcomp>
+1	cop<	xcomp>	ccomp>	advcl>
+1	cop<	xcomp>	ccomp>	prep>
+1	cop<	xcomp>	xcomp>	prep>	pobj>	prep>
+3	cop<	xcomp>	advmod>
+1	cop<	xcomp>	advmod>	advcl>
+11	cop<	xcomp>	advcl>
+11	cop<	xcomp>	prep>
+1	cop<	xcomp>	prep>	pobj>
+1	cop<	xcomp>	prep>	pobj>	prep>
+1	cop<	xcomp>	dobj>
+1	cop<	xcomp>	dobj>	vmod>
+1	cop<	xcomp>	dobj>	prep>	pobj>	prep>
+787	cop<	advmod>
+1	cop<	advmod>	dep>
+1	cop<	advmod>	dep>	prep>	pobj>	appos>
+1	cop<	advmod>	conj>	tmod>
+1	cop<	advmod>	conj>	advcl>
+2	cop<	advmod>	advmod>
+3	cop<	advmod>	prep>
+20	cop<	mark>
+5	cop<	appos>
+9	cop<	dobj>
+6180	ccomp>
+1	ccomp>	vmod>
+25	ccomp>	dep>
+1	ccomp>	dep>	conj>
+1	ccomp>	dep>	discourse>
+1	ccomp>	dep>	amod>
+1	ccomp>	dep>	advmod>
+1	ccomp>	acomp>
+1	ccomp>	acomp>	prep>
+1	ccomp>	rcmod>	advcl>
+167	ccomp>	nsubj>
+1	ccomp>	nsubj>	vmod>
+1	ccomp>	nsubj>	amod>
+1	ccomp>	nsubj>	amod>	advmod>
+1	ccomp>	nsubj>	num>
+2	ccomp>	nsubj>	advmod>
+1	ccomp>	nsubj>	appos>
+3	ccomp>	nsubj>	prep>
+1	ccomp>	nsubj>	nn>
+4	ccomp>	nsubjpass>
+2	ccomp>	nsubjpass>	amod>	prep>
+4	ccomp>	expl>
+1	ccomp>	csubj>
+43	ccomp>	prep>
+1	ccomp>	prep>	conj>
+1	ccomp>	prep>	dep>
+1	ccomp>	prep>	pobj>
+1	ccomp>	prep>	pobj>	dep>
+1	ccomp>	prep>	pobj>	conj>	dep>
+1	ccomp>	prep>	pobj>	rcmod>
+1	ccomp>	prep>	pobj>	prep>	pcomp>	advcl>
+1	ccomp>	prep>	pcomp>
+1	ccomp>	prep>	advmod>
+3	ccomp>	conj>
+2	ccomp>	conj>	advcl>
+2	ccomp>	conj>	prep>
+4	ccomp>	discourse>
+1	ccomp>	amod>	prep>	pobj>	appos>
+1	ccomp>	aux>
+11	ccomp>	ccomp>
+1	ccomp>	ccomp>	conj>	prep>	pobj>	dep>
+1	ccomp>	ccomp>	advmod>	prep>
+2	ccomp>	ccomp>	advcl>
+1	ccomp>	ccomp>	prep>	pobj>	prep>
+1	ccomp>	parataxis>
+1	ccomp>	parataxis>	rcmod>	dobj>	prep>	pobj>
+14	ccomp>	xcomp>
+1	ccomp>	xcomp>	rcmod>
+1	ccomp>	xcomp>	advcl>
+1	ccomp>	xcomp>	advmod>
+3	ccomp>	xcomp>	dobj>	advmod>
+3	ccomp>	xcomp>	prep>
+30	ccomp>	mark>
+26	ccomp>	advmod>
+50	ccomp>	advcl>
+1	ccomp>	advcl>	advcl>
+1	ccomp>	neg>
+8	ccomp>	dobj>
+1	ccomp>	dobj>	dep>
+1	ccomp>	dobj>	rcmod>
+1	ccomp>	dobj>	appos>
+3	ccomp>	cc>
+329	ccomp<
+1	ccomp<	vmod>	nsubj>
+4	ccomp<	vmod<
+1	ccomp<	vmod<	dep<	vmod>
+6	ccomp<	vmod<	nsubj<
+1	ccomp<	vmod<	nsubj<	prep>
+1	ccomp<	vmod<	csubj<
+1	ccomp<	vmod<	advcl>
+1	ccomp<	vmod<	dobj<
+1	ccomp<	vmod<	dobj<	dep<
+1	ccomp<	vmod<	dobj<	dep<	advmod>
+1	ccomp<	vmod<	dobj<	prep>
+1	ccomp<	vmod<	prep>	pobj>	conj>
+1	ccomp<	rcmod>	conj>	dobj>
+40	ccomp<	rcmod<
+5	ccomp<	rcmod<	dep>
+1	ccomp<	rcmod<	dep>	dep>	prep>
+1	ccomp<	rcmod<	dep>	nsubj>
+1	ccomp<	rcmod<	appos<	pobj<	prep<
+1	ccomp<	rcmod<	appos<	pobj<	prep<	nsubj<
+1	ccomp<	rcmod<	dep<
+1	ccomp<	rcmod<	dep<	dep>
+3	ccomp<	rcmod<	nsubj<
+1	ccomp<	rcmod<	nsubj<	rcmod<	appos>
+1	ccomp<	rcmod<	nsubj<	advmod>
+1	ccomp<	rcmod<	det>
+1	ccomp<	rcmod<	pobj<
+1	ccomp<	rcmod<	pobj<	prep<
+1	ccomp<	rcmod<	pobj<	prep<	nsubjpass<
+1	ccomp<	rcmod<	pobj<	prep<	nsubj<
+1	ccomp<	rcmod<	pobj<	prep<	xcomp<	ccomp<	csubj<	dep<	nsubj<	dep<	pobj<	prep<	cc>
+1	ccomp<	rcmod<	pobj<	prep<	pobj<	prep<	prep>	pobj>
+1	ccomp<	rcmod<	pobj<	prep<	dobj<
+1	ccomp<	rcmod<	pobj<	prep<	dobj<	xcomp<
+1	ccomp<	rcmod<	tmod<	dobj>
+2	ccomp<	rcmod<	prep>	pobj>
+3	ccomp<	rcmod<	cc>
+1	ccomp<	pobj>
+1	ccomp<	amod<
+1	ccomp<	aux>
+2	ccomp<	pcomp<	prep<
+1	ccomp<	pcomp<	prep<	dep>
+1	ccomp<	pcomp<	prep<	vmod<
+1	ccomp<	pcomp<	prep<	vmod<	nsubjpass<
+1	ccomp<	pcomp<	prep<	dep<
+1	ccomp<	pcomp<	prep<	dep<	advcl>
+1	ccomp<	pcomp<	prep<	rcmod<	dep>
+1	ccomp<	pcomp<	prep<	pobj<	prep<	rcmod<	dep>
+6	ccomp<	ccomp>
+1	ccomp<	ccomp>	ccomp>	nsubj>
+1	ccomp<	ccomp>	dobj>	rcmod>	dobj>
+14	ccomp<	ccomp<
+1	ccomp<	ccomp<	vmod<	nsubj<
+1	ccomp<	ccomp<	vmod<	dobj>
+1	ccomp<	ccomp<	dep<	dep>
+2	ccomp<	ccomp<	nsubj>
+1	ccomp<	ccomp<	xcomp<	nsubj>
+1	ccomp<	ccomp<	parataxis>
+1	ccomp<	ccomp<	ccomp>
+2	ccomp<	ccomp<	ccomp<
+1	ccomp<	ccomp<	advmod>
+1	ccomp<	ccomp<	advmod>	prep>	pobj>
+1	ccomp<	ccomp<	dobj<	dobj>
+1	ccomp<	ccomp<	dobj<	dobj>	amod>
+2	ccomp<	ccomp<	prep>	pobj>
+5	ccomp<	ccomp<	dobj>
+1	ccomp<	ccomp<	cc>
+11	ccomp<	advcl>
+1	ccomp<	advcl>	nsubj>
+1	ccomp<	neg>
+7	ccomp<	advcl<
+3	ccomp<	advcl<	dep>
+1	ccomp<	advcl<	nsubj>
+1	ccomp<	advcl<	pcomp<	prep<	cc>
+1	ccomp<	advcl<	xcomp<	rcmod<	appos<	pobj<	prep<	advcl>
+2	ccomp<	advcl<	ccomp>
+1	ccomp<	advcl<	advmod>
+1	ccomp<	advcl<	prep>
+1	ccomp<	advcl<	dobj>
+1	ccomp<	advcl<	cc>
+21	ccomp<	cc>
+17	ccomp<	dep>
+1	ccomp<	dep>	dep>
+1	ccomp<	dep>	conj>	advmod>
+1	ccomp<	dep>	pobj>
+1	ccomp<	dep>	prep>
+1	ccomp<	dep>	prep>	pobj>
+1	ccomp<	dep>	dobj>	conj>
+1	ccomp<	acomp<	rcmod<	pobj<	prep<
+1	ccomp<	acomp<	advcl>
+18	ccomp<	dep<
+1	ccomp<	dep<	vmod>
+1	ccomp<	dep<	amod<	nsubj<
+2	ccomp<	dep<	dep>
+1	ccomp<	dep<	dep<	nsubj<	prep>
+1	ccomp<	dep<	dep<	appos>
+1	ccomp<	dep<	rcmod<	pobj<	prep<
+1	ccomp<	dep<	rcmod<	pobj<	prep<	advcl<
+1	ccomp<	dep<	appos>
+1	ccomp<	dep<	prep>
+1	ccomp<	dep<	prep>	pobj>
+1	ccomp<	dep<	cc>
+1	ccomp<	acomp>
+1	ccomp<	tmod>
+1	ccomp<	tmod>	rcmod>
+98	ccomp<	nsubj>
+1	ccomp<	nsubj>	dep>
+1	ccomp<	nsubj>	conj>
+1	ccomp<	nsubj>	rcmod>	nsubj>
+1	ccomp<	nsubj>	det>
+8	ccomp<	nsubjpass>
+1	ccomp<	csubj>
+28	ccomp<	prep>
+2	ccomp<	prep>	conj>	pobj>
+48	ccomp<	prep>	pobj>
+2	ccomp<	prep>	pobj>	conj>
+1	ccomp<	prep>	pobj>	dep>
+1	ccomp<	prep>	pobj>	dep>	dep>	prep>	pobj>
+1	ccomp<	prep>	pobj>	dep>	prep>	pobj>
+1	ccomp<	prep>	pobj>	appos>
+1	ccomp<	prep>	pobj>	appos>	prep>	pobj>
+4	ccomp<	prep>	pobj>	prep>	pobj>
+1	ccomp<	prep>	pobj>	prep>	pobj>	prep>	pobj>
+1	ccomp<	prep>	pcomp>	prep>	pobj>
+1	ccomp<	prep>	advmod>
+3	ccomp<	conj>
+1	ccomp<	conj>	ccomp>
+1	ccomp<	conj>	advmod>
+1	ccomp<	conj>	prep>
+1	ccomp<	conj>	prep>	pobj>	rcmod>
+1	ccomp<	conj<
+1	ccomp<	conj<	conj>
+1	ccomp<	conj<	dep>
+1	ccomp<	conj<	vmod<	nsubj<
+1	ccomp<	conj<	dep<	nsubj<
+1	ccomp<	conj<	rcmod<
+3	ccomp<	conj<	nsubj>
+1	ccomp<	conj<	xcomp<	advcl>
+1	ccomp<	conj<	ccomp>	nsubj>
+1	ccomp<	conj<	ccomp<
+1	ccomp<	conj<	ccomp<	dobj>
+1	ccomp<	conj<	advmod>
+2	ccomp<	conj<	dobj>
+5	ccomp<	conj<	cc>
+3	ccomp<	parataxis<
+1	ccomp<	parataxis<	nsubj>
+2	ccomp<	parataxis<	dobj>
+2	ccomp<	csubj<
+2	ccomp<	xcomp<
+1	ccomp<	xcomp<	conj<	parataxis>
+1	ccomp<	xcomp<	csubj<
+1	ccomp<	xcomp<	rcmod<
+1	ccomp<	xcomp<	rcmod<	pobj<	prep<	pobj<	prep<
+1	ccomp<	xcomp<	rcmod<	prep>
+4	ccomp<	xcomp<	nsubj>
+1	ccomp<	xcomp<	nsubjpass>
+1	ccomp<	xcomp<	advcl>
+1	ccomp<	xcomp<	advcl>	dep>
+1	ccomp<	xcomp<	ccomp<	cc>
+2	ccomp<	xcomp<	prep>
+1	ccomp<	xcomp<	advcl<	dep>
+1	ccomp<	xcomp<	cc>
+33	ccomp<	parataxis>
+1	ccomp<	parataxis>	tmod>
+1	ccomp<	parataxis>	nsubj>
+1	ccomp<	parataxis>	prep>
+7	ccomp<	xcomp>
+1	ccomp<	xcomp>	ccomp>
+1	ccomp<	xcomp>	xcomp>
+1	ccomp<	xcomp>	xcomp>	dobj>
+1	ccomp<	xcomp>	advcl>	dobj>	prep>	pobj>
+3	ccomp<	xcomp>	prep>	pobj>
+2	ccomp<	xcomp>	dobj>
+44	ccomp<	advmod>
+4	ccomp<	advmod>	dep>
+2	ccomp<	advmod>	prep>	pobj>
+1	ccomp<	advmod>	prep>	pobj>	prep>	pobj>	appos>
+1	ccomp<	dobj<	vmod<	dep>
+1	ccomp<	dobj<	dobj>
+99	ccomp<	dobj>
+1	ccomp<	dobj>	dep>
+3	ccomp<	dobj>	prep>	pobj>
+1	ccomp<	dobj>	prep>	pobj>	conj>
+1	ccomp<	dobj>	prep>	pobj>	appos>
+1	ccomp<	dobj>	prep>	pcomp>	prep>	pobj>
+2767	neg>
+1	neg>	advmod>
+1328	dep>
+1	dep>	vmod>
+1	dep>	vmod>	prep>	pobj>	conj>
+40	dep>	dep>
+1	dep>	dep>	appos>
+1	dep>	dep>	prep>
+2	dep>	poss>
+1	dep>	rcmod>
+3	dep>	tmod>
+1	dep>	det>
+21	dep>	nsubj>
+1	dep>	nsubj>	appos>
+1	dep>	nsubj>	prep>
+1	dep>	nsubjpass>
+1	dep>	expl>
+1	dep>	iobj>	prep>	pobj>
+31	dep>	prep>
+2	dep>	prep>	dep>
+1	dep>	prep>	npadvmod>
+24	dep>	prep>	pobj>
+1	dep>	prep>	pobj>	rcmod>	conj>	prep>	pobj>
+1	dep>	prep>	pobj>	rcmod>	prep>	pobj>
+1	dep>	prep>	pobj>	appos>
+2	dep>	prep>	pobj>	prep>	pobj>
+1	dep>	prep>	pcomp>	pobj>
+1	dep>	conj>
+1	dep>	conj>	dobj>
+1	dep>	conj>	dobj>	prep>	pobj>
+1	dep>	conj>	prep>
+1	dep>	conj>	prep>	pobj>
+1	dep>	discourse>
+1	dep>	ccomp>	nsubj>
+1	dep>	ccomp>	parataxis>	dobj>	det>
+1	dep>	ccomp>	neg>
+1	dep>	ccomp>	prep>
+6	dep>	ccomp>	prep>	pobj>
+1	dep>	ccomp>	dobj>
+1	dep>	ccomp>	dobj>	prep>	pobj>
+3	dep>	pcomp>
+3	dep>	xcomp>
+2	dep>	xcomp>	prep>	pobj>
+23	dep>	advmod>
+3	dep>	advmod>	advmod>
+3	dep>	mark>
+2	dep>	advcl>
+1	dep>	advcl>	vmod>	prep>	pobj>
+1	dep>	advcl>	prep>	pobj>
+1	dep>	advcl>	prep>	pobj>	prep>	pobj>	conj>
+7	dep>	neg>
+9	dep>	dobj>
+2	dep>	dobj>	conj>
+1	dep>	dobj>	rcmod>	neg>
+1	dep>	dobj>	rcmod>	dobj>
+2	dep>	dobj>	prep>
+2	dep>	dobj>	prep>	pobj>
+1	dep>	dobj>	prep>	pcomp>	prep>	pobj>
+1	dep>	nn>
+198	poss>
+2	nsubjpass<
+3	nsubjpass<	rcmod<
+1	nsubjpass<	rcmod<	dep<
+1	nsubjpass<	expl>
+1	nsubjpass<	xcomp>
+2	nsubjpass<	prep>
+1	auxpass>
+1	mark<
+1	mark<	advcl<	xcomp>	prep>	pobj>
+525	dep<
+4	dep<	vmod>
+1	dep<	vmod>	nsubj>
+1	dep<	vmod>	dobj>
+2	dep<	vmod<
+1	dep<	rcmod>
+1	dep<	rcmod>	acomp>
+1	dep<	rcmod>	advmod>
+1	dep<	rcmod>	dobj>
+1	dep<	rcmod>	dobj>	vmod>	prep>	pobj>
+12	dep<	rcmod<
+1	dep<	rcmod<	dep>
+2	dep<	rcmod<	dep<
+1	dep<	rcmod<	pobj<	prep<
+2	dep<	rcmod<	prep>	pobj>
+1	dep<	rcmod<	dobj>
+1	dep<	pobj>
+1	dep<	pobj>	vmod>	prep>	pobj>
+13	dep<	pobj<
+9	dep<	pobj<	prep<
+1	dep<	pobj<	prep<	vmod<	xcomp<
+1	dep<	pobj<	prep<	vmod<	xcomp<	nsubj>
+1	dep<	pobj<	prep<	vmod<	pobj<	prep<	dobj<	nsubj>
+1	dep<	pobj<	prep<	vmod<	pobj<	prep<	dobj<	aux>
+2	dep<	pobj<	prep<	dep<
+1	dep<	pobj<	prep<	dep<	nsubj>
+1	dep<	pobj<	prep<	dep<	dobj<	xcomp<
+1	dep<	pobj<	prep<	nsubj<
+2	dep<	pobj<	prep<	nsubj>
+1	dep<	pobj<	prep<	pobj<	prep<	vmod<	nsubj<
+1	dep<	pobj<	prep<	pobj<	prep<	ccomp<
+1	dep<	pobj<	prep<	pobj<	prep<	ccomp<	aux>
+5	dep<	pobj<	prep<	prep>
+1	dep<	pobj<	prep<	prep>	npadvmod>
+1	dep<	pobj<	prep<	conj<	dep>	nsubj>
+2	dep<	pobj<	prep<	aux>
+1	dep<	pobj<	prep<	ccomp>
+1	dep<	pobj<	prep<	advmod>
+1	dep<	pobj<	prep<	advmod>	prep>
+6	dep<	pobj<	prep<	advcl>
+1	dep<	pobj<	prep<	dobj<	nsubj>
+2	dep<	pobj<	prep<	dobj>
+2	dep<	pobj<	prep<	cc>
+1	dep<	pobj<	conj<	prep<	nsubj>
+7	dep<	num>
+1	dep<	num>	number>
+7	dep<	amod<
+1	dep<	amod<	poss>
+1	dep<	amod<	nsubj<
+1	dep<	amod<	pobj<	prep<	dep<
+11	dep<	aux>
+7	dep<	amod>
+1	dep<	number>
+1	dep<	pcomp<	prep<	nsubj>
+3	dep<	ccomp>
+1	dep<	ccomp>	ccomp>	mark>
+1	dep<	ccomp>	dobj>
+1	dep<	ccomp>	dobj>	vmod>	dobj>	poss>
+1	dep<	ccomp>	dobj>	dep>
+1	dep<	ccomp>	prep>	pobj>	conj>
+13	dep<	advcl>
+1	dep<	advcl>	nsubj>
+2	dep<	ccomp<
+1	dep<	ccomp<	dep>
+1	dep<	ccomp<	conj<	nsubj>
+1	dep<	ccomp<	nsubj<	advmod>
+4	dep<	ccomp<	nsubj>
+1	dep<	ccomp<	pcomp<	prep<	dep>
+1	dep<	ccomp<	advcl>
+1	dep<	ccomp<	dobj>
+5	dep<	neg>
+1	dep<	advcl<
+1	dep<	advcl<	rcmod<	iobj<	dobj>
+1	dep<	advcl<	nsubj>
+1	dep<	advcl<	dobj>	prep>	pobj>
+2	dep<	neg<
+2	dep<	neg<	nsubj>
+2	dep<	neg<	aux>
+2	dep<	neg<	advcl>
+1	dep<	neg<	cc>
+29	dep<	cc>
+19	dep<	dep>
+1	dep<	dep>	dep>
+1	dep<	dep>	nsubj>
+1	dep<	dep>	advcl>
+1	dep<	dep>	prep>	pobj>
+1	dep<	dep>	prep>	pobj>	conj>
+1	dep<	dep>	prep>	pobj>	prep>	pobj>	prep>	pobj>
+1	dep<	dep>	dobj>
+2	dep<	poss>
+1	dep<	nsubjpass<	dep>
+19	dep<	dep<
+3	dep<	dep<	dep>
+1	dep<	dep<	dep<
+1	dep<	dep<	nsubj<
+1	dep<	dep<	nsubj<	advcl>
+1	dep<	dep<	nsubj<	prep>
+1	dep<	dep<	rcmod<	pobj<	prep<	conj<	advmod>
+4	dep<	dep<	nsubj>
+2	dep<	dep<	pobj<
+1	dep<	dep<	pobj<	prep<
+1	dep<	dep<	conj>
+1	dep<	dep<	conj>	prep>
+1	dep<	dep<	amod<	poss>
+1	dep<	dep<	amod<	nsubj<
+1	dep<	dep<	amod>
+1	dep<	dep<	aux>
+1	dep<	dep<	dobj<	dep<	pobj<
+1	dep<	dep<	dobj<	dep<	pobj<	parataxis>
+1	dep<	dep<	dobj<	pcomp<	prep<	dobj<	rcmod<	pobj<	prep<
+1	dep<	dep<	advcl>
+1	dep<	dep<	dobj>
+1	dep<	acomp>	prep>	pcomp>	pobj>
+11	dep<	nsubj<
+1	dep<	nsubj<	dep>
+1	dep<	nsubj<	dep<	appos>
+1	dep<	nsubj<	parataxis<	dobj>
+2	dep<	nsubj<	nsubj>
+1	dep<	nsubj<	xcomp<
+1	dep<	nsubj<	xcomp<	dep<
+2	dep<	tmod>
+3	dep<	det>
+97	dep<	nsubj>
+1	dep<	nsubj>	vmod>
+1	dep<	nsubj>	rcmod>	dobj>
+1	dep<	nsubj>	appos>
+9	dep<	nsubjpass>
+24	dep<	prep>
+1	dep<	prep>	conj>	pobj>
+24	dep<	prep>	pobj>
+2	dep<	prep>	pobj>	conj>
+1	dep<	prep>	pobj>	conj>	dep>	prep>	pobj>
+1	dep<	prep>	pobj>	rcmod>
+1	dep<	prep>	pobj>	rcmod>	ccomp>	conj>
+1	dep<	prep>	pobj>	num>
+1	dep<	prep>	pobj>	prep>	pobj>
+3	dep<	prep<
+2	dep<	prep<	dep>
+1	dep<	prep<	dep<
+1	dep<	prep<	rcmod<
+2	dep<	prep<	nsubj>
+1	dep<	prep<	tmod<	ccomp<	rcmod<
+1	dep<	prep<	dobj<	rcmod<
+1	dep<	prep<	dobj<	xcomp<	advcl>
+1	dep<	prep<	advmod>
+1	dep<	prep<	dobj>
+5	dep<	conj>
+2	dep<	conj>	pobj>
+1	dep<	conj>	appos>
+2	dep<	conj>	dobj>
+1	dep<	conj>	dobj>	rcmod>	ccomp>	nsubj>
+1	dep<	conj>	dobj>	prep>
+1	dep<	conj>	prep>
+1	dep<	conj>	prep>	pobj>	dep>
+1	dep<	conj>	prep>	pcomp>	dobj>
+3	dep<	conj<
+1	dep<	conj<	prep<
+1	dep<	conj<	prep<	nsubj<
+1	dep<	conj<	dep>
+1	dep<	conj<	dep<	nsubj>
+1	dep<	conj<	dep<	ccomp<	prep>
+1	dep<	conj<	dep<	prep>
+5	dep<	conj<	nsubj>
+2	dep<	conj<	aux>
+1	dep<	conj<	ccomp<	nsubj>
+1	dep<	conj<	dobj<	nsubj>
+1	dep<	conj<	dobj<	prep>
+1	dep<	appos<	pobj<	prep<
+1	dep<	parataxis<	dep>
+1	dep<	parataxis<	dep>	dep>
+1	dep<	parataxis<	conj>	xcomp>	ccomp>	nsubj>
+1	dep<	parataxis<	advcl>
+1	dep<	parataxis<	neg>
+2	dep<	parataxis<	dobj>
+2	dep<	csubj<
+3	dep<	discourse>
+1	dep<	xcomp<
+1	dep<	xcomp<	dep<
+1	dep<	xcomp<	dep<	advmod>
+5	dep<	xcomp<	nsubj>
+1	dep<	xcomp<	aux>
+1	dep<	xcomp<	nsubjpass>
+1	dep<	xcomp<	advmod>
+2	dep<	xcomp<	dobj>
+1	dep<	xcomp<	prep>
+1	dep<	xcomp<	prep>	pobj>
+1	dep<	xcomp<	cc>
+5	dep<	parataxis>
+1	dep<	parataxis>	nsubj>
+1	dep<	xcomp>	nsubj>
+31	dep<	advmod>
+1	dep<	advmod>	conj>
+1	dep<	advmod>	advmod>
+1	dep<	advmod>	prep>	pobj>
+7	dep<	dobj<
+1	dep<	dobj<	dep>
+1	dep<	dobj<	dep<	parataxis<	conj>	xcomp>	ccomp>	nsubj>
+1	dep<	dobj<	parataxis<
+1	dep<	dobj<	parataxis<	nsubj>
+13	dep<	dobj<	nsubj>
+1	dep<	dobj<	xcomp<	nsubj>
+1	dep<	dobj<	xcomp<	advcl<
+1	dep<	dobj<	xcomp<	advcl<	xcomp>
+1	dep<	dobj<	xcomp>
+1	dep<	dobj<	iobj>
+1	dep<	dobj<	advmod>
+1	dep<	dobj<	ccomp<	dep<	conj>	rcmod>
+5	dep<	dobj<	prep>
+1	dep<	dobj<	cc>
+7	dep<	appos>
+1	dep<	nn<
+68	dep<	dobj>
+2	dep<	dobj>	dep>
+1	dep<	dobj>	advmod>
+2	dep<	advmod<
+1	dep<	advmod<	rcmod<
+5	dep<	advmod<	nsubj>
+1	dep<	advmod<	ccomp<
+1	dep<	advmod<	dobj>
+1	dep<	advmod<	prep>
+98	det>
+2609	nsubjpass>
+1	nsubjpass>	vmod>
+1	nsubjpass>	vmod>	dep>
+1	nsubjpass>	vmod>	prep>	pcomp>	ccomp>	prep>
+1	nsubjpass>	vmod>	dobj>
+1	nsubjpass>	dep>
+1	nsubjpass>	dep>	appos>
+2	nsubjpass>	conj>
+1	nsubjpass>	rcmod>	advcl>	prep>	pobj>
+4	nsubjpass>	det>
+3	nsubjpass>	quantmod>
+2	nsubjpass>	num>
+11	nsubjpass>	advmod>
+3	nsubjpass>	appos>
+1	nsubjpass>	prep>
+2	nsubjpass>	prep>	pobj>
+1	nsubjpass>	prep>	pobj>	dep>
+1	nsubjpass>	prep>	pobj>	rcmod>	ccomp>	dobj>
+1	nsubjpass>	prep>	pobj>	prep>
+1	nsubjpass>	prep>	pobj>	prep>	pobj>	appos>
+140	csubj>
+1	csubj>	vmod>	ccomp>	prep>	pobj>	appos>
+2	csubj>	dep>	conj>
+1	csubj>	dep>	dobj>
+1	csubj>	nsubj>
+1	csubj>	nsubj>	vmod>
+1	csubj>	aux>
+1	csubj>	pobj>
+2	csubj>	ccomp>
+1	csubj>	ccomp>	xcomp>	prep>	pobj>	dep>
+1	csubj>	ccomp>	prep>	pobj>
+1	csubj>	xcomp>	conj>	prep>	pobj>	prep>	dep>
+1	csubj>	xcomp>	ccomp>
+4	csubj>	advmod>
+1	csubj>	mark>
+2	csubj>	neg>
+33	csubj>	dobj>
+4	csubj>	dobj>	conj>
+1	csubj>	dobj>	advmod>
+1	csubj>	dobj>	appos>
+1	csubj>	dobj>	prep>
+1	csubj>	dobj>	prep>	conj>
+2	csubj>	prep>
+5	csubj>	prep>	pobj>
+1	csubj>	prep>	pobj>	dep>
+1	csubj>	prep>	pobj>	dep>	prep>	pobj>	dep>
+1	csubj>	prep>	pobj>	conj>	dep>
+4	predet>
+249	auxpass<
+1	auxpass<	vmod>
+1	auxpass<	vmod<	dobj>
+18	auxpass<	rcmod<
+1	auxpass<	rcmod<	dep>
+1	auxpass<	rcmod<	conj<	cc>
+1	auxpass<	rcmod<	pobj<
+19	auxpass<	aux>
+1	auxpass<	pcomp<	prep<	dobj<	pcomp<	prep<	vmod<	nsubj>
+2	auxpass<	ccomp>
+17	auxpass<	advcl>
+1	auxpass<	advcl>	ccomp>
+1	auxpass<	ccomp<
+1	auxpass<	ccomp<	dep<
+1	auxpass<	ccomp<	prep>
+21	auxpass<	neg>
+7	auxpass<	cc>
+4	auxpass<	dep>
+1	auxpass<	dep<
+1	auxpass<	dep<	pobj<	prep<
+9	auxpass<	tmod>
+197	auxpass<	nsubjpass>
+1	auxpass<	nsubjpass>	appos>
+1	auxpass<	nsubjpass>	prep>
+1	auxpass<	expl>
+18	auxpass<	prep>
+1	auxpass<	prep>	dep>
+1	auxpass<	prep>	pobj>	rcmod>	advcl>
+1	auxpass<	prep>	advmod>
+1	auxpass<	conj>
+1	auxpass<	conj>	dep>	cc>
+1	auxpass<	conj<	rcmod<
+2	auxpass<	conj<	nsubj>
+2	auxpass<	conj<	nsubjpass>
+1	auxpass<	conj<	xcomp<	nsubj>
+1	auxpass<	conj<	xcomp<	aux>
+1	auxpass<	conj<	xcomp<	advmod>
+1	auxpass<	conj<	ccomp<	nsubj>
+1	auxpass<	conj<	advmod>
+1	auxpass<	conj<	prep>
+1	auxpass<	conj<	prep>	pcomp>	prep>
+1	auxpass<	parataxis<	advmod>
+1	auxpass<	discourse>
+2	auxpass<	xcomp<	nsubj>
+1	auxpass<	xcomp<	pcomp<	prep<	nsubj>
+1	auxpass<	xcomp<	dobj>
+1	auxpass<	xcomp<	prep>	pobj>
+1	auxpass<	parataxis>
+1	auxpass<	xcomp>
+1	auxpass<	xcomp>	acomp>
+32	auxpass<	advmod>
+1	auxpass<	dobj>
+24	conj>
+3	conj>	vmod>
+1	conj>	vmod>	xcomp>
+1	conj>	vmod>	advmod>
+1	conj>	dep>	pcomp>
+1	conj>	dep>	prep>
+1	conj>	acomp>	advmod>
+1	conj>	nsubj>
+1	conj>	nsubjpass>
+3	conj>	ccomp>
+1	conj>	ccomp>	advcl>
+1	conj>	ccomp>	advcl>	advcl>
+3	conj>	xcomp>
+1	conj>	xcomp>	dobj>
+1	conj>	xcomp>	prep>
+12	conj>	advcl>
+5	conj>	advmod>
+28	conj>	prep>
+1	conj>	prep>	pobj>
+1	conj>	prep>	pobj>	vmod>
+1	conj>	prep>	pobj>	dep>
+1	conj>	prep>	pobj>	dep>	prep>
+1	conj>	prep>	pobj>	prep>
+17	conj>	dobj>
+1	conj>	dobj>	vmod>	advcl>	advcl>
+2	conj>	dobj>	prep>	pobj>
+2	discourse<
+1	discourse<	conj<	nsubj>
+26	conj<
+7	conj<	vmod>
+1	conj<	vmod>	advcl>
+1	conj<	vmod>	prep>	pobj>
+10	conj<	vmod<
+1	conj<	vmod<	poss>
+1	conj<	vmod<	vmod<	xcomp<	nsubj>
+1	conj<	vmod<	nsubj<
+1	conj<	vmod<	rcmod<
+10	conj<	vmod<	nsubj>
+2	conj<	vmod<	pobj<	prep<
+1	conj<	vmod<	pobj<	prep<	nsubj>
+1	conj<	vmod<	pobj<	prep<	advmod>
+1	conj<	vmod<	pobj<	prep<	dobj>
+3	conj<	vmod<	prep>	pobj>
+1	conj<	vmod<	conj<
+1	conj<	vmod<	conj<	nsubj<
+1	conj<	vmod<	parataxis<	nsubj>
+1	conj<	vmod<	xcomp>
+1	conj<	vmod<	dobj<	vmod<	dobj>
+1	conj<	vmod<	dobj<	rcmod<	pobj<	prep<
+6	conj<	vmod<	dobj<	nsubj>
+2	conj<	vmod<	dobj<	xcomp<	nsubj>
+1	conj<	vmod<	dobj<	parataxis>
+2	conj<	vmod<	dobj<	iobj>
+1	conj<	vmod<	dobj<	prep>
+19	conj<	vmod<	dobj>
+1	conj<	vmod<	cc>
+1	conj<	rcmod>
+1	conj<	rcmod>	advcl>	nsubj>
+1	conj<	rcmod>	advcl>	aux>
+151	conj<	rcmod<
+1	conj<	rcmod<	vmod>
+1	conj<	rcmod<	vmod>	prep>
+3	conj<	rcmod<	dep>
+1	conj<	rcmod<	dep<	dep<
+1	conj<	rcmod<	dep<	parataxis>
+1	conj<	rcmod<	dep<	dobj<	vmod<	nsubjpass>
+1	conj<	rcmod<	dep<	dobj<	vmod<	dobj>
+1	conj<	rcmod<	dep<	dobj>
+4	conj<	rcmod<	nsubj<
+1	conj<	rcmod<	nsubj<	advcl>
+1	conj<	rcmod<	nsubj<	ccomp<	nsubj>
+1	conj<	rcmod<	nsubj<	advmod>
+1	conj<	rcmod<	rcmod<	nsubj<
+4	conj<	rcmod<	nsubj>
+4	conj<	rcmod<	pobj<	prep<
+1	conj<	rcmod<	pobj<	prep<	dep>
+1	conj<	rcmod<	pobj<	prep<	vmod<
+1	conj<	rcmod<	pobj<	prep<	dep<
+1	conj<	rcmod<	pobj<	prep<	rcmod<
+1	conj<	rcmod<	pobj<	prep<	nsubj>
+1	conj<	rcmod<	pobj<	prep<	nsubjpass>
+1	conj<	rcmod<	pobj<	prep<	pobj<
+1	conj<	rcmod<	pobj<	prep<	pobj<	prep<	dobj<	nsubj>
+1	conj<	rcmod<	pobj<	prep<	advmod<	dobj<	ccomp<	prep>
+1	conj<	rcmod<	pobj<	prep<	prep>
+6	conj<	rcmod<	prep>	pobj>
+1	conj<	rcmod<	conj>
+1	conj<	rcmod<	appos<
+1	conj<	rcmod<	conj<	conj>
+1	conj<	rcmod<	conj<	rcmod>
+1	conj<	rcmod<	ccomp>
+2	conj<	rcmod<	dobj<
+1	conj<	rcmod<	dobj<	dep>
+1	conj<	rcmod<	dobj<	vmod<
+1	conj<	rcmod<	dobj<	vmod<	nsubjpass<	ccomp<
+10	conj<	rcmod<	dobj<	nsubj>
+2	conj<	rcmod<	dobj<	aux>
+1	conj<	rcmod<	dobj<	pcomp<	prep<	advcl>
+1	conj<	rcmod<	dobj<	pcomp<	prep<	prep>
+1	conj<	rcmod<	dobj<	ccomp<
+1	conj<	rcmod<	dobj<	ccomp<	nsubj>
+1	conj<	rcmod<	dobj<	ccomp<	advcl>
+1	conj<	rcmod<	dobj<	ccomp<	advmod>
+1	conj<	rcmod<	dobj<	advmod>
+3	conj<	rcmod<	dobj<	prep>
+1	conj<	rcmod<	dobj<	cc>
+1	conj<	rcmod<	advmod>
+1	conj<	rcmod<	appos>	prep>	pobj>
+1	conj<	rcmod<	cc>
+1	conj<	pobj<	prep<
+1	conj<	pobj<	prep<	dep>
+1	conj<	pobj<	prep<	dep>	dep>
+1	conj<	pobj<	prep<	dep>	dobj>	conj>
+1	conj<	pobj<	prep<	vmod<	pobj<	prep<	dobj>
+1	conj<	pobj<	prep<	dep<	nsubjpass>
+1	conj<	pobj<	prep<	dep<	aux>
+1	conj<	pobj<	prep<	dep<	advmod>
+1	conj<	pobj<	prep<	rcmod<
+14	conj<	pobj<	prep<	nsubj>
+1	conj<	pobj<	prep<	nsubjpass>
+1	conj<	pobj<	prep<	pobj<	prep<
+1	conj<	pobj<	prep<	pobj<	prep<	dep<	det>
+1	conj<	pobj<	prep<	pobj<	prep<	rcmod<
+1	conj<	pobj<	prep<	pobj<	prep<	ccomp>
+2	conj<	pobj<	prep<	pobj<	prep<	advmod>
+11	conj<	pobj<	prep<	prep>
+2	conj<	pobj<	prep<	prep>	pobj>	prep>
+3	conj<	pobj<	prep<	aux>
+1	conj<	pobj<	prep<	xcomp<	conj>	dobj>
+1	conj<	pobj<	prep<	xcomp<	conj>	prep>
+2	conj<	pobj<	prep<	xcomp<	nsubj>
+1	conj<	pobj<	prep<	parataxis>	nsubj>	amod>
+1	conj<	pobj<	prep<	ccomp>
+2	conj<	pobj<	prep<	xcomp>
+1	conj<	pobj<	prep<	dobj<	prep>
+1	conj<	pobj<	prep<	advmod>
+1	conj<	pobj<	prep<	dobj>
+1	conj<	pobj<	prep<	cc>
+1	conj<	pobj<	conj<	xcomp<	nsubj>
+1	conj<	pobj<	conj<	xcomp<	advmod>
+1	conj<	pobj<	tmod>
+10	conj<	amod<
+1	conj<	amod<	vmod>
+2	conj<	amod<	nsubj>
+1	conj<	amod<	pobj<
+1	conj<	amod<	pobj<	prep<
+1	conj<	amod<	dobj<	nsubj>
+1	conj<	amod<	dobj<	aux>
+1	conj<	amod<	dobj<	xcomp<	nsubj>
+1	conj<	amod<	dobj<	xcomp<	prep>
+1	conj<	amod<	advmod>
+1	conj<	amod<	prep>
+279	conj<	aux>
+4	conj<	amod>
+1	conj<	amod>	advmod>
+2	conj<	pcomp<	prep<
+1	conj<	pcomp<	prep<	vmod<	nsubj>
+1	conj<	pcomp<	prep<	conj<	vmod<	dobj<	xcomp<	nsubj>
+1	conj<	pcomp<	prep<	parataxis<	nsubj>
+15	conj<	pcomp<	prep<	nsubj>
+2	conj<	pcomp<	prep<	nsubjpass>
+2	conj<	pcomp<	prep<	xcomp<	nsubj>
+1	conj<	pcomp<	prep<	xcomp<	nsubjpass>
+2	conj<	pcomp<	prep<	dobj>
+1	conj<	pcomp<	prep<	prep>	pobj>	appos>
+14	conj<	ccomp>
+1	conj<	ccomp>	dep>
+1	conj<	ccomp>	rcmod>	nsubjpass>
+1	conj<	ccomp>	rcmod>	prep>	pobj>	advmod>
+40	conj<	ccomp>	nsubj>
+3	conj<	ccomp>	nsubjpass>
+1	conj<	ccomp>	csubj>
+2	conj<	ccomp>	prep>
+1	conj<	ccomp>	conj>	nsubj>
+6	conj<	ccomp>	aux>
+1	conj<	ccomp>	ccomp>	nsubj>
+1	conj<	ccomp>	xcomp>	prep>	pobj>	rcmod>	nsubj>
+1	conj<	ccomp>	advmod>
+2	conj<	ccomp>	advcl>
+1	conj<	ccomp>	neg>
+15	conj<	ccomp<
+1	conj<	ccomp<	dep>
+2	conj<	ccomp<	vmod<
+1	conj<	ccomp<	vmod<	dep>
+1	conj<	ccomp<	vmod<	appos<	dep>
+1	conj<	ccomp<	vmod<	prep>	pobj>	conj>
+1	conj<	ccomp<	tmod>
+1	conj<	ccomp<	tmod>	rcmod>
+4	conj<	ccomp<	rcmod<
+1	conj<	ccomp<	rcmod<	appos<	dobj<	prep>
+2	conj<	ccomp<	rcmod<	pobj<	prep<	pobj<	prep<	prep>	pobj>
+1	conj<	ccomp<	rcmod<	dobj<	advmod>
+57	conj<	ccomp<	nsubj>
+4	conj<	ccomp<	nsubjpass>
+2	conj<	ccomp<	prep>
+7	conj<	ccomp<	prep>	pobj>
+1	conj<	ccomp<	prep>	pobj>	prep>	pobj>
+1	conj<	ccomp<	conj>
+2	conj<	ccomp<	conj<	nsubj>
+1	conj<	ccomp<	conj<	nsubj>	vmod>
+1	conj<	ccomp<	conj<	prep>
+1	conj<	ccomp<	parataxis<
+1	conj<	ccomp<	parataxis<	dobj>
+2	conj<	ccomp<	aux>
+1	conj<	ccomp<	xcomp<	nsubj>
+3	conj<	ccomp<	parataxis>
+1	conj<	ccomp<	parataxis>	dep>
+1	conj<	ccomp<	ccomp>
+1	conj<	ccomp<	ccomp<
+1	conj<	ccomp<	ccomp<	xcomp<	nsubj>
+1	conj<	ccomp<	ccomp<	xcomp>
+9	conj<	ccomp<	advmod>
+1	conj<	ccomp<	advcl>
+1	conj<	ccomp<	dobj>	dep>
+1	conj<	ccomp<	advcl<	xcomp>	prep>	pobj>	prep>	pobj>	prep>	pobj>
+2	conj<	ccomp<	cc>
+110	conj<	advcl>
+1	conj<	advcl>	conj>	nsubj>
+1	conj<	advcl>	conj>	aux>
+1	conj<	advcl>	conj>	neg>
+12	conj<	advcl>	nsubj>
+2	conj<	advcl>	nsubjpass>
+8	conj<	advcl>	aux>
+1	conj<	advcl>	ccomp>	nsubj>
+1	conj<	advcl>	ccomp>	aux>
+2	conj<	advcl>	mark>
+1	conj<	advcl>	advmod>
+3	conj<	advcl>	neg>
+1	conj<	advcl>	dobj>
+48	conj<	neg>
+2	conj<	advcl<
+1	conj<	advcl<	tmod>
+8	conj<	advcl<	nsubj>
+1	conj<	advcl<	xcomp<	nsubj>
+1	conj<	advcl<	ccomp>
+1	conj<	advcl<	advmod>
+1	conj<	advcl<	ccomp<	parataxis>	nsubj>
+3	conj<	advcl<	prep>
+4	conj<	advcl<	prep>	pobj>
+1	conj<	advcl<	cc>
+109	conj<	cc>
+4	conj<	cc>	advmod>
+1	conj<	acomp<
+1	conj<	acomp<	vmod<	nsubj>
+1	conj<	acomp<	vmod<	cc>
+1	conj<	acomp<	prep>
+97	conj<	dep>
+1	conj<	dep>	vmod>
+1	conj<	dep>	det>
+1	conj<	dep>	nsubj>
+1	conj<	dep>	advmod>
+1	conj<	dep>	prep>
+1	conj<	dep>	prep>	pobj>
+1	conj<	dep>	dobj>	prep>	pobj>
+2	conj<	poss>
+36	conj<	dep<
+2	conj<	dep<	vmod>
+3	conj<	dep<	dep>
+1	conj<	dep<	dep>	dobj>
+1	conj<	dep<	nsubjpass<	dep>
+2	conj<	dep<	dep<
+1	conj<	dep<	dep<	pobj<
+3	conj<	dep<	nsubj<
+1	conj<	dep<	nsubj<	dep>
+1	conj<	dep<	nsubj<	nsubj>
+4	conj<	dep<	rcmod<
+1	conj<	dep<	rcmod<	pobj<	prep<	ccomp>
+2	conj<	dep<	rcmod<	prep>	pobj>
+26	conj<	dep<	nsubj>
+2	conj<	dep<	pobj<	prep<
+1	conj<	dep<	pobj<	prep<	pobj<	prep<	cc>
+1	conj<	dep<	pobj<	pcomp<
+3	conj<	dep<	prep>
+2	conj<	dep<	prep>	pobj>
+1	conj<	dep<	prep<
+2	conj<	dep<	prep<	nsubj>
+1	conj<	dep<	prep<	tmod<	ccomp<	rcmod<
+1	conj<	dep<	prep<	advmod>
+1	conj<	dep<	conj>
+1	conj<	dep<	conj<	ccomp<	nsubj>
+1	conj<	dep<	iobj<	advcl<	rcmod<	dobj<	nsubj>
+1	conj<	dep<	iobj<	dobj>
+1	conj<	dep<	iobj<	dobj>	rcmod>	prep>
+4	conj<	dep<	aux>
+2	conj<	dep<	xcomp<	nsubj>
+1	conj<	dep<	ccomp>
+1	conj<	dep<	ccomp<	nsubj>
+1	conj<	dep<	ccomp<	parataxis>
+1	conj<	dep<	ccomp<	prep>	pobj>
+3	conj<	dep<	advmod>
+2	conj<	dep<	dobj<	dep>
+1	conj<	dep<	dobj<	vmod<
+1	conj<	dep<	dobj<	dep<
+1	conj<	dep<	dobj<	dep<	parataxis<	conj>	xcomp>	ccomp>	nsubj>
+1	conj<	dep<	dobj<	rcmod<
+8	conj<	dep<	dobj<	nsubj>
+1	conj<	dep<	dobj<	nsubj>	det>
+2	conj<	dep<	dobj<	xcomp<	nsubj>
+1	conj<	dep<	dobj<	iobj>
+1	conj<	dep<	dobj<	advcl>
+4	conj<	dep<	dobj<	prep>
+1	conj<	dep<	dobj<	prep>	pobj>
+1	conj<	dep<	advcl>
+15	conj<	dep<	dobj>
+1	conj<	dep<	advcl<	nsubj>
+2	conj<	dep<	cc>
+2	conj<	acomp>
+3	conj<	nsubj<
+1	conj<	nsubj<	xcomp<	rcmod<
+1	conj<	nsubj<	xcomp<	nsubj>
+1	conj<	nsubj<	xcomp<	prep>
+1	conj<	nsubj<	ccomp<	nsubj>
+21	conj<	tmod>
+1798	conj<	nsubj>
+2	conj<	nsubj>	vmod>
+1	conj<	nsubj>	vmod>	dobj>
+1	conj<	nsubj>	dep>
+1	conj<	nsubj>	dep>	nsubj>
+1	conj<	nsubj>	dep>	advmod>
+1	conj<	nsubj>	conj>	prep>	pobj>	rcmod>	prep>	pobj>
+1	conj<	nsubj>	rcmod>	advmod>
+1	conj<	nsubj>	rcmod>	dobj>
+5	conj<	nsubj>	det>
+1	conj<	nsubj>	tmod>
+2	conj<	nsubj>	num>
+4	conj<	nsubj>	advmod>
+1	conj<	nsubj>	neg>
+1	conj<	nsubj>	appos>
+3	conj<	nsubj>	prep>
+2	conj<	nsubj>	prep>	pobj>
+1	conj<	nsubj>	prep>	pobj>	nn>
+1	conj<	nsubj>	nn>
+117	conj<	nsubjpass>
+1	conj<	nsubjpass>	det>
+6	conj<	expl>
+7	conj<	csubj>
+1	conj<	csubj>	dobj>
+1	conj<	csubj>	prep>	pobj>
+3	conj<	iobj>
+260	conj<	prep>
+1	conj<	prep>	conj>
+14	conj<	prep>	pobj>
+3	conj<	prep>	pobj>	dep>
+2	conj<	prep>	pobj>	dep>	nsubj>
+1	conj<	prep>	pobj>	dep>	advmod>	advmod>
+2	conj<	prep>	pobj>	rcmod>	aux>
+1	conj<	prep>	pobj>	rcmod>	prep>	pobj>	dep>
+2	conj<	prep>	pobj>	rcmod>	dobj>
+6	conj<	prep>	pobj>	prep>
+2	conj<	prep>	pobj>	prep>	pobj>
+1	conj<	prep>	pobj>	prep>	pobj>	conj>	dep>	nsubj>
+1	conj<	prep>	pobj>	prep>	pobj>	rcmod>	aux>
+1	conj<	prep>	pobj>	prep>	pobj>	appos>
+1	conj<	prep>	pobj>	prep>	pobj>	prep>	pobj>	rcmod>
+2	conj<	prep>	pobj>	prep>	pcomp>	tmod>
+1	conj<	prep>	pcomp>
+1	conj<	prep>	pcomp>	nsubj>
+1	conj<	prep>	pcomp>	advcl>	nsubj>
+1	conj<	prep>	pcomp>	advcl>	ccomp>
+1	conj<	prep>	pcomp>	advcl>	ccomp>	rcmod>	aux>
+1	conj<	prep>	pcomp>	advcl>	mark>
+2	conj<	prep>	pcomp>	prep>
+1	conj<	prep>	pcomp>	dobj>
+1	conj<	prep>	advmod>
+1	conj<	prep<	nsubj<
+19	conj<	conj>
+2	conj<	conj>	vmod>
+2	conj<	conj>	vmod>	advmod>
+1	conj<	conj>	conj>
+1	conj<	conj>	dep>	dep>
+3	conj<	conj>	ccomp>	nsubj>
+1	conj<	conj>	ccomp>	aux>
+1	conj<	conj>	parataxis>	dobj>	prep>	pobj>
+1	conj<	conj>	xcomp>
+3	conj<	conj>	advmod>
+1	conj<	conj>	dobj>
+1	conj<	conj>	dobj>	prep>	pobj>
+1	conj<	conj>	prep>
+2	conj<	conj>	prep>	pobj>
+2	conj<	conj<
+3	conj<	conj<	dep>
+1	conj<	conj<	vmod<	dobj>
+1	conj<	conj<	dep<	prep>	pobj>
+2	conj<	conj<	rcmod<
+9	conj<	conj<	nsubj>
+1	conj<	conj<	nsubjpass>
+1	conj<	conj<	prep>
+1	conj<	conj<	prep>	pobj>	prep>	pobj>	conj>	dep>	nsubj>
+1	conj<	conj<	conj<	advcl<
+1	conj<	conj<	conj<	prep>
+3	conj<	conj<	aux>
+1	conj<	conj<	xcomp<	nsubj>
+1	conj<	conj<	xcomp>	nsubj>
+1	conj<	conj<	advcl>
+1	conj<	conj<	dobj<	rcmod<
+1	conj<	conj<	dobj<	xcomp>
+1	conj<	conj<	neg>
+1	conj<	conj<	dobj>
+1	conj<	conj<	dobj>	vmod>	advmod>	prep>	pobj>
+1	conj<	appos<
+3	conj<	csubj<
+1	conj<	csubj<	parataxis>
+1	conj<	csubj<	prep>	pobj>	dep>	nsubjpass>
+22	conj<	parataxis<
+5	conj<	parataxis<	dep>
+1	conj<	parataxis<	dep<
+6	conj<	parataxis<	nsubj>
+2	conj<	parataxis<	nsubjpass>
+1	conj<	parataxis<	expl>
+1	conj<	parataxis<	parataxis>
+1	conj<	parataxis<	ccomp>
+14	conj<	parataxis<	advmod>
+1	conj<	parataxis<	advmod>	dep>
+7	conj<	parataxis<	advcl>
+1	conj<	parataxis<	prep>
+1	conj<	iobj<	vmod<	dobj<	iobj>
+1	conj<	iobj<	dobj>
+1	conj<	iobj<	dobj>	prep>	pcomp>	pobj>	prep>
+2	conj<	discourse>
+1	conj<	prt>
+7	conj<	xcomp<
+1	conj<	xcomp<	acomp<	nsubj>
+1	conj<	xcomp<	acomp<	prep>	pobj>	dep>
+1	conj<	xcomp<	vmod<
+2	conj<	xcomp<	rcmod<
+1	conj<	xcomp<	rcmod<	conj>	prep>
+1	conj<	xcomp<	rcmod<	dep<
+1	conj<	xcomp<	rcmod<	conj<	dobj<	rcmod<	appos<	nsubj<
+2	conj<	xcomp<	rcmod<	dobj<	nsubj>
+2	conj<	xcomp<	rcmod<	prep>	pobj>
+1	conj<	xcomp<	rcmod<	cc>
+1	conj<	xcomp<	tmod>
+68	conj<	xcomp<	nsubj>
+5	conj<	xcomp<	nsubjpass>
+1	conj<	xcomp<	prep>
+3	conj<	xcomp<	prep>	pobj>
+1	conj<	xcomp<	prep>	pobj>	prep>	pobj>
+1	conj<	xcomp<	conj<	nsubj>
+1	conj<	xcomp<	conj<	nsubjpass>
+1	conj<	xcomp<	parataxis<	conj>	dobj>
+1	conj<	xcomp<	csubj<	parataxis<	nsubjpass>
+1	conj<	xcomp<	aux>
+1	conj<	xcomp<	xcomp<	acomp<	ccomp<	nsubj>
+3	conj<	xcomp<	xcomp<	nsubj>
+1	conj<	xcomp<	xcomp<	aux>
+1	conj<	xcomp<	xcomp>	prep>	pobj>
+2	conj<	xcomp<	advcl>
+4	conj<	xcomp<	advmod>
+1	conj<	xcomp<	mark>
+28	conj<	xcomp<	dobj>
+2	conj<	xcomp<	cc>
+20	conj<	parataxis>
+3	conj<	parataxis>	nsubj>
+1	conj<	parataxis>	advcl>
+10	conj<	xcomp>
+1	conj<	xcomp>	acomp>	dep>	prep>	pcomp>	ccomp>	nsubj>
+1	conj<	xcomp>	tmod>
+1	conj<	xcomp>	nsubj>	det>
+2	conj<	xcomp>	ccomp>	nsubj>
+2	conj<	xcomp>	dobj>
+1	conj<	xcomp>	dobj>	vmod>	dobj>	appos>
+1	conj<	xcomp>	dobj>	rcmod>	aux>
+314	conj<	advmod>
+1	conj<	advmod>	dep>
+1	conj<	advmod>	advcl>	advcl>	nsubjpass>
+1	conj<	advmod>	prep>	pobj>
+1	conj<	advmod>	prep>	pobj>	vmod>	prep>	pobj>
+1	conj<	advmod>	prep>	pobj>	rcmod>	nsubj>
+2	conj<	dobj<	dep>
+1	conj<	dobj<	vmod<	dobj<	nsubj>
+1	conj<	dobj<	dep<	dobj>
+1	conj<	dobj<	rcmod<
+15	conj<	dobj<	nsubj>
+1	conj<	dobj<	nsubj>	advmod>	prep>	pobj>
+2	conj<	dobj<	aux>
+3	conj<	dobj<	iobj>
+4	conj<	dobj<	advmod>
+1	conj<	dobj<	advcl>
+6	conj<	dobj<	neg>
+8	conj<	dobj<	prep>
+1	conj<	dobj<	prep>	pobj>
+1	conj<	dobj<	prep>	pobj>	prep>
+1	conj<	dobj<	prep>	cc>
+5	conj<	mark>
+11	conj<	nn<
+1	conj<	nn<	rcmod<
+1	conj<	nn<	aux>
+1	conj<	nn<	pobj<	prep<	nsubj>
+1	conj<	nn<	pobj<	prep<	dobj>
+3	conj<	nn<	dobj<	nsubj>
+1	conj<	nn<	dobj<	neg>
+1	conj<	nn<	prep>
+2	conj<	appos>
+1	conj<	appos>	prep>
+235	conj<	dobj>
+5	conj<	dobj>	dep>
+1	conj<	dobj>	dep>	rcmod>	aux>
+1	conj<	dobj>	dep>	nsubj>
+2	conj<	dobj>	dep>	prep>	pobj>	prep>	pobj>	rcmod>	nsubjpass>
+1	conj<	dobj>	poss>
+1	conj<	dobj>	conj>
+1	conj<	dobj>	rcmod>
+1	conj<	dobj>	rcmod>	nsubj>
+1	conj<	dobj>	rcmod>	nsubj>	dep>
+1	conj<	dobj>	rcmod>	ccomp>	nsubj>
+1	conj<	dobj>	rcmod>	xcomp>
+1	conj<	dobj>	rcmod>	advcl>	prep>	pobj>
+1	conj<	dobj>	rcmod>	prep>
+1	conj<	dobj>	rcmod>	dobj>
+1	conj<	dobj>	rcmod>	dobj>	vmod>
+1	conj<	dobj>	det>
+1	conj<	dobj>	quantmod>
+2	conj<	dobj>	num>
+10	conj<	dobj>	prep>
+1	conj<	dobj>	prep>	pobj>	prep>	pobj>	conj>
+1	conj<	dobj>	prep>	pobj>	prep>	pobj>	appos>	prep>	pobj>
+3	conj<	nn>
+54	csubj<
+1	csubj<	dep<	conj>
+1	csubj<	dep<	nsubj<	dep<	pobj<	prep<	nsubj>
+1	csubj<	dep<	nsubj<	dep<	pobj<	prep<	cc>
+1	csubj<	conj<	dep>	nsubj>
+1	csubj<	conj<	advcl>
+1	csubj<	parataxis<
+1	csubj<	parataxis<	nsubjpass>
+1	csubj<	parataxis<	advmod>
+2	csubj<	parataxis<	prep>	pobj>
+1	csubj<	rcmod<
+1	csubj<	parataxis>
+2	csubj<	ccomp<
+4	csubj<	ccomp<	nsubj>
+1	csubj<	ccomp<	cc>
+2	csubj<	advmod>
+2	csubj<	dobj>
+4	csubj<	prep>	pobj>
+1	csubj<	prep>	pobj>	poss>
+2	csubj<	advcl<	nsubj>
+2	csubj<	cc>
+130	parataxis<
+36	parataxis<	dep>
+1	parataxis<	dep>	rcmod>	nsubj>
+1	parataxis<	dep>	neg>
+1	parataxis<	vmod<	dep>
+1	parataxis<	vmod<	pobj<	prep<	amod<	ccomp<	csubjpass<
+1	parataxis<	vmod<	pobj<	prep<	nsubj<
+1	parataxis<	vmod<	appos>
+2	parataxis<	dep<
+1	parataxis<	dep<	nsubj>
+4	parataxis<	acomp>
+3	parataxis<	tmod>
+38	parataxis<	nsubj>
+1	parataxis<	nsubj>	conj>
+2	parataxis<	nsubj>	advmod>
+2	parataxis<	nsubjpass>
+1	parataxis<	expl>
+1	parataxis<	csubj>
+1	parataxis<	csubj>	nsubj>
+21	parataxis<	prep>
+13	parataxis<	prep>	pobj>
+1	parataxis<	prep>	pobj>	det>
+2	parataxis<	prep>	pobj>	prep>	pobj>
+1	parataxis<	conj>	prep>	pobj>
+1	parataxis<	conj>	dobj>
+1	parataxis<	conj<	cc>
+2	parataxis<	parataxis<	nsubj>
+1	parataxis<	discourse>
+1	parataxis<	pcomp<	prep<	nsubj>
+3	parataxis<	ccomp>
+2	parataxis<	ccomp>	nsubj>
+1	parataxis<	ccomp>	xcomp>	xcomp>	nsubj>
+1	parataxis<	ccomp>	xcomp>	dobj>
+1	parataxis<	ccomp>	advmod>
+3	parataxis<	ccomp>	dobj>
+1	parataxis<	ccomp>	prep>	pcomp>	pobj>
+4	parataxis<	parataxis>
+1	parataxis<	parataxis>	advcl>
+4	parataxis<	xcomp>
+2	parataxis<	xcomp>	prep>	pobj>
+83	parataxis<	advmod>
+1	parataxis<	advmod>	dep>
+1	parataxis<	advmod>	pobj>
+33	parataxis<	advcl>
+1	parataxis<	advcl>	conj>
+1	parataxis<	advcl>	advcl>
+1	parataxis<	ccomp<	dep<
+24	parataxis<	dobj>
+1	parataxis<	dobj>	vmod>	dobj>
+1	parataxis<	advcl<
+1	parataxis<	advcl<	cc>
+27	parataxis<	cc>
+1	csubjpass<
+1	csubjpass<	advmod>
+1	csubjpass<	prep>	pobj>
+1	csubjpass<	prep>	pobj>	amod>
+77	discourse>
+1	discourse>	discourse>
+123	parataxis>
+1	parataxis>	vmod>
+1	parataxis>	vmod>	prep>
+4	parataxis>	dep>
+1	parataxis>	rcmod>
+1	parataxis>	tmod>
+6	parataxis>	nsubj>
+9	parataxis>	prep>
+5	parataxis>	prep>	pobj>
+1	parataxis>	prep>	pobj>	vmod>
+1	parataxis>	prep>	pobj>	rcmod>	prep>	pobj>
+1	parataxis>	conj>
+1	parataxis>	conj>	prep>	pobj>
+1	parataxis>	aux>
+1	parataxis>	ccomp>	conj>	dobj>
+1	parataxis>	ccomp>	advcl>	dobj>	rcmod>	ccomp>	vmod>	advcl>	xcomp>	ccomp>	nsubj>
+2	parataxis>	parataxis>
+3	parataxis>	xcomp>
+1	parataxis>	xcomp>	nsubj>	prep>	pobj>
+5	parataxis>	advmod>
+2	parataxis>	advcl>
+2	parataxis>	neg>
+4	parataxis>	dobj>
+1	parataxis>	dobj>	rcmod>
+1	parataxis>	dobj>	rcmod>	xcomp>	prep>	pobj>
+1	parataxis>	dobj>	prep>
+8765	advmod>
+21	advmod>	dep>
+4	advmod>	conj>
+25	advmod>	npadvmod>
+1	advmod>	npadvmod>	det>
+2	advmod>	npadvmod>	num>	num>	number>
+1	advmod>	npadvmod>	advmod>
+11	advmod>	pobj>
+63	advmod>	advmod>
+14	advmod>	advcl>
+1	advmod>	advcl>	nsubj>
+1	advmod>	advcl>	xcomp>
+1	advmod>	advcl>	prep>
+84	advmod>	prep>
+2	advmod>	prep>	tmod>
+4	advmod>	prep>	pobj>
+1	advmod>	prep>	pobj>	conj>
+2	advmod>	prep>	pobj>	appos>
+4	advmod>	prep>	pobj>	prep>
+1	advmod>	prep>	pcomp>	advcl>
+1	advmod>	prep>	advmod>
+1	advmod>	cc>
+63	dobj<
+9	dobj<	vmod>
+4	dobj<	vmod<
+2	dobj<	vmod<	nsubj>
+1	dobj<	vmod<	pobj<	prep<	nsubj>
+1	dobj<	vmod<	pobj<	prep<	pobj<	prep<	conj<
+2	dobj<	vmod<	dobj<	nsubj>
+16	dobj<	rcmod<
+2	dobj<	rcmod<	dep<
+1	dobj<	rcmod<	pobj<	prep<	vmod<	nsubj<
+1	dobj<	rcmod<	pobj<	prep<	vmod<	nsubj<	prep>
+1	dobj<	rcmod<	advmod>	prep>	pobj>
+1	dobj<	rcmod<	prep>
+5	dobj<	aux>
+2	dobj<	pcomp<	prep<	dobj<	nsubj>
+6	dobj<	ccomp>
+1	dobj<	ccomp<
+1	dobj<	ccomp<	dep>
+1	dobj<	ccomp<	rcmod<
+1	dobj<	ccomp<	xcomp>
+1	dobj<	ccomp<	xcomp>	prep>
+1	dobj<	ccomp<	cc>
+4	dobj<	advcl>
+13	dobj<	neg>
+1	dobj<	advcl<	ccomp<	rcmod<	dep>	nsubj>
+3	dobj<	cc>
+7	dobj<	dep>
+3	dobj<	dep<
+1	dobj<	dep<	prep<	dobj<	rcmod<
+1	dobj<	dep<	dep>
+1	dobj<	dep<	dep>	dep>
+1	dobj<	dep<	acomp>
+1	dobj<	dep<	nsubj<
+1	dobj<	dep<	tmod>
+1	dobj<	dep<	pcomp<	prep<	nsubj>
+1	dobj<	dep<	dobj>
+1	dobj<	dep<	dobj>	poss>
+3	dobj<	tmod>
+55	dobj<	nsubj>
+3	dobj<	iobj>
+1	dobj<	iobj>	prep>	pobj>
+137	dobj<	prep>
+1	dobj<	prep>	pobj>	dep>
+5	dobj<	prep>	pobj>	prep>
+1	dobj<	prep>	pobj>	prep>	pobj>
+1	dobj<	prep>	pcomp>
+1	dobj<	conj>	dobj>
+1	dobj<	conj<	conj>
+1	dobj<	conj<	nsubj>
+1	dobj<	conj<	dobj>
+1	dobj<	parataxis<	advcl>
+1	dobj<	csubj<	dep>
+1	dobj<	xcomp<	dep>
+1	dobj<	xcomp<	rcmod<	dobj<	nsubj>
+6	dobj<	xcomp<	nsubj>
+1	dobj<	xcomp<	xcomp<	dobj>
+1	dobj<	xcomp<	prep>	pobj>
+2	dobj<	xcomp<	dobj>
+1	dobj<	parataxis>
+2	dobj<	xcomp>
+17	dobj<	advmod>
+1	dobj<	advmod>	prep>
+1	dobj<	mark>
+77	mark>
+21498	dobj>
+114	dobj>	vmod>
+1	dobj>	vmod>	vmod>
+1	dobj>	vmod>	tmod>
+1	dobj>	vmod>	nsubj>
+1	dobj>	vmod>	pobj>	prep>
+1	dobj>	vmod>	ccomp>	advcl>
+1	dobj>	vmod>	xcomp>
+3	dobj>	vmod>	advmod>
+1	dobj>	vmod>	advmod>	prep>
+7	dobj>	vmod>	advcl>
+1	dobj>	vmod>	advcl>	advcl>
+12	dobj>	vmod>	prep>
+1	dobj>	vmod>	prep>	pobj>	vmod>	prep>
+2	dobj>	vmod>	prep>	pobj>	prep>
+1	dobj>	vmod>	prep>	pcomp>	advcl>
+1	dobj>	vmod>	dobj>	vmod>
+1	dobj>	vmod>	dobj>	prep>
+101	dobj>	dep>
+2	dobj>	dep>	vmod>
+1	dobj>	dep>	vmod>	prep>	pobj>	prep>
+5	dobj>	dep>	dep>
+1	dobj>	dep>	dep>	dep>	prep>
+3	dobj>	dep>	dep>	prep>
+1	dobj>	dep>	conj>	rcmod>	prep>
+4	dobj>	dep>	tmod>
+1	dobj>	dep>	det>
+1	dobj>	dep>	advcl>
+2	dobj>	dep>	advmod>
+2	dobj>	dep>	appos>
+53	dobj>	dep>	prep>
+2	dobj>	dep>	prep>	pobj>	advmod>
+3	dobj>	dep>	prep>	pobj>	prep>
+1	dobj>	dep>	prep>	pobj>	prep>	pobj>	prep>
+11	dobj>	poss>
+102	dobj>	rcmod>
+2	dobj>	rcmod>	vmod>
+1	dobj>	rcmod>	acomp>	xcomp>
+1	dobj>	rcmod>	nsubj>
+1	dobj>	rcmod>	nsubj>	prep>
+2	dobj>	rcmod>	ccomp>
+1	dobj>	rcmod>	ccomp>	vmod>
+1	dobj>	rcmod>	ccomp>	prep>
+17	dobj>	rcmod>	xcomp>
+1	dobj>	rcmod>	xcomp>	prep>
+9	dobj>	rcmod>	advcl>
+2	dobj>	rcmod>	advmod>
+1	dobj>	rcmod>	mark>
+15	dobj>	rcmod>	prep>
+1	dobj>	rcmod>	prep>	pobj>
+1	dobj>	rcmod>	prep>	pobj>	prep>
+1	dobj>	rcmod>	prep>	pobj>	prep>	pobj>	dep>
+1	dobj>	rcmod>	dobj>	vmod>	prep>
+49	dobj>	det>
+1	dobj>	tmod>
+119	dobj>	num>
+1	dobj>	num>	number>
+1	dobj>	num>	quantmod>
+685	dobj>	prep>
+1	dobj>	prep>	dep>
+10	dobj>	prep>	pobj>
+11	dobj>	prep>	pobj>	vmod>
+1	dobj>	prep>	pobj>	vmod>	xcomp>
+1	dobj>	prep>	pobj>	vmod>	xcomp>	prep>	pobj>	prep>
+1	dobj>	prep>	pobj>	vmod>	xcomp>	prep>	pcomp>	prep>
+3	dobj>	prep>	pobj>	vmod>	advcl>
+1	dobj>	prep>	pobj>	vmod>	prep>
+1	dobj>	prep>	pobj>	vmod>	prep>	dep>
+8	dobj>	prep>	pobj>	dep>
+1	dobj>	prep>	pobj>	dep>	num>
+4	dobj>	prep>	pobj>	dep>	prep>
+2	dobj>	prep>	pobj>	conj>
+1	dobj>	prep>	pobj>	rcmod>
+1	dobj>	prep>	pobj>	rcmod>	tmod>
+1	dobj>	prep>	pobj>	rcmod>	xcomp>	advcl>
+1	dobj>	prep>	pobj>	rcmod>	advcl>
+1	dobj>	prep>	pobj>	rcmod>	prep>
+1	dobj>	prep>	pobj>	tmod>
+7	dobj>	prep>	pobj>	advmod>
+1	dobj>	prep>	pobj>	appos>
+57	dobj>	prep>	pobj>	prep>
+1	dobj>	prep>	pobj>	prep>	dep>
+1	dobj>	prep>	pobj>	prep>	pobj>	vmod>	xcomp>	prep>
+5	dobj>	prep>	pobj>	prep>	pobj>	prep>
+1	dobj>	prep>	pobj>	prep>	prep>
+1	dobj>	prep>	pcomp>	pobj>	prep>
+3	dobj>	prep>	pcomp>	advcl>
+4	dobj>	prep>	pcomp>	prep>
+1	dobj>	prep>	pcomp>	prep>	pobj>	prep>
+1	dobj>	prep>	pcomp>	dobj>	prep>
+6	dobj>	conj>
+3	dobj>	conj>	vmod>
+1	dobj>	conj>	dep>
+1	dobj>	conj>	rcmod>
+1	dobj>	conj>	rcmod>	prep>
+1	dobj>	conj>	amod>
+1	dobj>	conj>	pcomp>	nsubj>	prep>	pobj>	dep>
+1	dobj>	conj>	pcomp>	nsubj>	prep>	pobj>	dep>	dep>
+1	dobj>	conj>	advmod>
+4	dobj>	conj>	prep>
+1	dobj>	conj>	prep>	pcomp>	ccomp>
+15	dobj>	amod>
+1	dobj>	amod>	dep>	vmod>
+1	dobj>	amod>	number>
+9	dobj>	number>
+1	dobj>	ccomp>
+30	dobj>	quantmod>
+17	dobj>	advmod>
+1	dobj>	advmod>	npadvmod>
+2	dobj>	advmod>	prep>
+1	dobj>	advmod>	prep>	pobj>	prep>
+10	dobj>	appos>
+16	dobj>	nn>
+5	dobj>	cc>
+9	advmod<
+1	advmod<	dep<	pobj<	prep<	conj>	dobj>
+1	advmod<	nsubj<	advmod>
+1	advmod<	rcmod<
+1	advmod<	rcmod<	pobj<	prep<
+9	advmod<	nsubj>
+1	advmod<	pobj<	prep<	dobj<	nsubj>
+1	advmod<	pobj<	prep<	dobj<	aux>
+1	advmod<	prep>
+1	advmod<	prep>	pobj>
+1	advmod<	conj>
+1	advmod<	conj>	dobj>
+1	advmod<	aux>
+4	advmod<	advmod>
+1	advmod<	dobj<	vmod<
+1	advmod<	dobj<	vmod<	dobj<	advmod>
+1	advmod<	dobj<	tmod>
+1	advmod<	advcl<
+1	advmod<	advcl<	rcmod<	dep>
+1	advmod<	advcl<	nsubj>
+1	advmod<	dobj>
+1	advmod<	dobj>	prep>	pobj>
+1	advmod<	cc>
+563	vmod>
+1	vmod>	vmod>
+2	vmod>	dep>
+1	vmod>	dep>	dep>
+1	vmod>	tmod>
+2	vmod>	nsubj>
+3	vmod>	aux>
+1	vmod>	nsubjpass>
+2	vmod>	xcomp>
+7	vmod>	advcl>
+1	vmod>	advcl>	xcomp>	ccomp>	nsubj>
+5	vmod>	advmod>
+8	vmod>	prep>
+1	vmod>	prep>	pobj>	prep>
+1	vmod>	dobj>
+3	vmod>	dobj>	prep>
+1631	vmod<
+1	vmod<	vmod>
+5	vmod<	vmod<
+1	vmod<	vmod<	vmod<
+1	vmod<	vmod<	vmod<	xcomp<	ccomp<	nsubj>
+1	vmod<	vmod<	vmod<	xcomp<	ccomp<	cc>
+1	vmod<	vmod<	appos<	pobj<	prep<	xcomp<	nsubj>
+1	vmod<	vmod<	nsubj<
+1	vmod<	vmod<	nsubj<	advmod>
+1	vmod<	vmod<	nsubj>
+2	vmod<	vmod<	xcomp<	nsubj>
+1	vmod<	vmod<	xcomp<	advcl>
+1	vmod<	vmod<	pobj<	prep<	vmod<	pobj<	prep<
+1	vmod<	vmod<	pobj<	prep<	vmod<	pobj<	prep<	nsubj<
+2	vmod<	vmod<	pobj<	prep<	nsubj>
+1	vmod<	vmod<	pobj<	conj<	prep<	xcomp<	prep>	pobj>
+2	vmod<	vmod<	dobj<	nsubj>
+1	vmod<	vmod<	dobj<	xcomp<	nsubj>
+1	vmod<	vmod<	nn>
+6	vmod<	rcmod>
+1	vmod<	rcmod>	aux>
+6	vmod<	rcmod<
+1	vmod<	rcmod<	dep>
+1	vmod<	rcmod<	dobj<	nsubj>
+1	vmod<	rcmod<	prep>
+2	vmod<	punct>
+18	vmod<	pobj<
+103	vmod<	pobj<	prep<
+2	vmod<	pobj<	prep<	vmod<
+1	vmod<	pobj<	prep<	vmod<	conj<
+1	vmod<	pobj<	prep<	vmod<	tmod>
+3	vmod<	pobj<	prep<	vmod<	nsubj>
+1	vmod<	pobj<	prep<	vmod<	pobj<
+1	vmod<	pobj<	prep<	vmod<	pobj<	prep<
+1	vmod<	pobj<	prep<	vmod<	pobj<	prep<	prep>	pobj>
+4	vmod<	pobj<	prep<	rcmod<
+1	vmod<	pobj<	prep<	rcmod<	dep>
+1	vmod<	pobj<	prep<	rcmod<	dep<
+5	vmod<	pobj<	prep<	pobj<	prep<
+1	vmod<	pobj<	prep<	pobj<	prep<	dep>
+1	vmod<	pobj<	prep<	pobj<	prep<	dep>	prep>
+1	vmod<	pobj<	prep<	pobj<	prep<	conj<	advmod>
+1	vmod<	pobj<	prep<	pobj<	prep<	conj<	prep>
+1	vmod<	pobj<	prep<	pobj<	prep<	appos<
+3	vmod<	pobj<	prep<	pobj<	prep<	nsubj>
+1	vmod<	pobj<	prep<	pobj<	prep<	pobj<	prep<
+2	vmod<	pobj<	prep<	pobj<	prep<	dobj<	nsubj>
+1	vmod<	pobj<	prep<	pobj<	prep<	dobj>
+1	vmod<	pobj<	prep<	amod<	nsubj>
+1	vmod<	pobj<	prep<	pcomp<	prep<	rcmod<
+1	vmod<	pobj<	prep<	pcomp<	prep<	nsubjpass>
+1	vmod<	pobj<	prep<	pcomp<	prep<	dobj>
+1	vmod<	pobj<	prep<	ccomp<	nsubj>
+1	vmod<	pobj<	prep<	ccomp<	prep>
+1	vmod<	pobj<	prep<	advcl>
+1	vmod<	pobj<	prep<	advcl<	rcmod<	pobj<	prep<	parataxis>
+1	vmod<	pobj<	prep<	cc>
+3	vmod<	pobj<	prep<	dep>
+1	vmod<	pobj<	prep<	acomp<	nsubj>
+3	vmod<	pobj<	prep<	dep<
+1	vmod<	pobj<	prep<	dep<	vmod>
+1	vmod<	pobj<	prep<	dep<	dep>
+1	vmod<	pobj<	prep<	dep<	pobj<	prep<	nsubj<
+1	vmod<	pobj<	prep<	dep<	pobj<	prep<	pobj<	prep<	nsubj>
+1	vmod<	pobj<	prep<	dep<	dobj<	dep<
+3	vmod<	pobj<	prep<	nsubj<
+1	vmod<	pobj<	prep<	nsubj<	advcl>
+1	vmod<	pobj<	prep<	det>
+55	vmod<	pobj<	prep<	nsubj>
+5	vmod<	pobj<	prep<	nsubjpass>
+3	vmod<	pobj<	prep<	prep>
+1	vmod<	pobj<	prep<	prep>	pobj>
+1	vmod<	pobj<	prep<	conj>
+1	vmod<	pobj<	prep<	appos<	dobj<
+1	vmod<	pobj<	prep<	appos<	dobj<	advcl<
+2	vmod<	pobj<	prep<	conj<	nsubj>
+1	vmod<	pobj<	prep<	conj<	nsubjpass>
+1	vmod<	pobj<	prep<	conj<	dobj<	advmod>
+1	vmod<	pobj<	prep<	conj<	prep>	pobj>	rcmod>	nsubj>
+1	vmod<	pobj<	prep<	xcomp<	rcmod<	nsubj<
+5	vmod<	pobj<	prep<	xcomp<	nsubj>
+1	vmod<	pobj<	prep<	xcomp<	pcomp<	prep<	conj<	dobj<	ccomp<
+1	vmod<	pobj<	prep<	xcomp<	dobj>
+2	vmod<	pobj<	prep<	parataxis>
+1	vmod<	pobj<	prep<	dobj<
+1	vmod<	pobj<	prep<	dobj<	rcmod<	nsubj<
+8	vmod<	pobj<	prep<	dobj<	nsubj>
+2	vmod<	pobj<	prep<	dobj<	advmod>
+1	vmod<	pobj<	prep<	dobj<	prep>
+1	vmod<	pobj<	prep<	advmod<	nsubj>
+1	vmod<	pobj<	prep<	advmod<	cc>
+22	vmod<	pobj<	prep<	dobj>
+2	vmod<	pobj<	dep>
+1	vmod<	pobj<	dep<	nsubj>
+1	vmod<	pobj<	dep<	prep>
+1	vmod<	pobj<	conj<	prep<
+1	vmod<	pobj<	conj<	prep<	xcomp<	prep>	pobj>
+1	vmod<	pobj<	preconj>
+8	vmod<	num>
+2	vmod<	amod>
+1	vmod<	amod>	prep>	pobj>
+1	vmod<	pcomp<	prep<	rcmod<	dep>
+2	vmod<	pcomp<	prep<	nsubj>
+1	vmod<	pcomp<	prep<	nsubjpass>
+2	vmod<	pcomp<	prep<	dobj>
+1	vmod<	ccomp>
+1	vmod<	ccomp<	vmod<	dep<	vmod>
+1	vmod<	ccomp<	rcmod<
+1	vmod<	ccomp<	rcmod<	dep>
+1	vmod<	ccomp<	rcmod<	dobj<	nsubj>
+5	vmod<	ccomp<	nsubj>
+1	vmod<	ccomp<	parataxis>
+4	vmod<	advcl>
+1	vmod<	advcl>	nsubjpass>
+1	vmod<	advcl>	advmod>
+1	vmod<	neg>
+1	vmod<	advcl<	dep<
+1	vmod<	advcl<	rcmod<	dobj<	xcomp<	ccomp<	dep<
+1	vmod<	advcl<	rcmod<	dobj<	xcomp<	ccomp<	dep<	dep>
+1	vmod<	advcl<	xcomp<	rcmod<	pobj<	prep<	vmod<	pobj<	prep<	nsubj>
+1	vmod<	advcl<	ccomp>
+10	vmod<	cc>
+56	vmod<	dep>
+1	vmod<	dep>	dep>
+1	vmod<	dep>	conj>	nsubj>
+1	vmod<	dep>	xcomp>	advcl>	nsubj>
+3	vmod<	dep>	prep>
+1	vmod<	dep>	prep>	pobj>
+1	vmod<	dep>	prep>	pobj>	prep>
+4	vmod<	nsubjpass<
+1	vmod<	nsubjpass<	prep>
+2	vmod<	nsubjpass<	cc>
+21	vmod<	poss>
+54	vmod<	dep<
+2	vmod<	dep<	dep>
+1	vmod<	dep<	dep<
+1	vmod<	dep<	dep<	rcmod>	prep>	pobj>	prep>	pcomp>	ccomp>	nsubj>
+1	vmod<	dep<	dep<	appos>
+1	vmod<	dep<	rcmod>
+1	vmod<	dep<	nsubj<
+1	vmod<	dep<	nsubj<	rcmod<
+2	vmod<	dep<	pobj<	prep<
+1	vmod<	dep<	pobj<	prep<	pobj<	cc>
+1	vmod<	dep<	pobj<	prep<	prep>
+1	vmod<	dep<	prep<	dobj<	nsubj>
+2	vmod<	dep<	conj>
+1	vmod<	dep<	amod<
+1	vmod<	dep<	amod<	dobj<	nsubj>
+1	vmod<	dep<	csubj<	rcmod<	dep<
+1	vmod<	dep<	advmod>
+1	vmod<	dep<	dobj<	dep<
+2	vmod<	dep<	dobj<	nsubj>
+1	vmod<	dep<	dobj<	neg>
+1	vmod<	dep<	ccomp<	nsubj>
+1	vmod<	dep<	dobj>
+2	vmod<	dep<	cc>
+50	vmod<	nsubj<
+2	vmod<	nsubj<	dep>
+1	vmod<	nsubj<	dep>	nsubj>
+2	vmod<	nsubj<	dep<
+1	vmod<	nsubj<	dep<	pobj<	prep<	pobj<	prep<	vmod<	nsubj<
+1	vmod<	nsubj<	conj<	nsubj>
+1	vmod<	nsubj<	conj<	cc>
+1	vmod<	nsubj<	xcomp<
+7	vmod<	nsubj<	ccomp<
+1	vmod<	nsubj<	ccomp<	rcmod<	dep<
+1	vmod<	nsubj<	ccomp<	nsubj>
+1	vmod<	nsubj<	ccomp<	pcomp<	prep<	rcmod<	dep>
+1	vmod<	nsubj<	mark>
+4	vmod<	nsubj<	advmod>
+2	vmod<	nsubj<	prep>
+1	vmod<	nsubj<	dobj>
+3	vmod<	nsubj<	cc>
+8	vmod<	det>
+2	vmod<	tmod>
+420	vmod<	nsubj>
+1	vmod<	nsubj>	conj>
+1	vmod<	nsubj>	rcmod>	nsubj>
+1	vmod<	nsubj>	appos>	conj>	prep>	pobj>
+1	vmod<	nsubj>	prep>	pobj>	dep>
+1	vmod<	nsubj>	prep>	pobj>	rcmod>
+13	vmod<	nsubjpass>
+2	vmod<	iobj>
+12	vmod<	prep>
+75	vmod<	prep>	pobj>
+1	vmod<	prep>	pobj>	vmod>	prep>	pobj>
+1	vmod<	prep>	pobj>	vmod>	dobj>	cc>
+2	vmod<	prep>	pobj>	dep>
+3	vmod<	prep>	pobj>	conj>
+1	vmod<	prep>	pobj>	num>
+5	vmod<	prep>	pobj>	prep>	pobj>
+7	vmod<	conj>
+1	vmod<	conj>	dep>
+2	vmod<	conj>	prep>
+16	vmod<	conj<
+1	vmod<	conj<	conj>
+3	vmod<	conj<	dep<
+1	vmod<	conj<	nsubj<
+1	vmod<	conj<	rcmod<
+16	vmod<	conj<	nsubj>
+1	vmod<	conj<	nsubj>	det>
+1	vmod<	conj<	nsubjpass>
+1	vmod<	conj<	parataxis>	nsubj>
+1	vmod<	conj<	pobj<	prep<	dobj<	nsubj>
+1	vmod<	conj<	pobj<	prep<	dobj>
+1	vmod<	conj<	ccomp<	xcomp<	dep<	vmod>
+1	vmod<	conj<	dobj<	xcomp<	nsubj>
+1	vmod<	conj<	prep>	pobj>	rcmod>	prep>	pobj>	dep>	rcmod>	nsubj>
+3	vmod<	conj<	cc>
+2	vmod<	appos<
+1	vmod<	appos<	conj>
+1	vmod<	appos<	dep>
+1	vmod<	appos<	rcmod>
+1	vmod<	appos<	nsubj<
+1	vmod<	appos<	pobj<	prep<	pcomp<	prep<	xcomp<
+1	vmod<	appos<	pobj<	prep<	xcomp<	nsubj>
+1	vmod<	appos<	pobj<	prep<	pobj<	prep<	prep>
+1	vmod<	appos<	pobj<	prep<	dobj<	conj<	pcomp<	prep<	nsubj>
+1	vmod<	appos<	dobj<
+1	vmod<	appos<	dobj<	parataxis<	prep>
+1	vmod<	appos<	dobj<	advcl<
+2	vmod<	parataxis<
+3	vmod<	parataxis<	nsubj>
+2	vmod<	parataxis<	xcomp>
+1	vmod<	parataxis<	dobj>
+2	vmod<	csubj<
+1	vmod<	csubj<	dep<	dobj<	nsubj>
+1	vmod<	xcomp<	conj<	nsubj>
+26	vmod<	xcomp<	nsubj>
+5	vmod<	xcomp<	nsubjpass>
+1	vmod<	xcomp<	pcomp<	prep<	vmod<	pobj<	prep<	prep>
+1	vmod<	xcomp<	xcomp<	dobj>
+1	vmod<	xcomp<	parataxis>
+1	vmod<	xcomp<	ccomp<	nsubj>
+3	vmod<	xcomp<	dobj>
+3	vmod<	parataxis>
+4	vmod<	xcomp>
+1	vmod<	xcomp>	dep>
+1	vmod<	tmod<	xcomp<	conj<	nsubjpass>
+8	vmod<	dobj<
+2	vmod<	dobj<	vmod>
+2	vmod<	dobj<	dep>
+4	vmod<	dobj<	vmod<
+1	vmod<	dobj<	vmod<	nsubj>
+1	vmod<	dobj<	vmod<	dobj>
+5	vmod<	dobj<	dep<
+1	vmod<	dobj<	dep<	dep<	dep>
+9	vmod<	dobj<	rcmod<
+1	vmod<	dobj<	rcmod<	dep>
+1	vmod<	dobj<	rcmod<	tmod<	prep>
+1	vmod<	dobj<	rcmod<	pobj<	prep<
+2	vmod<	dobj<	rcmod<	pobj<	prep<	parataxis>
+1	vmod<	dobj<	rcmod<	pobj<	prep<	parataxis>	prep>
+1	vmod<	dobj<	rcmod<	dobj<	prep>
+1	vmod<	dobj<	tmod>
+137	vmod<	dobj<	nsubj>
+1	vmod<	dobj<	nsubj>	dep>	appos>
+1	vmod<	dobj<	nsubj>	rcmod>	nsubj>
+1	vmod<	dobj<	nsubj>	appos>	amod>
+3	vmod<	dobj<	nsubjpass>
+27	vmod<	dobj<	iobj>
+2	vmod<	dobj<	prep>
+1	vmod<	dobj<	prep>	pobj>
+1	vmod<	dobj<	conj<	parataxis<	nsubjpass>
+1	vmod<	dobj<	conj<	rcmod<
+3	vmod<	dobj<	conj<	nsubj>
+1	vmod<	dobj<	conj<	xcomp<	nsubj>
+1	vmod<	dobj<	conj<	ccomp>	nsubj>
+1	vmod<	dobj<	conj<	dobj>
+1	vmod<	dobj<	csubj<
+1	vmod<	dobj<	parataxis<	dobj>
+1	vmod<	dobj<	pcomp<	prep<	vmod<	dobj<	nsubj>
+2	vmod<	dobj<	pcomp<	prep<	nsubj>
+1	vmod<	dobj<	xcomp<	dep>
+1	vmod<	dobj<	xcomp<	parataxis<	nsubj>
+17	vmod<	dobj<	xcomp<	nsubj>
+1	vmod<	dobj<	xcomp<	pcomp<	prep<	dobj>
+1	vmod<	dobj<	xcomp<	parataxis>	prep>
+1	vmod<	dobj<	xcomp<	dobj>
+1	vmod<	dobj<	xcomp<	cc>
+1	vmod<	dobj<	parataxis>
+1	vmod<	dobj<	dobj<	nsubj>
+2	vmod<	dobj<	advmod>
+1	vmod<	dobj<	ccomp<	dep>
+2	vmod<	dobj<	ccomp<	nsubj>
+1	vmod<	dobj<	ccomp<	xcomp<
+1	vmod<	dobj<	ccomp<	dobj>
+2	vmod<	dobj<	advcl>
+1	vmod<	dobj<	dobj>
+1	vmod<	dobj<	cc>
+11	vmod<	advmod>
+2	vmod<	appos>
+2	vmod<	appos>	prep>	pobj>	prep>	pobj>
+236	vmod<	dobj>
+1	vmod<	dobj>	vmod>	prep>	pobj>
+1	vmod<	dobj>	conj>
+1	vmod<	dobj>	dep>
+3	vmod<	dobj>	det>
+2	vmod<	dobj>	num>
+1	vmod<	dobj>	advmod>	npadvmod>
+21	vmod<	dobj>	prep>	pobj>
+1	vmod<	dobj>	prep>	pobj>	conj>
+1	vmod<	dobj>	prep>	pobj>	prep>	pobj>
+4	vmod<	nn>
+141	pobj>
+1	pobj>	poss>
+2	pobj>	num>
+1	pobj>	advmod>
+10	pobj<
+51	pobj<	prep<
+1	pobj<	prep<	vmod>
+1	pobj<	prep<	vmod<
+1	pobj<	prep<	vmod<	pobj<	prep<	dep>
+1	pobj<	prep<	vmod<	pobj<	prep<	nsubj>
+2	pobj<	prep<	rcmod>
+2	pobj<	prep<	rcmod<
+1	pobj<	prep<	rcmod<	dep<	dep>
+2	pobj<	prep<	pobj<	prep<
+1	pobj<	prep<	pobj<	prep<	dep>
+1	pobj<	prep<	pobj<	prep<	dep<
+1	pobj<	prep<	pobj<	prep<	conj<	advmod>
+3	pobj<	prep<	pobj<	prep<	nsubj>
+1	pobj<	prep<	pobj<	prep<	xcomp<	advcl>
+1	pobj<	prep<	pobj<	prep<	ccomp>
+1	pobj<	prep<	pobj<	prep<	pobj<	prep<	amod<
+2	pobj<	prep<	pobj<	prep<	pobj<	prep<	prep>
+1	pobj<	prep<	pobj<	prep<	dobj<	tmod>
+1	pobj<	prep<	pobj<	prep<	dobj<	ccomp>
+1	pobj<	prep<	pobj<	prep<	dobj<	prep>
+1	pobj<	prep<	pobj<	prep<	advmod>
+2	pobj<	prep<	pobj<	prep<	dobj>
+4	pobj<	prep<	pobj<	prep<	prep>
+1	pobj<	prep<	pobj<	prep<	prep>	dep>
+1	pobj<	prep<	pobj<	prep<	prep>	pcomp>
+1	pobj<	prep<	pobj<	conj<	prep<	xcomp<	nsubj>
+1	pobj<	prep<	pobj<	conj<	pobj>
+1	pobj<	prep<	pobj<	pcomp<	prep<	nsubj>
+1	pobj<	prep<	pobj<	pcomp<	prep<	dobj>
+1	pobj<	prep<	amod<
+1	pobj<	prep<	pcomp<	prep<	dobj<	nsubj>
+5	pobj<	prep<	ccomp>
+3	pobj<	prep<	advcl>
+1	pobj<	prep<	ccomp<	dobj>
+1	pobj<	prep<	ccomp<	prep>
+2	pobj<	prep<	advcl<
+1	pobj<	prep<	advcl<	nsubj>
+1	pobj<	prep<	advcl<	nsubjpass>
+1	pobj<	prep<	advcl<	cc>
+1	pobj<	prep<	neg<	nsubj>
+4	pobj<	prep<	dep>
+1	pobj<	prep<	acomp<	prep>
+2	pobj<	prep<	dep<
+1	pobj<	prep<	dep<	amod<	prep>
+1	pobj<	prep<	dep<	nsubj>
+1	pobj<	prep<	dep<	pobj<	prep<	nsubj>
+1	pobj<	prep<	dep<	pobj<	pcomp<
+1	pobj<	prep<	dep<	dobj<	prep>
+1	pobj<	prep<	dep<	dobj<	cc>
+7	pobj<	prep<	nsubj<
+3	pobj<	prep<	nsubj<	xcomp<	nsubj>
+1	pobj<	prep<	nsubj<	xcomp<	prep>
+4	pobj<	prep<	tmod>
+40	pobj<	prep<	nsubj>
+2	pobj<	prep<	nsubjpass>
+1	pobj<	prep<	expl>	appos>
+1	pobj<	prep<	iobj>
+72	pobj<	prep<	prep>
+4	pobj<	prep<	prep>	pobj>
+1	pobj<	prep<	prep>	pobj>	dep>
+2	pobj<	prep<	prep>	pobj>	prep>
+1	pobj<	prep<	prep>	pobj>	prep>	pobj>	prep>	pobj>	dep>
+1	pobj<	prep<	prep>	advmod>
+1	pobj<	prep<	conj>	dep>
+2	pobj<	prep<	conj>	dobj>
+1	pobj<	prep<	conj<	dep<	dobj<	nsubj>
+3	pobj<	prep<	conj<	nsubj>
+1	pobj<	prep<	conj<	dobj>
+1	pobj<	prep<	conj<	advcl<	prep>
+1	pobj<	prep<	appos<	pobj<	prep<	vmod<	pobj<
+3	pobj<	prep<	xcomp<	nsubj>
+1	pobj<	prep<	xcomp<	ccomp<	vmod<	rcmod>
+1	pobj<	prep<	xcomp<	advcl<
+1	pobj<	prep<	parataxis>
+1	pobj<	prep<	parataxis>	nsubj>
+5	pobj<	prep<	xcomp>
+3	pobj<	prep<	advmod>
+1	pobj<	prep<	dobj<	rcmod<
+1	pobj<	prep<	dobj<	tmod>
+2	pobj<	prep<	dobj<	nsubj>
+1	pobj<	prep<	dobj<	ccomp>
+1	pobj<	prep<	dobj<	advmod>
+17	pobj<	prep<	dobj<	prep>
+20	pobj<	prep<	dobj>
+1	pobj<	prep<	dobj>	prep>
+1	pobj<	prep<	dobj>	prep>	conj>	pobj>
+1	pobj<	prep<	advmod<	pobj<	prep<
+1	pobj<	prep<	advmod<	pobj<	prep<	prep>
+1	pobj<	conj<	prep<	nsubj>
+2	pobj<	tmod>
+1	pobj<	pcomp<	prep<	parataxis<	dobj>
+1	pobj<	advmod<
+1	pobj<	advmod<	nsubj>
+1	pobj<	prep>
+24	num>
+944	amod<
+1	amod<	vmod>
+1	amod<	vmod>	nsubj>	nn>
+13	amod<	poss>
+6	amod<	dep>
+1	amod<	dep>	ccomp>	nsubjpass>
+1	amod<	dep>	prep>
+5	amod<	dep<
+1	amod<	dep<	pobj<	prep<	vmod<	pobj<	prep<	nsubj>
+1	amod<	dep<	pobj<	prep<	prep>
+1	amod<	dep<	appos>
+1	amod<	dep<	appos>	prep>	pobj>
+1	amod<	dep<	prep>	pobj>
+1	amod<	dep<	dobj>
+1	amod<	rcmod>	prep>
+3	amod<	nsubj<
+1	amod<	nsubj<	dep>
+1	amod<	nsubj<	dep<	prep>	pobj>
+1	amod<	nsubj<	parataxis<	prep>	pobj>	advmod>
+1	amod<	nsubj<	nsubj>	advmod>
+2	amod<	nsubj<	advmod>
+2	amod<	det>
+1	amod<	rcmod<
+1	amod<	rcmod<	nsubj<	dep<
+1	amod<	rcmod<	pobj<	prep<
+1	amod<	tmod>
+8	amod<	nsubj>
+2	amod<	pobj<
+5	amod<	pobj<	prep<
+1	amod<	pobj<	prep<	dep>
+1	amod<	pobj<	prep<	vmod<	nsubj>
+1	amod<	pobj<	prep<	vmod<	prep>	pobj>
+1	amod<	pobj<	prep<	dep<	amod<
+1	amod<	pobj<	prep<	dep<	dobj<	dep<	nsubj>
+1	amod<	pobj<	prep<	rcmod<	dep<
+1	amod<	pobj<	prep<	rcmod<	conj<	dep>
+5	amod<	pobj<	prep<	nsubj>
+1	amod<	pobj<	prep<	pobj<	prep<	xcomp<	dobj>
+2	amod<	pobj<	prep<	prep>
+2	amod<	pobj<	prep<	prep>	pobj>
+1	amod<	pobj<	prep<	prep>	pobj>	prep>	pobj>
+1	amod<	pobj<	prep<	appos<	dep>
+1	amod<	pobj<	prep<	xcomp<	rcmod<	cc>
+1	amod<	pobj<	prep<	ccomp>
+3	amod<	pobj<	prep<	dobj<	nsubj>
+1	amod<	pobj<	prep<	dobj<	ccomp<	vmod<	dobj<	prep>
+1	amod<	pobj<	prep<	dobj<	prep>
+1	amod<	pobj<	prep<	advmod>
+2	amod<	pobj<	prep<	dobj>
+1	amod<	pobj<	prep>
+1	amod<	pobj<	prep>	pobj>	prep>
+1	amod<	pobj<	advmod<
+1	amod<	pobj<	advmod<	aux>
+5	amod<	num>
+24	amod<	prep>
+1	amod<	prep>	pobj>	prep>
+1	amod<	conj>	prep>
+1	amod<	appos<	appos<
+1	amod<	appos<	conj<	dobj<	nsubj>
+1	amod<	appos<	nsubj>
+2	amod<	appos<	pobj<	prep<	nsubj>
+1	amod<	appos<	pobj<	prep<	pobj<	prep<	dobj<	xcomp<	nsubj>
+1	amod<	appos<	advmod>
+2	amod<	appos<	dobj<	nsubj>
+1	amod<	appos<	dobj<	prep>
+1	amod<	appos<	prep>	pobj>
+1	amod<	conj<
+1	amod<	conj<	conj>
+1	amod<	conj<	conj>	rcmod>	nsubj>
+1	amod<	conj<	conj>	prep>	pobj>	prep>
+1	amod<	conj<	appos<	pobj<	prep<	nsubj>
+1	amod<	conj<	nsubj<
+1	amod<	conj<	nsubj<	ccomp<	pcomp<	prep<	xcomp<	nsubj>
+1	amod<	conj<	nsubj<	ccomp<	advmod>
+1	amod<	conj<	pobj<	prep<	nsubj>
+1	amod<	conj<	pobj<	prep<	advmod<	advmod>
+1	amod<	conj<	pobj<	prep<	advmod<	prep>
+1	amod<	conj<	pobj<	prep<	prep>
+1	amod<	conj<	dobj<
+1	amod<	conj<	dobj<	vmod>
+3	amod<	conj<	dobj<	nsubj>
+1	amod<	conj<	dobj<	iobj>
+1	amod<	conj<	dobj<	prep>
+1	amod<	parataxis<	prep>	pobj>	prep>	pobj>	prep>	pobj>
+7	amod<	amod>
+2	amod<	ccomp>
+1	amod<	dobj<
+1	amod<	dobj<	vmod>
+1	amod<	dobj<	dep>
+1	amod<	dobj<	vmod<	dep>
+1	amod<	dobj<	vmod<	dobj<	rcmod<	dobj<	prep>
+2	amod<	dobj<	vmod<	dobj>
+2	amod<	dobj<	conj<	nsubj>
+1	amod<	dobj<	conj<	ccomp<
+1	amod<	dobj<	conj<	ccomp<	advmod>
+1	amod<	dobj<	parataxis<	vmod<	pobj<	prep<	amod<
+1	amod<	dobj<	rcmod<	pobj<	prep<	nsubjpass>
+8	amod<	dobj<	nsubj>
+1	amod<	dobj<	nsubj>	det>
+1	amod<	dobj<	pcomp<	prep<	amod<
+1	amod<	dobj<	csubj>
+1	amod<	dobj<	csubj>	prep>	pobj>	dep>
+1	amod<	dobj<	xcomp>
+7	amod<	dobj<	prep>
+10	amod<	advmod>
+1	amod<	neg>
+2	amod<	nn<
+26	amod<	nn>
+1	amod<	nn>	dep>	conj>
+2	npadvmod>
+103	aux<
+2	aux<	dep>
+1	aux<	dep>	advcl>	prep>	pobj>	rcmod>	pobj>	conj>
+1	aux<	dep>	prep>	pobj>
+1	aux<	vmod<
+1	aux<	dep<
+24	aux<	rcmod<
+1	aux<	rcmod<	conj<	conj>	prep>
+1	aux<	rcmod<	conj<	pobj<	prep<	rcmod<	pobj<	prep<	ccomp<	cc>
+1	aux<	rcmod<	conj<	cc>
+2	aux<	tmod>
+96	aux<	nsubj>
+1	aux<	nsubj>	dep>
+2	aux<	nsubj>	rcmod>	xcomp>	iobj>
+2	aux<	nsubj>	rcmod>	xcomp>	dobj>
+1	aux<	nsubj>	det>
+1	aux<	nsubj>	amod>	neg>
+1	aux<	nsubj>	prep>	pobj>	dep>
+2	aux<	nsubjpass>
+1	aux<	pobj>	prep>
+1	aux<	csubj>
+9	aux<	prep>
+1	aux<	prep>	pobj>
+1	aux<	prep>	pobj>	rcmod>
+1	aux<	prep>	pobj>	prep>
+1	aux<	prep>	pcomp>	pobj>
+1	aux<	prep>	pcomp>	dobj>	appos>	rcmod>	rcmod>	prep>	pobj>
+2	aux<	conj<	nsubj>
+1	aux<	parataxis<	nsubj>
+3	aux<	aux>
+1	aux<	pcomp<	prep<	nsubjpass>
+1	aux<	pcomp<	prep<	pobj<	prep<	conj<	cc>
+2	aux<	xcomp<	nsubj>
+1	aux<	xcomp<	dobj>
+1	aux<	xcomp>
+28	aux<	advmod>
+1	aux<	advmod>	prep>
+1	aux<	advmod>	prep>	pobj>
+7	aux<	advcl>
+2	aux<	advcl>	xcomp>	dobj>
+1	aux<	advcl>	dobj>
+1	aux<	ccomp<	nsubj>
+1	aux<	ccomp<	dobj>
+11	aux<	neg>
+6	aux<	dobj>
+1	aux<	dobj>	prep>
+5	aux<	cc>
+4	npadvmod<
+1	npadvmod<	conj<	prep<	vmod>
+1	npadvmod<	conj<	prep<	prep>
+1	npadvmod<	advmod<	rcmod<
+6132	aux>
+462	amod>
+1	amod>	dep>	appos>
+1	amod>	dep>	prep>	pobj>
+1	amod>	conj>
+1	amod>	number>
+6	amod>	num>
+1	amod>	prep>
+1	amod>	prep>	pobj>	appos>
+7	pcomp<
+30	pcomp<	prep<
+1	pcomp<	prep<	vmod>
+10	pcomp<	prep<	vmod<
+2	pcomp<	prep<	vmod<	nsubj<
+6	pcomp<	prep<	vmod<	nsubj>
+2	pcomp<	prep<	vmod<	pobj<	prep<
+1	pcomp<	prep<	vmod<	pobj<	prep<	conj<	nsubjpass>
+1	pcomp<	prep<	vmod<	pobj<	prep<	nsubj>
+1	pcomp<	prep<	vmod<	pobj<	prep<	parataxis>
+3	pcomp<	prep<	vmod<	dobj<	nsubj>
+1	pcomp<	prep<	vmod<	prep>
+1	pcomp<	prep<	vmod<	prep>	pobj>	prep>	pobj>
+1	pcomp<	prep<	vmod<	dobj>
+1	pcomp<	prep<	vmod<	dobj>	prep>	pobj>
+2	pcomp<	prep<	rcmod>
+2	pcomp<	prep<	rcmod>	prep>
+10	pcomp<	prep<	rcmod<
+2	pcomp<	prep<	rcmod<	dep>
+1	pcomp<	prep<	rcmod<	conj<	pobj<	prep<	prep>
+1	pcomp<	prep<	rcmod<	conj<	dobj<	nsubj>
+1	pcomp<	prep<	rcmod<	pobj<	prep<	nsubj>
+1	pcomp<	prep<	rcmod<	dobj<	advcl>
+1	pcomp<	prep<	rcmod<	cc>
+2	pcomp<	prep<	pobj<	prep<
+1	pcomp<	prep<	pobj<	prep<	vmod<	dobj<	nsubj>
+2	pcomp<	prep<	pobj<	prep<	dep<
+1	pcomp<	prep<	pobj<	prep<	rcmod>
+1	pcomp<	prep<	pobj<	prep<	rcmod<
+1	pcomp<	prep<	pobj<	prep<	rcmod<	dep>
+9	pcomp<	prep<	pobj<	prep<	nsubj>
+9	pcomp<	prep<	pobj<	prep<	nsubjpass>
+1	pcomp<	prep<	pobj<	prep<	pobj<	prep<
+1	pcomp<	prep<	pobj<	prep<	pobj<	conj<	prep<	nsubj>
+1	pcomp<	prep<	pobj<	prep<	conj<	parataxis<	nsubj>
+1	pcomp<	prep<	pobj<	prep<	parataxis<	nsubj>
+1	pcomp<	prep<	pobj<	prep<	csubj<
+1	pcomp<	prep<	pobj<	prep<	xcomp<	nsubj>
+1	pcomp<	prep<	pobj<	prep<	dobj<	rcmod<	dep>
+1	pcomp<	prep<	pobj<	prep<	dobj<	rcmod<	appos<
+2	pcomp<	prep<	pobj<	prep<	dobj<	nsubj>
+1	pcomp<	prep<	pobj<	prep<	dobj<	xcomp<	advcl>
+1	pcomp<	prep<	pobj<	prep<	ccomp<	rcmod<
+1	pcomp<	prep<	pobj<	prep<	advcl<	prep>	pobj>
+1	pcomp<	prep<	pobj<	prep<	advmod<	xcomp<	amod<
+1	pcomp<	prep<	pobj<	prep<	dobj>
+1	pcomp<	prep<	pobj<	conj<	prep<	xcomp<	nsubj>
+3	pcomp<	prep<	amod<
+1	pcomp<	prep<	amod<	appos<
+1	pcomp<	prep<	amod<	xcomp<	prep>
+1	pcomp<	prep<	amod<	pobj<	prep<	nsubjpass>
+1	pcomp<	prep<	pcomp<	prep<	conj<
+2	pcomp<	prep<	pcomp<	prep<	nsubj>
+1	pcomp<	prep<	pcomp<	prep<	xcomp<	rcmod<	dobj<	parataxis>	punct>
+1	pcomp<	prep<	pcomp<	prep<	xcomp<	nsubj>
+1	pcomp<	prep<	pcomp<	prep<	parataxis>
+1	pcomp<	prep<	pcomp<	prep<	prep>
+1	pcomp<	prep<	pcomp<	prep<	dobj>
+1	pcomp<	prep<	ccomp>
+2	pcomp<	prep<	ccomp<
+1	pcomp<	prep<	ccomp<	vmod<	nsubj<
+1	pcomp<	prep<	ccomp<	vmod<	nsubj<	prep>
+1	pcomp<	prep<	ccomp<	conj<	nsubj>
+1	pcomp<	prep<	ccomp<	rcmod<	dep<
+2	pcomp<	prep<	ccomp<	nsubj>
+1	pcomp<	prep<	ccomp<	xcomp<	nsubj>
+1	pcomp<	prep<	ccomp<	dobj>
+1	pcomp<	prep<	ccomp<	cc>
+1	pcomp<	prep<	advcl<
+1	pcomp<	prep<	advcl<	nsubj>
+2	pcomp<	prep<	cc>
+9	pcomp<	prep<	dep>
+3	pcomp<	prep<	dep>	nsubj>
+1	pcomp<	prep<	dep>	prep>
+1	pcomp<	prep<	acomp<	conj<	cc>
+4	pcomp<	prep<	acomp<	nsubj>
+3	pcomp<	prep<	poss>
+3	pcomp<	prep<	dep<
+1	pcomp<	prep<	dep<	conj<	nsubj>
+1	pcomp<	prep<	dep<	appos<	dep>	nsubj>
+2	pcomp<	prep<	dep<	nsubj>
+1	pcomp<	prep<	dep<	xcomp<	nsubj>
+1	pcomp<	prep<	dep<	dobj<	dep<	parataxis<	conj>	xcomp>	ccomp>	nsubj>
+1	pcomp<	prep<	dep<	dobj<	xcomp<	advcl<
+1	pcomp<	prep<	dep<	appos>
+2	pcomp<	prep<	nsubj<	dobj>
+251	pcomp<	prep<	nsubj>
+1	pcomp<	prep<	nsubj>	dep>	nsubj>
+1	pcomp<	prep<	nsubj>	det>
+32	pcomp<	prep<	nsubjpass>
+1	pcomp<	prep<	iobj>
+4	pcomp<	prep<	prep>
+1	pcomp<	prep<	prep>	pobj>
+1	pcomp<	prep<	prep>	pobj>	dep>	prep>	pobj>	conj>
+1	pcomp<	prep<	prep>	pobj>	appos>
+2	pcomp<	prep<	conj<
+1	pcomp<	prep<	conj<	dep>
+1	pcomp<	prep<	conj<	dep<
+1	pcomp<	prep<	conj<	parataxis<	nsubj>
+10	pcomp<	prep<	conj<	nsubj>
+1	pcomp<	prep<	conj<	pobj<	prep<	prep>	pobj>
+1	pcomp<	prep<	conj<	dobj<	ccomp<
+1	pcomp<	prep<	conj<	dobj>
+1	pcomp<	prep<	conj<	cc>
+2	pcomp<	prep<	csubj<
+2	pcomp<	prep<	parataxis<	nsubj>
+1	pcomp<	prep<	xcomp<	rcmod<
+1	pcomp<	prep<	xcomp<	rcmod<	dep>
+1	pcomp<	prep<	xcomp<	rcmod<	dobj<	parataxis>	punct>
+32	pcomp<	prep<	xcomp<	nsubj>
+4	pcomp<	prep<	xcomp<	nsubjpass>
+1	pcomp<	prep<	xcomp<	pcomp<	prep<	acomp<	nsubj>
+1	pcomp<	prep<	xcomp<	xcomp<	rcmod<	dep>
+2	pcomp<	prep<	xcomp<	xcomp<	nsubj>
+1	pcomp<	prep<	xcomp<	xcomp>
+1	pcomp<	prep<	xcomp<	ccomp<	nsubj>
+10	pcomp<	prep<	xcomp<	dobj>
+2	pcomp<	prep<	parataxis>
+1	pcomp<	prep<	parataxis>	nsubj>
+1	pcomp<	prep<	dobj<	vmod<	dep>
+1	pcomp<	prep<	dobj<	vmod<	dep>	nsubj>
+1	pcomp<	prep<	dobj<	vmod<	rcmod<
+1	pcomp<	prep<	dobj<	dep<
+1	pcomp<	prep<	dobj<	parataxis<	prep>	pobj>
+3	pcomp<	prep<	dobj<	rcmod<
+1	pcomp<	prep<	dobj<	rcmod<	dep>
+30	pcomp<	prep<	dobj<	nsubj>
+1	pcomp<	prep<	dobj<	xcomp<	amod<	dobj<	nsubjpass>
+1	pcomp<	prep<	dobj<	xcomp<	nsubj>
+1	pcomp<	prep<	dobj<	xcomp<	dobj>
+2	pcomp<	prep<	dobj<	ccomp>
+1	pcomp<	prep<	dobj<	csubj>
+4	pcomp<	prep<	dobj<	iobj>
+1	pcomp<	prep<	dobj<	advcl<
+1	pcomp<	prep<	dobj<	advcl<	nsubj>
+1	pcomp<	prep<	dobj<	advcl<	parataxis>	nsubj>
+1	pcomp<	prep<	dobj<	prep>
+2	pcomp<	prep<	advmod>
+1	pcomp<	prep<	advmod>	dep>	vmod>	advcl>	nsubj>
+61	pcomp<	prep<	dobj>
+1	pcomp<	prep<	dobj>	conj>	prep>	pobj>
+1	pcomp<	prep<	advmod<	vmod>
+1	pcomp<	prep<	advmod<	nsubj>
+1	pcomp<	prep<	advmod<	nsubjpass>
+1	pcomp<	prep<	advmod<	xcomp<	nsubj>
+1	pcomp<	dep>
+1	pcomp<	conj<	prep<
+1	pcomp<	conj<	prep<	rcmod<	xcomp<	dep<
+1	pcomp<	conj<	prep<	rcmod<	xcomp<	cc>
+3	pcomp<	conj<	prep<	nsubj>
+1	pcomp<	conj<	prep<	xcomp<	nsubj>
+1	pcomp<	conj<	prep<	prep>
+1	pcomp<	dep<	prep<	pcomp<	prep<	nsubj>
+1	pcomp<	dep<	dep<	nsubj>
+1	pcomp<	rcmod<	dep<
+1	pcomp<	pcomp<	prep<	nsubj>
+1	pcomp<	pcomp<	prep<	advmod<	vmod<	dobj<	nsubj>
+1	pcomp<	prep>
+1	pcomp<	prep>	pobj>	appos>
+1	preconj>
+56	pcomp>
+1	pcomp>	pobj>	prep>
+2832	advcl>
+5	advcl>	dep>
+1	advcl>	dep>	rcmod>	prep>	pobj>
+1	advcl>	dep>	pobj>
+1	advcl>	dep>	predet>
+1	advcl>	acomp>	xcomp>	prep>	pobj>
+1	advcl>	tmod>
+3	advcl>	nsubj>
+1	advcl>	nsubj>	vmod>
+9	advcl>	prep>
+4	advcl>	prep>	pobj>
+3	advcl>	prep>	pobj>	dep>
+1	advcl>	prep>	pobj>	dep>	advcl>
+1	advcl>	prep>	pobj>	conj>
+1	advcl>	prep>	pobj>	appos>
+1	advcl>	prep>	pobj>	appos>	advmod>
+1	advcl>	prep>	pobj>	prep>
+1	advcl>	prep>	pcomp>	conj>	prep>
+1	advcl>	prep>	pcomp>	dobj>
+1	advcl>	prep>	advmod>
+1	advcl>	conj>
+4	advcl>	ccomp>
+1	advcl>	ccomp>	rcmod>	prep>	pobj>
+1	advcl>	ccomp>	xcomp>	advcl>	dobj>
+4	advcl>	ccomp>	dobj>
+1	advcl>	ccomp>	prep>
+1	advcl>	parataxis>	dobj>
+9	advcl>	xcomp>
+2	advcl>	xcomp>	prep>	pobj>
+1	advcl>	xcomp>	prep>	pobj>	dep>
+1	advcl>	xcomp>	prep>	pobj>	rcmod>
+1	advcl>	xcomp>	prep>	pobj>	prep>	pobj>
+1	advcl>	xcomp>	dobj>
+1	advcl>	xcomp>	dobj>	dep>	prep>	pcomp>	dobj>
+38	advcl>	mark>
+22	advcl>	advmod>
+4	advcl>	advcl>
+1	advcl>	advcl>	dobj>
+6	advcl>	neg>
+5	advcl>	dobj>
+1	advcl>	dobj>	dep>	prep>
+1	advcl>	dobj>	rcmod>
+1	advcl>	dobj>	appos>
+1	advcl>	dobj>	appos>	vmod>	prep>	pobj>
+1	advcl>	dobj>	prep>	pobj>	rcmod>
+1	cc<
+3	cc<	conj>
+63	advcl<
+2	advcl<	vmod>
+1	advcl<	vmod<	rcmod>
+1	advcl<	vmod<	dep<	advmod<	prep>
+1	advcl<	vmod<	conj<	dep<
+1	advcl<	vmod<	nsubj>
+1	advcl<	vmod<	pobj<	prep<	dobj<	nsubj>
+1	advcl<	vmod<	dobj>
+5	advcl<	rcmod<
+2	advcl<	rcmod<	dep>
+1	advcl<	rcmod<	dep<	dep>
+1	advcl<	rcmod<	nsubj<
+1	advcl<	rcmod<	nsubj<	advmod>
+1	advcl<	rcmod<	pobj<	prep<
+1	advcl<	rcmod<	pobj<	prep<	conj<	cc>
+1	advcl<	rcmod<	pobj<	prep<	nsubj<
+1	advcl<	rcmod<	pobj<	prep<	dobj<	advcl<	advmod>
+1	advcl<	rcmod<	pobj<	prep<	dobj<	advcl<	prep>
+1	advcl<	rcmod<	dobj<	nsubj>
+1	advcl<	rcmod<	dobj<	cc>
+1	advcl<	pcomp<	prep<	nsubj>
+2	advcl<	pcomp<	prep<	cc>
+4	advcl<	ccomp>
+1	advcl<	ccomp>	prep>	pobj>	dep>	prep>	pobj>
+3	advcl<	advcl>
+1	advcl<	advcl>	nsubj>
+3	advcl<	ccomp<
+1	advcl<	ccomp<	rcmod<	dep>	nsubj>
+2	advcl<	ccomp<	nsubj>
+1	advcl<	ccomp<	parataxis>	nsubj>
+1	advcl<	ccomp<	ccomp<
+1	advcl<	ccomp<	dobj>
+1	advcl<	ccomp<	cc>
+1	advcl<	neg>
+2	advcl<	advcl<
+5	advcl<	cc>
+6	advcl<	dep>
+1	advcl<	dep>	prep>	pobj>
+1	advcl<	acomp>
+1	advcl<	acomp>	xcomp>	prep>	pobj>
+1	advcl<	acomp>	prep>
+1	advcl<	acomp>	prep>	pobj>
+5	advcl<	dep<
+1	advcl<	dep<	xcomp<
+13	advcl<	tmod>
+60	advcl<	nsubj>
+4	advcl<	nsubjpass>
+10	advcl<	prep>
+1	advcl<	prep>	conj>	pobj>
+61	advcl<	prep>	pobj>
+2	advcl<	prep>	pobj>	appos>
+1	advcl<	prep>	pobj>	appos>	rcmod>	xcomp>	advcl>	ccomp>	nsubj>
+1	advcl<	prep>	pobj>	prep>
+4	advcl<	prep>	pobj>	prep>	pobj>
+1	advcl<	prep>	pcomp>	pobj>
+2	advcl<	conj>
+1	advcl<	conj<	dep>
+1	advcl<	conj<	ccomp<	advmod>
+1	advcl<	conj<	prep>	pobj>	prep>	pobj>
+1	advcl<	conj<	cc>
+1	advcl<	csubj<
+1	advcl<	parataxis<	parataxis>	nsubj>
+1	advcl<	xcomp<
+1	advcl<	xcomp<	dep<	vmod>
+1	advcl<	xcomp<	dep<	dep>
+1	advcl<	xcomp<	rcmod<	dep<	dep>
+1	advcl<	xcomp<	rcmod<	appos<	pobj<	prep<	advcl>
+1	advcl<	xcomp<	rcmod<	pobj<	prep<	pobj<	prep<	nsubj>
+2	advcl<	xcomp<	nsubj>
+1	advcl<	xcomp<	xcomp<	prep>
+1	advcl<	xcomp<	xcomp<	dobj>
+2	advcl<	xcomp<	ccomp>
+1	advcl<	xcomp<	ccomp<	advcl<
+1	advcl<	xcomp<	dobj>
+4	advcl<	parataxis>
+1	advcl<	parataxis>	vmod>
+3	advcl<	xcomp>
+1	advcl<	xcomp>	rcmod>	prep>	pobj>	prep>	pobj>
+2	advcl<	xcomp>	prep>	pobj>
+1	advcl<	xcomp>	dobj>
+1	advcl<	xcomp>	dobj>	prep>	pobj>	prep>	pcomp>	prep>	pobj>	conj>
+14	advcl<	advmod>
+1	advcl<	advmod>	prep>	pobj>
+25	advcl<	dobj>
+1	advcl<	dobj>	vmod>	prep>	pobj>
+2	advcl<	dobj>	prep>	pobj>
+1	advcl<	dobj>	prep>	pobj>	vmod>	prep>	pobj>
+1	advcl<	dobj>	prep>	pobj>	rcmod>
+1	advcl<	advmod<	nsubj>
+1	advcl<	advmod<	xcomp<	ccomp<	cc>
+1	advcl<	advmod<	prep>
+1	advcl<	advmod<	cc>
+1851	cc>
+4	acomp<
+2	acomp<	conj<	nsubj>
+1	acomp<	conj<	xcomp<	nsubj>
+1	acomp<	rcmod<
+18	acomp<	nsubj>
+1	acomp<	aux>
+1	acomp<	xcomp<	nsubj>
+1	acomp<	xcomp<	nsubjpass>
+1	acomp<	ccomp<	advcl>	nsubj>
+1	acomp<	ccomp<	dobj>
+2	acomp<	advmod>
+1	acomp<	advcl>
+3	acomp<	prep>
+1	acomp<	prep>	pobj>	rcmod>	nsubj>
+1	acomp<	dobj>
+2	acomp<	cc>
+822	acomp>
+2	acomp>	dep>
+1	acomp>	dep>	pobj>
+3	acomp>	dep>	prep>
+3	acomp>	ccomp>
+1	acomp>	ccomp>	mark>
+18	acomp>	xcomp>
+3	acomp>	xcomp>	prep>
+3	acomp>	advmod>
+45	acomp>	prep>
+1	acomp>	prep>	pobj>	vmod>
+1	acomp>	prep>	pobj>	prep>
+73	nsubj<
+5	nsubj<	dep>
+2	nsubj<	vmod<
+2	nsubj<	rcmod>
+2	nsubj<	dep<
+1	nsubj<	dep<	advcl>
+1	nsubj<	dep<	prep>	pobj>
+11	nsubj<	rcmod<
+2	nsubj<	rcmod<	nsubj>
+1	nsubj<	nsubj>	prep>	dep>
+1	nsubj<	nsubj>	prep>	pobj>
+5	nsubj<	prep>
+1	nsubj<	prep>	pobj>
+1	nsubj<	conj<	nsubj>
+1	nsubj<	conj<	aux>
+1	nsubj<	parataxis<	rcmod<
+1	nsubj<	parataxis<	nsubj>
+1	nsubj<	parataxis<	dobj>
+1	nsubj<	parataxis<	dobj>	amod>
+1	nsubj<	parataxis<	prep>	pobj>	dep>
+2	nsubj<	aux>
+1	nsubj<	xcomp<
+3	nsubj<	xcomp<	nsubj>
+1	nsubj<	xcomp<	pcomp<	prep<	vmod<	pobj<	prep<	prep>
+1	nsubj<	xcomp<	xcomp<	nsubj>
+1	nsubj<	xcomp<	advmod>
+3	nsubj<	xcomp<	prep>
+2	nsubj<	ccomp>
+1	nsubj<	xcomp>
+13	nsubj<	advmod>
+2	nsubj<	ccomp<
+2	nsubj<	ccomp<	nsubj>
+1	nsubj<	ccomp<	xcomp<
+2	nsubj<	ccomp<	xcomp<	prep>
+1	nsubj<	ccomp<	prep>	pobj>
+1	nsubj<	advcl>
+4	nsubj<	neg>
+1	nsubj<	dobj>
+1	nsubj<	advcl<
+1	nsubj<	advcl<	vmod<
+1	nsubj<	advcl<	cc>
+3	nsubj<	cc>
+881	tmod>
+1	tmod>	vmod>
+2	tmod>	dep>
+1	tmod>	poss>
+1	tmod>	rcmod>	ccomp>
+3	tmod>	det>
+2	tmod>	amod>
+6	tmod>	advmod>
+1	tmod>	prep>
+1	tmod>	nn>
+30795	nsubj>
+23	nsubj>	vmod>
+3	nsubj>	vmod>	dep>
+2	nsubj>	vmod>	ccomp>	ccomp>	dobj>
+1	nsubj>	vmod>	ccomp>	xcomp>	dobj>
+1	nsubj>	vmod>	ccomp>	dobj>
+1	nsubj>	vmod>	ccomp>	prep>	pobj>
+1	nsubj>	vmod>	ccomp>	prep>	pobj>	vmod>
+2	nsubj>	vmod>	xcomp>
+1	nsubj>	vmod>	xcomp>	nsubj>
+1	nsubj>	vmod>	xcomp>	advmod>	advcl>	prep>	pcomp>	prep>	pobj>
+2	nsubj>	vmod>	xcomp>	dobj>
+1	nsubj>	vmod>	xcomp>	prep>	pobj>
+1	nsubj>	vmod>	xcomp>	prep>	pobj>	prep>	pobj>
+2	nsubj>	vmod>	advcl>
+2	nsubj>	vmod>	advcl>	nsubj>
+2	nsubj>	vmod>	advcl>	advmod>
+1	nsubj>	vmod>	advcl>	neg>
+1	nsubj>	vmod>	advcl>	dobj>
+2	nsubj>	vmod>	prep>
+1	nsubj>	vmod>	prep>	conj>	pobj>	tmod>
+3	nsubj>	vmod>	prep>	pobj>
+1	nsubj>	vmod>	prep>	pobj>	dep>
+1	nsubj>	vmod>	prep>	pobj>	dep>	dep>
+1	nsubj>	vmod>	prep>	pobj>	det>
+1	nsubj>	vmod>	prep>	pcomp>
+1	nsubj>	vmod>	prep>	pcomp>	dobj>
+12	nsubj>	vmod>	dobj>
+2	nsubj>	vmod>	dobj>	conj>
+45	nsubj>	dep>
+1	nsubj>	dep>	conj>	ccomp>	dobj>
+1	nsubj>	dep>	conj>	dobj>
+1	nsubj>	dep>	conj>	prep>	pobj>	prep>	pobj>
+1	nsubj>	dep>	dep>
+1	nsubj>	dep>	dep>	appos>
+1	nsubj>	dep>	dep>	prep>	pobj>
+3	nsubj>	dep>	nsubj>
+1	nsubj>	dep>	pobj>
+3	nsubj>	dep>	advmod>
+17	nsubj>	dep>	appos>
+1	nsubj>	dep>	prep>
+5	nsubj>	dep>	prep>	pobj>
+1	nsubj>	dep>	prep>	pobj>	appos>
+2	nsubj>	dep>	dobj>
+1	nsubj>	dep>	dobj>	dep>	dep>
+3	nsubj>	poss>
+23	nsubj>	rcmod>
+1	nsubj>	rcmod>	dep>
+1	nsubj>	rcmod>	rcmod>	dobj>
+1	nsubj>	rcmod>	acomp>	prep>	pobj>
+1	nsubj>	rcmod>	tmod>
+4	nsubj>	rcmod>	nsubj>
+5	nsubj>	rcmod>	prep>	pobj>
+1	nsubj>	rcmod>	prep>	pobj>	det>
+1	nsubj>	rcmod>	prep>	pobj>	prep>	pobj>	advmod>	prep>	pobj>	prep>	pobj>	conj>
+1	nsubj>	rcmod>	conj>	prep>
+1	nsubj>	rcmod>	conj>	dobj>	prep>	pobj>
+2	nsubj>	rcmod>	discourse>
+1	nsubj>	rcmod>	ccomp>	nsubj>
+1	nsubj>	rcmod>	ccomp>	ccomp>	nsubj>
+1	nsubj>	rcmod>	ccomp>	ccomp>	xcomp>	conj>
+1	nsubj>	rcmod>	ccomp>	neg>
+1	nsubj>	rcmod>	ccomp>	dobj>
+1	nsubj>	rcmod>	parataxis>	dep>
+1	nsubj>	rcmod>	parataxis>	dep>	rcmod>
+1	nsubj>	rcmod>	xcomp>	prep>	pobj>
+1	nsubj>	rcmod>	xcomp>	prep>	pobj>	vmod>	xcomp>
+1	nsubj>	rcmod>	xcomp>	prep>	pobj>	vmod>	dobj>
+1	nsubj>	rcmod>	xcomp>	dobj>
+9	nsubj>	rcmod>	advmod>
+1	nsubj>	rcmod>	advcl>	prep>	pobj>
+1	nsubj>	rcmod>	advcl>	prep>	pobj>	det>
+2	nsubj>	rcmod>	neg>
+9	nsubj>	rcmod>	dobj>
+2	nsubj>	rcmod>	dobj>	conj>
+1	nsubj>	rcmod>	dobj>	rcmod>	advmod>
+1	nsubj>	rcmod>	dobj>	prep>	pobj>	vmod>	prep>	pobj>
+33	nsubj>	det>
+4	nsubj>	tmod>
+1	nsubj>	nsubj>
+2	nsubj>	pobj>
+5	nsubj>	num>
+115	nsubj>	prep>
+1	nsubj>	prep>	conj>
+1	nsubj>	prep>	conj>	nsubj>
+1	nsubj>	prep>	dep>	prep>	pobj>	dep>
+1	nsubj>	prep>	discourse>
+55	nsubj>	prep>	pobj>
+1	nsubj>	prep>	pobj>	vmod>
+6	nsubj>	prep>	pobj>	conj>
+6	nsubj>	prep>	pobj>	dep>
+1	nsubj>	prep>	pobj>	dep>	prep>
+1	nsubj>	prep>	pobj>	dep>	prep>	conj>
+1	nsubj>	prep>	pobj>	dep>	prep>	conj>	dep>
+1	nsubj>	prep>	pobj>	rcmod>
+1	nsubj>	prep>	pobj>	rcmod>	nsubj>
+1	nsubj>	prep>	pobj>	rcmod>	xcomp>
+1	nsubj>	prep>	pobj>	rcmod>	xcomp>	nsubj>
+1	nsubj>	prep>	pobj>	rcmod>	advmod>
+1	nsubj>	prep>	pobj>	rcmod>	neg>
+1	nsubj>	prep>	pobj>	rcmod>	dobj>
+1	nsubj>	prep>	pobj>	rcmod>	prep>	pobj>
+2	nsubj>	prep>	pobj>	det>
+1	nsubj>	prep>	pobj>	tmod>
+3	nsubj>	prep>	pobj>	amod>
+1	nsubj>	prep>	pobj>	advmod>
+5	nsubj>	prep>	pobj>	appos>
+1	nsubj>	prep>	pobj>	appos>	conj>
+7	nsubj>	prep>	pobj>	prep>
+2	nsubj>	prep>	pobj>	prep>	dep>
+7	nsubj>	prep>	pobj>	prep>	pobj>
+2	nsubj>	prep>	pobj>	prep>	pobj>	appos>
+1	nsubj>	prep>	pobj>	prep>	pobj>	prep>
+2	nsubj>	prep>	pobj>	prep>	pobj>	prep>	pobj>
+1	nsubj>	prep>	pobj>	prep>	pobj>	prep>	pobj>	rcmod>	advmod>
+1	nsubj>	prep>	pobj>	nn>
+1	nsubj>	prep>	pcomp>	prep>
+1	nsubj>	predet>
+26	nsubj>	conj>
+1	nsubj>	conj>	dep>
+1	nsubj>	conj>	rcmod>
+1	nsubj>	conj>	rcmod>	ccomp>
+1	nsubj>	conj>	rcmod>	dobj>
+2	nsubj>	conj>	prep>	pobj>
+1	nsubj>	conj>	prep>	pobj>	rcmod>	prep>	pobj>
+1	nsubj>	conj>	predet>
+9	nsubj>	amod>
+1	nsubj>	amod>	dep>	cc>
+1	nsubj>	amod>	tmod>	appos>
+3	nsubj>	amod>	prep>
+1	nsubj>	amod>	prep>	pobj>
+1	nsubj>	amod>	prep>	pobj>	rcmod>	dobj>
+1	nsubj>	amod>	prep>	pobj>	appos>
+1	nsubj>	amod>	prep>	prep>
+1	nsubj>	aux>
+1	nsubj>	ccomp>	dep>	prep>	pobj>	appos>
+1	nsubj>	quantmod>
+66	nsubj>	advmod>
+1	nsubj>	advmod>	pobj>
+2	nsubj>	advmod>	advmod>
+1	nsubj>	advmod>	prep>	pobj>
+33	nsubj>	appos>
+1	nsubj>	appos>	vmod>
+2	nsubj>	appos>	dep>
+4	nsubj>	appos>	dep>	dep>	appos>
+1	nsubj>	appos>	dep>	prep>	pobj>
+1	nsubj>	appos>	rcmod>
+1	nsubj>	appos>	rcmod>	dobj>
+1	nsubj>	appos>	tmod>
+1	nsubj>	appos>	amod>
+1	nsubj>	appos>	advmod>
+2	nsubj>	appos>	prep>
+1	nsubj>	appos>	prep>	conj>
+1	nsubj>	appos>	prep>	pobj>
+1	nsubj>	appos>	prep>	pobj>	prep>	pobj>	vmod>
+1	nsubj>	appos>	prep>	pobj>	prep>	pobj>	prep>
+1	nsubj>	neg>
+9	nsubj>	nn>
+39	expl>
+1	expl>	appos>
+600	iobj>
+1	iobj>	dep>	vmod>
+2	iobj>	det>
+1	iobj>	prep>
+18203	prep>
+6	prep>	conj>
+1	prep>	conj>	pobj>
+1	prep>	conj>	pobj>	vmod>
+1	prep>	conj>	pobj>	rcmod>
+1	prep>	conj>	pobj>	prep>
+22	prep>	dep>
+1	prep>	dep>	conj>
+2	prep>	dep>	prep>
+1	prep>	dep>	prep>	pobj>
+10	prep>	npadvmod>
+3	prep>	tmod>
+174	prep>	pobj>
+60	prep>	pobj>	vmod>
+1	prep>	pobj>	vmod>	vmod>
+1	prep>	pobj>	vmod>	xcomp>
+1	prep>	pobj>	vmod>	advmod>
+1	prep>	pobj>	vmod>	dobj>
+1	prep>	pobj>	vmod>	dobj>	rcmod>
+1	prep>	pobj>	vmod>	dobj>	cc>
+7	prep>	pobj>	vmod>	prep>
+1	prep>	pobj>	vmod>	prep>	pobj>	conj>	prep>	pobj>
+1	prep>	pobj>	vmod>	prep>	pobj>	rcmod>
+1	prep>	pobj>	vmod>	prep>	pobj>	rcmod>	xcomp>	advcl>	vmod>
+77	prep>	pobj>	dep>
+1	prep>	pobj>	dep>	vmod>	prep>
+2	prep>	pobj>	dep>	dep>
+1	prep>	pobj>	dep>	rcmod>
+1	prep>	pobj>	dep>	rcmod>	prep>
+9	prep>	pobj>	dep>	prep>
+1	prep>	pobj>	dep>	prep>	conj>
+1	prep>	pobj>	dep>	dobj>
+1	prep>	pobj>	dep>	dobj>	det>
+6	prep>	pobj>	conj>
+1	prep>	pobj>	conj>	dep>
+1	prep>	pobj>	conj>	amod>
+3	prep>	pobj>	conj>	prep>
+41	prep>	pobj>	rcmod>
+1	prep>	pobj>	rcmod>	vmod>
+1	prep>	pobj>	rcmod>	dep>
+1	prep>	pobj>	rcmod>	conj>	dobj>	rcmod>	prep>	pcomp>	advcl>
+3	prep>	pobj>	rcmod>	ccomp>
+1	prep>	pobj>	rcmod>	xcomp>	prep>
+5	prep>	pobj>	rcmod>	advcl>
+1	prep>	pobj>	rcmod>	advmod>
+8	prep>	pobj>	rcmod>	prep>
+1	prep>	pobj>	rcmod>	prep>	pobj>	prep>
+1	prep>	pobj>	rcmod>	dobj>
+3	prep>	pobj>	tmod>
+1	prep>	pobj>	tmod>	appos>
+1	prep>	pobj>	det>
+7	prep>	pobj>	amod>
+1	prep>	pobj>	amod>	dep>
+1	prep>	pobj>	amod>	xcomp>
+3	prep>	pobj>	amod>	prep>
+1	prep>	pobj>	num>
+19	prep>	pobj>	advmod>
+1	prep>	pobj>	advmod>	prep>
+21	prep>	pobj>	appos>
+1	prep>	pobj>	appos>	vmod>	prep>
+1	prep>	pobj>	appos>	dep>
+1	prep>	pobj>	appos>	det>
+398	prep>	pobj>	prep>
+7	prep>	pobj>	prep>	pobj>
+3	prep>	pobj>	prep>	pobj>	vmod>
+1	prep>	pobj>	prep>	pobj>	vmod>	prep>
+4	prep>	pobj>	prep>	pobj>	dep>
+1	prep>	pobj>	prep>	pobj>	dep>	prep>
+4	prep>	pobj>	prep>	pobj>	rcmod>
+1	prep>	pobj>	prep>	pobj>	rcmod>	xcomp>	advcl>
+2	prep>	pobj>	prep>	pobj>	amod>
+1	prep>	pobj>	prep>	pobj>	advmod>
+3	prep>	pobj>	prep>	pobj>	appos>
+22	prep>	pobj>	prep>	pobj>	prep>
+1	prep>	pobj>	prep>	pobj>	prep>	pobj>
+1	prep>	pobj>	prep>	pcomp>	tmod>
+2	prep>	pobj>	cc>
+108	prep>	pcomp>
+1	prep>	pcomp>	vmod>
+1	prep>	pcomp>	conj>
+1	prep>	pcomp>	nsubj>
+1	prep>	pcomp>	pobj>
+1	prep>	pcomp>	pobj>	dep>
+1	prep>	pcomp>	pobj>	prep>
+1	prep>	pcomp>	pobj>	prep>	pcomp>
+1	prep>	pcomp>	ccomp>	xcomp>
+1	prep>	pcomp>	xcomp>
+5	prep>	pcomp>	advcl>
+1	prep>	pcomp>	advmod>
+11	prep>	pcomp>	prep>
+1	prep>	pcomp>	prep>	pobj>
+2	prep>	pcomp>	prep>	pobj>	dep>
+1	prep>	pcomp>	prep>	pobj>	appos>
+1	prep>	pcomp>	dobj>
+1	prep>	pcomp>	dobj>	vmod>
+2	prep>	pcomp>	dobj>	prep>
+1	prep>	pcomp>	dobj>	prep>	pobj>	prep>	conj>
+33	prep>	advmod>
+12	prep>	advmod>	npadvmod>
+2	prep>	neg>
+4	prep>	prep>
+1	prep>	prep>	pobj>	prep>
+2	prep>	prep>	pobj>	prep>	pobj>
+6	prep>	cc>
+44	prep<
+2	prep<	vmod>	prep>	pobj>
+2	prep<	dep>
+1	prep<	vmod<
+1	prep<	dep<
+1	prep<	dep<	dep>
+1	prep<	dep<	conj>
+2	prep<	nsubj<
+1	prep<	rcmod<
+1	prep<	rcmod<	nsubj<
+1	prep<	det>
+30	prep<	nsubj>
+1	prep<	nsubjpass>
+1	prep<	pobj>
+1	prep<	pobj<
+3	prep<	pobj<	prep<
+2	prep<	pobj<	prep<	dep<
+1	prep<	pobj<	prep<	det>
+1	prep<	pobj<	prep<	nsubj>
+1	prep<	pobj<	prep<	xcomp<	tmod>
+2	prep<	pobj<	prep<	pobj<	prep<
+1	prep<	pobj<	prep<	pobj<	prep<	prep>
+2	prep<	num>
+5	prep<	prep>
+11	prep<	prep>	pobj>
+2	prep<	prep>	pobj>	prep>	pobj>
+2	prep<	parataxis<	dobj>
+1	prep<	aux>
+1	prep<	pcomp<	prep<	dobj>
+1	prep<	xcomp<	rcmod<
+1	prep<	xcomp<	dobj>
+1	prep<	ccomp>	prep>	pcomp>	pobj>	prep>	pobj>
+6	prep<	advmod>
+1	prep<	dobj<	advcl<	advmod>
+1	prep<	advcl<
+13	prep<	dobj>
+1	prep<	dobj>	prep>
+1	prep<	dobj>	prep>	pobj>	appos>
+1	prep<	dobj>	prep>	pobj>	prep>	pobj>
+1	prep<	cc>
+8	appos<
+1	appos<	dep>
+1	appos<	appos<	nsubj<	parataxis<	nsubj>
+1	appos<	dep<	amod<
+1	appos<	conj<	dobj<	prep>
+1	appos<	nsubj<	parataxis<	nsubj>
+1	appos<	rcmod<	pobj<	prep<	nsubj<
+1	appos<	iobj<	vmod<	dobj<	iobj>
+1	appos<	iobj<	dobj>
+1	appos<	iobj<	dobj>	prep>	pcomp>	pobj>	prep>
+1	appos<	pobj<	prep<	prep<	nsubj>
+1	appos<	pobj<	prep<	dep<
+1	appos<	pobj<	prep<	dep<	nsubj>
+1	appos<	pobj<	prep<	conj<	dep>
+1	appos<	pobj<	prep<	conj<	dep<
+1	appos<	pobj<	prep<	rcmod<	dobj<	vmod<
+1	appos<	pobj<	prep<	xcomp<	vmod<
+1	appos<	pobj<	prep<	xcomp<	vmod<	nsubj<
+1	appos<	pobj<	prep<	xcomp<	vmod<	nsubj<	prep>
+1	appos<	pobj<	prep<	xcomp<	vmod<	nsubj<	cc>
+2	appos<	pobj<	prep<	pobj<
+1	appos<	pobj<	prep<	pobj<	prep<
+1	appos<	pobj<	prep<	pobj<	prep<	dep>
+1	appos<	pobj<	prep<	pobj<	prep<	conj<	pobj<	prep<	prep>
+1	appos<	pobj<	prep<	pobj<	prep<	nsubj>
+1	appos<	pobj<	prep<	pobj<	prep<	prep>
+1	appos<	pobj<	prep<	pobj<	cc>
+2	appos<	pobj<	prep<	prep>
+1	appos<	dobj<
+3	appos<	appos>
+2	appos<	prep>
+1	appos<	prep>	pobj>
+1	appos<	cc>
+2	iobj<
+1	iobj<	vmod<	dobj<	iobj>
+1	iobj<	rcmod<
+3	iobj<	nsubj>
+1	iobj<	advcl>
+5	iobj<	dobj>
+1	iobj<	dobj>	prep>	pcomp>	pobj>	prep>
+533	prt>
+136	xcomp<
+1	xcomp<	vmod>
+50	xcomp<	vmod<
+2	xcomp<	vmod<	dep>
+1	xcomp<	vmod<	dep<
+1	xcomp<	vmod<	dep<	amod<
+1	xcomp<	vmod<	dep<	pobj<	prep<
+1	xcomp<	vmod<	dep<	pobj<	prep<	pobj<	cc>
+1	xcomp<	vmod<	rcmod>
+3	xcomp<	vmod<	nsubj<
+1	xcomp<	vmod<	rcmod<	dep>
+10	xcomp<	vmod<	nsubj>
+2	xcomp<	vmod<	pobj<	prep<
+1	xcomp<	vmod<	pobj<	prep<	conj<	nsubj>
+2	xcomp<	vmod<	pobj<	prep<	nsubj>
+1	xcomp<	vmod<	pobj<	prep<	xcomp<	nsubj>
+1	xcomp<	vmod<	pobj<	prep<	pobj<	prep<
+1	xcomp<	vmod<	pobj<	prep<	pobj<	prep<	nsubj>
+1	xcomp<	vmod<	prep>
+1	xcomp<	vmod<	prep>	pobj>
+1	xcomp<	vmod<	appos<	rcmod>
+1	xcomp<	vmod<	conj<	nsubj>
+1	xcomp<	vmod<	pcomp<	prep<	rcmod<	dep>
+1	xcomp<	vmod<	dobj<	rcmod<
+5	xcomp<	vmod<	dobj<	nsubj>
+1	xcomp<	vmod<	dobj<	iobj>
+1	xcomp<	vmod<	dobj>
+1	xcomp<	vmod<	cc>
+124	xcomp<	rcmod<
+1	xcomp<	rcmod<	vmod>	ccomp>	xcomp>	prep>	pobj>
+5	xcomp<	rcmod<	dep>
+1	xcomp<	rcmod<	dep>	dep>
+1	xcomp<	rcmod<	dep>	nsubj>
+1	xcomp<	rcmod<	dep>	prep>
+4	xcomp<	rcmod<	dep<
+1	xcomp<	rcmod<	conj<
+1	xcomp<	rcmod<	conj<	dep<	pobj<	prep<	nsubj>
+1	xcomp<	rcmod<	conj<	pobj<	prep<	amod<
+1	xcomp<	rcmod<	conj<	pobj<	prep<	amod<	rcmod<	dep>	prep>
+1	xcomp<	rcmod<	conj<	cc>
+1	xcomp<	rcmod<	appos<	pobj<	prep<	advcl>
+4	xcomp<	rcmod<	nsubj<
+2	xcomp<	rcmod<	nsubj<	aux>
+1	xcomp<	rcmod<	nsubj<	advcl>	mark>
+1	xcomp<	rcmod<	nsubj<	prep>
+1	xcomp<	rcmod<	nsubj<	advcl<	nsubj>
+1	xcomp<	rcmod<	det>
+1	xcomp<	rcmod<	parataxis>
+1	xcomp<	rcmod<	pobj<	prep<
+1	xcomp<	rcmod<	pobj<	prep<	pcomp<	prep<	vmod<	dobj<	dep<	dep<	dep>
+1	xcomp<	rcmod<	dobj<	vmod<	pobj<	prep<	advcl>
+1	xcomp<	rcmod<	dobj<	parataxis<
+1	xcomp<	rcmod<	dobj<	rcmod<	dep<
+10	xcomp<	rcmod<	dobj<	nsubj>
+1	xcomp<	rcmod<	dobj<	xcomp<	nsubj>
+1	xcomp<	rcmod<	dobj<	parataxis>
+4	xcomp<	rcmod<	prep>	pobj>
+1	xcomp<	rcmod<	prep>	pobj>	num>
+2	xcomp<	rcmod<	cc>
+1	xcomp<	pobj>
+1	xcomp<	csubjpass>	ccomp>
+15	xcomp<	amod<
+1	xcomp<	amod<	nsubj<	advmod>
+2	xcomp<	amod<	det>
+1	xcomp<	amod<	nsubj>
+2	xcomp<	amod<	pobj<	prep<	nsubj>
+1	xcomp<	amod<	pobj<	prep<	dobj>
+2	xcomp<	aux>
+2	xcomp<	pcomp<	prep<
+1	xcomp<	pcomp<	prep<	acomp<	nsubj>
+1	xcomp<	pcomp<	prep<	dep>
+1	xcomp<	pcomp<	prep<	dep>	vmod>
+1	xcomp<	pcomp<	prep<	conj<
+1	xcomp<	pcomp<	prep<	conj<	dobj<	ccomp<
+1	xcomp<	pcomp<	prep<	rcmod<	conj<	pobj<	prep<	prep>
+11	xcomp<	pcomp<	prep<	nsubj>
+1	xcomp<	pcomp<	prep<	nsubjpass>
+1	xcomp<	pcomp<	prep<	advcl>
+1	xcomp<	pcomp<	prep<	ccomp<	rcmod<	dep<
+2	xcomp<	pcomp<	prep<	dobj>
+1	xcomp<	pcomp<	prep<	prep>
+1	xcomp<	pcomp<	prep<	advmod<	nsubj>
+17	xcomp<	ccomp>
+4	xcomp<	ccomp>	nsubj>
+1	xcomp<	ccomp>	ccomp>	conj>	dobj>
+1	xcomp<	ccomp>	dobj>
+11	xcomp<	ccomp<
+1	xcomp<	ccomp<	vmod<
+2	xcomp<	ccomp<	vmod<	nsubj<
+2	xcomp<	ccomp<	dep<
+1	xcomp<	ccomp<	dep<	vmod>
+1	xcomp<	ccomp<	dep<	dep>
+2	xcomp<	ccomp<	dep<	dep<
+3	xcomp<	ccomp<	rcmod<
+1	xcomp<	ccomp<	rcmod<	dep>
+1	xcomp<	ccomp<	rcmod<	dep>	prep>
+1	xcomp<	ccomp<	rcmod<	dep<	dep>
+21	xcomp<	ccomp<	nsubj>
+3	xcomp<	ccomp<	prep>	pobj>
+1	xcomp<	ccomp<	prep>	pobj>	prep>	pobj>
+1	xcomp<	ccomp<	conj>	prep>	pobj>
+1	xcomp<	ccomp<	conj<	rcmod<	appos<
+1	xcomp<	ccomp<	conj<	cc>
+1	xcomp<	ccomp<	csubj<
+1	xcomp<	ccomp<	csubj<	dep<	nsubj<	dep<	pobj<	prep<	cc>
+1	xcomp<	ccomp<	pcomp<	prep<	dep<
+1	xcomp<	ccomp<	pcomp<	prep<	pobj<	prep<	rcmod<	dep>
+2	xcomp<	ccomp<	parataxis>
+1	xcomp<	ccomp<	xcomp>	dobj>
+2	xcomp<	ccomp<	ccomp<
+1	xcomp<	ccomp<	ccomp<	amod<	advmod>
+1	xcomp<	ccomp<	ccomp<	dobj<	dobj>
+1	xcomp<	ccomp<	advcl>
+1	xcomp<	ccomp<	advmod>
+11	xcomp<	ccomp<	dobj>
+4	xcomp<	ccomp<	cc>
+28	xcomp<	advcl>
+1	xcomp<	advcl>	xcomp>
+1	xcomp<	advcl>	xcomp>	dobj>	appos>
+1	xcomp<	advcl>	advmod>
+2	xcomp<	neg>
+7	xcomp<	advcl<
+1	xcomp<	advcl<	dep>
+1	xcomp<	advcl<	conj<	dep<	ccomp<	nsubj>
+1	xcomp<	advcl<	conj<	ccomp<	advmod>
+1	xcomp<	advcl<	tmod>
+1	xcomp<	advcl<	rcmod<	dep>
+10	xcomp<	advcl<	nsubj>
+1	xcomp<	advcl<	nsubjpass>
+1	xcomp<	advcl<	advcl>	nsubj>
+1	xcomp<	advcl<	ccomp<	parataxis>	nsubj>
+3	xcomp<	advcl<	dobj>
+1	xcomp<	advcl<	advmod<	nsubj>
+2	xcomp<	advcl<	prep>	pobj>
+23	xcomp<	cc>
+1	xcomp<	acomp<
+1	xcomp<	acomp<	vmod<
+1	xcomp<	acomp<	vmod<	nsubj>
+1	xcomp<	acomp<	conj<	advcl>	nsubjpass>
+1	xcomp<	acomp<	rcmod<
+1	xcomp<	acomp<	rcmod<	dobj<	nsubj>
+37	xcomp<	acomp<	nsubj>
+1	xcomp<	acomp<	nsubj>	conj>	dep>	conj>
+1	xcomp<	acomp<	advmod>
+2	xcomp<	acomp<	advcl>
+1	xcomp<	acomp<	ccomp<	rcmod<
+4	xcomp<	acomp<	ccomp<	nsubj>
+1	xcomp<	acomp<	advcl<
+1	xcomp<	acomp<	prep>	pobj>	dep>
+21	xcomp<	dep>
+1	xcomp<	dep>	dobj>
+1	xcomp<	dep>	prep>	pobj>	prep>	pcomp>	xcomp>	advmod>
+1	xcomp<	acomp>
+2	xcomp<	acomp>	prep>	pobj>
+39	xcomp<	dep<
+2	xcomp<	dep<	vmod>
+1	xcomp<	dep<	conj>
+1	xcomp<	dep<	dep<
+1	xcomp<	dep<	csubj<
+4	xcomp<	dep<	nsubj>
+2	xcomp<	dep<	ccomp<	nsubj>
+3	xcomp<	dep<	dobj<	nsubj>
+1	xcomp<	dep<	appos>
+1	xcomp<	dep<	dobj>	conj>
+1	xcomp<	dep<	advmod<	vmod<	xcomp<	xcomp<	dobj>
+3	xcomp<	dep<	advmod<	nsubj>
+1	xcomp<	dep<	prep>	conj>	pobj>
+1	xcomp<	dep<	prep>	pcomp>	pobj>	prep>	pobj>
+5	xcomp<	tmod>
+2676	xcomp<	nsubj>
+1	xcomp<	nsubj>	vmod>	xcomp>	nsubj>
+1	xcomp<	nsubj>	vmod>	dobj>
+3	xcomp<	nsubj>	conj>
+1	xcomp<	nsubj>	conj>	vmod>
+1	xcomp<	nsubj>	dep>
+4	xcomp<	nsubj>	poss>
+1	xcomp<	nsubj>	rcmod>
+2	xcomp<	nsubj>	rcmod>	nsubj>
+1	xcomp<	nsubj>	rcmod>	xcomp>	dobj>
+1	xcomp<	nsubj>	rcmod>	advmod>	prep>	pobj>
+1	xcomp<	nsubj>	rcmod>	dobj>
+5	xcomp<	nsubj>	det>
+2	xcomp<	nsubj>	appos>
+2	xcomp<	nsubj>	prep>
+5	xcomp<	nsubj>	prep>	pobj>
+2	xcomp<	nsubj>	prep>	pobj>	conj>
+1	xcomp<	nsubj>	prep>	pobj>	appos>
+1	xcomp<	nsubj>	prep>	pobj>	prep>	pobj>
+1	xcomp<	nsubj>	nn>
+290	xcomp<	nsubjpass>
+1	xcomp<	nsubjpass>	conj>
+1	xcomp<	nsubjpass>	det>
+1	xcomp<	expl>
+2	xcomp<	csubj>
+1	xcomp<	csubj>	xcomp>	ccomp>
+4	xcomp<	csubj>	dobj>
+1	xcomp<	csubj>	prep>	pobj>
+29	xcomp<	prep>
+2	xcomp<	prep>	conj>	pobj>
+1	xcomp<	prep>	tmod>
+136	xcomp<	prep>	pobj>
+3	xcomp<	prep>	pobj>	conj>
+1	xcomp<	prep>	pobj>	conj>	poss>
+1	xcomp<	prep>	pobj>	poss>
+1	xcomp<	prep>	pobj>	det>
+1	xcomp<	prep>	pobj>	advmod>
+13	xcomp<	prep>	pobj>	prep>	pobj>
+1	xcomp<	prep>	pobj>	prep>	pobj>	conj>
+1	xcomp<	prep>	pobj>	prep>	pobj>	appos>
+2	xcomp<	prep>	pobj>	prep>	pobj>	prep>	pobj>
+1	xcomp<	prep>	pobj>	prep>	pobj>	prep>	pobj>	conj>
+1	xcomp<	prep>	pobj>	cc>
+1	xcomp<	prep>	pcomp>	pobj>
+2	xcomp<	conj>
+1	xcomp<	conj>	nsubj>
+1	xcomp<	conj>	prep>	pobj>
+1	xcomp<	conj>	prep>	pobj>	prep>
+1	xcomp<	conj<
+1	xcomp<	conj<	dep>
+1	xcomp<	conj<	vmod<	parataxis<	nsubj>
+1	xcomp<	conj<	vmod<	dobj>
+7	xcomp<	conj<	rcmod<
+1	xcomp<	conj<	rcmod<	pobj<	prep<	nsubj>
+1	xcomp<	conj<	rcmod<	dobj<
+127	xcomp<	conj<	nsubj>
+1	xcomp<	conj<	nsubj>	det>
+14	xcomp<	conj<	nsubjpass>
+2	xcomp<	conj<	csubj>
+1	xcomp<	conj<	csubj>	prep>	pobj>
+1	xcomp<	conj<	pobj<	prep<	nsubj>
+1	xcomp<	conj<	prep>	pobj>	dep>
+2	xcomp<	conj<	prep>	pobj>	rcmod>	nsubj>
+1	xcomp<	conj<	prep>	pobj>	prep>	pobj>	prep>	pobj>	rcmod>
+1	xcomp<	conj<	conj>	parataxis>	dobj>	prep>	pobj>	rcmod>	nsubj>
+1	xcomp<	conj<	aux>
+2	xcomp<	conj<	pcomp<	prep<
+1	xcomp<	conj<	xcomp<	dobj>
+3	xcomp<	conj<	parataxis>
+2	xcomp<	conj<	ccomp>	nsubj>
+1	xcomp<	conj<	advcl>	nsubj>
+1	xcomp<	conj<	advcl>	nsubjpass>
+1	xcomp<	conj<	advmod>
+3	xcomp<	conj<	ccomp<	nsubj>
+1	xcomp<	conj<	neg>
+3	xcomp<	conj<	advcl<	nsubj>
+3	xcomp<	conj<	dobj>
+3	xcomp<	csubj<
+1	xcomp<	csubj<	parataxis<	nsubjpass>
+4	xcomp<	parataxis<
+1	xcomp<	parataxis<	nsubj>
+1	xcomp<	parataxis<	nsubj>	det>
+1	xcomp<	parataxis<	ccomp<	nsubj>
+1	xcomp<	parataxis<	advcl>	prep>	pobj>	rcmod>	prep>	pobj>
+3	xcomp<	parataxis<	dobj>
+1	xcomp<	xcomp<	acomp<	nsubj>
+2	xcomp<	xcomp<	vmod<
+1	xcomp<	xcomp<	dep<
+1	xcomp<	xcomp<	dep<	nsubj>
+1	xcomp<	xcomp<	rcmod<
+1	xcomp<	xcomp<	rcmod<	pobj<	prep<	dobj>
+1	xcomp<	xcomp<	rcmod<	pobj<	prep<	cc>
+64	xcomp<	xcomp<	nsubj>
+11	xcomp<	xcomp<	nsubjpass>
+1	xcomp<	xcomp<	prep>
+4	xcomp<	xcomp<	prep>	pobj>
+1	xcomp<	xcomp<	prep>	pobj>	conj>
+1	xcomp<	xcomp<	prep>	pobj>	det>
+5	xcomp<	xcomp<	conj<	nsubj>
+2	xcomp<	xcomp<	xcomp<	nsubj>
+1	xcomp<	xcomp<	xcomp<	nsubjpass>
+2	xcomp<	xcomp<	ccomp>
+1	xcomp<	xcomp<	ccomp>	nsubj>
+2	xcomp<	xcomp<	xcomp>
+1	xcomp<	xcomp<	ccomp<
+1	xcomp<	xcomp<	ccomp<	prep>	pobj>
+20	xcomp<	xcomp<	dobj>
+16	xcomp<	parataxis>
+1	xcomp<	parataxis>	dep>
+2	xcomp<	parataxis>	nsubj>
+1	xcomp<	parataxis>	dobj>	dep>
+17	xcomp<	xcomp>
+1	xcomp<	xcomp>	xcomp>	advmod>
+1	xcomp<	xcomp>	prep>	pobj>
+1	xcomp<	xcomp>	prep>	pobj>	rcmod>	prep>	pobj>
+1	xcomp<	xcomp>	prep>	pcomp>	dobj>
+56	xcomp<	advmod>
+2	xcomp<	advmod>	conj>	pobj>
+2	xcomp<	advmod>	prep>	pobj>
+12	xcomp<	mark>
+757	xcomp<	dobj>
+1	xcomp<	dobj>	dep>
+1	xcomp<	dobj>	conj>	num>
+3	xcomp<	dobj>	rcmod>
+1	xcomp<	dobj>	rcmod>	nsubj>
+2	xcomp<	dobj>	rcmod>	advmod>
+1	xcomp<	dobj>	det>
+1	xcomp<	dobj>	prep>
+6	xcomp<	dobj>	prep>	pobj>
+1	xcomp<	dobj>	prep>	pobj>	appos>
+1	xcomp<	dobj>	prep>	pobj>	appos>	prep>	pobj>
+4470	xcomp>
+5	xcomp>	vmod>
+10	xcomp>	dep>
+1	xcomp>	dep>	dep>
+2	xcomp>	dep>	advcl>
+1	xcomp>	dep>	prep>
+2	xcomp>	rcmod>
+1	xcomp>	rcmod>	prep>
+1	xcomp>	acomp>	prep>
+5	xcomp>	tmod>
+225	xcomp>	nsubj>
+2	xcomp>	nsubj>	det>
+2	xcomp>	nsubj>	prep>
+1	xcomp>	nsubj>	nn>
+5	xcomp>	expl>
+91	xcomp>	prep>
+2	xcomp>	prep>	pobj>	vmod>
+1	xcomp>	prep>	pobj>	vmod>	xcomp>
+1	xcomp>	prep>	pobj>	vmod>	advcl>
+1	xcomp>	prep>	pobj>	dep>
+2	xcomp>	prep>	pobj>	rcmod>
+1	xcomp>	prep>	pobj>	tmod>
+1	xcomp>	prep>	pobj>	amod>
+1	xcomp>	prep>	pobj>	appos>
+8	xcomp>	prep>	pobj>	prep>
+1	xcomp>	prep>	pobj>	prep>	pobj>	prep>
+1	xcomp>	prep>	pcomp>	prep>
+2	xcomp>	conj>
+1	xcomp>	conj>	dep>
+1	xcomp>	conj>	acomp>	advmod>
+2	xcomp>	npadvmod>
+1	xcomp>	cop>
+1	xcomp>	amod>
+1	xcomp>	amod>	prep>
+3	xcomp>	aux>
+4	xcomp>	ccomp>
+1	xcomp>	ccomp>	vmod>	prep>
+5	xcomp>	ccomp>	advcl>
+1	xcomp>	ccomp>	advmod>
+1	xcomp>	ccomp>	dobj>	vmod>	dobj>	conj>	vmod>	advcl>	dobj>
+1	xcomp>	ccomp>	dobj>	vmod>	dobj>	conj>	vmod>	advcl>	dobj>	conj>
+9	xcomp>	xcomp>
+3	xcomp>	xcomp>	advcl>
+2	xcomp>	xcomp>	prep>
+1	xcomp>	xcomp>	prep>	pcomp>	prep>
+48	xcomp>	advcl>
+28	xcomp>	advmod>
+1	xcomp>	advmod>	advmod>
+2	xcomp>	advmod>	advcl>
+4	xcomp>	dobj>
+2	xcomp>	dobj>	vmod>
+1	xcomp>	dobj>	conj>
+1	xcomp>	dobj>	dep>
+3	xcomp>	dobj>	rcmod>	advcl>
+1	xcomp>	dobj>	appos>
+2	xcomp>	dobj>	prep>
+1	tmod<	nsubj>
+1	tmod<	pcomp<	prep<	dobj<	rcmod<
+1	tmod<	neg>
+3	tmod<	prep>
+1	tmod<	dobj>	dep>
+1	tmod<	dobj>	prep>	pobj>	nn>
+140	nn<
+1	nn<	vmod>
+2	nn<	dep>
+1	nn<	nsubjpass<
+1	nn<	nsubjpass<	conj<	nsubj>
+1	nn<	nsubjpass<	ccomp<
+2	nn<	poss>
+12	nn<	dep<
+1	nn<	dep<	prep<
+1	nn<	dep<	prep<	nsubj<	dep<
+1	nn<	dep<	prep<	nsubj>
+1	nn<	dep<	prep<	cc>
+2	nn<	dep<	dep<
+1	nn<	dep<	dep<	advmod<
+2	nn<	dep<	nsubj<
+1	nn<	dep<	parataxis<	parataxis>
+1	nn<	dep<	advmod>
+2	nn<	poss<
+1	nn<	poss<	pobj<	prep<	dobj<	xcomp<	prep>	pobj>
+1	nn<	poss<	dobj<
+1	nn<	poss<	dobj<	prep>
+6	nn<	nsubj<
+1	nn<	nsubj<	dep>
+1	nn<	nsubj<	advmod>
+1	nn<	nsubj<	prep>	pobj>	appos>
+2	nn<	det>
+6	nn<	rcmod<
+4	nn<	nsubj>
+5	nn<	pobj<	prep<
+1	nn<	pobj<	prep<	vmod>
+11	nn<	pobj<	prep<	nsubj>
+3	nn<	pobj<	prep<	pobj<	prep<	prep>	pcomp>
+3	nn<	pobj<	prep<	prep>
+1	nn<	pobj<	prep<	amod<
+1	nn<	pobj<	prep<	amod<	pobj<	prep<	dobj<	nsubj>
+1	nn<	pobj<	prep<	conj<	advcl<	xcomp<	nsubj>
+1	nn<	pobj<	prep<	pcomp<	prep<	conj<
+1	nn<	pobj<	prep<	xcomp<	nsubjpass>
+1	nn<	pobj<	prep<	parataxis>
+1	nn<	pobj<	prep<	xcomp>
+1	nn<	pobj<	prep<	dobj<	conj<	parataxis>
+1	nn<	pobj<	prep<	dobj<	advmod>
+1	nn<	pobj<	prep<	dobj<	prep>	pcomp>
+1	nn<	pobj<	prep<	advmod>
+1	nn<	pobj<	prep<	advmod<	dobj>
+3	nn<	pobj<	prep<	dobj>
+11	nn<	prep>
+1	nn<	conj<
+1	nn<	conj<	conj<	dobj<	nsubj>
+1	nn<	conj<	conj<	cc>
+1	nn<	conj<	dep<
+1	nn<	conj<	dep<	dep>	advmod>
+1	nn<	conj<	nsubj<	ccomp>	nsubj>
+1	nn<	conj<	nsubj<	ccomp>	aux>
+1	nn<	conj<	pobj<	prep<	vmod>
+1	nn<	conj<	pobj<	prep<	dep<	dobj<	nsubj>
+1	nn<	conj<	pobj<	prep<	dep<	dobj<	aux>
+1	nn<	conj<	pobj<	prep<	rcmod<	dep<
+1	nn<	conj<	pobj<	prep<	xcomp<	nsubj>
+1	nn<	conj<	pobj<	prep<	xcomp>
+1	nn<	conj<	pobj<	prep<	neg>
+1	nn<	conj<	dobj<	conj<	nsubj>
+1	nn<	conj<	dobj<	dep<	dep>
+1	nn<	conj<	dobj<	dep<	prep>	pobj>
+1	nn<	conj<	dobj<	rcmod<
+1	nn<	conj<	dobj<	xcomp<	dobj>
+1	nn<	conj<	dobj<	xcomp>
+1	nn<	conj<	dobj<	advmod>
+1	nn<	conj<	dobj<	neg>
+1	nn<	conj<	dobj>	vmod>	advmod>	prep>	pobj>
+1	nn<	appos<
+1	nn<	appos<	nsubj<	ccomp<	rcmod<
+1	nn<	appos<	pobj<
+1	nn<	appos<	pobj<	dep<
+1	nn<	parataxis<	dobj>	prep>	pobj>
+1	nn<	npadvmod<
+4	nn<	aux>
+13	nn<	amod>
+1	nn<	amod>	advmod>
+1	nn<	xcomp<
+1	nn<	xcomp<	advmod>
+1	nn<	dobj<	vmod>
+1	nn<	dobj<	dep>
+1	nn<	dobj<	xcomp<	nsubj>
+1	nn<	dobj<	prep>
+1	nn<	dobj<	cc>
+4	nn<	neg>
+7	nn<	nn>
+3	appos>
+291	nn>
+6	nn>	conj>
+1	nn>	advmod>
