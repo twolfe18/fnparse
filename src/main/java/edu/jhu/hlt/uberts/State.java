@@ -39,7 +39,7 @@ public class State {
     public final Relation rel;
     public final HypNode arg;
     public final int argPos;
-    public final int hc;
+    public final long hc;
     public ArgVal(int argPos, Relation rel, HypNode arg) {
       if (rel == null)
         throw new IllegalArgumentException();
@@ -48,19 +48,20 @@ public class State {
       this.argPos = argPos;
       this.rel = rel;
       this.arg = arg;
-      this.hc = Hash.mix(argPos, rel.hashCode(), arg.hashCode());
+      this.hc = Hash.mix64(Hash.mix64(982451653, argPos),
+          Hash.mix64(Hash.hash(rel.getName()), arg.hashCode()));
     }
     @Override
     public String toString() {
       return "(ArgVal rel=" + rel.getName() + " pos=" + argPos + " val=" + arg + ")";
     }
     @Override
-    public int hashCode() { return hc; }
+    public int hashCode() { return (int) hc; }
     @Override
     public boolean equals(Object other) {
       if (other instanceof ArgVal) {
         ArgVal a = (ArgVal) other;
-        return argPos == a.argPos && rel == a.rel && arg == a.arg;
+        return hc == a.hc && argPos == a.argPos && rel == a.rel && arg == a.arg;
       }
       return false;
     }

@@ -4,9 +4,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
@@ -28,15 +31,35 @@ public interface TransGen {
     private Rule rule;
     private LocalFactor score;
 
+    // Pull in score from previous edges
+    public boolean addLhsToRhsScore = true;
+    public static final List<String> RELEVANT_RELATIONS =
+        Arrays.asList("predicate2", "srl2", "srl3");
+
     public Regular(Rule rule, LocalFactor score) {
       this.rule = rule;
       this.score = score;
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      addLhsToRhsScore = config.getBoolean("addLhsScoreToRhsScore");
+      Log.info("[main] addLhsToRhs=" + addLhsToRhsScore + " " + rule + " " + score);
     }
 
     @Override
     public List<Pair<HypEdge, Adjoints>> match(HypEdge[] trigger, Uberts u) {
       HypEdge e = instantiateRule(trigger, rule, u);
       Adjoints s = score.score(e, u);
+
+      if (addLhsToRhsScore) {
+        State st = u.getState();
+        for (int i = 0; i < trigger.length; i++) {
+          HypEdge fact = trigger[i];
+          if (RELEVANT_RELATIONS.contains(fact.getRelation().getName())) {
+            Adjoints fs = st.getScore(new HashableHypEdge(fact));
+            s = Adjoints.sum(s, new Adjoints.Constant(fs.forwards()));
+          }
+        }
+      }
+
       return Arrays.asList(new Pair<>(e, s));
     }
   }
@@ -52,7 +75,9 @@ public interface TransGen {
       else
         tail[rhsArg] = boundLhsValues[lhsBinding.first].getTail(lhsBinding.second);
     }
-    return u.makeEdge(rule.rhs.rel, tail);
+    // TODO I currently don't see any reason why isSchema should be true...
+    boolean isSchema = false;
+    return u.makeEdge(isSchema, rule.rhs.rel, tail);
   }
 
   public static class Composite implements TransGen {

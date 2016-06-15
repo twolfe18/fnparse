@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
@@ -121,6 +122,7 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
    * each document.
    */
   public ManyDocRelationFileIterator(RelationFileIterator itr, boolean dedup) {
+    Log.info("dedup=" + dedup + " itr=" + itr);
     this.itr = itr;
     if (dedup)
       uniq = new HashSet<>();
@@ -164,6 +166,7 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
 
   @Override
   public void close() throws IOException {
+    Log.info("closing " + itr);
     itr.close();
   }
 }

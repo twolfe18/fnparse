@@ -38,7 +38,6 @@ import edu.jhu.hlt.uberts.rules.Env.Trie3;
 import edu.jhu.hlt.uberts.transition.TransGen;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
-import edu.jhu.util.HPair;
 
 /**
  * An uber transition system for joint predictions. Holds a state and agenda,
@@ -83,7 +82,6 @@ public class Uberts {
   // the case that all predicate2(t,f) facts end up with a score below 0.
   private Map<Relation, Double> minScoreForPredict = new HashMap<>();
 
-  // TODO This will replace minScoreForPredict
   // A set of mappers which are allowed to change the score of an edge before
   // it gets added to the agenda.
   // TODO For now we'll have just one, when another is needed, figure out if
@@ -91,16 +89,11 @@ public class Uberts {
   // some other indexing strategy.
   private PreAgendaAddMapper preAgendaAddMapper;
 
-
-  private Random rand;
-  private MultiTimer timer;
-
   // So you can ask for Relations by name and keep them unique
   private Map<String, Relation> relations;
 
   // Alphabet of HypNodes which appear in either state or agenda.
-//  private Map<Pair<NodeType, Object>, HypNode> nodes;
-  private Map<HPair<NodeType, Object>, HypNode> nodes;
+  NodeStore.Composite nodes3;
 
   // Never call `new NodeType` outside of Uberts, use lookupNodeType
   private Map<String, NodeType> nodeTypes;
@@ -110,11 +103,15 @@ public class Uberts {
 
   public boolean showTrajDiagnostics = false;
 
+  private Random rand;
+  private MultiTimer timer;
+
   // Tracks things like number of pushes and pops, can be externally read/reset
   public Counts<String> stats = new Counts<>();
   // i^th value is the size of the agenda after applying i actions.
   // This must be cleared after each round of inference by the user.
   public IntArrayList statsAgendaSizePerStep = new IntArrayList();
+
 
   // Ancillary data for features which don't look at the State graph.
   // New data backend (used to be fnparse.Sentence and FNParse)
@@ -129,6 +126,7 @@ public class Uberts {
   public void setDocument(edu.jhu.hlt.tutils.Document doc) {
     this.doc = doc;
   }
+
 
   public void setMinScore(String relationName, double minScore) {
     setMinScore(getEdgeType(relationName, false), minScore);
@@ -179,8 +177,8 @@ public class Uberts {
    * You need to do this to release memory if you are calling lookupNode on all
    * the data you're processing.
    */
-  public void clearNodes() {
-    nodes.clear();
+  public void clearNonSchemaNodes() {
+    nodes3.clearNonSchema();
   }
 
   public Uberts(Random rand) {
@@ -191,9 +189,11 @@ public class Uberts {
     this.relations = new HashMap<>();
     this.agenda = new Agenda(agendaPriority);
     this.state = new State.Split();
-//    this.trie = new TNode(null, null);
     this.trie3 = Trie3.makeRoot();
-    this.nodes = new HashMap<>();
+
+    this.nodes3 = new NodeStore.Composite(
+        new NodeStore.Regular("schema"), new NodeStore.Regular("temporary"));
+
     this.nodeTypes = new HashMap<>();
 
     this.trie3 = Trie3.makeRoot();
@@ -211,10 +211,11 @@ public class Uberts {
   public Relation addSuccTok(int n) {
     NodeType tokenIndex = lookupNodeType("tokenIndex", true);
     Relation succTok = addEdgeType(new Relation("succTok", tokenIndex, tokenIndex));
-    HypNode prev = lookupNode(tokenIndex, String.valueOf(-1), true);
+    boolean isSchema = true;
+    HypNode prev = lookupNode(tokenIndex, String.valueOf(-1), true, isSchema);
     for (int i = 0; i < n; i++) {   // TODO figure out a better way to handle this...
-      HypNode cur = lookupNode(tokenIndex, String.valueOf(i), true);
-      HypEdge e = makeEdge(succTok, prev, cur);
+      HypNode cur = lookupNode(tokenIndex, String.valueOf(i), true, isSchema);
+      HypEdge e = makeEdge(isSchema, succTok, prev, cur);
       e = new HypEdge.WithProps(e, HypEdge.IS_SCHEMA);
       addEdgeToState(e, Adjoints.Constant.ZERO);
       prev = cur;
@@ -253,9 +254,6 @@ public class Uberts {
       double thresh = minScoreForPredict.getOrDefault(ai.edge.getRelation(), 0d);
       boolean pred = !hitLim && ai.score.forwards() > thresh;
       steps.add(new Step(ai, y, pred));
-
-      if (!pred && "srl3".equals(ai.edge.getRelation().getName()))
-        assert false : "why? " + ai;
 
       // But maybe don't add apply it (add it to state)
       if (hitLim)
@@ -457,9 +455,6 @@ public class Uberts {
       }
     }
 
-    // TODO Return (state,agenda) back to how they were?
-    // We kept a copy around anyway...
-
     // Compute the max-violator
     Pair<Traj, Traj> best = null;
     double bestViolation = 0;
@@ -609,83 +604,6 @@ public class Uberts {
   }
 
   /**
-   * Use this when you don't have any global factors (the scores of actions
-   * don't affect one another).
-   *
-   * Works by using the agenda as an argmax at every step. The best action is
-   * taken and all the others are removed.
-   *
-   * WARNING: This is not compatible with schemes where you push a bunch of
-   * gold edges on to the agenda (with some oracle feature which knows that
-   * they're gold). Since the agenda is emptied at every step, all but one of
-   * these gold edges will be removed at the first step, limiting recall.
-   *
-   * NOTE: This should be removed once you implement a beam Agenda (which has a
-   * maximum size) -- just use a max size of 1.
-   */
-  public Pair<Labels.Perf, List<Step>> runLocalInference(boolean oracle, double minScore, int actionLimit) {
-    throw new RuntimeException("re-impelment me or use dbgRunInference");
-//    if (COARSE_EVENT_LOGGING)
-//      Log.info("starting, oracle=" + oracle + " minScore=" + minScore + " actionLimit=" + actionLimit);
-//    Labels.Perf perf = goldEdges.new Perf();
-//    List<Step> steps = new ArrayList<>();
-//    for (int i = 0; agenda.size() > 0 && (actionLimit <= 0 || i < actionLimit); i++) {
-//      Pair<HypEdge, Adjoints> p = agenda.popBoth();
-//      HypEdge best = p.get1();
-//      boolean y = getLabel(best);
-//      if (!y && oracle)
-//        continue;
-//      if (p.get2().forwards() < minScore)
-//        break;
-//      agenda.clear();
-//      perf.add(best);
-//      steps.add(new Step(p, y));
-//      addEdgeToState(best);
-//    }
-//    return new Pair<>(perf, steps);
-  }
-
-//  /**
-//   * Normally, the oracle takes the best action you give it, and says "yes, add
-//   * that edge to the state" or "no, throw that edge out". A better oracle could
-//   * have their own beam, with edges ordered differently, and pick whatever edge
-//   * they want. I have some temporal ordering in the dependencies of my edges
-//   * which makes the first oracle kind of sucky. E.g.:
-//   *
-//   * a => b
-//   * c => d
-//   * b & d => y
-//   *
-//   * Suppose we put the a's and c's on the agenda which are needed to get to y.
-//   * If the oracle adds the a nodes to the state AFTER the c nodes, then the
-//   * d will have been there and the b will trigger the last rule. If the oracle
-//   * chooses the A nodes first, there are y that we will never derive because
-//   * the rule doesn't fire.
-//   *
-//   * This oracle will find the first action which produces a gold edge.
-//   *
-//   * NOTE: I have been confused on what the state/action space is, thinking that
-//   * I only have one action available to me: the one at the top of the agenda.
-//   * That isn't true for this model (with some given params), but not this
-//   * transition system per se (if the parameters were different, the order of
-//   * the agenda would be different, and thus the action would be different).
-//   * The proper way to think about is that all actions on the agenda are possible
-//   * next states (which an oracle could choose instead of the highest scoring
-//   * one). Each action has a loss (not cost, as the distinction is made in the
-//   * dagger paper) of 1 if that HypEdge is not in the gold set and 0 otherwise.
-//   * Could even add a "how many edges got added to the agenda as a result of
-//   * adding this edge to the state" penalty term.
-//   */
-//  public void dbgRunAgressiveOracleStep(List<Step> addTo) {
-//    for (HypEdge e : agenda.getContentsInNoParticularOrder()) {
-//      if (getLabel(e)) {
-//        addTo.add(new Step(e, agenda.getScore(e), true));
-//        break;
-//      }
-//    }
-//  }
-
-  /**
    * Runs inference, records the HypEdge popped at every step, and adds gold
    * HypEdges to the state graph as it goes (pruning other edges which are
    * popped but not gold).
@@ -768,7 +686,7 @@ public class Uberts {
     NodeType tokenNT = lookupNodeType("tokenIndex", false);
     List<String> s = new ArrayList<>();
     for (int t = i; t < j; t++) {
-      HypNode tokenN = lookupNode(tokenNT, String.valueOf(t), false);
+      HypNode tokenN = lookupNode(tokenNT, String.valueOf(t), false, true);
       HypEdge wt = state.match1(0, word2, tokenN);
       String wordVal = (String) wt.getTail(1).getValue();
       s.add(wordVal);
@@ -880,14 +798,13 @@ public class Uberts {
     case "schema":
     case "x":
     case "y":
+      boolean schema = "schema".equals(command);
       relName = toks[1];
       Relation rel = this.getEdgeType(relName);
       HypNode[] args = new HypNode[toks.length-2];
       for (int i = 0; i < args.length; i++)
-        args[i] = this.lookupNode(rel.getTypeForArg(i), toks[i+2], true);
-      HypEdge e = this.makeEdge(rel, args);
-      if (command.equals("schema"))
-        e = new HypEdge.WithProps(e, HypEdge.IS_SCHEMA);
+        args[i] = lookupNode(rel.getTypeForArg(i), toks[i+2], true, schema);
+      HypEdge e = makeEdge(schema, rel, args);
       if (command.equals("y")) {
         this.addLabel(e);
       } else {
@@ -907,26 +824,11 @@ public class Uberts {
    * Use this rather than calling the {@link HypNode} constructor so that nodes
    * are guaranteed to be unique.
    */
-  public HypNode lookupNode(NodeType nt, Object value, boolean addIfNotPresent) {
-//    Pair<NodeType, Object> key = new Pair<>(nt, value);
-    HPair<NodeType, Object> key = new HPair<>(nt, value);
-    HypNode v = nodes.get(key);
-    if (v == null && addIfNotPresent) {
-      v = new HypNode(nt, value);
-      nodes.put(key, v);
-    }
-    return v;
+  public HypNode lookupNode(NodeType nt, Object value) {
+    return nodes3.lookupNode(nt, value, false);
   }
-
-  /**
-   * Prefer lookupNode if you can. Throws exception if this node exists.
-   */
-  public void putNode(HypNode n) {
-//    Pair<NodeType, Object> key = new Pair<>(n.getNodeType(), n.getValue());
-    HPair<NodeType, Object> key = new HPair<>(n.getNodeType(), n.getValue());
-    HypNode old = nodes.put(key, n);
-    if (old != null)
-      throw new RuntimeException("duplicate: " + key);
+  public HypNode lookupNode(NodeType nt, Object value, boolean addIfNotPresent, boolean isSchema) {
+    return nodes3.lookupNode(nt, value, addIfNotPresent, isSchema);
   }
 
   /**
@@ -1003,20 +905,17 @@ public class Uberts {
 
 
   private boolean nodesContains(HypNode n) {
-//    HypNode n2 = nodes.get(new Pair<>(n.getNodeType(), n.getValue()));
-    HypNode n2 = nodes.get(new HPair<>(n.getNodeType(), n.getValue()));
-    return n2 == n;
+    return nodes3.contains(n);
   }
   private boolean nodesContains(HypEdge e) {
     if (e.getHead() != null && !nodesContains(e.getHead())) {
-      Log.warn("missing head=" + e.getHead());
+      Log.info("missing head=" + e.getHead());
       return false;
     }
     int n = e.getNumTails();
     for (int i = 0; i < n; i++) {
       if (!nodesContains(e.getTail(i))) {
-        if (DEBUG > 1)
-          Log.info("missing: tail[" + i + "]=" + e.getTail(i));
+        Log.info("missing: tail[" + i + "]=" + e.getTail(i));
         return false;
       }
     }
@@ -1057,7 +956,8 @@ public class Uberts {
    * other trigger like doneAnno(docid) which ensures that you're rules fire.
    */
   public void addEdgeToStateNoMatch(HypEdge e, Adjoints score) {
-    assert nodesContains(e);
+    assert nodesContains(e) : e + " has some HypNodes which aren't in Uberts.nodes";
+    stats.increment("pop/noMatch");
     state.add(e, score);
   }
 
@@ -1134,35 +1034,43 @@ public class Uberts {
    * and 5 came from) OR if you just want to call new HypNode (as is the case if
    * you just want to write an edge to a file).
    */
-  public HypEdge makeEdge(RelLine line, boolean lookupHypNodes) {
+  public HypEdge.WithProps makeEdge(RelLine line, boolean lookupHypNodes) {
     Relation r = getEdgeType(line.tokens[1]);
     assert r.getNumArgs() == line.tokens.length-2
         : "values=" + Arrays.toString(Arrays.copyOfRange(line.tokens, 2, line.tokens.length))
         + " does not match up with " + r.getDefinitionString()
         + " line=\"" + line.toLine() + "\""
         + " providence=" + line.providence;
+    boolean isSchema = line.isSchema();
     HypNode[] tail = new HypNode[r.getNumArgs()];
     for (int i = 0; i < tail.length; i++) {
       NodeType nt = r.getTypeForArg(i);
       Object value = line.tokens[i+2];
       if (lookupHypNodes)
-        tail[i] = this.lookupNode(nt, value, true);
+        tail[i] = lookupNode(nt, value, true, isSchema);
       else
         tail[i] = new HypNode(nt, value);
     }
+    HypEdge.WithProps e;
     if (lookupHypNodes)
-      return makeEdge(r, tail);
-    return new HypEdge(r, null, tail);
+      e = makeEdge(isSchema, r, tail);
+    else
+      e = new HypEdge.WithProps(r, null, tail, 0);
+    e.setProperty(HypEdge.IS_SCHEMA, isSchema);
+    e.setProperty(HypEdge.IS_X, line.isX());
+    e.setProperty(HypEdge.IS_Y, line.isY());
+    return e;
   }
-  public HypEdge makeEdge(String relationName, HypNode... tail) {
+  public HypEdge.WithProps makeEdge(boolean isSchema, String relationName, HypNode... tail) {
     Relation r = getEdgeType(relationName);
-    return makeEdge(r, tail);
+    return makeEdge(isSchema, r, tail);
   }
-  public HypEdge makeEdge(Relation r, HypNode... tail) {
+  public HypEdge.WithProps makeEdge(boolean isSchema, Relation r, HypNode... tail) {
     NodeType headType = getWitnessNodeType(r);
     Object encoded = r.encodeTail(tail);
-    HypNode head = lookupNode(headType, encoded, true);
-    return new HypEdge(r, head, tail);
+    HypNode head = lookupNode(headType, encoded, true, isSchema);
+    long mask = isSchema ? HypEdge.IS_SCHEMA : 0;
+    return new HypEdge.WithProps(r, head, tail, mask);
   }
 
   /**
@@ -1184,7 +1092,7 @@ public class Uberts {
    *
    * @param factString will be split on commas, so arguments cannot contain commas.
    */
-  public HypEdge dbgMakeEdge(String factString) {
+  public HypEdge dbgMakeEdge(String factString, boolean isSchema) {
     factString = factString.trim();
     int lp = factString.indexOf('(');
     int rp = factString.indexOf(')');
@@ -1193,8 +1101,8 @@ public class Uberts {
     String[] args = factString.substring(lp + 1, rp).split(",");
     HypNode[] tail = new HypNode[args.length];
     for (int i = 0; i < args.length; i++)
-      tail[i] = lookupNode(r.getTypeForArg(i), args[i].trim(), true);
-    return makeEdge(r, tail);
+      tail[i] = lookupNode(r.getTypeForArg(i), args[i].trim(), true, isSchema);
+    return makeEdge(isSchema, r, tail);
   }
 
 }

@@ -130,9 +130,9 @@ public class Agenda {
   public void clear() {
     this.top = 0;
     Arrays.fill(heap, null);
-    this.n2ei = new HashMap<>();
-    this.e2i = new HashMap<>();
-    this.fineView = new HashMap<>();
+    this.n2ei.clear();
+    this.e2i.clear();
+    this.fineView.clear();
     this.uniq.clear();
   }
 
@@ -191,14 +191,15 @@ public class Agenda {
     return eager;
   }
 
-  public List<HypEdge> adjacent(HypNode n) {
+  // TODO AgendaItem version of this?
+  public List<HashableHypEdge> adjacent(HypNode n) {
     BitSet bs = n2ei.get(n);
     if (bs == null)
       return Collections.emptyList();
-    List<HypEdge> el = new ArrayList<>();
+    List<HashableHypEdge> el = new ArrayList<>();
     for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i + 1)) {
       assert i < top;
-      HypEdge e = heap[i].edge;
+      HashableHypEdge e = heap[i].getHashableEdge();
       assert e != null;
       el.add(e);
     }

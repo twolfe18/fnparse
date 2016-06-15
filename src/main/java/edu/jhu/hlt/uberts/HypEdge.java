@@ -44,6 +44,10 @@ public class HypEdge {
       this.bitmask = bitmask;
     }
 
+    public void setPropertyMask(long propertyMask) {
+      bitmask = propertyMask;
+    }
+
     public void setProperty(long propertyMask, boolean value) {
       if (value)
         bitmask |= propertyMask;

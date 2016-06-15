@@ -16,14 +16,12 @@ import com.google.common.collect.Iterators;
 
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.StringUtils;
-import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.AgendaPriority;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -56,7 +54,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   static boolean performTest = false;
 
-  static boolean pizza = false;
   static String[] oracleFeats = new String[] {};
   static boolean graphFeats = false;
   static boolean templateFeats = false;
@@ -171,12 +168,21 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
+    /*
+     * We set the threshold during inference very low, but when we update,
+     * we check whether a score is above 0, lowering or raising it as need be.
+     *
+     * When I do this, I set costFP=1 for all Relations.
+     */
+    u.setMinScore("srl2", -3);
+    u.setMinScore("srl3", -3);
 //    u.setMinScore("predicate2", Double.NEGATIVE_INFINITY);
 //    u.setMinScore("predicate2", -1);
 
     // This is now a ExperimentProperties config string "AtLeast1Local" -> "predicate2(t,f):t"
 //    u.preAgendaAddMapper = new AtLeast1Local("predicate2(t,f):t", u);
-
+    if (!config.containsKey("AtLeast1Local"))
+      Log.info("WARNING: did you forget to set AtLeast1Local=\"predicate2(t,f):t\"");
 
     // Train and dev should be shuffled. Test doesn't need to be.
     List<File> train = config.getExistingFiles("train.facts");
@@ -256,11 +262,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private OldFeaturesWrapper.Ints feFast;
 
   private List<Consumer<Double>> batch = new ArrayList<>();
-  private int batchSize = 32;
+  private int batchSize = 1;
   private boolean updateAccordingToPriority = false;
-  private double pOracleRollIn = 1;
+  private double pOracleRollIn = 0;
 
-  private static boolean skipSrlFilterStages = true;
+  private static boolean skipSrlFilterStages = false;
 
   private NumArgsRoleCoocArgLoc numArgsArg4;
   private NumArgsRoleCoocArgLoc numArgsArg3;
@@ -270,12 +276,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   // For now these store all performances for the last data segment
   private List<Map<String, FPR>> perfByRel = new ArrayList<>();
-
-  // Keeps track of how frequently types of events happen
-  private Counts<String> eventCounts = new Counts<>();
-
-  // How long a train/update takes
-  private Timer trainTimer = new Timer("train", 1000, true);
 
   public void useAvgWeights(boolean useAvg) {
     for (OldFeaturesWrapper.Ints3 w : feFast3) {
@@ -314,10 +314,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (predicate2Mutex) {
       NumArgsRoleCoocArgLoc p = new NumArgsRoleCoocArgLoc(u.getEdgeType("predicate2"), 0, 1, u);
       p.storeExactFeatureIndices();
-      if (enableGlobalFactors) {
-        globalFactors.add(p);
-        u.addGlobalFactor(p.getTrigger2(), p);
-      }
+      globalFactors.add(p);
+      u.addGlobalFactor(p.getTrigger2(), p);
     }
 
     ExperimentProperties config = ExperimentProperties.getInstance();
@@ -461,9 +459,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   @Override
   public void consume(RelDoc doc) {
+    if (MEM_LEAK_DEBUG)
+      return;
+//    System.out.println("[consume] " + doc.getId());
+
     eventCounts.increment("consume/" + mode.toString());
-    if (eventCounts.getTotalCount() % 500 == 0)
+    if (eventCounts.getTotalCount() % 500 == 0) {
       Log.info("event counts: " + eventCounts);
+      System.out.println("[memLeak] " + u.getState());
+    }
     u.stats.clear();
     switch (mode) {
     case TRAIN:
@@ -471,8 +475,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case DEV:
     case TEST:
-      if (DEBUG > 0 && perfByRel.size() % 25 == 0)
-        System.out.println("mode=" + mode + " doc=" + doc.getId());
+      if (DEBUG > 0 && perfByRel.size() % 25 == 0) {
+        System.out.println("mode=" + mode + " doc=" + doc.getId() + " [memLeak] perfByRel.size=" + perfByRel.size());
+      }
       boolean oracle = false;
       int actionLimit = 0;
 
@@ -543,11 +548,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     h("srl2", costFP_srl2, costFP, u);
     h("predicate2", 1d, costFP, u);
     h("event1", costFP_event1, costFP, u);
-//    costFP.put(u.getEdgeType("argument4"), 1d);
-//    costFP.put(u.getEdgeType("srl3"), costFP_srl3);
-//    costFP.put(u.getEdgeType("srl2"), costFP_srl2);
-//    costFP.put(u.getEdgeType("predicate2"), 1d);
-//    costFP.put(u.getEdgeType("event1"), costFP_event1);
     return costFP;
   }
   private static void h(String name, double costFP, Map<Relation, Double> maybeAddTo, Uberts u) {
@@ -562,7 +562,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   private void train(RelDoc doc) {
-    trainTimer.start();
     if (DEBUG > 1)
       Log.info("starting on " + doc.getId());
 
@@ -620,17 +619,24 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       timer.start("train/dagger1");
       boolean verbose = false;
       int actionLimit = 0;
-      boolean oracle = true;
+      boolean oracle = u.getRandom().nextDouble() < pOracleRollIn;
       Pair<Perf, List<Step>> x = u.dbgRunInference(oracle, actionLimit);
       batch.add(lr -> {
-        if (verbose) System.out.println("about to update against length=" + x.get2().size() + " trajectory");
+        Map<Relation, Double> cfp = getCostFP();
+        if (verbose) {
+          System.out.println("about to update against length=" + x.get2().size()
+                + " trajectory, costFP=" + cfp);
+        }
         for (Step s : x.get2()) {
-          if (s.gold && !s.pred) {
+          // NOTE: We are NOT using minScorePerRelation here since we only want
+          // to move scores about 0, not the threshold.
+          boolean pred = s.score.forwards() > 0;
+          if (s.gold && !pred) {
             if (verbose) System.out.println("FN: " + s);
             s.score.backwards(-lr);
-          } else if (!s.gold && s.pred) {
+          } else if (!s.gold && pred) {
             if (verbose) System.out.println("FP: " + s);
-            s.score.backwards(+lr);
+            s.score.backwards(+lr * cfp.getOrDefault(s.edge.getRelation(), 1d));
           } else if (verbose) {
             if (s.gold)
               System.out.println("TP: " + s);
@@ -653,8 +659,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       completedObservation();
       timer.stop("train/batchApply");
     }
-
-    trainTimer.stop();
   }
 
 }

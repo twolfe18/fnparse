@@ -10,6 +10,10 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import com.google.common.base.Charsets;
+import com.google.common.hash.HashFunction;
+import com.google.common.hash.Hashing;
+
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Parse;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -31,7 +35,6 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
-import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
@@ -88,6 +91,9 @@ public class OldFeaturesWrapper {
     }
   }
 
+  /**
+   * @deprecated
+   */
   public static class Ints extends FeatureExtractionFactor<Integer> {
     private OldFeaturesWrapper inner;
     private int mask;
@@ -219,8 +225,9 @@ public class OldFeaturesWrapper {
     private Counts<String> cnt = new Counts<>();
     private Timer timer;
 
-    private Alphabet<String> alph;
-    private LongIntHashMap alph2;
+    private HashFunction hf = Hashing.murmur3_32(42); // slightly slower than Jenkins, but worth the peace of mind
+    private Alphabet<String> alph;  // don't use, too much memory
+    private LongIntHashMap alph2;   // don't use, probably too much memory
 
     private BufferedWriter featStrDebug;
 
@@ -232,7 +239,7 @@ public class OldFeaturesWrapper {
       this.timer = new Timer("Int3/" + rel.getName() + "/score", 250_000, true);
 
 //      this.alph = new Alphabet<>();
-      this.alph2 = new LongIntHashMap();
+//      this.alph2 = new LongIntHashMap();
 
 //      try {
 //        featStrDebug = FileUtil.getWriter(new File("/tmp/features.txt"));
@@ -280,13 +287,25 @@ public class OldFeaturesWrapper {
         int t = fyxi.get1().index;
         assert t >= 0 && t < T;
 
-////        String s = t + "/" + fyxi.get2();
-////        features[i] = index(s);
-//        features[i] = t + T * index(fyxi.get2());
+        if (alph2 != null) {
+          String s = t + "/" + fyxi.get2();
+          features[i] = index(s);
+        } else {
 
-//        int f = Hash.hash(fyxi.get2());
-        int f = (int) Hash.sha256(fyxi.get2());
-        features[i] = f * T + t;
+          // Slightly slower than Jenkinsa and worse performance.
+          // Performance may be caused by not doing f*T+t.
+          //        features[i] = hf.newHasher()
+          //            .putShort((short) i)
+          //            .putString(fyxi.get2(), Charsets.UTF_8)
+          //            .hash().asInt();
+
+          int f = hf.newHasher()
+              .putString(fyxi.get2(), Charsets.UTF_8)
+              .hash().asInt();
+          //        int f = Hash.hash(fyxi.get2());
+          //        int f = (int) Hash.sha256(fyxi.get2());
+          features[i] = f * T + t;
+        }
 
 //        if (alph != null) {
 //          features[i] = alph.lookupIndex(t + "/" + fyxi.get2());
@@ -458,8 +477,8 @@ public class OldFeaturesWrapper {
     };
 
     timer = new MultiTimer();
-    timer.put("convert-sentence", new Timer("convert-sentence", 100, true));
-    timer.put("compute-features", new Timer("compute-features", 10000, true));
+    timer.put("convert-sentence", new Timer("convert-sentence", 1000, true));
+    timer.put("compute-features", new Timer("compute-features", 50000, true));
 
     ctx = new TemplateContext();
     depGraphEdges = new Alphabet<>();
@@ -733,7 +752,7 @@ public class OldFeaturesWrapper {
     List<String> posL = new ArrayList<>();
     List<String> lemmaL = new ArrayList<>();
     for (int i = 0; true; i++) {
-      HypNode tok = u.lookupNode(tokenIndex, String.valueOf(i), false);
+      HypNode tok = u.lookupNode(tokenIndex, String.valueOf(i));
       if (tok == null)
         break;
       tokens.add(tok);

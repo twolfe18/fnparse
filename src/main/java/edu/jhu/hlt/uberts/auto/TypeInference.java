@@ -14,14 +14,19 @@ import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
 
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
+import edu.jhu.hlt.uberts.NodeStore;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
+import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -38,6 +43,74 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public class TypeInference {
+
+  /**
+   * Generates intermediate facts w.r.t. some labels and a grammar. Due to the
+   * interplay between this code and {@link Uberts}'s {@link NodeStore}, this
+   * can't easily be used as a mapper function over an iterator, like was tried
+   * previously. Replacement for {@link TransitionGeneratorBackwardsParser.Iter}.
+   */
+  public class Expander {
+    public Counts<String> counts;
+    public Counts<String> countsByRelation;
+    public Set<String> relationsToIgnore;
+    private TimeMarker tm = new TimeMarker();
+
+    // Anything Uberts-based which is not pure IO (e.g. training/inference) will
+    // break if this is false. True requires a lot of memory.
+    public boolean lookupHypNodes = true;
+
+    public boolean onlyReadXYFacts = true;
+
+    public Expander() {
+      this(null);
+    }
+    public Expander(Collection<String> relationsToIgnore) {
+      this.counts = new Counts<>();
+      this.countsByRelation = new Counts<>();
+      this.relationsToIgnore = new HashSet<>();
+      if (relationsToIgnore != null)
+        this.relationsToIgnore.addAll(relationsToIgnore);
+    }
+
+    public void expand(RelDoc d) {
+      assert d.facts.isEmpty();
+      Set<HashableHypEdge> seen = new HashSet<>();
+
+      // Move
+      for (RelLine l : d.items) {
+        HypEdge.WithProps e = u.makeEdge(l, lookupHypNodes);
+        if (onlyReadXYFacts && !(e.hasProperty(HypEdge.IS_X) || e.hasProperty(HypEdge.IS_Y)))
+          continue;
+        if (seen.add(new HashableHypEdge(e)))
+          d.facts.add(e);
+      }
+      d.items.clear();
+      counts.update("input-facts", d.facts.size());
+
+      // Expand
+      for (int i = 0; i < d.facts.size(); i++) {
+        HypEdge.WithProps fact = d.facts.get(i);
+        for (HypEdge.WithProps e : TypeInference.this.expand(fact)) {
+          String rel = e.getRelation().getName();
+          if (relationsToIgnore.contains(rel)) {
+            counts.increment("facts-skipped");
+            countsByRelation.increment("skipped-" + rel);
+            continue;
+          }
+          if (seen.add(new HashableHypEdge(e))) {
+            d.facts.add(e);
+            counts.increment("facts-derived");
+          }
+        }
+      }
+      counts.update("facts-output", d.facts.size());
+      if (tm.enoughTimePassed(15)) {
+        Log.info("[TypeInference.Expander] " + counts + " in "
+            + tm.secondsSinceFirstMark() + " seconds");
+      }
+    }
+  }
 
   // Graph structure
   private Map<Arg, List<Arg>> edges;  // bi-directional, based on name equality, no head nodes (defs or usages)
@@ -82,7 +155,7 @@ public class TypeInference {
     this.rel2UnvaluedArgs.clear();
   }
 
-  public List<HypEdge> expand(HypEdge fact) {
+  public List<HypEdge.WithProps> expand(HypEdge.WithProps fact) {
     // We re-set the inferred values for every fact
     for (Rule r : rules) {
       for (Term t : r.lhs) {
@@ -97,7 +170,7 @@ public class TypeInference {
       }
     }
 
-    List<HypEdge> all = new ArrayList<>();
+    List<HypEdge.WithProps> all = new ArrayList<>();
     for (Rule r : rules)
       expand(fact, r, all);
 
@@ -112,7 +185,7 @@ public class TypeInference {
    * fact's values and the rule's pairs of co-bound arguments to propagate from
    * RHS to LHS, creating new facts.
    */
-  private void expand(HypEdge fact, Rule r, List<HypEdge> addTo) {
+  private void expand(HypEdge.WithProps fact, Rule r, List<HypEdge.WithProps> addTo) {
     assert r.rhs.rel != null : "did you run type inference?";
     if (!r.rhs.relName.equals(fact.getRelation().getName()))
       return; // not applicable
@@ -147,11 +220,16 @@ public class TypeInference {
           continue lhsTerm;
         }
       }
-      HypEdge e = u.makeEdge(lrel, tail);
+      // TODO I currently don't see any reason why isSchema should be true...
+      boolean isSchema = false;
+      HypEdge.WithProps e = u.makeEdge(isSchema, lrel, tail);
+      e.setPropertyMask(fact.getProperties() | HypEdge.IS_DERIVED);
+
       if (debug) {// || e.getRelation().getName().startsWith("event")) {
         HashableHypEdge hhe = new HashableHypEdge(e);
         System.out.println("[TypeInference] adding: " + hhe.hashDesc());
       }
+
       addTo.add(e);
     }
   }
@@ -355,7 +433,9 @@ public class TypeInference {
           tail[i] = values.get(key);
           assert tail[i] != null;
         }
-        HypEdge e = u.makeEdge(rel, tail);
+        // TODO I currently don't see any reason why isSchema should be true...
+        boolean isSchema = false;
+        HypEdge e = u.makeEdge(isSchema, rel, tail);
 
         // Store the head value
         Arg head = new Arg(a.relation, Arg.WITNESS_ARGPOS);

@@ -196,7 +196,7 @@ public class FeatletIndex {
           if (t.y.intValue() < 0)
             return "<s>";
           NodeType tokenIndexNT = t.u.lookupNodeType("tokenIndex", false);
-          HypNode token = t.u.lookupNode(tokenIndexNT, t.y, false);
+          HypNode token = t.u.lookupNode(tokenIndexNT, t.y);
           if (token == null) {
 //            Log.info("not a token: " + t.y);
             return "</s>";

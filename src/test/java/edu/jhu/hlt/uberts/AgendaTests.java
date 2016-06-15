@@ -89,13 +89,13 @@ public class AgendaTests {
         System.out.printf("%d\t%.4f\t%s\n", i, e.get2().forwards(), e.get1());
       }
     }
-    public List<HypEdge> adjacent(HypNode n) {
-      List<HypEdge> el = new ArrayList<>();
+    public List<HashableHypEdge> adjacent(HypNode n) {
+      List<HashableHypEdge> el = new ArrayList<>();
       for (Pair<HypEdge, Adjoints> p : list) {
         HypEdge e = p.get1();
         for (HypNode n2 : e.getNeighbors()) {
           if (n2 == n) {
-            el.add(e);
+            el.add(new HashableHypEdge(e));
             break;
           }
         }
@@ -290,7 +290,7 @@ public class AgendaTests {
     for (int i = 0; i < K; i++) {
       // Add rel1 fact
       HypNode[] tail1 = new HypNode[] { new HypNode(col1, i) };
-      HypEdge e1 = u.makeEdge(rel1, tail1);
+      HypEdge e1 = u.makeEdge(false, rel1, tail1);
       Adjoints a1 = scores.getScore(i);
       if (verbose)
         Log.info("about to add " + e1);
@@ -300,9 +300,9 @@ public class AgendaTests {
       // Add rel2 fact
       HypNode[] tail2 = new HypNode[] {
           tail1[0],
-          u.lookupNode(col2, "val-" + rand.nextInt(10), true),
+          u.lookupNode(col2, "val-" + rand.nextInt(10), true, true),
       };
-      HypEdge e2 = u.makeEdge(rel2, tail2);
+      HypEdge e2 = u.makeEdge(false, rel2, tail2);
       Adjoints a2 = Adjoints.sum(a1, new Adjoints.Constant(rand.nextGaussian()));
       if (verbose)
         Log.info("about to add " + e2);
@@ -316,20 +316,12 @@ public class AgendaTests {
 
       // Check adjacency functionality
       n = dumb.randomNode(rand);
-      Set<HashableHypEdge> a = new HashSet<>();
-      for (HypEdge e : dumb.adjacent(n))
-        a.add(new HashableHypEdge(e));
-      Set<HashableHypEdge> b = new HashSet<>();
-      for (HypEdge e : agenda.adjacent(n))
-        b.add(new HashableHypEdge(e));
+      Set<HashableHypEdge> a = new HashSet<>(dumb.adjacent(n));
+      Set<HashableHypEdge> b = new HashSet<>(agenda.adjacent(n));
       if (!a.equals(b)) {
         Log.warn("wat: n=" + n + " dumb=" + a + " agenda=" + b);
-        a = new HashSet<>();
-        for (HypEdge e : dumb.adjacent(n))
-          a.add(new HashableHypEdge(e));
-        b = new HashSet<>();
-        for (HypEdge e : agenda.adjacent(n))
-          b.add(new HashableHypEdge(e));
+        a = new HashSet<>(dumb.adjacent(n));
+        b = new HashSet<>(agenda.adjacent(n));
       }
       assertEquals(a, b);
 

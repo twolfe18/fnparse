@@ -55,7 +55,7 @@ public class SimpleNer {
     State s = u.getState();
 
     String nerPrevTag = null;
-    HypNode prev = u.lookupNode(this.tokenIndex, tokenIndex-1, false);
+    HypNode prev = u.lookupNode(this.tokenIndex, tokenIndex-1);
     if (prev != null) {
       HypEdge nerPrev = null; // TODO s.match1(ner3, prev);
       nerPrevTag = (String) nerPrev.getTail(1).getValue();
@@ -64,7 +64,7 @@ public class SimpleNer {
     }
 
     String nerPrevPrevTag = null;
-    HypNode prevPrev = u.lookupNode(this.tokenIndex, tokenIndex-2, false);
+    HypNode prevPrev = u.lookupNode(this.tokenIndex, tokenIndex-2);
     if (prevPrev != null) {
       HypEdge nerPrevPrev = null; // TODO s.match1(ner3, prevPrev);
       nerPrevPrevTag = (String) nerPrevPrev.getTail(1).getValue();
@@ -139,10 +139,24 @@ public class SimpleNer {
         new IdxHypNode(biolu, "L", 3),
         new IdxHypNode(biolu, "U", 4),
     };
-    for (IdxHypNode n : nerTagValues)
-      u.putNode(n);
-    for (IdxHypNode n : bioluValues)
-      u.putNode(n);
+//    for (IdxHypNode n : nerTagValues)
+//      u.putNode(n);
+//    for (IdxHypNode n : bioluValues)
+//      u.putNode(n);
+    if (true)
+      throw new RuntimeException("replace putNode with lookupNode");
+    // From Uberts (removed now):
+//  /**
+//   * Prefer lookupNode if you can. Throws exception if this node exists.
+//   */
+//  public void putNode(HypNode n) {
+////    Pair<NodeType, Object> key = new Pair<>(n.getNodeType(), n.getValue());
+//    HPair<NodeType, Object> key = new HPair<>(n.getNodeType(), n.getValue());
+//    HypNode old = nodes.put(key, n);
+//    if (old != null)
+//      throw new RuntimeException("duplicate: " + key);
+//  }
+
 
     int T = nerTagValues.length;
     int B = bioluValues.length;
@@ -211,12 +225,13 @@ public class SimpleNer {
         String[] ntb = nerTagBiolu.split("-");
         assert (ntb.length == 1 && ntb[0].equals("O"))
             || ntb.length == 2 : "should be <biolu>-<tag>: " + nerTagBiolu + ", " + Arrays.toString(ntb);
-        HypNode i = u.lookupNode(tokenIndex, tok.getIndex(), true);
-        HypNode b = u.lookupNode(biolu, ntb[0], false);
+        HypNode i = u.lookupNode(tokenIndex, tok.getIndex(), true, true);
+        HypNode b = u.lookupNode(biolu, ntb[0]);
         HypNode t = b == O_biolu
             ? nerTagValues[0]
-            : u.lookupNode(nerTag, ntb[1], false);
-        HypEdge goldEdge = u.makeEdge(ner3, i, t, b);
+            : u.lookupNode(nerTag, ntb[1]);
+        boolean isSchema = false;
+        HypEdge goldEdge = u.makeEdge(isSchema, ner3, i, t, b);
         u.addLabel(goldEdge);
       }
     }
@@ -234,9 +249,10 @@ public class SimpleNer {
    * Builds a tag for tokenIndex=-1 to kick things off L2R.
    */
   public HypEdge makeRootEdge() {
-    HypNode i = u.lookupNode(tokenIndex, -1, true);
+    HypNode i = u.lookupNode(tokenIndex, -1);
     HypNode t = nerTagValues[0];
-    HypEdge e = u.makeEdge(ner3, i, t, O_biolu);
+    boolean isSchema = false;
+    HypEdge e = u.makeEdge(isSchema, ner3, i, t, O_biolu);
     return e;
   }
 

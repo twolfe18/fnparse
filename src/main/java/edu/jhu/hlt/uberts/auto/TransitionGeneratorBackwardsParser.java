@@ -21,6 +21,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
+import edu.jhu.hlt.uberts.NodeStore;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
@@ -47,6 +48,8 @@ public class TransitionGeneratorBackwardsParser {
   public static boolean DEBUG = true;
 
   /**
+   * @deprecated This doesn't play nice with {@link NodeStore} being setup/cleared.
+   *
    * Takes {@link RelDoc} with items:List<RelLine> populated, expands and moves
    * them over to facts:List<HypEdge>.
    */
@@ -102,24 +105,28 @@ public class TransitionGeneratorBackwardsParser {
       if (!wrapped.hasNext())
         return null;
       RelDoc d = wrapped.next();
+      System.out.println("[Iter advance] " + d.getId());
       assert d.facts.isEmpty();
       Set<HashableHypEdge> seen = new HashSet<>();
       Uberts u = typeInf.getUberts();
 
       // Move
       for (RelLine l : d.items) {
-        HypEdge e = u.makeEdge(l, lookupHypNodes);
+        HypEdge.WithProps e = u.makeEdge(l, lookupHypNodes);
+        if (onlyReadXYFacts && !(e.hasProperty(HypEdge.IS_X) || e.hasProperty(HypEdge.IS_Y)))
+          continue;
         if (seen.add(new HashableHypEdge(e))) {
-          long mask = 0;
-          if (l.isX())
-            mask |= HypEdge.IS_X;
-          if (l.isY())
-            mask |= HypEdge.IS_Y;
-          if (onlyReadXYFacts && mask == 0) {
-            counts.increment("input-lines-skipped");
-            continue;
-          }
-          d.facts.add(new HypEdge.WithProps(e, mask));
+//          long mask = 0;
+//          if (l.isX())
+//            mask |= HypEdge.IS_X;
+//          if (l.isY())
+//            mask |= HypEdge.IS_Y;
+//          if (onlyReadXYFacts && mask == 0) {
+//            counts.increment("input-lines-skipped");
+//            continue;
+//          }
+//          d.facts.add(new HypEdge.WithProps(e, mask));
+          d.facts.add(e);
         }
       }
       d.items.clear();
@@ -128,7 +135,7 @@ public class TransitionGeneratorBackwardsParser {
       // Expand
       for (int i = 0; i < d.facts.size(); i++) {
         HypEdge.WithProps fact = d.facts.get(i);
-        for (HypEdge e : typeInf.expand(fact)) {
+        for (HypEdge.WithProps e : typeInf.expand(fact)) {
           String rel = e.getRelation().getName();
           if (relationsToIgnore.contains(rel)) {
             counts.increment("facts-skipped");
@@ -136,9 +143,10 @@ public class TransitionGeneratorBackwardsParser {
             continue;
           }
           if (seen.add(new HashableHypEdge(e))) {
-            long mask = fact.getProperties();
-            mask |= HypEdge.IS_DERIVED;
-            d.facts.add(new HypEdge.WithProps(e, mask));
+//            long mask = fact.getProperties();
+//            mask |= HypEdge.IS_DERIVED;
+//            d.facts.add(new HypEdge.WithProps(e, mask));
+            d.facts.add(e);
             counts.increment("facts-derived");
           }
         }
@@ -161,6 +169,7 @@ public class TransitionGeneratorBackwardsParser {
   }
 
   private Map<Relation, List<Rule>> howToMake = new HashMap<>();
+  private Set<Arg> alreadyWarnedAbout = new HashSet<>();
   private boolean verbose = false;
 
   public void add(Rule r) {
@@ -185,8 +194,6 @@ public class TransitionGeneratorBackwardsParser {
       expand(fact, r, mustBeTrue);
     return mustBeTrue;
   }
-
-  private Set<Arg> alreadyWarnedAbout = new HashSet<>();
 
   /**
    * Assume that every term in wayToDerive.lhs must be true to prove fact, even

@@ -8,12 +8,13 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
-import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.auto.Term;
 
 /**
  * Running examples:
@@ -132,7 +133,8 @@ public class AtMost1 {
         Log.info("removing all edges adjacent to " + observedValue + " matching " + relationMatch + " from agenda");
       nRescore++;
       int c = 0, r = 0;
-      for (HypEdge e : a.adjacent(observedValue)) {
+      for (HashableHypEdge he : a.adjacent(observedValue)) {
+        HypEdge e = he.getEdge();
         c++;
         if (e.getRelation() == relationMatch) {
           nEdgeRescore++;

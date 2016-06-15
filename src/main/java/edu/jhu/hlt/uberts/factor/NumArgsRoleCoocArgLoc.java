@@ -629,10 +629,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         int c = Math.min(6, numCommitted);
         int[] feats;
         if (featureNames != null) {
+          int n = featureNames.size();
           feats = new int[] {
               featureNames.lookupIndex(rel.getName() + ",numArgs=" + c),
               featureNames.lookupIndex(rel.getName() + ",numArgs=" + c + ",refinement=" + frame),
           };
+          if (featureNames.size() > n && featureNames.size() % 1000 == 0) {
+            Log.info("[memLeak] featureNames.size=" + featureNames.size());
+          }
         } else {
           int r = rel.hashCode();
           int f = frame.hashCode();

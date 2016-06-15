@@ -45,12 +45,12 @@ public class UbertsTest {
 //    sent = new String[] {"<s>", "short", "sentence"};
     for (int i = 0; i < sent.length; i++) {
       HypNode[] tail = new HypNode[] {
-          u.lookupNode(tokenIndex, i, true),
-          u.lookupNode(word, sent[i], true),
+          u.lookupNode(tokenIndex, i, true, true),
+          u.lookupNode(word, sent[i], true, false),
       };
-      HypEdge e = u.makeEdge("word", tail);
+      HypEdge e = u.makeEdge(false, "word", tail);
       u.addEdgeToState(e, Adjoints.Constant.ZERO);
-      tokens.add(u.lookupNode(tokenIndex, i, true));
+      tokens.add(u.lookupNode(tokenIndex, i, true, true));
     }
     Log.info("sent.length=" + sent.length);
 
@@ -60,7 +60,7 @@ public class UbertsTest {
     for (String p : Arrays.asList("N", "V", "OTHER"))
 //    for (String p : Arrays.asList("N", "V"))
 //    for (String p : Arrays.asList("N"))
-      posTags.add(u.lookupNode(posTag, p, true));
+      posTags.add(u.lookupNode(posTag, p, true, false));
   }
 
   public void posTestSetup() {
@@ -100,10 +100,10 @@ public class UbertsTest {
   public void posTestKickoff() {
     // This should kick off pos(i,*) => pos(i+1,*)
     HypNode[] tail = new HypNode[] {
-        u.lookupNode(tokenIndex, 0, true),
-        u.lookupNode(posTag, "<s>", true),
+        u.lookupNode(tokenIndex, 0, true, true),
+        u.lookupNode(posTag, "<s>", true, true),
     };
-    u.addEdgeToState(u.makeEdge("pos", tail), Adjoints.Constant.ZERO);
+    u.addEdgeToState(u.makeEdge(false, "pos", tail), Adjoints.Constant.ZERO);
 
     Agenda a = u.getAgenda();
     for (int i = 0; a.size() > 0; i++) {
@@ -153,15 +153,15 @@ public class UbertsTest {
         int i = (Integer) lhsValues.getBoundNode(2).getValue();
         if (i == sent.length)
           return Collections.emptyList();
-        HypNode end = u.lookupNode(tokenIndex, i+1, true);
+        HypNode end = u.lookupNode(tokenIndex, i+1, true, true);
         List<Pair<HypEdge, Adjoints>> el = new ArrayList<>();
         for (String nerType : Arrays.asList("PER", "GPE", "ORG", "LOC", "MISC")) {
-          HypNode PER = u.lookupNode(nerTag, nerType, true);
+          HypNode PER = u.lookupNode(nerTag, nerType, true, true);
           int j0 = Math.max(0, (i - maxEntWidth) + 1);
           for (int j = j0; j <= i; j++) {
-            HypNode start = u.lookupNode(tokenIndex, j, true);
+            HypNode start = u.lookupNode(tokenIndex, j, true, true);
             HypNode[] tail = new HypNode[] {start, end, PER};
-            HypEdge e = u.makeEdge("ner", tail);
+            HypEdge e = u.makeEdge(false, "ner", tail);
             double r = u.getRandom().nextGaussian();
             Adjoints a = new Adjoints.Constant(r);
             el.add(new Pair<>(e, a));
@@ -198,10 +198,10 @@ public class UbertsTest {
     // Setup all the POS tags to be N
     for (int i = 1; i < sent.length; i++) {
       HypNode[] tail = new HypNode[] {
-          u.lookupNode(tokenIndex, i, true),
-          u.lookupNode(posTag, "N", true),
+          u.lookupNode(tokenIndex, i, true, true),
+          u.lookupNode(posTag, "N", true, true),
       };
-      u.addEdgeToState(u.makeEdge("pos", tail), Adjoints.Constant.ZERO);
+      u.addEdgeToState(u.makeEdge(false, "pos", tail), Adjoints.Constant.ZERO);
     }
 
     Log.info("before adding NER:");
@@ -263,11 +263,11 @@ public class UbertsTest {
         if (s1.crosses(s2))
           return Collections.emptyList();
 
-        HypEdge e = u.makeEdge("coref",
-            u.lookupNode(tokenIndex, i, true),
-            u.lookupNode(tokenIndex, j, true),
-            u.lookupNode(tokenIndex, k, true),
-            u.lookupNode(tokenIndex, l, true));
+        HypEdge e = u.makeEdge(false, "coref",
+            u.lookupNode(tokenIndex, i, true, true),
+            u.lookupNode(tokenIndex, j, true, true),
+            u.lookupNode(tokenIndex, k, true, true),
+            u.lookupNode(tokenIndex, l, true, true));
         double r = u.getRandom().nextGaussian();
         Adjoints a = new Adjoints.Constant(r);
         return Arrays.asList(new Pair<>(e, a));

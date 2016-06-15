@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -54,7 +55,9 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public abstract class UbertsPipeline {
-  public static int DEBUG = 2;  // 0 means off, 1 means coarse, 2+ means fine grain logging
+  public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
+
+  public static boolean MEM_LEAK_DEBUG = false;
 
   protected Uberts u;
   protected List<Rule> rules;
@@ -67,6 +70,9 @@ public abstract class UbertsPipeline {
   protected NodeType docidNT;
   protected Relation startDocRel;   // startDoc(docid) is added when a new doc is considered, can be used as a message to dump caches
   protected Relation doneAnnoRel;   // doneAnno(docid) is added when all pos/ner/parses have been added, good time to trigger pushing actions onto the agenda who may inspect the graph for features
+
+  // Keeps track of how frequently types of events happen
+  protected Counts<String> eventCounts = new Counts<>();
 
   protected Set<String> dontBackwardsGenerate;
 
@@ -86,7 +92,6 @@ public abstract class UbertsPipeline {
       File relationDefs) throws IOException {
     this.u = u;
     timer = new MultiTimer();
-    timer.put("setupUbertsForDoc", new Timer("setupUbertsForDoc", 30, true));
 //    timer.put("adHocSrlClassificationByRole.setup", new Timer("adHocSrlClassificationByRole.setup", 30, true));
 //    timer.put("adHocSrlClassificationByRole.prediction", new Timer("adHocSrlClassificationByRole.prediction", 30, true));
 //    timer.put("adHocSrlClassificationByRole.update", new Timer("adHocSrlClassificationByRole.update", 30, true));
@@ -100,7 +105,7 @@ public abstract class UbertsPipeline {
     helperRelations = new ArrayList<>();
 
     // succTok(i,j)
-    helperRelations.add(u.addSuccTok(1000));
+//    helperRelations.add(u.addSuccTok(1000));
 
     startDocRel = u.readRelData("def startDoc <docid>");
     doneAnnoRel = u.readRelData("def doneAnno <docid>");
@@ -327,21 +332,45 @@ public abstract class UbertsPipeline {
     return sb.toString();
   }
 
+  public void cleanupUbertsForDoc(Uberts u, RelDoc doc) {
+    timer.start("cleanupUbertsForDoc");
+    if (DEBUG > 1)
+      System.out.println("[cleanupUbertsForDoc] " + doc.getId());
+
+    // It is certainly impossible to never call this or do something to clean
+    // up the set of interned HypNodes, most obviously because of head nodes.
+    // Unless you're predictions are pretty simple, the number of distinct
+    // HypEdges, and therefore head HypNodes, should grow with the data set.
+    // For something like Ontonotes 5, this can get too big to stream over with
+    // a reasonable amount of memory (~4GB).
+
+    // TODO This one is questionable!
+    // Some of these HypNodes will be a part of schema HypEdges, problem?
+    // HypNode implements hashcode and equals, solution?
+//    u.clearNodes();
+    u.clearNonSchemaNodes();
+
+    u.clearLabels();
+    u.getState().clearNonSchema();
+    timer.stop("cleanupUbertsForDoc");
+  }
+
   /**
    * @return the doc id.
    */
   public String setupUbertsForDoc(Uberts u, RelDoc doc) {
     boolean debug = false;
-    timer.start("setupUbertsForDoc");
-    u.getState().clearNonSchema();
-    u.getAgenda().clear();
-    u.initLabels();
+    if (debug)
+      System.out.println("[setupUbertsForDoc] " + doc.getId());
 
+//    u.getAgenda().clear();
+    u.clearAgenda();
+    u.initLabels();
 
     // Add an edge to the state specifying that we are working on this document/sentence.
     String docid = doc.def.tokens[1];
-    HypNode docidN = u.lookupNode(docidNT, docid, true);
-    u.addEdgeToState(u.makeEdge(startDocRel, docidN), Adjoints.Constant.ZERO);
+    HypNode docidN = u.lookupNode(docidNT, docid, true /* addIfNotPresent */, false /* isSchema */);
+    u.addEdgeToState(u.makeEdge(false /* isSchema */, startDocRel, docidN), Adjoints.Constant.ZERO);
 
     int cx = 0, cy = 0;
     assert doc.items.isEmpty();
@@ -386,12 +415,11 @@ public abstract class UbertsPipeline {
 
     // Put out a notification that all of the annotations have been added.
     // Up to this, most actions will be blocked.
-    HypEdge d = u.makeEdge(doneAnnoRel, docidN);
+    HypEdge d = u.makeEdge(false /* isSchema */, doneAnnoRel, docidN);
     u.addEdgeToState(d, Adjoints.Constant.ZERO);
 
     if (this.debug)
       Log.info("done setup on " + docid);
-    timer.stop("setupUbertsForDoc");
     return docid;
   }
 
@@ -457,17 +485,51 @@ public abstract class UbertsPipeline {
 
   /**
    * Calls {@link UbertsPipeline#consume(RelDoc)}
+   *
+   * @param x only needs to be raw data (not expanded w.r.t. a transition grammar,
+   * like {@link TransitionGeneratorBackwardsParser.Iter})
    */
   public void runInference(Iterator<RelDoc> x, String dataName) throws IOException {
     start(dataName);
     TimeMarker tm = new TimeMarker();
     int docs = 0;
-    Iter itr = new Iter(x, typeInf, dontBackwardsGenerate);
-    while (itr.hasNext()) {
-      RelDoc doc = itr.next();
+
+    int interval = 1000;
+    Timer tIter = new Timer("UbertsPipeline.IO", interval, true);
+    Timer tExp = new Timer("TypeInf.Expand", interval, true);
+    Timer tSetup = new Timer("UbertsPipeline.Setup", interval, true);
+    Timer tConsume = new Timer("UbertsPipeline.Consume", interval, true);
+    Timer tCleanup = new Timer("UbertsPipeline.Cleanup", interval, true);
+
+    // NOTE: This iterator calls lookupNode which makes Uberts grow in memory
+    // usage. See Uberts.clearNodes, which is called from cleanupUbertsForDoc.
+    TypeInference.Expander exp = typeInf.new Expander(dontBackwardsGenerate);
+    while (x.hasNext()) {
+      tIter.start();
+      RelDoc doc = x.next();
       docs++;
+      tIter.stop();
+
+      // Generate intermediate facts w.r.t. the transition system
+      tExp.start();
+      exp.expand(doc);
+      tExp.stop();
+
+      // Add labels, input data to state, etc
+      tSetup.start();
       setupUbertsForDoc(u, doc);
+      tSetup.stop();
+
+      // Call learning/prediction algorithm
+      tConsume.start();
       consume(doc);
+      tConsume.stop();
+
+      // Free any non-schema edges and nodes
+      tCleanup.start();
+      cleanupUbertsForDoc(u, doc);
+      tCleanup.stop();
+
       if (tm.enoughTimePassed(15)) {
         Log.info("[main] dataName=" + dataName
             + " docsProcessed=" + docs
@@ -477,6 +539,9 @@ public abstract class UbertsPipeline {
     finish(dataName);
   }
 
+  /**
+   * @deprecated see {@link UbertsLearnPipeline}
+   */
   public static void main(String[] args) throws IOException {
     BrownClusters.DEBUG = true;
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -501,13 +566,11 @@ public abstract class UbertsPipeline {
       throw new RuntimeException("unknown mode: " + mode);
     }
 
-//    Shard dataShard = config.getShard();
     boolean includeProvidence = false;
     boolean dedupInputLines = true;
     File multiXY = config.getExistingFile("inputRel");
     try (RelationFileIterator itr = new RelationFileIterator(multiXY, includeProvidence);
         ManyDocRelationFileIterator x  = new ManyDocRelationFileIterator(itr, dedupInputLines)) {
-//      srl.runInference(x, dataShard);
       srl.runInference(x, "file:" + multiXY.getPath());
     }
 

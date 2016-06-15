@@ -48,12 +48,12 @@ public class RuleMatchingTests {
 
   /** returns the last HypEdge added */
   private HypEdge addJohnLovesMary() {
-    u.addEdgeToState(u.dbgMakeEdge("lemma2(0,John)"), Adjoints.Constant.ZERO);
-    u.addEdgeToState(u.dbgMakeEdge("lemma2(1,love)"), Adjoints.Constant.ZERO);
-    u.addEdgeToState(u.dbgMakeEdge("lemma2(2,Mary)"), Adjoints.Constant.ZERO);
-    u.addEdgeToState(u.dbgMakeEdge("pos2(0,NNS)"), Adjoints.Constant.ZERO);
-    u.addEdgeToState(u.dbgMakeEdge("pos2(1,VBZ)"), Adjoints.Constant.ZERO);
-    return u.addEdgeToState(u.dbgMakeEdge("pos2(2,NNS)"), Adjoints.Constant.ZERO);
+    u.addEdgeToState(u.dbgMakeEdge("lemma2(0,John)", false), Adjoints.Constant.ZERO);
+    u.addEdgeToState(u.dbgMakeEdge("lemma2(1,love)", false), Adjoints.Constant.ZERO);
+    u.addEdgeToState(u.dbgMakeEdge("lemma2(2,Mary)", false), Adjoints.Constant.ZERO);
+    u.addEdgeToState(u.dbgMakeEdge("pos2(0,NNS)", false), Adjoints.Constant.ZERO);
+    u.addEdgeToState(u.dbgMakeEdge("pos2(1,VBZ)", false), Adjoints.Constant.ZERO);
+    return u.addEdgeToState(u.dbgMakeEdge("pos2(2,NNS)", false), Adjoints.Constant.ZERO);
   }
 
   /**
@@ -75,7 +75,7 @@ public class RuleMatchingTests {
     t.add(new Trigger(rule.lhs, 0));
 
     addJohnLovesMary();
-    HypEdge last = u.addEdgeToState(u.dbgMakeEdge("doneAnno(test0)"), Adjoints.Constant.ZERO);
+    HypEdge last = u.addEdgeToState(u.dbgMakeEdge("doneAnno(test0)", false), Adjoints.Constant.ZERO);
 
     State s = u.getState();
     t.match(s, last, m -> {
@@ -116,7 +116,7 @@ public class RuleMatchingTests {
     System.out.println(Trie3.EVENT_COUNTS);
 
     addJohnLovesMary();
-    HypEdge last = u.addEdgeToState(u.dbgMakeEdge("doneAnno(test0)"), Adjoints.Constant.ZERO);
+    HypEdge last = u.addEdgeToState(u.dbgMakeEdge("doneAnno(test0)", false), Adjoints.Constant.ZERO);
 
     State s = u.getState();
     t.match(s, last, m -> {
@@ -124,7 +124,7 @@ public class RuleMatchingTests {
     });
     System.out.println(Trie3.EVENT_COUNTS);
 
-    HypEdge ev1 = s.add(u.dbgMakeEdge("event1(1-2)"), Adjoints.Constant.ONE);
+    HypEdge ev1 = s.add(u.dbgMakeEdge("event1(1-2)", false), Adjoints.Constant.ONE);
     t.match(s, ev1, m -> {
       System.out.println("[match after event1] " + m);
     });

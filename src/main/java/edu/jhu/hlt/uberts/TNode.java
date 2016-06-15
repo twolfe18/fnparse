@@ -335,7 +335,10 @@ public class TNode {
         case TKey.NODE_TYPE:
           throw new RuntimeException("implement me!");
         case TKey.NODE_VALUE:
-          HypNode maybeExists = u.lookupNode(poss.nodeType, poss.nodeValue, false);
+          boolean isSchema = false;
+          if (true)
+            throw new RuntimeException("should this be isSchema? ask caller to provide this?");
+          HypNode maybeExists = u.lookupNode(poss.nodeType, poss.nodeValue, false, isSchema);
           if (maybeExists != null)
             tryMatch(poss, u, new HNode(maybeExists), traversal, trie, crossed);
           break;

@@ -8,6 +8,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.prim.tuple.Pair;
@@ -75,6 +76,9 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
       return "<RelLine " + Arrays.toString(tokens) + ">";
     }
 
+    public boolean isSchema() {
+      return tokens[0].equals("schema");
+    }
     public boolean isX() {
       return tokens[0].equals("x");
     }
@@ -90,11 +94,17 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
   public boolean includeProvidence;
 
   public RelationFileIterator(File f, boolean includeProvidence) throws IOException {
+    Log.info("includeProvidence=" + includeProvidence + " f=" + f.getPath());
     this.includeProvidence = includeProvidence;
     this.file = f;
     this.reader = FileUtil.getReader(f);
     this.lineNo = -1;
     next();
+  }
+
+  @Override
+  public String toString() {
+    return "(RelFileItr " + file.getPath() + " lineNo=" + lineNo + ")";
   }
 
   public File getFile() {
@@ -154,6 +164,7 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
 
   @Override
   public void close() throws IOException {
+    Log.info("closing " + file.getPath());
     reader.close();
   }
 

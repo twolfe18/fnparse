@@ -34,10 +34,13 @@ import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
+import edu.jhu.hlt.uberts.rules.Env.Trie3;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 
 /**
+ * @deprecated See {@link Trie3} for newer/faster implementation.
+ *
  * Parse a transition grammar expression like:
  *   ner3(i,t,b) & succ(i,j) & biolu(b,i,t,r) => ner3(j,r,i)
  *
@@ -1232,7 +1235,10 @@ public class TransitionGeneratorForwardsParser {
           + " rule=" + rule
           + " lhsVals=" + lhsValues;
 
-      HypEdge e = u.makeEdge(rule.rhs.rel, rhsNodes);
+      boolean isSchema = false;
+      if (true)
+        throw new RuntimeException("should isSchema be true? ask caller?");
+      HypEdge e = u.makeEdge(isSchema, rule.rhs.rel, rhsNodes);
 
       // You can end up generating the same fact many times
       // e.g. foo(x,y) & bar(y,z) => baz(y)
