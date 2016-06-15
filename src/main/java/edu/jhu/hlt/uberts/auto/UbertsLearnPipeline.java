@@ -45,11 +45,16 @@ import edu.jhu.prim.tuple.Pair;
 public class UbertsLearnPipeline extends UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
 
-  static enum TrainMethod {
+  public static enum TrainMethod {
     EARLY_UPDATE,
     MAX_VIOLATION,
     DAGGER,
     DAGGER1,  // Only updates w.r.t. top item on the agenda at every state
+  }
+
+  // How should the document being consumed be interpretted?
+  public static enum Mode {
+    TRAIN, DEV, TEST,
   }
 
   static boolean performTest = false;
@@ -70,6 +75,32 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static double costFP_srl2 = 1;
   static double costFP_event1 = 1;
 
+  private Mode mode;
+
+  private BasicFeatureTemplates bft;
+  private OldFeaturesWrapper ofw;
+  private OldFeaturesWrapper.Ints2 feFast2;
+  private List<OldFeaturesWrapper.Ints3> feFast3;
+  /** @deprecated */
+  private OldFeaturesWrapper.Ints feFast;
+
+  private List<Consumer<Double>> batch = new ArrayList<>();
+  private int batchSize = 1;
+  private boolean updateAccordingToPriority = false;
+  private double pOracleRollIn = 0;
+
+  private static boolean skipSrlFilterStages = false;
+
+  private NumArgsRoleCoocArgLoc numArgsArg4;
+  private NumArgsRoleCoocArgLoc numArgsArg3;
+  private NumArgsRoleCoocArgLoc numArgsArg2;
+  // These are not mutually exclusive, above are in below
+  private List<GlobalFactor> globalFactors = new ArrayList<>();
+
+  // For now these store all performances for the last data segment
+  private List<Map<String, FPR>> perfByRel = new ArrayList<>();
+
+
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -80,6 +111,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     performTest = config.getBoolean("performTest", performTest);
     Log.info("[main] performTest=" + performTest);
+
+    skipSrlFilterStages = config.getBoolean("skipSrlFilterStages", skipSrlFilterStages);
+    Log.info("[main] skipSrlFilterStages=" + skipSrlFilterStages);
 
     costFP_event1 = config.getDouble("costFP_event1", costFP_event1);
     costFP_srl2 = config.getDouble("costFP_srl2", costFP_srl2);
@@ -249,35 +283,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
     Log.info("[main] done at " + new java.util.Date().toString());
   }
-
-  // How should the document being consumed be interpretted?
-  public static enum Mode {
-    TRAIN, DEV, TEST,
-  }
-  private Mode mode;
-
-  private BasicFeatureTemplates bft;
-  private OldFeaturesWrapper ofw;
-  private OldFeaturesWrapper.Ints2 feFast2;
-  private List<OldFeaturesWrapper.Ints3> feFast3;
-  /** @deprecated */
-  private OldFeaturesWrapper.Ints feFast;
-
-  private List<Consumer<Double>> batch = new ArrayList<>();
-  private int batchSize = 1;
-  private boolean updateAccordingToPriority = false;
-  private double pOracleRollIn = 0;
-
-  private static boolean skipSrlFilterStages = false;
-
-  private NumArgsRoleCoocArgLoc numArgsArg4;
-  private NumArgsRoleCoocArgLoc numArgsArg3;
-  private NumArgsRoleCoocArgLoc numArgsArg2;
-  // These are not mutually exclusive, above are in below
-  private List<GlobalFactor> globalFactors = new ArrayList<>();
-
-  // For now these store all performances for the last data segment
-  private List<Map<String, FPR>> perfByRel = new ArrayList<>();
 
   public void useAvgWeights(boolean useAvg) {
     for (OldFeaturesWrapper.Ints3 w : feFast3) {
