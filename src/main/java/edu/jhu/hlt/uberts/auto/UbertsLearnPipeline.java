@@ -79,6 +79,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     List<File> schemaFiles = config.getExistingFiles("schema");
 
     performTest = config.getBoolean("performTest", performTest);
+    Log.info("[main] performTest=" + performTest);
 
     costFP_event1 = config.getDouble("costFP_event1", costFP_event1);
     costFP_srl2 = config.getDouble("costFP_srl2", costFP_srl2);
@@ -187,10 +188,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Train and dev should be shuffled. Test doesn't need to be.
     List<File> train = config.getExistingFiles("train.facts");
     File dev = config.getExistingFile("dev.facts");
-    File test = config.getExistingFile("test.facts");
+    File test = performTest ? config.getExistingFile("test.facts") : null;
     Log.info("[main] trainFiles=" + train);
     Log.info("[main] devFile=" + dev.getPath());
-    Log.info("[main] testFile=" + test.getPath());
+    if (performTest)
+      Log.info("[main] testFile=" + test.getPath());
 
     // The ratio of miniDevSize/trainSegSize is the price of knowing how well
     // you're doing during training. Try to minimize it to keep train times down.
