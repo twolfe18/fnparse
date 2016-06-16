@@ -142,7 +142,7 @@ public class Env {
         EVENT_COUNTS.increment(msg);
     }
 
-    public static int DEBUG = 1;
+    public static int DEBUG = 0;
 
     private Trie3 root;
     private Trie3 parent; // allows you to compute i from just R

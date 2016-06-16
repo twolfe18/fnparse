@@ -1,1 +1,1 @@
-0	0	0	0	0	0	0	semafor/argId/frames/roles
+0	0	0	0	0	0	0	semafor/argId

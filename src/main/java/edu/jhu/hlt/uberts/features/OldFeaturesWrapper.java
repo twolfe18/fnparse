@@ -67,6 +67,13 @@ import edu.jhu.util.Alphabet;
 public class OldFeaturesWrapper {
   public static int DEBUG = 1;
 
+  // set TemplateContext.debugMessage to the HypEdge being scored, features downstream can use this for debugging
+  public static boolean DEBUG_CONTEXT_MESSAGE = false;
+
+  // Timer intervals
+  public static int INTERVAL_CONV_SENT = 1000;
+  public static int INTERVAL_COMP_FEAT = 50000;
+
   /**
    * Doesn't take the product of feature with the {@link Relation} of the
    * {@link HypEdge} being scored!
@@ -477,8 +484,8 @@ public class OldFeaturesWrapper {
     };
 
     timer = new MultiTimer();
-    timer.put("convert-sentence", new Timer("convert-sentence", 1000, true));
-    timer.put("compute-features", new Timer("compute-features", 50000, true));
+    timer.put("convert-sentence", new Timer("convert-sentence", INTERVAL_CONV_SENT, true));
+    timer.put("compute-features", new Timer("compute-features", INTERVAL_COMP_FEAT, true));
 
     ctx = new TemplateContext();
     depGraphEdges = new Alphabet<>();
@@ -498,8 +505,8 @@ public class OldFeaturesWrapper {
     }
 
     timer = new MultiTimer();
-    timer.put("convert-sentence", new Timer("convert-sentence", 100, true));
-    timer.put("compute-features", new Timer("compute-features", 10000, true));
+    timer.put("convert-sentence", new Timer("convert-sentence", INTERVAL_CONV_SENT, true));
+    timer.put("compute-features", new Timer("compute-features", INTERVAL_COMP_FEAT, true));
 
     ctx = new TemplateContext();
     depGraphEdges = new Alphabet<>();
@@ -599,23 +606,6 @@ public class OldFeaturesWrapper {
     hf = new DependencyHeadFinder();
     skipped = new Counts<>();
   }
-
-//  /** This will read all unigram templates in */
-//  public OldFeaturesWrapper(BasicFeatureTemplates bft, Double pSkipNeg) {
-//    this.pSkipNeg = pSkipNeg;
-//    timer = new MultiTimer();
-//    timer.put("convert-sentence", new Timer("convert-sentence", 100, true));
-//    timer.put("compute-features", new Timer("compute-features", 10000, true));
-//
-//    skipped = new Counts<>();
-//    depGraphEdges = new Alphabet<>();
-//    ctx = new TemplateContext();
-//    sentCache = null;
-//    edu.jhu.hlt.fnparse.features.precompute.Alphabet alph =
-//        new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft);
-//    this.hf = alph.getHeadFinder();
-//    this.features = alph;
-//  }
 
   public edu.jhu.hlt.fnparse.features.precompute.Alphabet getFeatures() {
     return features;
@@ -820,6 +810,8 @@ public class OldFeaturesWrapper {
     Span t = null, s = null;
     String f = null, k = null;
     ctx.clear();
+    if (DEBUG_CONTEXT_MESSAGE)
+      ctx.debugMessage = "setup for " + yhat.toString();
     ctx.setSentence(sentCache);
     if (customEdgeCtxSetup == null) {
       switch (yhat.getRelation().getName()) {
@@ -878,22 +870,26 @@ public class OldFeaturesWrapper {
         throw new RuntimeException("don't know how to handle: " + yhat);
 //        break;
       }
-      if (s != null && s != Span.nullSpan) {
+      if (s != null) {
         ctx.setArg(s);
         ctx.setSpan1(s);
-        int sh = hf.head(s, sentCache);
-        if (sh >= 0) {
-          ctx.setArgHead(sh);
-          ctx.setHead1(ctx.getArgHead());
+        if (s != Span.nullSpan) {
+          int sh = hf.head(s, sentCache);
+          if (sh >= 0) {
+            ctx.setArgHead(sh);
+            ctx.setHead1(ctx.getArgHead());
+          }
         }
       }
-      if (t != null && t != Span.nullSpan) {
+      if (t != null) {
         ctx.setTarget(t);
         ctx.setSpan2(t);
-        int th = hf.head(t, sentCache);
-        if (th >= 0) {
-          ctx.setTargetHead(th);
-          ctx.setHead2(ctx.getTargetHead());
+        if (t != Span.nullSpan) {
+          int th = hf.head(t, sentCache);
+          if (th >= 0) {
+            ctx.setTargetHead(th);
+            ctx.setHead2(ctx.getTargetHead());
+          }
         }
       }
     } else {

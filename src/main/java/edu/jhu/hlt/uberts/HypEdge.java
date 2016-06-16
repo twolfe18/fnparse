@@ -207,11 +207,11 @@ public class HypEdge {
 
     public HashableHypEdge(HypEdge e) {
       this.edge = e;
-      long[] h = new long[e.getNumTails() + 1];
-      h[0] = e.getRelation().hashCode();
-      for (int i = 1; i < h.length; i++)
-        h[i] = e.getTail(i-1).hashCode();
-      this.hc = Hash.mix64(h);
+      long h = Hash.hash(e.getRelation().getName());
+      int n = e.getNumTails();
+      for (int i = 0; i < n; i++)
+        h = Hash.mix64(h, e.getTail(i).hashCode());
+      this.hc = h;
     }
 
     public String hashDesc() {

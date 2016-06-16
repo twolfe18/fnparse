@@ -28,6 +28,8 @@ public class TemplateContext {
   public static void showContext(TemplateContext ctx) {
     Sentence s = ctx.getSentence();
     Frame f = ctx.getFrame();
+    if (ctx.debugMessage != null)
+      System.out.println("[context] " + ctx.debugMessage);
     System.out.println("[context] stage=" + (ctx == null ? "UNSET" : ctx.getStage()));
     System.out.println("[context] sentence=" + s);
     System.out.println("[context] frame=" + (f == null ? "UNSET" : f.getName()));
@@ -59,6 +61,7 @@ public class TemplateContext {
   // Common
   private Sentence sentence;
   private Frame frame;
+  public String debugMessage;
 
   // For frame id
   private Span target;
@@ -111,6 +114,7 @@ public class TemplateContext {
 
   public void clear() {
     sentence = null;
+    debugMessage = null;
     frame = null;
     target = null;
     targetHead = UNSET;

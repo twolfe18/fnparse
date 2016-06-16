@@ -233,6 +233,22 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     int miniDevSize = config.getInt("miniDevSize", 300);
     int trainSegSize = config.getInt("trainSegSize", miniDevSize * 20);
 
+
+    if (config.getBoolean("speedDebug", false)) {
+      Uberts.DEBUG = 3;
+      UbertsPipeline.DEBUG = 3;
+      pipe.pOracleRollIn = 1;
+      Log.info("[main] speedDebug=true");
+      File f = train.get(0);
+      try (RelationFileIterator rels = new RelationFileIterator(f, false);
+          ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
+        Iterator<RelDoc> itr = Iterators.limit(many, 1);
+        pipe.runInference(itr, "train-speedDebug");
+      }
+      return;
+    }
+
+
     /*
      * for each pass over all train data:
      *    for each segment of size N:

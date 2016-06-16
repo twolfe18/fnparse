@@ -157,7 +157,7 @@ public class Uberts {
     if (DEBUG > 1)
       System.out.println("Uberts addLabel: " + e);
     if (goldEdges == null)
-      goldEdges = new Labels();
+      goldEdges = new Labels(this);
     goldEdges.add(e);;
   }
   public boolean getLabel(HypEdge e) {
@@ -170,7 +170,7 @@ public class Uberts {
    * Sets the set of gold edges to the empty set.
    */
   public void initLabels() {
-    goldEdges = new Labels();
+    goldEdges = new Labels(this);
   }
 
   /**
@@ -264,12 +264,14 @@ public class Uberts {
         addEdgeToState(ai);
       }
     }
+
     if (showTrajDiagnostics) {
       if (perf == null)
         Log.info("cannot show traj perf since there are no labels!");
       else
         showTrajPerf(steps, perf);
     }
+
     return new Pair<>(perf, steps);
   }
   public Pair<Labels.Perf, List<Step>> dbgRunInference() {
@@ -658,22 +660,46 @@ public class Uberts {
 
   private void showTrajPerf(List<Step> traj, Labels.Perf perf) {
     Log.info("traj.size=" + traj.size());
-    Map<Relation, FPR> pbr = perf.perfByRel2();
-    for (Relation rel : goldEdges.getLabeledRelation()) {
-      Log.info("relation=" + rel.getName()
-          + " perf=" + pbr.get(rel)
-          + " n=" + goldEdges.getRelCount(rel.getName()));
-      for (HypEdge fn : perf.getFalseNegatives(rel)) {
-        System.out.println("\tfn: " + fn);
-//          if ("srl1".equals(fn.getRelation().getName())) {
-//            int i = Integer.parseInt((String) fn.getTail(0).getValue());
-//            int j = Integer.parseInt((String) fn.getTail(1).getValue());
-//            System.out.println("\tfn: " + fn + "\t" + dbgGetSpan(i, j));
-//          } else {
-//            System.out.println("\tfn: " + fn);
-//          }
+
+//    Map<Relation, FPR> pbr = perf.perfByRel2();
+//    for (Relation rel : goldEdges.getLabeledRelation()) {
+//      Log.info("relation=" + rel.getName()
+//          + " perf=" + pbr.get(rel)
+//          + " n=" + goldEdges.getRelCount(rel.getName()));
+//
+//      for (HypEdge fn : perf.getFalseNegatives(rel)) {
+//        System.out.println("\tfn: " + fn);
+////          if ("srl1".equals(fn.getRelation().getName())) {
+////            int i = Integer.parseInt((String) fn.getTail(0).getValue());
+////            int j = Integer.parseInt((String) fn.getTail(1).getValue());
+////            System.out.println("\tfn: " + fn + "\t" + dbgGetSpan(i, j));
+////          } else {
+////            System.out.println("\tfn: " + fn);
+////          }
+//      }
+//    }
+
+    Counts<String> c = new Counts<>();
+    for (Step s : traj) {
+      // Counts stuff
+      if (c != null) {
+        String r = s.edge.getRelation().getName();
+        c.increment(r);
+        c.increment(r + "/pred=" + s.pred);
+        if (s.gold != null) {
+          c.increment(r + "/gold=" + s.gold);
+          if (s.gold && s.pred)
+            c.increment(r + "/TP");
+          else if (s.gold && !s.pred)
+            c.increment(r + "/FN");
+          else if (!s.gold && s.pred)
+            c.increment(r + "/FP");
+          else if (!s.gold && !s.pred)
+            c.increment(r + "/TN");
+        }
       }
     }
+    System.out.println("[showTrajPerf] " + c);
   }
 
   /**

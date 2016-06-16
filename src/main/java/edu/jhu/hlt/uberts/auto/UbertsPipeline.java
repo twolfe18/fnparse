@@ -4,25 +4,20 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.TemplateContext;
-import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
-import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
-import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
@@ -33,19 +28,14 @@ import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
-import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
-import edu.jhu.hlt.uberts.Step;
 import edu.jhu.hlt.uberts.Uberts;
-import edu.jhu.hlt.uberts.auto.TransitionGeneratorBackwardsParser.Iter;
-import edu.jhu.hlt.uberts.auto.TransitionGeneratorForwardsParser.TG;
 import edu.jhu.hlt.uberts.factor.AtLeast1Local;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
-import edu.jhu.prim.tuple.Pair;
 
 /**
  * A super-class for implementing functionality which needs to scan over a
@@ -62,7 +52,6 @@ public abstract class UbertsPipeline {
   protected Uberts u;
   protected List<Rule> rules;
   protected Set<Relation> rhsOfRules;
-  protected List<TG> transitionGenerators;
   protected List<Relation> helperRelations;
   protected TypeInference typeInf;
 
@@ -92,16 +81,12 @@ public abstract class UbertsPipeline {
       File relationDefs) throws IOException {
     this.u = u;
     timer = new MultiTimer();
-//    timer.put("adHocSrlClassificationByRole.setup", new Timer("adHocSrlClassificationByRole.setup", 30, true));
-//    timer.put("adHocSrlClassificationByRole.prediction", new Timer("adHocSrlClassificationByRole.prediction", 30, true));
-//    timer.put("adHocSrlClassificationByRole.update", new Timer("adHocSrlClassificationByRole.update", 30, true));
 
     dontBackwardsGenerate = new HashSet<>();
     dontBackwardsGenerate.add("succTok");
 
     rules = new ArrayList<>();
     rhsOfRules = new HashSet<>();
-    transitionGenerators = new ArrayList<>();
     helperRelations = new ArrayList<>();
 
     // succTok(i,j)
@@ -160,20 +145,7 @@ public abstract class UbertsPipeline {
     Log.info("[main] lhsInRhsScoreScale=" + lhsInRhsScoreScale);
     assert lhsInRhsScoreScale >= 0;
     if (lhsInRhsScoreScale > 0) {
-      for (TG tg : transitionGenerators) {
-        tg.lhsInRhsScoreScale = lhsInRhsScoreScale;
-        Rule r = tg.getRule();
-        for (Term lhsT : r.lhs) {
-          assert lhsT.rel != null;
-          if (rhsOfRules.contains(lhsT.rel)) {
-            if (tg.addLhsScoreToRhsScore == null)
-              tg.addLhsScoreToRhsScore = new HashSet<>();
-            tg.addLhsScoreToRhsScore.add(lhsT.rel);
-          }
-        }
-        if (tg.addLhsScoreToRhsScore != null)
-          Log.info("using lhs scores of " + tg.addLhsScoreToRhsScore + " to score rhs of " + tg.getRule());
-      }
+      throw new RuntimeException("update TransitionGenerator/TG code to TransGen");
     }
 
     // TODO Support more than one AtLeast1Local factor
@@ -209,44 +181,9 @@ public abstract class UbertsPipeline {
     assert r.rhs.allArgsAreTyped();
     for (Term lt : r.lhs)
       assert lt.allArgsAreTyped();
-
     rules.add(r);
     LocalFactor phi = getScoreFor(r);
     u.addTransitionGenerator(r, phi);
-
-//    // Add to Uberts as a TransitionGenerator
-//    // Create all orderings of this rule
-//    for (Rule rr : Rule.allLhsOrders(r)) {
-//
-//      Relation f = rr.lhs[0].rel;
-//      if (helperRelations.contains(f)) {
-//        if (DEBUG > 0)
-//          Log.info("[main] not adding this rule since first Functor is schema type: " + rr);
-//        continue;
-//      }
-//
-//      if (f != doneAnnoRel && !rhsOfRules.contains(f)) {
-//        if (DEBUG > 0)
-//          Log.info("[main] not adding this rule since first functor is not a RHS of another rule and its not doneAnno either: " + rr);
-//        continue;
-//      }
-//
-//      TransitionGeneratorForwardsParser tgfp = new TransitionGeneratorForwardsParser();
-//      Pair<List<TKey>, TG> tg = tgfp.parse2(rr, u);
-//
-//      if (DEBUG > 0) {
-//        Log.info("[main] adding: " + rr);
-//        if (DEBUG > 1)
-//          System.out.println(StringUtils.join("\n", tg.get1()));
-//      }
-//
-//      tg.get2().feats = phi;
-//      transitionGenerators.add(tg.get2());
-//      u.addTransitionGenerator(tg.get1(), tg.get2());
-////      TNode tnode = u.addTransitionGenerator(tg.get1(), tg.get2());
-////      tnode.getValue().r = rr;
-//      throw new RuntimeException("add back the ability to set the rule to rr!");
-//    }
   }
 
   public List<Relation> getHelperRelations() {
@@ -270,68 +207,6 @@ public abstract class UbertsPipeline {
     System.out.println();
   }
 
-
-  public void evaluate(ManyDocRelationFileIterator instances) {
-    Iter itr = new Iter(instances, typeInf, dontBackwardsGenerate);
-    while (itr.hasNext()) {
-      RelDoc doc = itr.next();
-      evaluate(doc);
-    }
-  }
-
-  /**
-   * General purpose (calls Uberts.dbgRunInference and follows the transition
-   * system). Reports performance for each Relation.
-   */
-  public void evaluate(RelDoc doc) {
-    String docid = setupUbertsForDoc(u, doc);
-    Log.info("evaluating on " + docid);
-    boolean oracle = false;
-    int actionLimit = 1000;
-    Pair<Labels.Perf, List<Step>> pt = u.dbgRunInference(oracle, actionLimit);
-//    Pair<Labels.Perf, List<Step>> pt = u.runLocalInference(oracle, minScore, actionLimit);
-    Labels.Perf perf = pt.get1();
-    Log.info("performance on " + docid);
-    Map<String, FPR> pbr = perf.perfByRel();
-    List<String> rels = new ArrayList<>(pbr.keySet());
-    Collections.sort(rels);
-    for (String rel : rels)
-      System.out.println(rel + ":\t" + pbr.get(rel));
-
-    System.out.println("traj.size=" + pt.get2().size() + " actionLimit=" + actionLimit);
-
-//    // Weights
-//    for (TG tg : dbgTransitionGenerators) {
-//      FeatureExtractionFactor.Oracle fe = (FeatureExtractionFactor.Oracle) tg.feats;
-//      for (Pair<Relation, Weight<String>> p : fe.getWeights())
-//        System.out.println(p.get1() + "\t" + p.get2() + "\t" + tg.getRule());
-//    }
-
-    // False negatives
-    int Nfn = 0;
-    for (HypEdge e : perf.getFalseNegatives()) {
-      if (e.getRelation().getName().equals("srl4"))
-        continue;
-      Nfn++;
-      System.out.println("fn: " + e);
-    }
-    System.out.println(Nfn + " false negatives");
-    System.out.println();
-  }
-
-  static String prependRefinementTemplate(String refinement, File featureSet) {
-    String fs = FeatureSet.getFeatureSetString(featureSet);
-    List<String> features = TemplatedFeatures.tokenizeTemplates(fs);
-    StringBuilder sb = new StringBuilder();
-    for (int i = 0; i < features.size(); i++) {
-      if (i > 0) sb.append(" + ");
-      sb.append(refinement);
-      sb.append('*');
-      sb.append(features.get(i));
-    }
-    return sb.toString();
-  }
-
   public void cleanupUbertsForDoc(Uberts u, RelDoc doc) {
     timer.start("cleanupUbertsForDoc");
     if (DEBUG > 1)
@@ -343,11 +218,6 @@ public abstract class UbertsPipeline {
     // HypEdges, and therefore head HypNodes, should grow with the data set.
     // For something like Ontonotes 5, this can get too big to stream over with
     // a reasonable amount of memory (~4GB).
-
-    // TODO This one is questionable!
-    // Some of these HypNodes will be a part of schema HypEdges, problem?
-    // HypNode implements hashcode and equals, solution?
-//    u.clearNodes();
     u.clearNonSchemaNodes();
 
     u.clearLabels();
@@ -487,16 +357,16 @@ public abstract class UbertsPipeline {
    * Calls {@link UbertsPipeline#consume(RelDoc)}
    *
    * @param x only needs to be raw data (not expanded w.r.t. a transition grammar,
-   * like {@link TransitionGeneratorBackwardsParser.Iter})
+   * like {@link TypeInference.Expander})
    */
   public void runInference(Iterator<RelDoc> x, String dataName) throws IOException {
     start(dataName);
     TimeMarker tm = new TimeMarker();
     int docs = 0;
 
-    int interval = 1000;
+    int interval = 500;
     Timer tIter = new Timer("UbertsPipeline.IO", interval, true);
-    Timer tExp = new Timer("TypeInf.Expand", interval, true);
+    Timer tExp = new Timer("UbertsPipeline.TypeInf.Expand", interval, true);
     Timer tSetup = new Timer("UbertsPipeline.Setup", interval, true);
     Timer tConsume = new Timer("UbertsPipeline.Consume", interval, true);
     Timer tCleanup = new Timer("UbertsPipeline.Cleanup", interval, true);

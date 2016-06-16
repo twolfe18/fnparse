@@ -26,6 +26,7 @@ import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateSS;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -207,6 +208,21 @@ public class BasicFeatureTemplates {
     else if (len <= 30) return "(25,30]";
     else if (len <= 40) return "(30,40]";
     else return "(40,inf)";
+  }
+
+  public static boolean closedClass(int i, Sentence s) {
+    String pos = s.getPos(i);
+    if (pos.equals("CC")) return true;
+    if (pos.endsWith("DT")) return true;
+    if (pos.equals("IN")) return true;
+    if (pos.equals("MD")) return true;
+    if (pos.equals("POS")) return true;
+    if (pos.startsWith("PRP")) return true;
+    if (pos.equals("RP")) return true;
+    if (pos.equals("SYM")) return true;
+    if (pos.equals("TO")) return true;
+    if (pos.startsWith("W")) return true;
+    return false;
   }
 
   public static boolean canLexicalize(int i, Sentence s) {
@@ -1510,118 +1526,342 @@ public class BasicFeatureTemplates {
     // Role id
     // http://www.dipanjandas.com/files/acl2014frames.pdf
     // table 1
-    // NOTE: This is not the same as:
+    // NOTE: This is not the same as (see below):
     // http://www.mitpressjournals.org/doi/pdf/10.1162/COLI_a_00163
-    for (boolean f : Arrays.asList(true, false)) {
-      for (boolean r : Arrays.asList(true, false)) {
-        String p = (f ? "frames" : "noFrames") + "/" + (r ? "roles" : "noRoles");
-        addTemplate("semafor/argId/" + p, new Template() {
-          private final boolean includeFrames = f;
-          private final boolean includeRoles = r;
-          @Override
-          public Iterable<String> extract(TemplateContext context) {
-            List<String> feats = new ArrayList<>();
-            Sentence s = context.getSentence();
-            DependencyParse d = s.getBasicDeps();
-            Span a = context.getArg();
-            int ah = context.getArgHead();
-            int p = context.getTargetHead();
+    addTemplate("semafor/argId", new Template() {
+      @Override
+      public Iterable<String> extract(TemplateContext context) {
+        List<String> feats = new ArrayList<>();
+        Sentence s = context.getSentence();
+        DependencyParse d = s.getBasicDeps();
+        Span a = context.getArg();
+        int ah = context.getArgHead();
+        int p = context.getTargetHead();
+        String r = context.getRoleS();
+        String fr;
+        if (context.getFrame() == null)
+          fr = null;
+        else
+          fr = context.getFrame().getName() + "-" + r;
 
-            if (a == null || ah < 0 || p < 0)
-              return null;
+        assert a != null : "only use this with args, use Span.nullSpan if needed";
+        assert d != null;
 
-            // • a bias feature
-            feats.add("bias");
+        if (a == Span.nullSpan) {
+          r += "/nullSpan";
+          if (fr != null)
+            fr += "/nullSpan";
+        }
 
-            // • starting word of a
-            feats.add("sw/" + s.getWord(a.start));
+        if (context.debugMessage != null)
+          Log.info("computing features: " + context.debugMessage);
 
-            // • POS of the starting word of a
-            feats.add("sp/" + s.getPos(a.start));
+        // • a bias feature
+        feats.add("bias/" + r);
+        if (fr != null)
+          feats.add("bias/" + fr);
 
-            // • ending word of a
-            feats.add("ew/" + s.getWord(a.end - 1));
+        // • voice of the predicate use
+        String voice = voice(s, p);
+        feats.add("v/" + voice  + "/" + r);
+        if (fr != null)
+          feats.add("v/" + voice + "/" + fr);
 
-            // • POS of the ending word of a
-            feats.add("ep/" + s.getPos(a.end - 1));
+        // • the set of dependency labels of the predicate’s children
+        String ds = depSet(s, d, p);
+        feats.add("pd/" + ds + "/" + r);
+        if (fr != null)
+          feats.add("pd/" + ds + "/" + fr);
 
-            // • head word of a
-            feats.add("hw/" + s.getWord(ah));
+        // • whether the subject of the predicate is missing (missingsubj)
+        String ms = missingSubj(s, d, p);
+        feats.add("ms1/" + ms + "/" + r);
+        if (fr != null)
+          feats.add("ms1/" + ms + "/" + fr);
 
-            // • POS of the head word of a
-            feats.add("hp/" + s.getPos(ah));
+        if (a != Span.nullSpan) {
+          boolean ahValid = ah >= 0 && ah < s.size();
 
-            // • bag of words in a
-            for (int i = a.start; i < a.end; i++)
-              feats.add("bw/" + s.getWord(i));
+          // • starting word of a
+          feats.add("sw/" + s.getWord(a.start) + "/" + r);
+          if (fr != null)
+            feats.add("sw/" + s.getWord(a.start) + "/" + fr);
 
-            // • bag of POS tags in a
-            for (int i = a.start; i < a.end; i++)
-              feats.add("bp/" + s.getPos(i));
+          // • POS of the starting word of a
+          feats.add("sp/" + s.getPos(a.start) + "/" + r);
+          if (fr != null)
+            feats.add("sp/" + s.getPos(a.start) + "/" + fr);
 
-            // • voice of the predicate use
-            feats.add("v/" + voice(s, p));
+          // • ending word of a
+          feats.add("ew/" + s.getWord(a.end - 1) + "/" + r);
+          if (fr != null)
+            feats.add("ew/" + s.getWord(a.end - 1) + "/" + fr);
 
-            // • word cluster of a’s head
-            String ahc = bc256.getPath(s.getWord(ah));
-            feats.add("hc1/" + ahc);
+          // • POS of the ending word of a
+          feats.add("ep/" + s.getPos(a.end - 1) + "/" + r);
+          if (fr != null)
+            feats.add("ep/" + s.getPos(a.end - 1) + "/" + fr);
 
-            // • word cluster of a’s head conjoined with word cluster of the predicate∗
-            String phc = bc256.getPath(s.getWord(p));
-            feats.add("hc2/" + ahc + "/" + phc);
+          // • head word of a
+          String hw = ahValid ? s.getWord(ah) : "NONE";
+          feats.add("hw/" + hw + "/" + r);
+          if (fr != null)
+            feats.add("hw/" + hw + "/" + fr);
 
+          // • POS of the head word of a
+          String hp = ahValid ? s.getPos(ah) : "NONE";
+          feats.add("hp/" + hp + "/" + r);
+          if (fr != null)
+            feats.add("hp/" + hp + "/" + fr);
+
+          // • bag of words in a
+          for (int i = a.start; i < a.end; i++) {
+            feats.add("bw/" + s.getWord(i) + "/" + r);
+            if (fr != null)
+              feats.add("bw/" + s.getWord(i) + "/" + fr);
+          }
+
+          // • bag of POS tags in a
+          for (int i = a.start; i < a.end; i++) {
+            feats.add("bp/" + s.getPos(i) + "/" + r);
+            if (fr != null)
+              feats.add("bp/" + s.getPos(i) + "/" + fr);
+          }
+
+          // • word cluster of a’s head
+          String ahc = ahValid ? bc256.getPath(s.getWord(ah)) : "NONE";
+          feats.add("hc1/" + ahc + "/" + r);
+          if (fr != null)
+            feats.add("hc1/" + ahc + "/" + fr);
+
+          // • word cluster of a’s head conjoined with word cluster of the predicate∗
+          String phc = bc256.getPath(s.getWord(p));
+          feats.add("hc2/" + ahc + "/" + phc + "/" + r);
+
+          // • position of a with respect to the predicate (before, after, overlap or identical)
+          String pr = spanPosRel(Span.getSpan(p, p+1), a);
+          feats.add("dir/" + pr + "/" + r);
+          if (fr != null)
+            feats.add("dir/" + pr + "/" + fr);
+
+          if (!ahValid) {
+            feats.add("ahInvalid/" + r);
+            if (fr != null)
+              feats.add("ahInvalid/" + fr);
+          } else {
             // • dependency path between a’s head and the predicate
             Path2 path = new Path2(p, ah, d, s);
             String pathS = path.getPath(NodeType.WORD, EdgeType.DEP);
-            feats.add("p1/" + pathS);
-
-            // • the set of dependency labels of the predicate’s children
-            feats.add("pd/" + depSet(s, d, p));
+            feats.add("p1/" + pathS + "/" + r);
+            if (fr != null)
+              feats.add("p1/" + pathS + "/" + fr);
 
             // • dependency path conjoined with the POS tag of a’s head
-            feats.add("p2/" + pathS + "/ah" + s.getPos(ah));
+            feats.add("p2/" + pathS + "/ah" + s.getPos(ah) + "/" + r);
+            if (fr != null)
+              feats.add("p2/" + pathS + "/ah" + s.getPos(ah) + "/" + fr);
 
             // • dependency path conjoined with the word cluster of a’s head
-            feats.add("p3/" + pathS + "/ahc" + ahc);
-
-            // • position of a with respect to the predicate (before, after, overlap or identical)
-            feats.add("dir/" + spanPosRel(Span.getSpan(p, p+1), a));
-
-            // • whether the subject of the predicate is missing (missingsubj)
-            String ms = missingSubj(s, d, p);
-            feats.add("ms1/" + ms);
+            feats.add("p3/" + pathS + "/ahc" + ahc + "/" + r);
+            if (fr != null)
+              feats.add("p3/" + pathS + "/ahc" + ahc + "/" + fr);
 
             // • missingsubj, conjoined with the dependency path
-            feats.add("ms2/" + ms + "/" + pathS);
+            feats.add("ms2/" + ms + "/" + pathS + "/" + r);
+            if (fr != null)
+              feats.add("ms2/" + ms + "/" + pathS + "/" + fr);
 
             // • missingsubj, conjoined with the dependency path from the verb dominating the predicate to a’s head
-            feats.add("ms3/" + ms + "/" + argHeadToVerbParent(s, d, ah));
-
-            // META: conjoin with feature
-            if (includeFrames) {
-              if (context.getFrame() != null) {
-                String f = context.getFrame().getName();
-                int n = feats.size();
-                for (int i = 0; i < n; i++)
-                  feats.set(i, feats.get(i) + "/f/" + f);
-              }
-            }
-
-            // META: conjoin with role
-            if (includeRoles) {
-              String role = context.getRoleS();
-              if (role != null) {
-                int n = feats.size();
-                for (int i = 0; i < n; i++)
-                  feats.set(i, feats.get(i) + "/r/" + role);
-              }
-            }
-
-            return feats;
+            String ahvp = argHeadToVerbParent(s, d, ah);
+            feats.add("ms3/" + ms + "/" + ahvp + "/" + r);
+            if (fr != null)
+              feats.add("ms3/" + ms + "/" + ahvp + "/" + fr);
           }
-        });
+        }
+
+        return feats;
       }
-    }
+    });
+
+    // http://www.mitpressjournals.org/doi/pdf/10.1162/COLI_a_00163
+    addTemplate("semafor/argId2", new Template() {
+      @Override
+      public Iterable<String> extract(TemplateContext context) {
+        List<String> fs = new ArrayList<>();
+        String f = context.getFrame().getName();
+        String r = context.getRoleS();
+        String fr = f + ":" + r;
+        Span a = context.getArg();
+        String overt = a == null || a == Span.nullSpan ? "nullSpan" : "overt";
+        Span t = context.getTarget();
+        int tHead = context.getTargetHead();
+        int aHead = context.getArgHead();
+        Sentence sent = context.getSentence();
+        ConstituencyParse cp = sent.getStanfordParse();
+        DependencyParse dp = sent.getBasicDeps();
+
+        /*
+        Features with both null and non-null variants: These features come in
+        two flavors: if the argument is null, then one version fires; if it is
+        overt (non-null), then another version fires.
+        */
+
+        // some word in t has lemma λ
+        for (int i = t.start; i < t.end; i++)
+          fs.add("t/" + overt + "/" + sent.getLemma(i) + "/" + fr);
+        // some word in t has POS π
+        for (int i = t.start; i < t.end; i++)
+          fs.add("t/" + overt + "/"+ sent.getPos(i) + "/" + fr);
+
+        //  some word in t has lemma λ, and the sentence uses PASSIVE voice
+        //  some word in t has lemma λ, and the sentence uses ACTIVE voice
+        String voice = voice(sent, tHead);
+        for (int i = t.start; i < t.end; i++)
+          fs.add("tv/" + overt + "/" + voice + "/" + sent.getLemma(i) + "/" + r);
+
+        //  the head of t has subcategorization sequence τ = τ1, τ2, ...
+        ConstituencyParse.Node tNode = cp.getConstituent(t);
+        fs.add("tcat/" + overt + "/" + tNode.getRule() + "/" + r);
+
+        //  some syntactic dependent of the head of t has dependency type τ
+        int[] tChildren = dp.getChildren(tHead);
+        for (int i = 0; i < tChildren.length; i++)
+          fs.add("tdep/" + overt + "/" + dp.getLabel(tChildren[i]) + "/" + r);
+
+        // the head of t has c syntactic dependents
+        fs.add("tdep#/" + overt + "/" + tChildren.length + "/" + fr);
+
+        // bias feature (always fires)
+        fs.add("bias/" + overt + "/" + fr);
+
+
+        // The rest of the features require an overt argument
+        if (a == null && a != Span.nullSpan)
+          return fs;
+
+        /*
+        Span content features: apply to overt argument candidates.
+         POS tag π occurs for some word in s
+        */
+        for (int i = a.start; i < a.end; i++)
+          fs.add("ap/" + sent.getPos(i));
+
+        /*  the head word of s has POS π */
+        fs.add("ahw/" + sent.getPos(aHead));
+
+        /*  the first word of s has POS π */
+        fs.add("afw/" + sent.getPos(aHead));
+
+        /* |s|, the number of words in the span */
+        fs.add("alw/" + a.width() + "/" + fr);
+
+        /*  the last word of s has POS π */
+        fs.add("alp/" + sent.getPos(a.end - 1));
+
+        /*  the first word of s has lemma λ */
+        fs.add("afl/" + sent.getWord(a.start));
+
+        /*  the head word of s has syntactic dependency type τ */
+        fs.add("ahd/" + dp.getLabel(aHead));
+
+        /* the first word of s: ws1 , and its POS tag πs1 ,
+        if πs1 is a closed-class POS */
+        if (closedClass(a.start, sent))
+          fs.add("af2/" + sent.getWord(a.start) + "/" + sent.getPos(a.start) + "/" + fr);
+
+        /* ws2 and its closed-class POS tag πs2 ,
+        provided that |s| ≥ 2 */
+        if (a.width() >= 2 && closedClass(a.start+1, sent))
+          fs.add("af3/" + sent.getWord(a.start+1) + "/" + sent.getPos(a.start+1) + "/" + fr);
+
+        /* the syntactic dependency type τs1 of the
+        first word with respect to its head */
+        fs.add("afd/" + dp.getLabel(a.start) + "/" + fr);
+
+        /*  the head word of s has lemma λ  τs2 , provided that |s| ≥ 2 */
+        fs.add("ahl/" + sent.getLemma(aHead));
+
+        /*  the last word of s: ws|s| has lemma λ  τs|s|, provided that |s| ≥ 3 */
+        if (a.width() >= 2)
+          fs.add("afd2/" + dp.getLabel(a.start+1) + "/" + fr);
+
+        /* ws|s|, and its closed-class POS tag πs|s|, provided that |s| ≥ 3 */
+        if (a.width() >= 3 && closedClass(a.end-1, sent))
+          fs.add("al2/" + sent.getWord(a.end-1) + "/" + sent.getPos(a.end-1) + "/" + fr);
+
+        /*  lemma λ is realized in some word in s */
+        for (int i = a.start; i < a.end; i++)
+          fs.add("abl/" + sent.getLemma(i) + "/" + r);
+
+        /*  lemma λ is realized in some word in s, the voice denoted in the span, */
+        for (int i = a.start; i < a.end; i++)
+          fs.add("ablv/" + voice + "/" + sent.getLemma(i) + "/" + r);
+
+        /* s’s position with respect to t (BEFORE, AFTER, or OVERLAPPING) */
+        String atPos = spanPosRel(t, a);
+        fs.add("apos/" + atPos + "/" + r);
+
+        /*  lemma λ is realized in some word in s, the voice denoted in the span (ACTIVE or PASSIVE) */
+        for (int i = a.start; i < a.end; i++)
+          fs.add("aposlv/" + voice + "/" + sent.getLemma(i) + "/" + atPos + "/" + r);
+
+        /*
+        Syntactic features: apply to overt argument candidates.
+         */
+        //  dependency path: sequence of labeled, directed edges from the head word of s to the head word of t
+        Path2 p = new Path2(tHead, aHead, dp, sent);
+        fs.add("path/" + p.getPath(NodeType.WORD, EdgeType.DEP));
+
+        //  length of the dependency path
+        fs.add("path#/" + p.getEntries().size());
+
+        /*
+        Span context POS features: for overt candidates, up to 6 of these features will be active.
+        */
+        //  a word with POS π occurs up to 3 words before the first word of s
+        //  a word with POS π occurs up to 3 words after the last word of s
+        for (int i = Math.max(0, a.start-3); i < a.start; i++)
+          fs.add("ctl/" + sent.getPos(i));
+        int stop = Math.min(sent.size(), a.end+3);
+        for (int i = a.end; i < stop; i++)
+          fs.add("ctr/" + sent.getPos(i));
+
+        /*
+        Ordering features: apply to overt argument candidates.
+         the position of s with respect to the span
+        of t: BEFORE, AFTER, or OVERLAPPING (i.e.
+        there is at least one word shared by s and t) */
+        fs.add("apos2/" + atPos + "/" + fr);
+
+        /*  target-argument crossing: there is at least
+        one word shared by s and t, at least one
+        word in s that is not in t, and at least one
+        word in t that is not in s */
+        fs.add("crs/" + a.crosses(t));
+
+        /*  linear word distance between the nearest
+        word of s and the nearest word of t,
+        provided s and t do not overlap */
+        if (t.end <= a.start)
+          fs.add("dist1/" + Math.min(20, a.start-t.end));
+        else if (a.end <= t.start)
+          fs.add("dist2/" + Math.min(20, t.start-a.end));
+        else
+          fs.add("dist3");
+
+        /*  linear word distance between the middle
+        word of s and the middle word of t,
+        provided s and t do not overlap
+        template addition */
+        int d = tHead - aHead;
+        if (d > 0)
+          fs.add("disth/" + Math.min(20, d));
+        else
+          fs.add("disth/" + Math.max(-20, d));
+
+        return fs;
+      }
+    });
 
 
     /* FRAME-TARGET FEATURES **************************************************/

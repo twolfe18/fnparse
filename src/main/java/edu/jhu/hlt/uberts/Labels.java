@@ -21,13 +21,60 @@ import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
  */
 public class Labels {
 
+  public static enum Y {
+    NO,
+    YES,
+    YES_NULL_SPAN,    // prediction=true and prediction is a nullSpan argument4
+  }
+
+  static final String NULL_SPAN = "0-0";
+
+  /**
+   * Returns true if given an argument4(t,f,0-0,k) fact and there is no fact
+   * argument4(t,*,s,k) such that s != 0-0 in the set of positive labels.
+   */
+  public boolean nullSpanAllowable(HypEdge arg4) {
+    if (!"argument4".equals(arg4.getRelation().getName()))
+      return false; // Not applicable
+
+    // check that s == 0-0
+    int tIdx = 0;
+    int sIdx = 2;
+    int kIdx = 3;
+    HypNode s = arg4.getTail(sIdx);
+    if (!NULL_SPAN.equals(s.getValue()))
+      return false; // Not applicable
+
+    HypNode t = arg4.getTail(tIdx);
+    HypNode k = arg4.getTail(kIdx);
+    Relation arg4Rel = u.getEdgeType("argument4");
+
+    Set<HashableHypEdge> posArg4Facts = edges2.get(arg4Rel);
+    if (posArg4Facts != null) {
+      for (HashableHypEdge a4 : posArg4Facts) {
+        HypNode tt = a4.getEdge().getTail(tIdx);
+        HypNode kk = a4.getEdge().getTail(kIdx);
+        if (t.equals(tt) && k.equals(kk)) {
+          // We have found an argument4(t,f,s,k) with a non-null-span value
+          assert !NULL_SPAN.equals(kk.getValue());
+          return false;
+        }
+      }
+    }
+
+//    System.out.println("gold null span: " + arg4);
+    return true;
+  }
+
+  private Uberts u;
   private Set<HashableHypEdge> edges;
   private Counts<String> relationCounts;
 
   // Stratify by relation
   private Map<Relation, Set<HashableHypEdge>> edges2;
 
-  public Labels() {
+  public Labels(Uberts u) {
+    this.u = u;
     edges = new HashSet<>();
     relationCounts = new Counts<>();
     edges2 = new HashMap<>();
@@ -54,7 +101,15 @@ public class Labels {
     return contains(new HashableHypEdge(e));
   }
   public boolean contains(HashableHypEdge e) {
-    return edges.contains(e);
+    return contains2(e) != Y.NO;
+  }
+  public Y contains2(HashableHypEdge e) {
+    boolean c = edges.contains(e);
+    if (c)
+      return Y.YES;
+    if (nullSpanAllowable(e.getEdge()))
+      return Y.YES_NULL_SPAN;
+    return Y.NO;
   }
 
   public void clear() {
@@ -137,30 +192,59 @@ public class Labels {
   public class Perf {
     Set<HashableHypEdge> seen = new HashSet<>();
     int tp = 0, fp = 0;
+
+    // split predictions by nullSpan vs realSpan, gold does not contain any nullSpan edges
+    int tpNullSpan = 0, fpNullSpan = 0;
+
     Counts<Relation> tpByRel, fpByRel;
+    Counts<Relation> tpByRelNS; // FPs for nullSpan are not counted against
 
     public Perf() {
       tpByRel = new Counts<>();
       fpByRel = new Counts<>();
+      tpByRelNS = new Counts<>();
     }
 
     /** returns true if this is a gold edge */
     public boolean add(HypEdge e) {
       // Ignore duplicates: P and R are measures on sets
       HashableHypEdge he = new HashableHypEdge(e);
-      if (contains(he)) {
-        if (seen.add(he)) {
-          tp++;
-          tpByRel.increment(e.getRelation());
-        }
-        return true;
-      } else {
+      Y y = contains2(he);
+      switch (y) {
+      case NO:
         if (seen.add(he)) {
           fp++;
           fpByRel.increment(e.getRelation());
         }
         return false;
+      case YES:
+        if (seen.add(he)) {
+          tp++;
+          tpByRel.increment(e.getRelation());
+        }
+        return true;
+      case YES_NULL_SPAN:
+        if (seen.add(he)) {
+          tpNullSpan++;
+          tpByRelNS.increment(e.getRelation());
+        }
+        return true;
+      default:
+        throw new RuntimeException("unknown Y: " + y);
       }
+//      if (contains(he)) {
+//        if (seen.add(he)) {
+//          tp++;
+//          tpByRel.increment(e.getRelation());
+//        }
+//        return true;
+//      } else {
+//        if (seen.add(he)) {
+//          fp++;
+//          fpByRel.increment(e.getRelation());
+//        }
+//        return false;
+//      }
     }
 
     public Map<String, FPR> perfByRel() {
@@ -168,9 +252,12 @@ public class Labels {
         return Collections.emptyMap();
       Map<String, FPR> m = new HashMap<>();
       for (Relation rel : edges2.keySet()) {
+
+        // Measure w.r.t. non-null-span prediction and gold edges
         int tp = tpByRel.getCount(rel);
         int fp = fpByRel.getCount(rel);
         int fn = edges2.get(rel).size() - tp;
+
         FPR perf = new FPR();
         perf.accum(tp, fp, fn);
         Object old = m.put(rel.getName(), perf);
@@ -182,56 +269,63 @@ public class Labels {
     public Map<Relation, FPR> perfByRel2() {
       if (edges.size() == 0)
         return Collections.emptyMap();
-      Map<Relation, FPR> m = new HashMap<>();
-      for (Relation rel : edges2.keySet()) {
-        int tp = tpByRel.getCount(rel);
-        int fp = fpByRel.getCount(rel);
-        int fn = edges2.get(rel).size() - tp;
-        FPR perf = new FPR();
-        perf.accum(tp, fp, fn);
-        Object old = m.put(rel, perf);
-        assert old == null;
-      }
-      return m;
+//      Map<Relation, FPR> m = new HashMap<>();
+//      for (Relation rel : edges2.keySet()) {
+//        int tp = tpByRel.getCount(rel);
+//        int fp = fpByRel.getCount(rel);
+//        int fn = edges2.get(rel).size() - tp;
+//        FPR perf = new FPR();
+//        perf.accum(tp, fp, fn);
+//        Object old = m.put(rel, perf);
+//        assert old == null;
+//      }
+//      return m;
+      throw new RuntimeException("update this");
     }
 
     public double precision() {
       if (tp + fp == 0)
         return 1;
-      return ((double) tp) / (tp + fp);
+      double p = ((double) tp) / (tp + fp);
+      assert p >= 0 && p <= 1;
+      return p;
     }
 
     public Map<String, Double> precisionByRel() {
       if (edges.size() == 0)
         return Collections.emptyMap();
-      Map<String, Double> m = new HashMap<>();
-      for (Relation rel : edges2.keySet()) {
-        int tp = tpByRel.getCount(rel);
-        int fp = fpByRel.getCount(rel);
-        double recall = ((double) tp) / (tp + fp);
-        Object old = m.put(rel.getName(), recall);
-        assert old == null;
-      }
-      return m;
+//      Map<String, Double> m = new HashMap<>();
+//      for (Relation rel : edges2.keySet()) {
+//        int tp = tpByRel.getCount(rel);
+//        int fp = fpByRel.getCount(rel);
+//        double recall = ((double) tp) / (tp + fp);
+//        Object old = m.put(rel.getName(), recall);
+//        assert old == null;
+//      }
+//      return m;
+      throw new RuntimeException("update this");
     }
 
     public double recall() {
       if (edges.size() == 0)
         return 1;
-      return ((double) tp) / edges.size();
+      double r = ((double) tp) / edges.size();
+      assert r >= 0 && r <= 1;
+      return r;
     }
 
     public Map<String, Double> recallByRel() {
       if (edges.size() == 0)
         return Collections.emptyMap();
-      Map<String, Double> m = new HashMap<>();
-      for (Relation rel : edges2.keySet()) {
-        int tp = tpByRel.getCount(rel);
-        double recall = ((double) tp) / edges2.get(rel).size();
-        Object old = m.put(rel.getName(), recall);
-        assert old == null;
-      }
-      return m;
+//      Map<String, Double> m = new HashMap<>();
+//      for (Relation rel : edges2.keySet()) {
+//        int tp = tpByRel.getCount(rel);
+//        double recall = ((double) tp) / edges2.get(rel).size();
+//        Object old = m.put(rel.getName(), recall);
+//        assert old == null;
+//      }
+//      return m;
+      throw new RuntimeException("update this");
     }
 
     public List<HypEdge> getFalseNegatives(Relation rel) {
