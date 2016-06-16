@@ -19,12 +19,21 @@ public class Relation {
 
   private String name;
   private NodeType[] domain;
+  private long hc;
 
   public Relation(String name, NodeType... domain) {
     this.name = name.intern();
     this.domain = domain;
     for (int i = 0; i < domain.length; i++)
       assert domain[i] != null;
+
+    StringBuilder desc = new StringBuilder();
+    desc.append(name);
+    for (int i = 0; i < domain.length; i++) {
+      desc.append('\t');
+      desc.append(domain[i].getName());
+    }
+    this.hc = Hash.sha256(desc.toString());
   }
 
   public String getName() {
@@ -136,6 +145,24 @@ public class Relation {
   @Override
   public String toString() {
     return "(Relation " + name + ")";
+  }
+
+  @Override
+  public int hashCode() {
+    return (int) hc;
+  }
+  public long hashCode64() {
+    return hc;
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof Relation) {
+      Relation r = (Relation) other;
+      return hc == r.hc && name.equals(r.name) &&
+          Arrays.asList(domain).equals(Arrays.asList(r.domain));
+    }
+    return false;
   }
 
   public static Comparator<Relation> BY_NAME = new Comparator<Relation>() {

@@ -26,12 +26,12 @@ import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.DecisionFunction;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
-import edu.jhu.hlt.uberts.factor.AtLeast1Local;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
@@ -153,8 +153,9 @@ public abstract class UbertsPipeline {
     String atl = config.getString("AtLeast1Local", "");
     if (!atl.isEmpty()) {
       Log.info("adding " + atl);
-      AtLeast1Local a = new AtLeast1Local(atl, u);
-      u.setPreAgendaAddMapper(a);
+//      AtLeast1Local a = new AtLeast1Local(atl, u);
+//      u.setPreAgendaAddMapper(a);
+      u.prependDecisionFunction(new DecisionFunction.AtLeastOne(atl, u));
     }
 
     Log.info("done");

@@ -24,6 +24,7 @@ import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.AgendaPriority;
+import edu.jhu.hlt.uberts.DecisionFunction;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.Labels.Perf;
@@ -209,8 +210,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
      *
      * When I do this, I set costFP=1 for all Relations.
      */
-    u.setMinScore("srl2", -3);
-    u.setMinScore("srl3", -3);
+//    u.setMinScore("srl2", -3);
+//    u.setMinScore("srl3", -3);
+    Relation srl2 = u.getEdgeType("srl2", true);
+    if (srl2 == null) {
+      Log.info("[main] no srl2 relation, assuming this is frame id");
+    } else {
+      u.prependDecisionFunction(new DecisionFunction.Constant(u.getEdgeType("srl2"), -3));
+      u.prependDecisionFunction(new DecisionFunction.Constant(u.getEdgeType("srl3"), -3));
+    }
 //    u.setMinScore("predicate2", Double.NEGATIVE_INFINITY);
 //    u.setMinScore("predicate2", -1);
 
@@ -232,21 +240,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // you're doing during training. Try to minimize it to keep train times down.
     int miniDevSize = config.getInt("miniDevSize", 300);
     int trainSegSize = config.getInt("trainSegSize", miniDevSize * 20);
-
-
-    if (config.getBoolean("speedDebug", false)) {
-      Uberts.DEBUG = 3;
-      UbertsPipeline.DEBUG = 3;
-      pipe.pOracleRollIn = 1;
-      Log.info("[main] speedDebug=true");
-      File f = train.get(0);
-      try (RelationFileIterator rels = new RelationFileIterator(f, false);
-          ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-        Iterator<RelDoc> itr = Iterators.limit(many, 1);
-        pipe.runInference(itr, "train-speedDebug");
-      }
-      return;
-    }
 
 
     /*

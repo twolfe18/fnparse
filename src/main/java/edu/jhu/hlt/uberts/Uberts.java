@@ -27,11 +27,9 @@ import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.hlt.uberts.auto.Trigger;
-import edu.jhu.hlt.uberts.factor.AtLeast1Local;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
-import edu.jhu.hlt.uberts.factor.PreAgendaAddMapper;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.rules.Env.Trie3;
@@ -62,7 +60,7 @@ public class Uberts {
   private State state;
   private Agenda agenda;
 
-  // TNode holds TransGen (which holds LocalFeatures) and GlobalFactors
+  // Index of Triggers which cause TransGens and GlobalFactors to fire.
   private Trie3 trie3;
 
   // All of these are co-indexed
@@ -74,20 +72,10 @@ public class Uberts {
   private GlobalFactor[] globalFactors;   // may contain nulls
   private int numTriggers;
 
-  // Usually the decision function is score > 0, this lets you use your own threshold.
-  // Assuming you have an intercept feature, this is only good for sweeping
-  // ROC curves without re-training.
-  // This was originally added for fixing the following issue: we know there
-  // will be a predicate2(t,f) fact for every event1(t) fact, but it could be
-  // the case that all predicate2(t,f) facts end up with a score below 0.
-  private Map<Relation, Double> minScoreForPredict = new HashMap<>();
-
-  // A set of mappers which are allowed to change the score of an edge before
-  // it gets added to the agenda.
-  // TODO For now we'll have just one, when another is needed, figure out if
-  // I should chain them together (composition) or do dispatch per-relation, or
-  // some other indexing strategy.
-  private PreAgendaAddMapper preAgendaAddMapper;
+  // When an edge is popped off the agenda, this is responsible for determining
+  // if the edge should be added to the state. The default implementation checks
+  // whether score(edge) > 0.
+  private DecisionFunction thresh = DecisionFunction.DEFAULT;
 
   // So you can ask for Relations by name and keep them unique
   private Map<String, Relation> relations;
@@ -113,9 +101,9 @@ public class Uberts {
   public IntArrayList statsAgendaSizePerStep = new IntArrayList();
 
 
+  // TODO Remove
   // Ancillary data for features which don't look at the State graph.
   // New data backend (used to be fnparse.Sentence and FNParse)
-  // TODO Update TemplateContext and everything in BasicFeatureTemplates.
   /** @deprecated Switch to a pure State/graph-based representation! */
   private edu.jhu.hlt.tutils.Document doc;
   /** @deprecated Switch to a pure State/graph-based representation! */
@@ -127,21 +115,9 @@ public class Uberts {
     this.doc = doc;
   }
 
-
-  public void setMinScore(String relationName, double minScore) {
-    setMinScore(getEdgeType(relationName, false), minScore);
-  }
-  public void setMinScore(Relation r, double minScore) {
-    minScoreForPredict.put(r, minScore);
-  }
-
-  /**
-   * e.g. {@link AtLeast1Local}
-   */
-  public void setPreAgendaAddMapper(PreAgendaAddMapper preAgendaAddMapper) {
-    Log.info("adding " + preAgendaAddMapper);
-    assert this.preAgendaAddMapper == null;
-    this.preAgendaAddMapper = preAgendaAddMapper;
+  public void prependDecisionFunction(DecisionFunction thresh) {
+    Log.info("[main] " + thresh);
+    this.thresh = new DecisionFunction.Cascade(thresh, this.thresh);
   }
 
   /**
@@ -251,8 +227,7 @@ public class Uberts {
 
       // Always record the action
       boolean hitLim = actionLimit > 0 && i >= actionLimit;
-      double thresh = minScoreForPredict.getOrDefault(ai.edge.getRelation(), 0d);
-      boolean pred = !hitLim && ai.score.forwards() > thresh;
+      boolean pred = thresh.decide(ai);
       steps.add(new Step(ai, y, pred));
 
       // But maybe don't add apply it (add it to state)
@@ -505,9 +480,8 @@ public class Uberts {
 
       // Take an action
       AgendaItem ai = agenda.popBoth2();
-      double thresh = minScoreForPredict.getOrDefault(ai.edge.getRelation(), 0d);
+      boolean yhat = thresh.decide(ai);
       boolean y = getLabel(ai.edge);
-      boolean yhat = ai.score.forwards() > thresh;
       if ((oracleRollIn && y) || (!oracleRollIn && yhat))
         addEdgeToState(ai);
     }
@@ -738,8 +712,9 @@ public class Uberts {
 
   public void clearAgenda() {
     agenda.clear();
-    if (preAgendaAddMapper != null)
-      preAgendaAddMapper.clear();
+//    if (preAgendaAddMapper != null)
+//      preAgendaAddMapper.clear();
+    thresh.clear();
   }
 
   public static String stripComment(String line) {
@@ -1010,8 +985,8 @@ public class Uberts {
       stats.increment("push/dup/state");
       stats.increment("push/dup/state/" + e.getRelation().getName());
     } else {
-      if (preAgendaAddMapper != null)
-        score = preAgendaAddMapper.map(hhe, score);
+//      if (preAgendaAddMapper != null)
+//        score = preAgendaAddMapper.map(hhe, score);
       agenda.add(hhe, score);
     }
   }
