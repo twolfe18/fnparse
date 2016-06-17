@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.data;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -14,7 +15,6 @@ import java.util.Map;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.LineIterator;
-import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
@@ -27,14 +27,20 @@ import edu.jhu.hlt.tutils.data.PropbankFrameIndex.PropbankFrame;
 /**
  * Reads frames from disk and provides access to them
  */
-public class FrameIndex implements FrameIndexInterface {
-  public static final Logger LOG = Logger.getLogger(FrameIndex.class);
+public class FrameIndex implements FrameIndexInterface, Serializable {
+  private static final long serialVersionUID = 9063336157775364000L;
+
   /**
    * Frame used to indicate that a word does not evoke a frame
    */
   public static final Frame nullFrame = Frame.nullFrame;
   public static final int framesInFrameNet = 1019;	// The number of frames in Framenet 1.5
   public static final int framesInPropbank = 9999;  // TODO
+
+  // Files where FrameIndexes are memoized to/from.
+  // These are the keys for ExperimentProperties.getFile(key)
+  public static final String JSER_FN_KEY = "data.framenet.memoizeFrameIndex";
+  public static final String JSER_PB_KEY = "data.propbank.memoizeFrameIndex";
 
   public static class FrameNetIterator implements Iterable<Frame>{
     // The reader that points to the frameindex file
@@ -194,9 +200,20 @@ public class FrameIndex implements FrameIndexInterface {
 
   public static FrameIndex getPropbank() {
     if (propbank == null) {
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      File memo = null;
+      if (config.containsKey(JSER_PB_KEY)) {
+        memo = config.getFile(JSER_PB_KEY);
+        if (memo.isFile()) {
+          Log.info("loading memoized frame index!");
+          Object fi = FileUtil.deserialize(memo);
+          propbank = (FrameIndex) fi;
+          return propbank;
+        }
+      }
+
       Log.info("[main] reading propbank frames");
 
-      ExperimentProperties config = ExperimentProperties.getInstance();
       boolean universalRoles = config.getBoolean("data.propbank.universalRoles", true);
 
       File dir = config.getExistingDir("data.propbank.frames");
@@ -225,6 +242,11 @@ public class FrameIndex implements FrameIndexInterface {
       }
       fi.checkFrameNotNull = false;
       propbank = fi;
+
+      if (memo != null) {
+        Log.info("writing frame index memo to " + memo.getPath());
+        FileUtil.serialize(propbank, memo);
+      }
     }
     return propbank;
   }
@@ -232,7 +254,19 @@ public class FrameIndex implements FrameIndexInterface {
   public static FrameIndex getFrameNet() {
     if(frameNet == null) {
 
-      LOG.info("reading framenet frames");
+      File memo = null;
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      if (config.containsKey(JSER_PB_KEY)) {
+        memo = config.getFile(JSER_PB_KEY);
+        if (memo.isFile()) {
+          Log.info("loading memoized frame index!");
+          Object fi = FileUtil.deserialize(memo);
+          frameNet = (FrameIndex) fi;
+          return frameNet;
+        }
+      }
+
+      Log.info("reading framenet frames");
       frameNet = new FrameIndex("framenet", framesInFrameNet);
       int idx = 0;
       for(Frame f: new FrameNetIterator()){
@@ -246,7 +280,7 @@ public class FrameIndex implements FrameIndexInterface {
       // Read in information about what the core roles are
       File fnDataDir = UsefulConstants.getDataPath();
       File coreFile = new File(fnDataDir, "core-roles.txt");
-      LOG.info("reading role core types from " + coreFile.getPath());
+      Log.info("reading role core types from " + coreFile.getPath());
       try (BufferedReader r = FileUtil.getReader(coreFile)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
           String[] toks = line.split("\\t");
@@ -257,14 +291,19 @@ public class FrameIndex implements FrameIndexInterface {
             throw new RuntimeException("couldn't find frame by name=" + fn);
           int k = Arrays.asList(f.getRoles()).indexOf(toks[1]);
           if (k < 0) {
-            LOG.warn("missing " + toks[1] + " role for " + toks[0] + "?");
+            Log.warn("missing " + toks[1] + " role for " + toks[0] + "?");
           } else {
             f.setRoleType(k, toks[2]);
           }
         }
-        LOG.info("done reading role core types");
+        Log.info("done reading role core types");
       } catch (IOException e) {
         throw new RuntimeException(e);
+      }
+
+      if (memo != null) {
+        Log.info("writing frame index memo to " + memo.getPath());
+        FileUtil.serialize(frameNet, memo);
       }
     }
     return frameNet;

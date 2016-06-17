@@ -312,38 +312,40 @@ public class Pred2ArgPaths {
         for (int i = 0; i < ci.length; i++)
           addNode(ci[i], d, args);
 
-        if (p == predicate) {
-          // Partial sub-trees are only relevant to the predicate's parent and higher
-          continue;
-        }
-
-        // Walk from the nearest left child leftwards
-        int nearestLC = 0;
-        for (int i = 1; i < ci.length; i++) {
-          if (ci[i] >= p)
-            break;
-          if (ci[i] > ci[nearestLC])
-            nearestLC = i;
-        }
-        for (int i = nearestLC; i >= 0; i--) {
-          if (offensive(ci[i], d, sent))
-            break;
-          args.add(Span.getSpan(ci[i], p));
-        }
-
-        // Walk from the nearest right child righwards
-        int nearestRC = 0;
-        for (int i = 0; i < ci.length; i++) {
-          if (ci[i] > p) {
-            nearestRC = i;
-            break;
-          }
-        }
-        for (int i = nearestRC; i < ci.length; i++) {
-          if (offensive(ci[i], d, sent))
-            break;
-          args.add(Span.getSpan(p+1, ci[i]+1));
-        }
+        // Their algorithm is very poorly explained, and as implemented doesn't
+        // seem to work. I think its good enough if we get arguments of the parent.
+//        if (p == predicate) {
+//          // Partial sub-trees are only relevant to the predicate's parent and higher
+//          continue;
+//        }
+//
+//        // Walk from the nearest left child leftwards
+//        int nearestLC = 0;
+//        for (int i = 1; i < ci.length; i++) {
+//          if (ci[i] >= p)
+//            break;
+//          if (ci[i] > ci[nearestLC])
+//            nearestLC = i;
+//        }
+//        for (int i = nearestLC; i >= 0; i--) {
+//          if (ci[i] == predicate || offensive(ci[i], d, sent))
+//            break;
+//          args.add(Span.getSpan(ci[i], p));
+//        }
+//
+//        // Walk from the nearest right child rightwards
+//        int nearestRC = 0;
+//        for (int i = 0; i < ci.length; i++) {
+//          if (ci[i] > p) {
+//            nearestRC = i;
+//            break;
+//          }
+//        }
+//        for (int i = nearestRC; i < ci.length; i++) {
+//          if (ci[i] == predicate || offensive(ci[i], d, sent))
+//            break;
+//          args.add(Span.getSpan(p+1, ci[i]+1));
+//        }
       }
 
       // Remove any duplicates
@@ -364,7 +366,7 @@ public class Pred2ArgPaths {
     }
     private static boolean offensive(int i, DependencyParse d, Sentence s) {
       String deprel = d.getLabel(i);
-      return !notOffensiveDeprels.contains(deprel);
+      return !notOffensiveDeprels.contains(deprel.toLowerCase());
     }
 
     private static void addNode(int i, DependencyParse d, List<Span> args) {
