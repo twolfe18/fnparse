@@ -35,7 +35,7 @@ import edu.jhu.prim.tuple.Pair;
  * NOTE: The way I've implemented this, you're going to need on instance per
  * {@link Sentence}.
  *
- * @param Y is the type this transistion system will predict/derive
+ * @param Lossless is the type this transistion system will predict/derive
  *
  * @param Z is an argument to the State type. It must be at least big enough to
  * store counts/label and know how to search. The reason the transition system

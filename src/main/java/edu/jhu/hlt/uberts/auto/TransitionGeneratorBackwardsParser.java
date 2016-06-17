@@ -42,6 +42,8 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
  * true. This is an approximation since there may be more than one way to derive
  * a fact.
  *
+ * @deprecated see {@link TypeInference}
+ *
  * @author travis
  */
 public class TransitionGeneratorBackwardsParser {

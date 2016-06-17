@@ -810,8 +810,10 @@ public class OldFeaturesWrapper {
     Span t = null, s = null;
     String f = null, k = null;
     ctx.clear();
-    if (DEBUG_CONTEXT_MESSAGE)
+    if (DEBUG_CONTEXT_MESSAGE) {
       ctx.debugMessage = "setup for " + yhat.toString();
+      ctx.debugEdge = yhat;
+    }
     ctx.setSentence(sentCache);
     if (customEdgeCtxSetup == null) {
       switch (yhat.getRelation().getName()) {
@@ -895,8 +897,11 @@ public class OldFeaturesWrapper {
     } else {
       customEdgeCtxSetup.accept(new Pair<>(yhat, x), ctx);
     }
-    if (f != null)
-      ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(f));
+    if (f != null) {
+//      ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(f));
+//      assert ctx.getFrame() != null;
+      ctx.setFrameStr(f);
+    }
     if (k != null)
       ctx.setRoleS(k);
 

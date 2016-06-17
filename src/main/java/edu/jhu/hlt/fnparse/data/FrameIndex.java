@@ -176,14 +176,19 @@ public class FrameIndex implements FrameIndexInterface {
     } else {
       // Frames now have the schema in the name, don't need to re-extract
 //      String fn = frameName.substring(s + 1);
+      Frame f = null;
       switch (frameName.substring(0, s)) {
       case "framenet":
-        return getFrameNet().nameToFrameMap.get(frameName);
+        f = getFrameNet().nameToFrameMap.get(frameName);
+        break;
       case "propbank":
-        return getPropbank().nameToFrameMap.get(frameName);
+        f = getPropbank().nameToFrameMap.get(frameName);
+        break;
       default:
         throw new RuntimeException("can't parse: " + frameName);
       }
+      assert f != null;
+      return f;
     }
   }
 

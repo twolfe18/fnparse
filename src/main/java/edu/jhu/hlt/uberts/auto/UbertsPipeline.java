@@ -27,6 +27,7 @@ import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.DecisionFunction;
+import edu.jhu.hlt.uberts.DecisionFunction.ByGroup.ByGroupMode;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
@@ -155,7 +156,7 @@ public abstract class UbertsPipeline {
       Log.info("adding " + atl);
 //      AtLeast1Local a = new AtLeast1Local(atl, u);
 //      u.setPreAgendaAddMapper(a);
-      u.prependDecisionFunction(new DecisionFunction.AtLeastOne(atl, u));
+      u.prependDecisionFunction(new DecisionFunction.ByGroup(ByGroupMode.AT_LEAST_ONE, atl, u));
     }
 
     Log.info("done");

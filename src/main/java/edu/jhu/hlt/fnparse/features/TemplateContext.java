@@ -5,6 +5,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.uberts.HypEdge;
 
 /**
  * All of the information needed for a template to make an extraction.
@@ -60,8 +61,10 @@ public class TemplateContext {
 
   // Common
   private Sentence sentence;
+  private String frameStr;
   private Frame frame;
   public String debugMessage;
+  public HypEdge debugEdge;
 
   // For frame id
   private Span target;
@@ -115,7 +118,9 @@ public class TemplateContext {
   public void clear() {
     sentence = null;
     debugMessage = null;
+    debugEdge = null;
     frame = null;
+    frameStr = null;
     target = null;
     targetHead = UNSET;
 //    role = UNSET;
@@ -146,6 +151,16 @@ public class TemplateContext {
   }
   public void setFrame(Frame frame) {
     this.frame = frame;
+  }
+  public void setFrameStr(String frame) {
+    this.frameStr = frame;
+  }
+  public String getFrameStr() {
+    if (frame != null) {
+      assert frameStr == null;
+      return frame.getName();
+    }
+    return frameStr;
   }
   public Span getTarget() {
     return target;

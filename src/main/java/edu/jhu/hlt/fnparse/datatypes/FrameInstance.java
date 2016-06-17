@@ -6,7 +6,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.tuple.Pair;
@@ -237,10 +239,36 @@ public class FrameInstance implements Serializable {
    * Returns what it was given.
    */
   public <T extends Collection<Span>> T getRealizedArgs(T addTo) {
-    for (int k = 0; k < arguments.length; k++)
+    for (int k = 0; k < arguments.length; k++) {
       if (arguments[k] != Span.nullSpan)
         addTo.add(arguments[k]);
+      if (argumentContinuations[k] != null)
+        for (Span s : argumentContinuations[k])
+          if (s != Span.nullSpan)
+            addTo.add(s);
+      if (argumentReferences[k] != null)
+        for (Span s : argumentReferences[k])
+          if (s != Span.nullSpan)
+            addTo.add(s);
+    }
     return addTo;
+  }
+
+  public Set<Pair<String, Span>> getRealizedRoleArgs() {
+    HashSet<Pair<String, Span>> args = new HashSet<>();
+    for (int k = 0; k < arguments.length; k++) {
+      if (arguments[k] != Span.nullSpan)
+        args.add(new Pair<>(frame.getRole(k), arguments[k]));
+      if (argumentContinuations[k] != null)
+        for (Span s : argumentContinuations[k])
+          if (s != Span.nullSpan)
+            args.add(new Pair<>("C-" + frame.getRole(k), s));
+      if (argumentReferences[k] != null)
+        for (Span s : argumentReferences[k])
+          if (s != Span.nullSpan)
+            args.add(new Pair<>("R-" + frame.getRole(k), s));
+    }
+    return args;
   }
 
   @Override

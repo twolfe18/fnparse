@@ -8,8 +8,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
@@ -23,12 +25,12 @@ import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * Implementation of the context locations described in section 3.1 of:
@@ -71,7 +73,8 @@ public class Pred2ArgPaths {
     }
 
     public void add(List<T> path) {
-      add(new LL<>(path));
+      if (!path.isEmpty())
+        add(new LL<>(path));
     }
     public void add(LL<T> path) {
       Trie<T> c = children.get(path.cur);
@@ -136,8 +139,12 @@ public class Pred2ArgPaths {
   // A set of paths from pred -> arg head
   private Trie<String> pred2argHead;
 
+  // First item is the role, e.g. ARG0, followed by the pred -> arg head path, similar to above
+  private Trie<String> role2pred2argHead;
+
   public Pred2ArgPaths() {
     pred2argHead = new Trie<>(null);
+    role2pred2argHead = new Trie<String>(null);
   }
 
   public void add(FNParse y, HeadFinder hf) {
@@ -148,7 +155,9 @@ public class Pred2ArgPaths {
     Sentence sent = fi.getSentence();
     DependencyParse deps = sent.getBasicDeps();
     int p = hf.head(fi.getTarget(), sent);
-    for (Span s : fi.getRealizedArgs(new ArrayList<>())) {
+    for (Pair<String, Span> rs : fi.getRealizedRoleArgs()) {
+      String role = rs.get1();
+      Span s = rs.get2();
       int a = hf.head(s, sent);
 
 //      System.out.println("[p2a] sent: " + sent.getId());
@@ -169,14 +178,20 @@ public class Pred2ArgPaths {
       System.out.println("[p2a] path: " + path.getEntries());
       System.out.println();
       pred2argHead.add(edges);
+      edges.add(0, role);
+      role2pred2argHead.add(edges);
     }
   }
 
-  /** writes out a TSV where the count comes before the path */
-  private void writePathsWithCounts(File out) throws IOException {
-    Log.info("writing to " + out.getPath());
+  /**
+   * Writes out a TSV where the count comes before the path.
+   * @param includeRole if true, pred->arg path counts will be stratified by role
+   */
+  private void writePathsWithCounts(File out, boolean includeRole) throws IOException {
+    Log.info("writing pred->arg counts to file=" + out.getPath() + " includeRole=" + includeRole);
     try (BufferedWriter w = FileUtil.getWriter(out)) {
-      pred2argHead.visit((count, edges) -> {
+      Trie<String> p = includeRole ? role2pred2argHead : pred2argHead;
+      p.visit((count, edges) -> {
         try {
           w.write(count + "\t");
           w.write(StringUtils.join("\t", edges));
@@ -191,7 +206,11 @@ public class Pred2ArgPaths {
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
     File out = config.getFile("output");
-    Log.info("writing to " + out.getPath());
+    Log.info("writing pred->arg counts to " + out.getPath());
+
+    File outByRole = config.getFile("output.byRole", null);
+    if (outByRole != null)
+      Log.info("writing pred->arg counts by role to " + outByRole.getPath());
 
     Pred2ArgPaths paths = new Pred2ArgPaths();
     HeadFinder hf = new DependencyHeadFinder();
@@ -207,13 +226,154 @@ public class Pred2ArgPaths {
       if (n >= target) {
         Log.info("added " + n + " paths");
         target *= 2;
-        paths.writePathsWithCounts(out);
+        paths.writePathsWithCounts(out, false);
+        if (outByRole != null)
+          paths.writePathsWithCounts(outByRole, true);
       }
     }
-    paths.writePathsWithCounts(out);
+    paths.writePathsWithCounts(out, false);
+    if (outByRole != null)
+      paths.writePathsWithCounts(outByRole, true);
     Log.info("done");
   }
 
+  /**
+   * Implements the argument candidate selection algorithm based on dependency
+   * trees described in section 6.3 of
+   *   Efficient Inference and Structured Learning for Semantic Role Labeling
+   *   Tackstrom, Ganchev, and Das (2015)
+   *   https://static.googleusercontent.com/media/research.google.com/en//pubs/archive/43251.pdf
+   *
+   * They claim to get R=88.2 and P=38.2 on Ontonotes 5 (Propbank, CoNLL 2012).
+   * They DO NOT use this method for Framenet, instead using the dependency-based
+   * method of Hermann et al. (2014), achieving R=72.6 and P=25.1.
+   */
+  public static class ArgCandidates {
+//    private Map<String, Trie<Path2.Edge>> role2path2arg;
+    /*
+      In our candidate argument extraction algorithm,
+      first, we select all the children subtrees of a given
+      predicate as potential arguments; if a child word
+      is connected via the conj (conjunction) or the prep
+      (preposition) label, we also select the corresponding
+      grand-children subtrees. Next, we climb up to the
+      predicate’s syntactic parent and add any partial subtrees
+      headed by it that could serve as constituents in
+      the corresponding phrase-structure tree. To capture
+      such constructions, we select partial subtrees for a
+      head word by first adding the head word, then adding
+      contiguous child subtrees from the head word’s rightmost
+      left child towards the leftmost left child until we
+      either reach the predicate word or an offensive dependency
+      label.11 This procedure is then symmetrically
+      applied to the head word’s right children. Once a partial
+      subtree has been added, we add the parent word’s
+      children subtrees — and potentially grand-children
+      subtrees in case of children labeled as conj or prep —
+      to the candidate list, akin to the first step. We apply
+      this parent operation recursively for all the ancestors
+      of the predicate. Finally, we consider the predicate’s
+      syntactic parent word as a candidate argument if the
+      predicate is connected to it via the amod label.
+     *
+      The candidates are further filtered to only keep
+      those where the role of the argument, conjoined with
+      the path from its head to the predicate, has been observed
+      in the training data. This algorithm obtains an
+      unlabeled argument recall of 88.2% on the OntoNotes
+      5.0 development data, with a precision of 38.2%.
+     */
+
+    /**
+     * Returns a uniq set of argument candidates for a predicate headed at the
+     * given position, not including Span.nullSpan.
+     */
+    public static List<Span> getArgCandidates(int predicate, Sentence sent) {
+      // Note: the bit about checking (role, pred->arg) can be enforced after
+      // the fact by some other hard LocalFactor for argument4
+      List<Span> args = new ArrayList<>();
+      DependencyParse d = sent.getBasicDeps();
+      for (int p = predicate; p >= 0; p = d.getHead(p)) {
+
+        int[] ci = d.getChildren(p);
+        Arrays.sort(ci);
+
+        for (int i = 0; i < ci.length; i++) {
+          String l = d.getLabel(ci[i]);
+          if ("conj".equals(l) || "prep".equals(l)) {
+            // Add grand-children
+            int[] gci = d.getChildren(ci[i]);
+            for (int j = 0; j < gci.length; j++)
+              addNode(gci[j], d, args);
+          }
+        }
+
+        // Add children
+        for (int i = 0; i < ci.length; i++)
+          addNode(ci[i], d, args);
+
+        if (p == predicate) {
+          // Partial sub-trees are only relevant to the predicate's parent and higher
+          continue;
+        }
+
+        // Walk from the nearest left child leftwards
+        int nearestLC = 0;
+        for (int i = 1; i < ci.length; i++) {
+          if (ci[i] >= p)
+            break;
+          if (ci[i] > ci[nearestLC])
+            nearestLC = i;
+        }
+        for (int i = nearestLC; i >= 0; i--) {
+          if (offensive(ci[i], d, sent))
+            break;
+          args.add(Span.getSpan(ci[i], p));
+        }
+
+        // Walk from the nearest right child righwards
+        int nearestRC = 0;
+        for (int i = 0; i < ci.length; i++) {
+          if (ci[i] > p) {
+            nearestRC = i;
+            break;
+          }
+        }
+        for (int i = nearestRC; i < ci.length; i++) {
+          if (offensive(ci[i], d, sent))
+            break;
+          args.add(Span.getSpan(p+1, ci[i]+1));
+        }
+      }
+
+      // Remove any duplicates
+      Set<Span> uniq = new HashSet<>(args);
+      args.clear();
+      args.addAll(uniq);
+
+      return args;
+    }
+
+    private static Set<String> notOffensiveDeprels;
+    static {
+      String s = "advmod, amod, appos, aux, auxpass, cc, conj, dep, det, mwe, neg, nn,"
+          + "npadvmod, num, number, poss, preconj, predet, prep, prt, ps, quantmod, tmod";
+      notOffensiveDeprels = new HashSet<>();
+      for (String d : s.split(","))
+        notOffensiveDeprels.add(d.trim());
+    }
+    private static boolean offensive(int i, DependencyParse d, Sentence s) {
+      String deprel = d.getLabel(i);
+      return !notOffensiveDeprels.contains(deprel);
+    }
+
+    private static void addNode(int i, DependencyParse d, List<Span> args) {
+      int s = d.getProjLeft(i);
+      int e = d.getProjRight(i) + 1;
+      args.add(Span.getSpan(s, e));
+    }
+
+  }
 
   /**
    * A {@link Template} which implements the feature described in the paper.

@@ -38,7 +38,7 @@ import edu.jhu.prim.tuple.Pair;
  * propagates known types to the new relations, adding NodeTypes and Relations
  * to Uberts as necessary. Handles Hobbs' prime notation fine.
  *
- * @see TransitionGeneratorBackwardsParser, which this replaces.
+ * {@see TransitionGeneratorBackwardsParser}, which this replaces.
  *
  * @author travis
  */

@@ -137,10 +137,13 @@ public class Uberts {
     goldEdges.add(e);;
   }
   public boolean getLabel(HypEdge e) {
-    return goldEdges.contains(e);
+    return goldEdges.getLabel(e);
   }
   public boolean getLabel(HashableHypEdge e) {
-    return goldEdges.contains(e);
+    return goldEdges.getLabel(e);
+  }
+  public boolean getLabel(AgendaItem ai) {
+    return goldEdges.getLabel(ai.getHashableEdge());
   }
   /**
    * Sets the set of gold edges to the empty set.
@@ -221,7 +224,7 @@ public class Uberts {
     for (int i = 0; agenda.size() > 0; i++) {// && (actionLimit <= 0 || i < actionLimit); i++) {
       statsAgendaSizePerStep.add(agenda.size());
       AgendaItem ai = agenda.popBoth2();
-      Boolean y = perf == null ? null : getLabel(ai.edge);
+      Boolean y = perf == null ? null : getLabel(ai);
       if (DEBUG > 1)
         System.out.println("[dbgRunInference] popped=" + ai);
 
@@ -266,7 +269,7 @@ public class Uberts {
       statsAgendaSizePerStep.add(agenda.size());
       AgendaItem ai = agenda.popBoth2();
       boolean yhat = ai.score.forwards() > 0;
-      boolean y = getLabel(ai.edge);
+      boolean y = getLabel(ai);
       if (y != yhat)
         return new Step(ai, y, yhat);
       if (yhat)
@@ -388,7 +391,7 @@ public class Uberts {
     {
       while (agenda.size() > 0) {
         AgendaItem ai = agenda.popBoth2();
-        boolean y = getLabel(ai.edge);
+        boolean y = getLabel(ai);
         boolean yhat = ai.score.forwards() > 0;
         if (DEBUG > 1)
           System.out.println("[dbgRunInference] popped=" + ai);
@@ -416,7 +419,7 @@ public class Uberts {
       while (agenda.size() > 0 && (t2 == null || t2.length < t1.length)) {
         statsAgendaSizePerStep.add(agenda.size());
         AgendaItem ai = agenda.popBoth2();
-        boolean y = getLabel(ai.edge);
+        boolean y = getLabel(ai);
         boolean yhat = ai.score.forwards() > 0;
         if (DEBUG > 1)
           System.out.println("[dbgRunInference] popped=" + ai);
@@ -475,13 +478,13 @@ public class Uberts {
       // Record possible actions
       List<LabledAgendaItem> a = new ArrayList<>();
       for (AgendaItem ai : agenda.getContentsInNoParticularOrder())
-        a.add(ai.withLabel(getLabel(ai.edge)));
+        a.add(ai.withLabel(getLabel(ai)));
       snaps.add(new AgendaSnapshot(a));
 
       // Take an action
       AgendaItem ai = agenda.popBoth2();
       boolean yhat = thresh.decide(ai);
-      boolean y = getLabel(ai.edge);
+      boolean y = getLabel(ai);
       if ((oracleRollIn && y) || (!oracleRollIn && yhat))
         addEdgeToState(ai);
     }

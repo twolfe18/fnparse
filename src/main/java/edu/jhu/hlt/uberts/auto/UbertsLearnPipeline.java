@@ -14,6 +14,7 @@ import java.util.function.Consumer;
 
 import com.google.common.collect.Iterators;
 
+import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -25,6 +26,7 @@ import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.AgendaPriority;
 import edu.jhu.hlt.uberts.DecisionFunction;
+import edu.jhu.hlt.uberts.DecisionFunction.ByGroup.ByGroupMode;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.Labels.Perf;
@@ -105,6 +107,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
+
+    // I'm tired of this popping up in an un-expected place, do it AOT.
+//    FrameIndex.getFrameNet();
+    FrameIndex.getPropbank();
 
     File grammarFile = config.getExistingFile("grammar");
     File relationDefs = config.getExistingFile("relations");
@@ -218,6 +224,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     } else {
       u.prependDecisionFunction(new DecisionFunction.Constant(u.getEdgeType("srl2"), -3));
       u.prependDecisionFunction(new DecisionFunction.Constant(u.getEdgeType("srl3"), -3));
+
+      u.prependDecisionFunction(new DecisionFunction.ByGroup(ByGroupMode.EXACTLY_ONE, "argument4(t,f,s,k):t:f:k", u));
     }
 //    u.setMinScore("predicate2", Double.NEGATIVE_INFINITY);
 //    u.setMinScore("predicate2", -1);
@@ -641,12 +649,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         Map<Relation, Double> cfp = getCostFP();
         if (verbose) {
           System.out.println("about to update against length=" + x.get2().size()
-                + " trajectory, costFP=" + cfp);
+                + " trajectory, costFP=" + cfp + " oracleRollIn=" + oracle);
         }
         for (Step s : x.get2()) {
+
           // NOTE: We are NOT using minScorePerRelation here since we only want
           // to move scores about 0, not the threshold.
           boolean pred = s.score.forwards() > 0;
+//          boolean pred = s.pred;
+
           if (s.gold && !pred) {
             if (verbose) System.out.println("FN: " + s);
             s.score.backwards(-lr);

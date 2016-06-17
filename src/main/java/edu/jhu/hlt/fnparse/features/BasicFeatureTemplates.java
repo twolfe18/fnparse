@@ -1539,10 +1539,14 @@ public class BasicFeatureTemplates {
         int p = context.getTargetHead();
         String r = context.getRoleS();
         String fr;
-        if (context.getFrame() == null)
+        if (context.getFrameStr() == null)
           fr = null;
         else
-          fr = context.getFrame().getName() + "-" + r;
+          fr = context.getFrameStr() + "-" + r;
+
+        if (context.debugEdge != null && "argument4".equals(context.debugEdge.getRelation().getName())) {
+          Log.info("check this: " + context.debugMessage);
+        }
 
         assert a != null : "only use this with args, use Span.nullSpan if needed";
         assert d != null;

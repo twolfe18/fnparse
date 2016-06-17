@@ -5,9 +5,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
@@ -26,6 +28,7 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntTrip;
@@ -69,6 +72,14 @@ public class FNParseToRelations {
   // If true, replace all <tokenIndex> <tokenIndex> pairs which represent spans
   // with a single <span>
   public boolean spansInsteadOfTokens = true;
+
+  // If true, then only extract possible arguments for known targets.
+  public boolean targetsGiven = true;
+
+  public boolean skipEmptySentences = true;
+
+  // Keep track of the quality of our argument span retrieval heuristic
+  private Map<DeterministicRolePruning.Mode, FPR> argHeuristic = new HashMap<>();
 
   public static String norm(String x) {
     x = x.trim();
@@ -291,39 +302,60 @@ public class FNParseToRelations {
     }
   }
 
-  private void writeArgs(FNParse y, BufferedWriter w) throws IOException {
-    DeterministicRolePruning drp = new DeterministicRolePruning(
-        Mode.XUE_PALMER_HERMANN, null, null);
-    List<FrameInstance> frameMentions = new ArrayList<>();
-    Set<Span> uniq = new HashSet<>();
+  private void writeArgs(String name, DeterministicRolePruning.Mode mode, FNParse y, BufferedWriter w) throws IOException {
+//  private void writeArgs(FNParse y, BufferedWriter w) throws IOException {
     Sentence sent = y.getSentence();
     Frame f = new Frame(0, "propbank/dummyframe", null, new String[] {"ARG0", "ARG1"});
-    for (int i = 0; i < sent.size(); i++) {
-      Span t = Span.getSpan(i, i+1);
-      frameMentions.add(FrameInstance.frameMention(f, t, sent));
-      uniq.add(t);
+
+    List<FrameInstance> frameMentions = new ArrayList<>();
+    Set<Span> uniq = new HashSet<>();
+    if (!targetsGiven) {
+      for (int i = 0; i < sent.size(); i++) {
+        Span t = Span.getSpan(i, i+1);
+        frameMentions.add(FrameInstance.frameMention(f, t, sent));
+        uniq.add(t);
+      }
     }
-    Set<Span> gold = new HashSet<>();
+    Set<Span> goldTargets = new HashSet<>();
     for (FrameInstance fi : y.getFrameInstances()) {
       Span t = fi.getTarget();
-      if (!uniq.contains(t) && gold.add(t))
+      if (goldTargets.add(t) && uniq.add(t))
         frameMentions.add(FrameInstance.frameMention(f, t, sent));
     }
     FNTagging argsFor = new FNTagging(sent, frameMentions);
+
+//    DeterministicRolePruning drp = new DeterministicRolePruning(
+//        Mode.XUE_PALMER_HERMANN, null, null);
+    DeterministicRolePruning drp = new DeterministicRolePruning(mode, null, null);
     FNParseSpanPruning args = drp.setupInference(Arrays.asList(argsFor), null).decodeAll().get(0);
+
+    Set<Span> predArgs = new HashSet<>();
     for (SpanPair ts : args.getAllArgs()) {
       Span t = ts.get1();
       Span s = ts.get2();
       if (t == Span.nullSpan || s == Span.nullSpan)
         continue;
+      predArgs.add(s);
       if (spansInsteadOfTokens)
-        w.write("x xue-palmer-args2 " + t.shortString() + " " + s.shortString());
+        w.write("x " + name + " " + t.shortString() + " " + s.shortString());
       else
-        w.write("x xue-palmer-args4 " + t.start + " " + t.end + " " + s.start + " " + s.end);
-      if (gold.contains(t))
+        w.write("x " + name + " " + t.start + " " + t.end + " " + s.start + " " + s.end);
+      if (goldTargets.contains(t))
         w.write(" # gold");
       w.newLine();
     }
+
+    Set<Span> goldArgs = new HashSet<>();
+    for (FrameInstance fi : y.getFrameInstances())
+      fi.getRealizedArgs(goldArgs);
+
+    FPR fpr = FPR.fromSets(goldArgs, predArgs);
+    FPR accum = argHeuristic.get(mode);
+    if (accum == null) {
+      accum = new FPR(false);
+      argHeuristic.put(mode, accum);
+    }
+    accum.accum(fpr);
   }
 
   public void write(FNParse y, BufferedWriter w) throws IOException {
@@ -336,7 +368,8 @@ public class FNParseToRelations {
     // arg-pruning
     if (outputArgPruning) {
       try {
-        writeArgs(y, w);
+        writeArgs("xue-palmer-args2", Mode.XUE_PALMER_HERMANN, y, w);
+        writeArgs("xue-palmer-deps-args2", Mode.XUE_PALMER_DEP_HERMANN, y, w);
       } catch (Exception e) {
         e.printStackTrace();
       }
@@ -425,10 +458,14 @@ public class FNParseToRelations {
     Iterable<FNParse> l = FeaturePrecomputation.getData(dataset, addParses);
 
     TimeMarker tm = new TimeMarker();
-    int docs = 0;
+    int docs = 0, empty = 0;
     try (BufferedWriter w = FileUtil.getWriter(outputVals)) {
       int done = 0;
       for (FNParse y : l) {
+        if (fn2r.skipEmptySentences && y.numFrameInstances() == 0) {
+          empty++;
+          continue;
+        }
         Sentence s = y.getSentence();
         s.lemmatize();
         Log.info("sentenceLength=" + s.size());
@@ -439,12 +476,12 @@ public class FNParseToRelations {
         done++;
         if (tm.enoughTimePassed(15)) {
           w.flush();
-          Log.info("wrote out " + done + " parses in "
+          Log.info("wrote out " + done + " parses (" + empty + " empty ones skipped) in "
               + tm.secondsSinceFirstMark()
-              + " seconds");
+              + " seconds, argRetrievalHeuristic: " + fn2r.argHeuristic);
         }
       }
     }
-    Log.info("done, wrote " + docs + " docs");
+    Log.info("done, wrote " + docs + " docs, skipped " + empty + " empty");
   }
 }

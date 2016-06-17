@@ -14,6 +14,11 @@ import edu.jhu.hlt.uberts.auto.Term;
  * Given an (edge, score) just popped off the agenda, decide whether this edge
  * should be kept and put on the State, or pruned.
  *
+ * TODO The way the interface is currently designed is for HARD constraints
+ * (which have no parameters in them). Change this so that decide() returns
+ * some Adjoints representing the justification (or parameters) which lead to
+ * saying yes or no to this edge. This way you can implement SOFT constraints.
+ *
  * @author travis
  */
 public interface DecisionFunction {
@@ -73,12 +78,21 @@ public interface DecisionFunction {
   }
 
   /**
+   * Super class for AtLeastOne, AtMostOne, ExactlyOne.
+   *
    * Only applies a fact-at-a-time.
    * Meaning that in enforcing "at least one Y per X",
    * Y is characterized as any fact of a given relation and
    * X is characterized as a list of arguments to Y.
    */
-  public static class AtLeastOne implements DecisionFunction {
+  public static class ByGroup implements DecisionFunction {
+
+    public static enum ByGroupMode {
+      AT_LEAST_ONE,
+      AT_MOST_ONE,
+      EXACTLY_ONE,
+    }
+
     // RHS of rule which this applies to
     private Relation relation;
 
@@ -91,10 +105,13 @@ public interface DecisionFunction {
     // E.g. for "at least one predicate2(t,f) per event1(t)", we might use
     private Set<List<Object>> observedKeys;
 
+    private ByGroupMode mode;
+
     /**
      * @param description should look like: <term>(:<varName>)+, e.g. "predicate2(t,f):t"
      */
-    public AtLeastOne(String description, Uberts u) {
+    public ByGroup(ByGroupMode mode, String description, Uberts u) {
+      this.mode = mode;
       this.observedKeys = new HashSet<>();
       String[] parts = description.split(":");
       assert parts.length >= 2;
@@ -112,7 +129,7 @@ public interface DecisionFunction {
       }
     }
 
-    public AtLeastOne(Relation relation, int[] keyArgs) {
+    public ByGroup(ByGroupMode mode, Relation relation, int[] keyArgs) {
       if (keyArgs.length >= relation.getNumArgs()) {
         throw new IllegalArgumentException("too many keys, can be no more than "
             + "n-1 where n is the number of args to the given Relation");
@@ -128,6 +145,7 @@ public interface DecisionFunction {
           + " must be uniq: " + Arrays.toString(keyArgs));
         }
       }
+      this.mode = mode;
       this.relation = relation;
       this.keyArgs = keyArgs;
       this.observedKeys = new HashSet<>();
@@ -159,6 +177,8 @@ public interface DecisionFunction {
 
     @Override
     public void clear() {
+      if ("argument4".equals(relation.getName()) && !observedKeys.isEmpty())
+        System.currentTimeMillis();
       observedKeys.clear();
     }
 
@@ -170,7 +190,19 @@ public interface DecisionFunction {
       List<Object> key = new ArrayList<>(keyArgs.length);
       for (int i = 0; i < keyArgs.length; i++)
         key.add(e.getTail(keyArgs[i]));
-      return observedKeys.add(key);
+      boolean newEdge = observedKeys.add(key);
+      switch (mode) {
+      case AT_LEAST_ONE:
+        return newEdge ? true : null;
+      case AT_MOST_ONE:
+        return !newEdge ? false : null;
+      case EXACTLY_ONE:
+        if ("argument4".equals(relation.getName()))
+          System.currentTimeMillis();
+        return newEdge;
+      default:
+        throw new RuntimeException("unknown mode:" + mode);
+      }
     }
   }
 

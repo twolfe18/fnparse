@@ -22,7 +22,10 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.features.Pred2ArgPaths;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.stages.IDecodable;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatum;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
@@ -235,9 +238,13 @@ public class DeterministicRolePruning implements Serializable {
                 parse.getConstituent(fi.getTarget());
             Set<Span> spanSet = new HashSet<>();
             if (pred == null) {
-              // TODO: single-token targets are gauranteed to be nodes in the
+              // Single-token targets are guaranteed to be nodes in the
               // tree, but multi-word targets often won't be.
-              // Solution: take the smallest node that dominates the entire target.
+              HeadFinder hf = new DependencyHeadFinder();
+              int h = hf.head(fi.getTarget(), input.getSentence());
+              pred = parse.getConstituent(Span.widthOne(h));
+            }
+            if (pred == null) {
               Log.warn("[" + mode + " decode] target is not a span! "
                   + Describe.span(fi.getTarget(), fi.getSentence()));
             } else {
@@ -289,8 +296,21 @@ public class DeterministicRolePruning implements Serializable {
             sent.setBasicDeps(dParser.apply(sent));
             //sent.setBasicDeps(parser.getBasicDParse(sent));
           }
-          possibleSpans = DependencyBasedXuePalmerRolePruning
-              .getMask(input, mode);
+
+//          possibleSpans = DependencyBasedXuePalmerRolePruning
+//              .getMask(input, mode);
+          assert mode == Mode.XUE_PALMER_DEP_HERMANN : "this is not really imlemented properly";
+          HeadFinder hf = new DependencyHeadFinder();
+          for (FrameInstance fi : input.getFrameInstances()) {
+            int predicate = hf.head(fi.getTarget(), sent);
+            List<Span> args = Pred2ArgPaths.ArgCandidates.getArgCandidates(predicate, sent);
+            args.add(Span.nullSpan);
+
+            FrameInstance key = FrameInstance.frameMention(
+                fi.getFrame(), fi.getTarget(), fi.getSentence());
+            possibleSpans.put(key, args);
+          }
+
         } else if (mode == Mode.DEPENDENCY_SPANS) {
           if (sent.getBasicDeps() == null)
             sent.setBasicDeps(dParser.apply(sent));
@@ -341,14 +361,29 @@ public class DeterministicRolePruning implements Serializable {
   private static void xuePalmerHelper(
       ConstituencyParse.Node node,
       Collection<Span> spans) {
-    spans.add(node.getSpan());
+
+//    spans.add(node.getSpan());
+
+    // Check for coordination
+    boolean coord = false;
     for (ConstituencyParse.Node sib : node.getSiblings()) {
-      spans.add(sib.getSpan());
-      if ("PP".equals(sib.getTag())) {
-        for (ConstituencyParse.Node niece : sib.getChildren())
-          spans.add(niece.getSpan());
+      if ("CC".equals(sib.getTag())) {
+        coord = true;
+        break;
       }
     }
+
+    if (!coord) {
+      for (ConstituencyParse.Node sib : node.getSiblings()) {
+        spans.add(sib.getSpan());
+        if ("PP".equals(sib.getTag())) {
+          for (ConstituencyParse.Node niece : sib.getChildren())
+            spans.add(niece.getSpan());
+        }
+      }
+    }
+
+    // Recurse up the tree
     if (node.getParent() != null)
       xuePalmerHelper(node.getParent(), spans);
   }

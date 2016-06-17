@@ -8,23 +8,33 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.log4j.Logger;
-
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 
+/**
+ * @deprecated I don't know what I was thinking when I wrote this code, but it
+ * seems like a buggy implementation of:
+ *   Dependency-based Semantic Role Labeling of PropBank
+ *   Richard Johansson and Pierre Nugues (2008)
+ *
+ * Having nothing in particular to do with xue-palmer.
+ *
+ * @author travis
+ */
 public class DependencyBasedXuePalmerRolePruning {
-  public static final Logger LOG =
-      Logger.getLogger(DependencyBasedXuePalmerRolePruning.class);
   public static boolean DEBUG = true;
 
   public static void xuePalmerHelper(
       int i,
       DependencyParse parse,
       Collection<Span> spans) {
+
+    assert false : "this code is known to be broken";
+
     spans.add(parse.getSpan(i));
     for (int sib : parse.getSiblings(i)) {
       // TODO
@@ -75,7 +85,7 @@ public class DependencyBasedXuePalmerRolePruning {
     for (FrameInstance fi : input.getFrameInstances()) {
       int i = fi.getTarget().end - 1;
       if (fi.getTarget().width() > 1) {
-        LOG.warn("[mode=" + mode + "] width="
+        Log.info("[mode=" + mode + "] WARNING width="
             + fi.getTarget().width()
             + " target="
             + Describe.span(fi.getTarget(), fi.getSentence()));
@@ -112,11 +122,11 @@ public class DependencyBasedXuePalmerRolePruning {
           if (s <= e) {
             spanSet.add(Span.getSpan(s, e + 1));
           } else {
-            LOG.warn("a predicate was the rightmost child of its parent?");
-            LOG.warn("predicates are usually heads, and heads are usually to "
+            Log.info("a predicate was the rightmost child of its parent?");
+            Log.info("predicates are usually heads, and heads are usually to "
                 + "the right in English...");
-            LOG.debug("3) target=" + fi.getTarget());
-            LOG.debug("3) parent=\n" + Describe.spanWithDeps(
+            Log.info("3) target=" + fi.getTarget());
+            Log.info("3) parent=\n" + Describe.spanWithDeps(
                 deps.getSpan(p), fi.getSentence(), true));
           }
         }
@@ -136,11 +146,9 @@ public class DependencyBasedXuePalmerRolePruning {
 
   /**
    * Returns a map where the keys are spans and the values are the index of
-   * the headword of that span.
+   * the head word of that span.
    */
   public static Map<Span, Integer> getAllSpansFromDeps(DependencyParse deps) {
-    if (DEBUG)
-      LOG.debug("[getAllSpansFromDeps]");
     Map<Span, Integer> spans = new HashMap<>();
     boolean[] seen = new boolean[deps.size()];
     for (int i = 0; i < deps.size(); i++) {
