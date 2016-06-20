@@ -256,8 +256,8 @@ public class FrameIndex implements FrameIndexInterface, Serializable {
 
       File memo = null;
       ExperimentProperties config = ExperimentProperties.getInstance();
-      if (config.containsKey(JSER_PB_KEY)) {
-        memo = config.getFile(JSER_PB_KEY);
+      if (config.containsKey(JSER_FN_KEY)) {
+        memo = config.getFile(JSER_FN_KEY);
         if (memo.isFile()) {
           Log.info("loading memoized frame index!");
           Object fi = FileUtil.deserialize(memo);
