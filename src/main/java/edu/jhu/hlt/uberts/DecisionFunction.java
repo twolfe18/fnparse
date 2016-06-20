@@ -22,6 +22,7 @@ import edu.jhu.hlt.uberts.auto.Term;
  * @author travis
  */
 public interface DecisionFunction {
+  public static int DEBUG = 1;
 
   public static final DecisionFunction DEFAULT = new Constant(0);
 
@@ -43,6 +44,14 @@ public interface DecisionFunction {
 
   /**
    * Takes the first DecisionFunction to fire.
+   *
+   * TODO This doesn't quite work. Say you have:
+   * 1) Exactly1 argument4(t,f,s,k) [t,s]
+   * 2) Exactly1 argument4(t,f,s,k) [t,k]
+   *
+   * If they are put in series, 1 will accept/reject facts without 2 ever seeing
+   * anything. If 1 let SOME but not ALL/NONE through, like AtLeast1, then 2 will
+   * get the wrong information.
    */
   public static class Cascade implements DecisionFunction {
     private DecisionFunction cur;
@@ -91,6 +100,31 @@ public interface DecisionFunction {
       AT_LEAST_ONE,
       AT_MOST_ONE,
       EXACTLY_ONE,
+    }
+
+    /**
+     * Must match <ByGroupMode>:<Term>(:<arg>)+
+     * e.g. "EXACTLY_ONE:argument4(t,f,s,k):t:k"
+     */
+    public static ByGroup parse(String description, Uberts u) {
+      String[] items = description.trim().split(":", 2);
+      if (items.length < 2)
+        throw new IllegalArgumentException("incorrect format: " + description);
+      ByGroupMode m = ByGroupMode.valueOf(items[0]);
+      return new ByGroup(m, items[1], u);
+    }
+
+    /**
+     * Accepts white-space-separated items which can be parsed by {@link
+     * ByGroup#parse(String)}. Composes them into a {@link Cascade}.
+     */
+    public static DecisionFunction parseMany(String description, Uberts u) {
+      String[] rules = description.split("\\s+");
+      int n = rules.length;
+      DecisionFunction df = parse(rules[n - 1], u);
+      for (int i = n-2; i >= 0; i--)
+        df = new Cascade(parse(rules[i], u), df);
+      return df;
     }
 
     // RHS of rule which this applies to
@@ -197,8 +231,8 @@ public interface DecisionFunction {
       case AT_MOST_ONE:
         return !newEdge ? false : null;
       case EXACTLY_ONE:
-        if ("argument4".equals(relation.getName()))
-          System.currentTimeMillis();
+        if (DEBUG > 0)
+          System.out.println("[Exactly1] first=" + newEdge + "\t" + e + "\t" + toString());
         return newEdge;
       default:
         throw new RuntimeException("unknown mode:" + mode);
@@ -226,7 +260,10 @@ public interface DecisionFunction {
     public Boolean decide(HypEdge e, Adjoints s) {
       if (relevant != null && e.getRelation() != relevant)
         return null;
-      return s.forwards() > threshold;
+      double f = s.forwards();
+      if (DEBUG > 0)
+        System.out.println("[Constant] keep=" + (f>threshold) + "\t" + e + "\t" + toString());
+      return f > threshold;
     }
     @Override
     public void clear() {
