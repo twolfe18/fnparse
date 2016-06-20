@@ -210,30 +210,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
-    /*
-     * We set the threshold during inference very low, but when we update,
-     * we check whether a score is above 0, lowering or raising it as need be.
-     *
-     * When I do this, I set costFP=1 for all Relations.
-     */
-//    u.setMinScore("srl2", -3);
-//    u.setMinScore("srl3", -3);
-    Relation srl2 = u.getEdgeType("srl2", true);
-    if (srl2 == null) {
-      Log.info("[main] no srl2 relation, assuming this is frame id");
-    } else {
-      u.prependDecisionFunction(new DecisionFunction.Constant(u.getEdgeType("srl2"), -3));
-      u.prependDecisionFunction(new DecisionFunction.Constant(u.getEdgeType("srl3"), -3));
-
-      u.prependDecisionFunction(new DecisionFunction.ByGroup(ByGroupMode.EXACTLY_ONE, "argument4(t,f,s,k):t:f:k", u));
-    }
-//    u.setMinScore("predicate2", Double.NEGATIVE_INFINITY);
-//    u.setMinScore("predicate2", -1);
-
-    // This is now a ExperimentProperties config string "AtLeast1Local" -> "predicate2(t,f):t"
-//    u.preAgendaAddMapper = new AtLeast1Local("predicate2(t,f):t", u);
-    if (!config.containsKey("AtLeast1Local"))
-      Log.info("WARNING: did you forget to set AtLeast1Local=\"predicate2(t,f):t\"");
 
     // Train and dev should be shuffled. Test doesn't need to be.
     List<File> train = config.getExistingFiles("train.facts");

@@ -49,7 +49,7 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public class Uberts {
-  public static int DEBUG = 1;
+  public static int DEBUG = 2;
 
   // Log things like when an edge is added to the state or a rule fires
   /* deprecated */
@@ -115,9 +115,9 @@ public class Uberts {
     this.doc = doc;
   }
 
-  public void prependDecisionFunction(DecisionFunction thresh) {
-    Log.info("[main] " + thresh);
-    this.thresh = new DecisionFunction.Cascade(thresh, this.thresh);
+  public void prependDecisionFunction(DecisionFunction df) {
+    Log.info("[main] " + df);
+    this.thresh = new DecisionFunction.Cascade(df, this.thresh);
   }
 
   /**

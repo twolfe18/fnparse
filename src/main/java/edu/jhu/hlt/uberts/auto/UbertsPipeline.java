@@ -149,14 +149,24 @@ public abstract class UbertsPipeline {
       throw new RuntimeException("update TransitionGenerator/TG code to TransGen");
     }
 
-    // TODO Support more than one AtLeast1Local factor
-    // each instance should look like: <term>(:<varName>)+, e.g. "predicate2(t,f):t"
-    String atl = config.getString("AtLeast1Local", "");
-    if (!atl.isEmpty()) {
-      Log.info("adding " + atl);
-//      AtLeast1Local a = new AtLeast1Local(atl, u);
-//      u.setPreAgendaAddMapper(a);
-      u.prependDecisionFunction(new DecisionFunction.ByGroup(ByGroupMode.AT_LEAST_ONE, atl, u));
+    // E.g. "EXACTLY_ONE:argument4(t,f,s,k):t:k"
+    String dfs = config.getString("byGroupDecoder", "");
+    if (!dfs.isEmpty()) {
+      DecisionFunction df = DecisionFunction.ByGroup.parseMany(dfs, u);
+      u.prependDecisionFunction(df);
+    }
+
+    // Thresholds for each each relation
+    // E.g. "srl2=-3 srl3=-3"
+    String rts = config.getString("threshold", "");
+    if (!rts.isEmpty()) {
+      for (String t : rts.split("\\s+")) {
+        String[] rt = t.split("=");
+        assert rt.length == 2;
+        Relation r = u.getEdgeType(rt[0]);
+        double thresh = Double.parseDouble(rt[1]);
+        u.prependDecisionFunction(new DecisionFunction.Constant(r, thresh));
+      }
     }
 
     Log.info("done");

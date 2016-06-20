@@ -47,37 +47,42 @@ public class Labels {
   }
 
   static final String NULL_SPAN = "0-0";
-  static final Object NIL = "NIL";
+  static final Object NIL = "NIL";  // TODO
 
-  public static int getNilArgPos(HypEdge e) {
-    int nilArgPos = -1;
+  /**
+   * Returns a bit mask (set) of tail/argument positions which are NIL
+   */
+  public static int getNilArgPosMask(HypEdge e) {
+    int nilArgPos = 0;
     int n = e.getNumTails();
+    assert n < 32;
     for (int i = 0; i < n; i++) {
 //      if (e.getTail(i).getValue() == NIL) {
       // TODO use NIL everywhere, maybe need first class Rule support
       if (NULL_SPAN.equals(e.getTail(i).getValue())) {
-        assert nilArgPos < 0 : "multiple NIL args? " + e;
-        nilArgPos = i;
+        nilArgPos |= 1<<i;
       }
     }
     return nilArgPos;
   }
 
   /**
-   * Presupposing this is a NIL valued fact, returns true if this rules out at
-   * least one other gold fact (assuming an AtMost1/Exactly1 factor is in play).
+   * Presupposing this is a NIL valued fact (in every position denoted by the
+   * bit mask nilArgPosMask), returns true if this rules out at least one other
+   * gold fact (assuming an AtMost1/Exactly1 factor is in play).
    *
    * This is implemented by finding some fact f which has the same relation as e
    * AND matches all of the bindings other than the NIL argument. If this fact
    * f can be found, then we return true (this NIL fact forces a FN).
    */
-  public boolean nilFN(HypEdge e, int nilArgPos) {
+  public boolean nilFN(HypEdge e, int nilArgPosMask) {
+    assert nilArgPosMask > 0;
     // Check all god facts which match every binding but NIL,
     // if we find one then that is a proof of a FN.
     Set<HashableHypEdge> related = edges2.get(e.getRelation());
     if (related != null)
       for (HashableHypEdge f : related)
-        if (bindingsMatch(f.getEdge(), e, nilArgPos))
+        if (bindingsMatch(f.getEdge(), e, nilArgPosMask))
           return true;
     return false;
   }
@@ -86,11 +91,12 @@ public class Labels {
    * Presupposing f and e are facts of the same type/relation, return true if
    * they have same arguments in every position except nilArgPos.
    */
-  public static boolean bindingsMatch(HypEdge f, HypEdge e, int nilArgPos) {
+  public static boolean bindingsMatch(HypEdge f, HypEdge e, int nilArgPosMask) {
     assert f.getRelation() == e.getRelation();
     int n = f.getNumTails();
+    assert n < 32;
     for (int i = 0; i < n; i++) {
-      if (i == nilArgPos)
+      if (((1<<i) & nilArgPosMask) != 0)
         continue;
       Object v1 = f.getTail(i).getValue();
       Object v2 = e.getTail(i).getValue();
@@ -187,10 +193,10 @@ public class Labels {
   }
 
   public Lossless lossless(HashableHypEdge e) {
-    int nilArgPos = getNilArgPos(e.getEdge());
-    if (nilArgPos < 0)
+    int nilArgPosMask = getNilArgPosMask(e.getEdge());
+    if (nilArgPosMask == 0)
       return edges.contains(e) ? Lossless.YES : Lossless.NO;
-    return nilFN(e.getEdge(), nilArgPos) ? Lossless.NO_NIL : Lossless.YES_NIL;
+    return nilFN(e.getEdge(), nilArgPosMask) ? Lossless.NO_NIL : Lossless.YES_NIL;
   }
 
   public void clear() {
