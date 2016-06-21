@@ -453,7 +453,7 @@ public class TNode {
 //    Log.info(traversal.boundVals);
     // NOTE: Both of these operations don't mutate the State, only Agenda
     if (tval.tg != null) {
-      if (Uberts.COARSE_EVENT_LOGGING || COARSE_DEBUG)
+      if (COARSE_DEBUG)
         System.out.println("state match: " + tval.r);
       for (Pair<HypEdge, Adjoints> p : tval.tg.generate(traversal))
         tval.u.addEdgeToAgenda(p);
