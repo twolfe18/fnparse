@@ -48,8 +48,15 @@ public class State {
       this.argPos = argPos;
       this.rel = rel;
       this.arg = arg;
-      this.hc = Hash.mix64(Hash.mix64(982451653, argPos),
-          Hash.mix64(Hash.hash(rel.getName()), arg.hashCode()));
+//      this.hc = Hash.mix64(Hash.mix64(982451653, argPos),
+//          Hash.mix64(Hash.hash(rel.getName()), arg.hashCode()));
+      this.hc =
+          Hash.mix64(
+              Hash.mix64(
+                  Hash.mix64(
+                      982451653, argPos),
+                  rel.hashCode64()),
+              arg.hashCode());
     }
     @Override
     public String toString() {
