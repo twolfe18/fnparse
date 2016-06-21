@@ -37,6 +37,19 @@ import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
  */
 public class Labels {
 
+  /**
+   * NIL facts are not needed and they make things more complex.
+   * The point was to have a dynamic score for "no fact applies" which can
+   * condition on everything in the fact but the NIL argument. There is nothing
+   * from letting you do this in the scoring function like:
+   *   theta * [ f(argument4(t,f,s,k)) - f(argument4(t,f,NIL,k) ]
+   * And use the decision function score(fact) > 0. This way you get the dynamic
+   * intercept features (second f term) but you don't need to handle NIL facts
+   * specially (they don't exist, except for in halucinations (backoff features)
+   * in the feature function).
+   */
+  public static boolean NO_NIL_FACTS = true;
+
   // NO means costly/lossy, YES means cost=0
   public static enum Lossless {
     NO,
@@ -53,6 +66,8 @@ public class Labels {
    * Returns a bit mask (set) of tail/argument positions which are NIL
    */
   public static int getNilArgPosMask(HypEdge e) {
+    if (NO_NIL_FACTS)
+      return 0;
     int nilArgPos = 0;
     int n = e.getNumTails();
     assert n < 32;
@@ -106,46 +121,7 @@ public class Labels {
     return true;
   }
 
-//  /**
-//   * TODO Remove, this is SRL-specific.
-//   *
-//   * Returns true if given an argument4(t,f,0-0,k) fact and there is no fact
-//   * argument4(t,*,s,k) such that s != 0-0 in the set of positive labels.
-//   */
-//  public boolean nullSpanAllowable(HypEdge arg4) {
-//    if (!"argument4".equals(arg4.getRelation().getName()))
-//      return false; // Not applicable
-//
-//    // check that s == 0-0
-//    int tIdx = 0;
-//    int sIdx = 2;
-//    int kIdx = 3;
-//    HypNode s = arg4.getTail(sIdx);
-//    if (!NULL_SPAN.equals(s.getValue()))
-//      return false; // Not applicable
-//
-//    HypNode t = arg4.getTail(tIdx);
-//    HypNode k = arg4.getTail(kIdx);
-//    Relation arg4Rel = u.getEdgeType("argument4");
-//
-//    Set<HashableHypEdge> posArg4Facts = edges2.get(arg4Rel);
-//    if (posArg4Facts != null) {
-//      for (HashableHypEdge a4 : posArg4Facts) {
-//        HypNode tt = a4.getEdge().getTail(tIdx);
-//        HypNode kk = a4.getEdge().getTail(kIdx);
-//        if (t.equals(tt) && k.equals(kk)) {
-//          // We have found an argument4(t,f,s,k) with a non-null-span value
-//          assert !NULL_SPAN.equals(kk.getValue());
-//          return false;
-//        }
-//      }
-//    }
-//
-////    System.out.println("gold null span: " + arg4);
-//    return true;
-//  }
-
-  private Uberts u;
+//  private Uberts u;
   private Set<HashableHypEdge> edges;
   private Counts<String> relationCounts;
 
@@ -153,7 +129,7 @@ public class Labels {
   private Map<Relation, Set<HashableHypEdge>> edges2;
 
   public Labels(Uberts u) {
-    this.u = u;
+//    this.u = u;
     edges = new HashSet<>();
     relationCounts = new Counts<>();
     edges2 = new HashMap<>();
@@ -229,6 +205,14 @@ public class Labels {
     List<Relation> r = new ArrayList<>(edges2.keySet());
     Collections.sort(r, Relation.BY_NAME);
     return r;
+  }
+
+  public List<HypEdge> getGoldEdges() {
+    List<HypEdge> all = new ArrayList<>();
+    for (HashableHypEdge hhe : edges)
+      all.add(hhe.getEdge());
+    Collections.sort(all, HypEdge.BY_RELATION_THEN_TAIL);
+    return all;
   }
 
   public static <T> Map<T, FPR> combinePerfByRel(Map<T, FPR> a, Map<T, FPR> b) {

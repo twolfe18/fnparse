@@ -306,11 +306,11 @@ public class OldFeaturesWrapper {
           //            .putString(fyxi.get2(), Charsets.UTF_8)
           //            .hash().asInt();
 
-          int f = hf.newHasher()
-              .putString(fyxi.get2(), Charsets.UTF_8)
-              .hash().asInt();
-          //        int f = Hash.hash(fyxi.get2());
-          //        int f = (int) Hash.sha256(fyxi.get2());
+//          int f = hf.newHasher()
+//              .putString(fyxi.get2(), Charsets.UTF_8)
+//              .hash().asInt();
+          int f = Hash.hash(fyxi.get2());
+//          int f = (int) Hash.sha256(fyxi.get2());
           features[i] = f * T + t;
         }
 

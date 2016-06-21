@@ -25,8 +25,6 @@ import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.AgendaPriority;
-import edu.jhu.hlt.uberts.DecisionFunction;
-import edu.jhu.hlt.uberts.DecisionFunction.ByGroup.ByGroupMode;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.Labels.Perf;
@@ -90,7 +88,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private List<Consumer<Double>> batch = new ArrayList<>();
   private int batchSize = 1;
   private boolean updateAccordingToPriority = false;
-  private double pOracleRollIn = 0;
+  private double pOracleRollIn = 1;
 
   private static boolean skipSrlFilterStages = false;
 
@@ -293,7 +291,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   public void completedObservation() {
     if (feFast3 == null) {
-      Log.warn("no feFast3 features!");
+      if (DEBUG > 1)
+        Log.warn("no feFast3 features!");
     } else {
       for (OldFeaturesWrapper.Ints3 w : feFast3)
         w.completedObservation();
@@ -565,6 +564,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 1)
       Log.info("starting on " + doc.getId());
 
+    int verbose = 0;
     switch (trainMethod) {
     case EARLY_UPDATE:
       timer.start("train/earlyUpdate");
@@ -617,13 +617,19 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case DAGGER1:
       timer.start("train/dagger1");
-      boolean verbose = false;
+      boolean stdOld = u.showTrajDiagnostics;
+      u.showTrajDiagnostics = verbose >= 2;
       int actionLimit = 0;
+      if (verbose >= 1) {
+        System.out.println();
+        for (HypEdge e : u.getLabels().getGoldEdges())
+          System.out.println("gold: " + e);
+      }
       boolean oracle = u.getRandom().nextDouble() < pOracleRollIn;
       Pair<Perf, List<Step>> x = u.dbgRunInference(oracle, actionLimit);
       batch.add(lr -> {
         Map<Relation, Double> cfp = getCostFP();
-        if (verbose) {
+        if (verbose >= 2) {
           System.out.println("about to update against length=" + x.get2().size()
                 + " trajectory, costFP=" + cfp + " oracleRollIn=" + oracle);
         }
@@ -631,23 +637,28 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
           // NOTE: We are NOT using minScorePerRelation here since we only want
           // to move scores about 0, not the threshold.
-          boolean pred = s.score.forwards() > 0;
-//          boolean pred = s.pred;
+//          boolean pred = s.score.forwards() > 0;
+          boolean pred = s.pred;
+          if (verbose >= 2 && s.pred != (s.score.forwards() > 0)) {
+            System.out.println("[DAGGER1] disagreement! step.pred=" + s.pred + " score=" + s.score.forwards());
+          }
+          boolean a4 = s.edge.getRelation().getName().equals("argument4");
 
           if (s.gold && !pred) {
-            if (verbose) System.out.println("FN: " + s);
+            if (verbose >= 1 && a4) System.out.println("FN: " + s);
             s.score.backwards(-lr);
           } else if (!s.gold && pred) {
-            if (verbose) System.out.println("FP: " + s);
+            if (verbose >= 1 && a4) System.out.println("FP: " + s);
             s.score.backwards(+lr * cfp.getOrDefault(s.edge.getRelation(), 1d));
-          } else if (verbose) {
+          } else if (verbose >= 1 && a4) {
             if (s.gold)
               System.out.println("TP: " + s);
-            else
+            else if (verbose >= 2)
               System.out.println("TN: " + s);
           }
         }
       });
+      u.showTrajDiagnostics = stdOld;
       timer.stop("train/dagger1");
       break;
     default:
@@ -661,6 +672,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       batch.clear();
       completedObservation();
       timer.stop("train/batchApply");
+      if (verbose >= 1)
+        System.out.println();
     }
   }
 

@@ -49,11 +49,7 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public class Uberts {
-  public static int DEBUG = 2;
-
-  // Log things like when an edge is added to the state or a rule fires
-  /* deprecated */
-  public static boolean COARSE_EVENT_LOGGING = false;
+  public static int DEBUG = 1;
 
   public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
 
@@ -75,7 +71,9 @@ public class Uberts {
   // When an edge is popped off the agenda, this is responsible for determining
   // if the edge should be added to the state. The default implementation checks
   // whether score(edge) > 0.
-  private DecisionFunction thresh = DecisionFunction.DEFAULT;
+  private DecisionFunction.Cascade thresh =
+      new DecisionFunction.Cascade(
+          new DecisionFunction.Unanimous(), DecisionFunction.DEFAULT);
 
   // So you can ask for Relations by name and keep them unique
   private Map<String, Relation> relations;
@@ -117,7 +115,8 @@ public class Uberts {
 
   public void prependDecisionFunction(DecisionFunction df) {
     Log.info("[main] " + df);
-    this.thresh = new DecisionFunction.Cascade(df, this.thresh);
+    DecisionFunction.Unanimous u = (DecisionFunction.Unanimous) thresh.getCur();
+    u.add(df);
   }
 
   /**
@@ -236,7 +235,8 @@ public class Uberts {
       // But maybe don't add apply it (add it to state)
       if (hitLim)
         continue;
-      if ((oracle && y) || (!oracle && pred)) {
+//      if ((oracle && y) || (!oracle && pred)) {
+      if ((oracle && y) || pred) {
         if (perf != null)
           perf.add(ai.edge);
         addEdgeToState(ai);
@@ -394,7 +394,7 @@ public class Uberts {
         boolean y = getLabel(ai);
         boolean yhat = ai.score.forwards() > 0;
         if (DEBUG > 1)
-          System.out.println("[dbgRunInference] popped=" + ai);
+          System.out.println("[maxViolationPerceptron] popped=" + ai);
 
         // Always record the action
         Step s = new Step(ai, y, yhat);
@@ -422,7 +422,7 @@ public class Uberts {
         boolean y = getLabel(ai);
         boolean yhat = ai.score.forwards() > 0;
         if (DEBUG > 1)
-          System.out.println("[dbgRunInference] popped=" + ai);
+          System.out.println("[maxViolationPerceptron] popped=" + ai);
 
         // Always record the action
         Step s = new Step(ai, y, yhat);
