@@ -34,6 +34,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.data.BrownClusters;
+import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.prim.tuple.Pair;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.ISynsetID;
@@ -1524,11 +1525,9 @@ public class BasicFeatureTemplates {
     addTemplate("semafor/predId/counts/nullClass", new Pred2ArgPaths.Feature(config, true, true));
 
     // Role id
-    // http://www.dipanjandas.com/files/acl2014frames.pdf
-    // table 1
-    // NOTE: This is not the same as (see below):
-    // http://www.mitpressjournals.org/doi/pdf/10.1162/COLI_a_00163
+    // http://www.dipanjandas.com/files/acl2014frames.pdf (table 1)
     addTemplate("semafor/argId", new Template() {
+      private boolean bo = true;  // bo = "backoff"
       @Override
       public Iterable<String> extract(TemplateContext context) {
         List<String> feats = new ArrayList<>();
@@ -1544,11 +1543,15 @@ public class BasicFeatureTemplates {
         else
           fr = context.getFrameStr() + "-" + r;
 
+        if (Labels.NO_NIL_FACTS && a == Span.nullSpan)
+          throw new RuntimeException("Labels.NO_NIL_FACTS=true and a nullSpan argument was just provided!");
+
         if (context.debugEdge != null && "argument4".equals(context.debugEdge.getRelation().getName())) {
           Log.info("check this: " + context.debugMessage);
         }
 
         assert a != null : "only use this with args, use Span.nullSpan if needed";
+        assert r != null : "why?";
         assert d != null;
 
         if (a == Span.nullSpan) {
@@ -1561,24 +1564,28 @@ public class BasicFeatureTemplates {
           Log.info("computing features: " + context.debugMessage);
 
         // • a bias feature
+        if (bo) feats.add("bias/NIL");
         feats.add("bias/" + r);
         if (fr != null)
           feats.add("bias/" + fr);
 
         // • voice of the predicate use
         String voice = voice(s, p);
+        if (bo) feats.add("v/" + voice + "/NIL");
         feats.add("v/" + voice  + "/" + r);
         if (fr != null)
           feats.add("v/" + voice + "/" + fr);
 
         // • the set of dependency labels of the predicate’s children
         String ds = depSet(s, d, p);
+        if (bo) feats.add("pd/" + ds + "/NIL");
         feats.add("pd/" + ds + "/" + r);
         if (fr != null)
           feats.add("pd/" + ds + "/" + fr);
 
         // • whether the subject of the predicate is missing (missingsubj)
         String ms = missingSubj(s, d, p);
+        if (bo) feats.add("ms1/" + ms + "/NIL");
         feats.add("ms1/" + ms + "/" + r);
         if (fr != null)
           feats.add("ms1/" + ms + "/" + fr);
@@ -1587,39 +1594,67 @@ public class BasicFeatureTemplates {
           boolean ahValid = ah >= 0 && ah < s.size();
 
           // • starting word of a
+          if (bo) {
+            feats.add("sw/NIL/" + r);
+            feats.add("sw/" + s.getWord(a.start) + "/NIL");
+          }
           feats.add("sw/" + s.getWord(a.start) + "/" + r);
           if (fr != null)
             feats.add("sw/" + s.getWord(a.start) + "/" + fr);
 
           // • POS of the starting word of a
+          if (bo) {
+            feats.add("sp/NIL/" + r);
+            feats.add("sp/" + s.getPos(a.start) + "/NIL");
+          }
           feats.add("sp/" + s.getPos(a.start) + "/" + r);
           if (fr != null)
             feats.add("sp/" + s.getPos(a.start) + "/" + fr);
 
           // • ending word of a
+          if (bo) {
+            feats.add("ew/NIL/" + r);
+            feats.add("ew/" + s.getWord(a.end - 1) + "/NIL");
+          }
           feats.add("ew/" + s.getWord(a.end - 1) + "/" + r);
           if (fr != null)
             feats.add("ew/" + s.getWord(a.end - 1) + "/" + fr);
 
           // • POS of the ending word of a
+          if (bo) {
+            feats.add("ep/NIL/" + r);
+            feats.add("ep/" + s.getPos(a.end - 1) + "/NIL");
+          }
           feats.add("ep/" + s.getPos(a.end - 1) + "/" + r);
           if (fr != null)
             feats.add("ep/" + s.getPos(a.end - 1) + "/" + fr);
 
           // • head word of a
           String hw = ahValid ? s.getWord(ah) : "NONE";
+          if (bo) {
+            feats.add("hw/NIL/" + r);
+            feats.add("hw/" + hw + "/NIL");
+          }
           feats.add("hw/" + hw + "/" + r);
           if (fr != null)
             feats.add("hw/" + hw + "/" + fr);
 
           // • POS of the head word of a
           String hp = ahValid ? s.getPos(ah) : "NONE";
+          if (bo) {
+            feats.add("hp/NIL/" + r);
+            feats.add("hp/" + hp + "/NIL");
+          }
           feats.add("hp/" + hp + "/" + r);
           if (fr != null)
             feats.add("hp/" + hp + "/" + fr);
 
           // • bag of words in a
           for (int i = a.start; i < a.end; i++) {
+            if (bo) {
+              feats.add("bw/NIL/" + r);
+              feats.add("bw/" + s.getWord(i) + "/NIL");
+            }
             feats.add("bw/" + s.getWord(i) + "/" + r);
             if (fr != null)
               feats.add("bw/" + s.getWord(i) + "/" + fr);
@@ -1627,6 +1662,10 @@ public class BasicFeatureTemplates {
 
           // • bag of POS tags in a
           for (int i = a.start; i < a.end; i++) {
+            if (bo) {
+              feats.add("bp/NIL/" + r);
+              feats.add("bp/" + s.getPos(i) + "/NIL");
+            }
             feats.add("bp/" + s.getPos(i) + "/" + r);
             if (fr != null)
               feats.add("bp/" + s.getPos(i) + "/" + fr);
@@ -1634,21 +1673,35 @@ public class BasicFeatureTemplates {
 
           // • word cluster of a’s head
           String ahc = ahValid ? bc256.getPath(s.getWord(ah)) : "NONE";
+          if (bo) {
+            feats.add("hc1/NIL/" + r);
+            feats.add("hc1/" + ahc + "/NIL");
+          }
           feats.add("hc1/" + ahc + "/" + r);
           if (fr != null)
             feats.add("hc1/" + ahc + "/" + fr);
 
           // • word cluster of a’s head conjoined with word cluster of the predicate∗
           String phc = bc256.getPath(s.getWord(p));
+          if (bo) {
+            feats.add("hc2/NIL/" + phc + "/" + r);
+            feats.add("hc2/" + ahc + "/" + phc + "/NIL");
+          }
           feats.add("hc2/" + ahc + "/" + phc + "/" + r);
 
           // • position of a with respect to the predicate (before, after, overlap or identical)
           String pr = spanPosRel(Span.getSpan(p, p+1), a);
+          if (bo) {
+            feats.add("dir/NIL/" + r);
+            feats.add("dir/" + pr + "/NIL");
+          }
           feats.add("dir/" + pr + "/" + r);
           if (fr != null)
             feats.add("dir/" + pr + "/" + fr);
 
           if (!ahValid) {
+            if (bo)
+              feats.add("ahInvalid/NIL");
             feats.add("ahInvalid/" + r);
             if (fr != null)
               feats.add("ahInvalid/" + fr);
@@ -1656,27 +1709,47 @@ public class BasicFeatureTemplates {
             // • dependency path between a’s head and the predicate
             Path2 path = new Path2(p, ah, d, s);
             String pathS = path.getPath(NodeType.WORD, EdgeType.DEP);
+            if (bo) {
+              feats.add("p1/NIL/" + r);
+              feats.add("p1/" + pathS + "/NIL");
+            }
             feats.add("p1/" + pathS + "/" + r);
             if (fr != null)
               feats.add("p1/" + pathS + "/" + fr);
 
             // • dependency path conjoined with the POS tag of a’s head
+            if (bo) {
+              feats.add("p2/NIL/ahNIL/" + r);
+              feats.add("p2/" + pathS + "/ah" + s.getPos(ah) + "/NIL");
+            }
             feats.add("p2/" + pathS + "/ah" + s.getPos(ah) + "/" + r);
             if (fr != null)
               feats.add("p2/" + pathS + "/ah" + s.getPos(ah) + "/" + fr);
 
             // • dependency path conjoined with the word cluster of a’s head
+            if (bo) {
+              feats.add("p3/NIL/ahcNIL/" + r);
+              feats.add("p3/" + pathS + "/ahc" + ahc + "/NIL");
+            }
             feats.add("p3/" + pathS + "/ahc" + ahc + "/" + r);
             if (fr != null)
               feats.add("p3/" + pathS + "/ahc" + ahc + "/" + fr);
 
             // • missingsubj, conjoined with the dependency path
+            if (bo) {
+              feats.add("ms2/" + ms + "/NIL/" + r);
+              feats.add("ms2/" + ms + "/" + pathS + "/NIL");
+            }
             feats.add("ms2/" + ms + "/" + pathS + "/" + r);
             if (fr != null)
               feats.add("ms2/" + ms + "/" + pathS + "/" + fr);
 
             // • missingsubj, conjoined with the dependency path from the verb dominating the predicate to a’s head
             String ahvp = argHeadToVerbParent(s, d, ah);
+            if (bo) {
+              feats.add("ms3/" + ms + "/NIL/" + r);
+              feats.add("ms3/" + ms + "/" + ahvp + "/NIL");
+            }
             feats.add("ms3/" + ms + "/" + ahvp + "/" + r);
             if (fr != null)
               feats.add("ms3/" + ms + "/" + ahvp + "/" + fr);
