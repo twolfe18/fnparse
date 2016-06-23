@@ -1010,6 +1010,7 @@ public class Uberts {
 
   /** returns its argument */
   public Relation addEdgeType(Relation r) {
+    Log.info(r.toString());
     Relation old = relations.put(r.getName(), r);
     if (old != null)
       throw new IllegalStateException("already existed: " + r);

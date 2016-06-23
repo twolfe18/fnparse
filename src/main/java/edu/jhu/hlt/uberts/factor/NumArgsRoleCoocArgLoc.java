@@ -14,6 +14,7 @@ import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
@@ -290,6 +291,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   }
 
   private Adjoints rescoreMutable(HypEdge e, Adjoints oldScore, Agenda a, HypEdge srl4Fact, HypNode t, Iterable<HypEdge> affected, LL<HypEdge> existing) {
+    oldScore = Adjoints.uncacheIfNeeded(oldScore);
     if (!(oldScore instanceof GlobalFactorAdjoints))
       oldScore = new GlobalFactorAdjoints(oldScore, globalToLocalScale);
     GlobalFactorAdjoints gs = (GlobalFactorAdjoints) oldScore;
@@ -339,10 +341,13 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     // Create new adjoints with local score
     GlobalFactorAdjoints gs;
     GlobalFactorAdjoints gsOld;
+    oldScore = Adjoints.uncacheIfNeeded(oldScore);
     if (oldScore instanceof GlobalFactorAdjoints) {
+      events.increment("rescoreImmutable/oldIsGlobal");
       gsOld = (GlobalFactorAdjoints) oldScore;
       gs = new GlobalFactorAdjoints(gsOld.getLocalScore(), globalToLocalScale);
     } else {
+      events.increment("rescoreImmutable/oldIsLocal");
       gsOld = null;
       gs = new GlobalFactorAdjoints(oldScore, globalToLocalScale);
     }
@@ -402,11 +407,6 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
     }
 
-    if (events.getTotalCount() > 75000) {
-      System.out.println("event counts: " + toString());
-      events.clear();
-    }
-
     return gs;
   }
 
@@ -423,6 +423,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     metaRescore(a, srl4Fact);
   }
 
+  private TimeMarker tm = new TimeMarker();
   private void metaRescore(Agenda a, HypEdge srl4Fact) {
     nRescore++;
     HypNode t = srl4Fact.getTail(aggregateArgPos);
@@ -450,6 +451,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       if (GF_DEBUG && new HashableHypEdge(e).hashCode() % 20 == 0) {
         System.out.println("[rescore] GF_DEBUG " + toString());
       }
+    }
+
+    if (tm.enoughTimePassed(15)) {
+      System.out.println("showing stats for: " + this.toString());
+      int k = 30;
+      System.out.println(k + " biggest weights: " + getBiggestWeights(k));
+      System.out.println("event counts: " + toString());
+      events.clear();
     }
 
     if (DEBUG > 0) {
@@ -626,13 +635,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     @Override
     public double forwards() {
       if (aFromTheta == null) {
-        int c = Math.min(6, numCommitted);
+        int cCoarse = Math.min(8, numCommitted);
+        int cFine = Math.min(24, numCommitted);
         int[] feats;
         if (featureNames != null) {
           int n = featureNames.size();
           feats = new int[] {
-              featureNames.lookupIndex(rel.getName() + ",numArgs=" + c),
-              featureNames.lookupIndex(rel.getName() + ",numArgs=" + c + ",refinement=" + frame),
+              featureNames.lookupIndex(rel.getName() + ",numArgsF=" + cFine),
+              featureNames.lookupIndex(rel.getName() + ",numArgsC=" + cCoarse + ",refinement=" + frame),
           };
           if (featureNames.size() > n && featureNames.size() % 1000 == 0) {
             Log.info("[memLeak] featureNames.size=" + featureNames.size());
@@ -641,8 +651,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
           int r = rel.hashCode();
           int f = frame.hashCode();
           feats = new int[] {
-              Hash.mix(r, c),
-              Hash.mix(r, c, f),
+              Hash.mix(42, r, cFine),
+              Hash.mix(9001, r, cCoarse, f),
           };
         }
         boolean reindex = true;

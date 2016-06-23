@@ -266,6 +266,38 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     u.add(i, c * -dErr_dForwards);
   }
 
+  public static String hexToString(int[] x, int maxCharsPerElem) {
+    StringBuilder sb = new StringBuilder();
+//    sb.append('[');
+    for (int i = 0; i < x.length; i++) {
+      if (i > 0) {
+//        sb.append(", ");
+        sb.append(',');
+      }
+      String s = Integer.toHexString(x[i]);
+      if (s.length() > maxCharsPerElem) {
+        // take low-order bits
+        s = s.substring(s.length() - maxCharsPerElem, s.length());
+      }
+      s = s.toUpperCase();
+      sb.append(s);
+    }
+//    sb.append(']');
+    return sb.toString();
+  }
+  public static String hexToString(List<ProductIndex> x, int maxCharsPerElem) {
+    int[] a = new int[x.size()];
+    for (int i = 0; i < a.length; i++)
+      a[i] = (int) x.get(i).getProdFeature();
+    return hexToString(a, maxCharsPerElem);
+  }
+  public static String hexToString(LL<ProductIndex> x, int maxCharsPerElem) {
+    List<ProductIndex> l = new ArrayList<>();
+    for (LL<ProductIndex> cur = x; cur != null; cur = cur.next)
+      l.add(cur.item);
+    return hexToString(l, maxCharsPerElem);
+  }
+
   /**
    * Reads from weights (not averaged weights). Backwards performs update to
    * weights and average, but you must still call
@@ -281,13 +313,14 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     @Override
     public String toString() {
       StringBuilder sb = new StringBuilder("(AvgPctW");
-      int limit = 400;
+      int limit = 80;
+      int maxCharsPerElem = 2;
       if (features != null)
-        sb.append("f=" + StringUtils.trunc(Arrays.toString(features), limit));
+        sb.append("f=" + StringUtils.trunc(hexToString(features, maxCharsPerElem), limit));
       if (features2 != null)
-        sb.append("f2=" + StringUtils.trunc(features2, limit));
+        sb.append("f2=" + StringUtils.trunc(hexToString(features2, maxCharsPerElem), limit));
       if (features3 != null)
-        sb.append("f3=" + StringUtils.trunc(features3, limit));
+        sb.append("f3=" + StringUtils.trunc(hexToString(features3, maxCharsPerElem), limit));
       sb.append(')');
       return sb.toString();
     }

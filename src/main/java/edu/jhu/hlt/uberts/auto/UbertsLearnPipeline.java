@@ -100,7 +100,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private NumArgsRoleCoocArgLoc numArgsArg4;
   private NumArgsRoleCoocArgLoc numArgsArg3;
   private NumArgsRoleCoocArgLoc numArgsArg2;
-  // These are not mutually exclusive, above are in below
+  // These fields are not mutually exclusive, above are in below
   private List<GlobalFactor> globalFactors = new ArrayList<>();
 
   // For now these store all performances for the last data segment
@@ -151,6 +151,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     predicate2Mutex = config.getBoolean("pred2Mutex", predicate2Mutex);
     Log.info("predicate2Mutex=" + predicate2Mutex);
 
+    // TODO add FRAMES as one of these global feature types, also add to ALL/FULL
+    // This is currently predicate2Mutex
     String gfm = config.getString("globalFeatMode");
     Log.info("[main] globalFeatMode=" + gfm);
     switch (gfm.toLowerCase()) {
@@ -334,6 +336,19 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] pOracleRollIn=" + pOracleRollIn);
     Log.info("[main] batchSize=" + batchSize);
 
+    if (srl2ByArg && enableGlobalFactors && !skipSrlFilterStages) {
+      // srl2(t,s) with mutexArg=s
+      Relation srl2 = u.getEdgeType("srl2", true);
+      if (srl2 == null) {
+        Log.warn("there is no srl2 relation, did you want skipSrlFilterStages=true? NOT ADDING GLOBAL FACTOR.");
+      } else {
+        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2, 1, -1, u);
+        a.storeExactFeatureIndices();
+        globalFactors.add(a);
+        u.addGlobalFactor(a.getTrigger2(), a);
+      }
+    }
+
     if (argument4ByArg && enableGlobalFactors) {
       // argument4(t,f,s,k) with mutexArg=s
       NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 2, 1, u);
@@ -342,12 +357,28 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       u.addGlobalFactor(a.getTrigger2(), a);
     }
 
-    if (srl2ByArg && enableGlobalFactors && !skipSrlFilterStages) {
-      // srl2(t,s) with mutexArg=s
-      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 1, -1, u);
-      a.storeExactFeatureIndices();
-      globalFactors.add(a);
-      u.addGlobalFactor(a.getTrigger2(), a);
+    if (enableGlobalFactors && !skipSrlFilterStages) {
+      Relation srl2 = u.getEdgeType("srl2", true);
+      if (srl2 == null) {
+        Log.warn("there is no srl2 relation, did you want skipSrlFilterStages=true? NOT ADDING GLOBAL FACTOR.");
+      } else {
+        numArgsArg2 = new NumArgsRoleCoocArgLoc(srl2, 0, -1, u);
+        numArgsArg2.storeExactFeatureIndices();
+        globalFactors.add(numArgsArg2);
+        u.addGlobalFactor(numArgsArg2.getTrigger2(), numArgsArg2);
+      }
+    }
+
+    if (enableGlobalFactors && !skipSrlFilterStages) {
+      Relation srl3 = u.getEdgeType("srl3", true);
+      if (srl3 == null) {
+        Log.warn("there is no srl3 relation, did you want skipSrlFilterStages=true? NOT ADDING GLOBAL FACTOR.");
+      } else {
+        numArgsArg3 = new NumArgsRoleCoocArgLoc(srl3, 0, -1, u);
+        numArgsArg3.storeExactFeatureIndices();
+        globalFactors.add(numArgsArg3);
+        u.addGlobalFactor(numArgsArg3.getTrigger2(), numArgsArg3);
+      }
     }
 
     if (enableGlobalFactors) {
@@ -355,20 +386,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       numArgsArg4.storeExactFeatureIndices();
       globalFactors.add(numArgsArg4);
       u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
-    }
-
-    if (enableGlobalFactors && !skipSrlFilterStages) {
-      numArgsArg3 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl3"), 0, -1, u);
-      numArgsArg3.storeExactFeatureIndices();
-      globalFactors.add(numArgsArg3);
-      u.addGlobalFactor(numArgsArg3.getTrigger2(), numArgsArg3);
-    }
-
-    if (enableGlobalFactors && !skipSrlFilterStages) {
-      numArgsArg2 = new NumArgsRoleCoocArgLoc(u.getEdgeType("srl2"), 0, -1, u);
-      numArgsArg2.storeExactFeatureIndices();
-      globalFactors.add(numArgsArg2);
-      u.addGlobalFactor(numArgsArg2.getTrigger2(), numArgsArg2);
     }
   }
 
@@ -453,7 +470,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Memory usage
     Log.info(Describe.memoryUsage());
 
-    if (DEBUG > 1) {
+    boolean verbose = true;
+    if (verbose || DEBUG > 1) {
       if (numArgsArg4 != null)
         Log.info("numArgsArg4 biggest weights: " + numArgsArg4.getBiggestWeights(10));
       if (numArgsArg3 != null)
