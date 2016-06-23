@@ -53,6 +53,15 @@ public class Uberts {
 
   public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
 
+  interface NewStateEdgeListener {
+    void addedToState(HashableHypEdge e);
+  }
+  private List<NewStateEdgeListener> newStateEdgeListeners = new ArrayList<>();
+  public void addNewStateEdgeListener(NewStateEdgeListener l) {
+    Log.info("[main] adding " + l);
+    newStateEdgeListeners.add(l);
+  }
+
   private State state;
   private Agenda agenda;
 
@@ -939,6 +948,11 @@ public class Uberts {
     }
     assert nodesContains(e);
     state.add(e, score);
+
+    HashableHypEdge he = new HashableHypEdge(e);
+    for (NewStateEdgeListener l : newStateEdgeListeners)
+      l.addedToState(he);
+
     trie3.match(state, e, m -> {
       Trigger t = m.getTrigger();
       int ti = t.getIndex();

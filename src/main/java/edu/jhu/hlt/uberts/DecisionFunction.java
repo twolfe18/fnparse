@@ -11,6 +11,8 @@ import java.util.Set;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
+import edu.jhu.hlt.uberts.Uberts.NewStateEdgeListener;
 import edu.jhu.hlt.uberts.auto.Term;
 
 /**
@@ -171,7 +173,7 @@ public interface DecisionFunction {
    * decide(e2, ...), then e1 was actually added to the state... which isn't
    * really true.
    */
-  public static class ByGroup implements DecisionFunction {
+  public static class ByGroup implements DecisionFunction, NewStateEdgeListener {
 
     public static enum ByGroupMode {
       AT_LEAST_ONE,
@@ -237,6 +239,8 @@ public interface DecisionFunction {
               + parts[i+1] + " in term " + t);
         }
       }
+
+      u.addNewStateEdgeListener(this);
     }
 
     public ByGroup(ByGroupMode mode, Relation relation, int[] keyArgs) {
@@ -313,12 +317,14 @@ public interface DecisionFunction {
       // AT_MOST_ONE on e2 => not new, return false
       // This is actually probably not a problem since nothing is going to come
       // in between popping e1 and e2 which might change the score of e2...
-      boolean newEdge = observedKeys.add(key);
+//      boolean newEdge = observedKeys.add(key);
+      boolean newEdge = !observedKeys.contains(key);
 
       switch (mode) {
       case AT_LEAST_ONE:
         return newEdge ? true : null;
       case AT_MOST_ONE:
+//        Log.info(mode + "  " + (newEdge ? "NEW" : "OLD") + "  key=" + key + " edge=" + e);
         return !newEdge ? false : null;
       case EXACTLY_ONE:
         if (DEBUG > 1)
@@ -327,6 +333,20 @@ public interface DecisionFunction {
       default:
         throw new RuntimeException("unknown mode:" + mode);
       }
+    }
+
+    @Override
+    public void addedToState(HashableHypEdge he) {
+      HypEdge e = he.getEdge();
+      if (e.getRelation() != relation)
+        return;  // Doesn't apply
+
+      List<Object> key = new ArrayList<>(keyArgs.length);
+      for (int i = 0; i < keyArgs.length; i++)
+        key.add(e.getTail(keyArgs[i]));
+      boolean newEdge = observedKeys.add(key);
+
+//      Log.info(mode + "  " + (newEdge ? "NEW" : "OLD") + "  key=" + key + " edge=" + e);
     }
   }
 

@@ -262,6 +262,7 @@ public class Labels {
   /** You add predicted edges to this and it tracks precision, recall, F1 */
   public class Perf {
     Set<HashableHypEdge> seen = new HashSet<>();
+    public List<HypEdge> tpInstances = new ArrayList<>();
 
     // You only need to keep track of non-NIL facts.
     // Gold facts are always non-NIL and we don't want to evaluate against
@@ -296,6 +297,7 @@ public class Labels {
       case YES:
         tp++;
         tpByRel.increment(e.getRelation());
+        tpInstances.add(e);
         break;
       default:
         // We can ignore NIL-facts (pruning actions)

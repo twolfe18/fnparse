@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -59,6 +60,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   static boolean performTest = false;
+
+  // Useful when you use oracle features and test out various hard constraints
+  // which may not allow you to get 100% recall.
+  static boolean showDevFN = false;
 
   static String[] oracleFeats = new String[] {};
   static boolean graphFeats = false;
@@ -202,8 +207,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     int passes = config.getInt("passes", 10);
     Log.info("[main] passes=" + passes);
 
+    String ap = config.getString("agendaPriority");
     BiFunction<HypEdge, Adjoints, Double> agendaPriority =
-        AgendaPriority.parse(config.getString("agendaPriority", "1*easyFirst + 1*dfs"));
+        AgendaPriority.parse(ap);
+    Log.info("[main] agendaPriority=" + ap.replaceAll("\\s+", "_"));
 
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
@@ -485,17 +492,29 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       timer.stop("inf/" + mode);
       perfByRel.add(p.get1().perfByRel());
 
-      if (DEBUG > 0) {// && perfByRel.size() % 50 == 0) {
-        if (DEBUG > 1) {
-          // Steps
-          for (Step s : p.get2())
-            System.out.println("step: " + s);
 
-          // False negatives
-          List<HypEdge> srl3FNs = p.get1().getFalseNegatives(u.getEdgeType("srl3"));
-          for (HypEdge e : srl3FNs)
-            System.out.println("prediction FN: " + e);
-        }
+      if (showDevFN && mode == Mode.DEV) {
+
+        // Steps
+        System.out.println();
+        for (Step s : p.get2())
+          System.out.println("step: " + s);
+
+        // True positives
+        Collections.sort(p.get1().tpInstances, HypEdge.BY_RELATION_THEN_TAIL);
+        System.out.println();
+        for (HypEdge e : p.get1().tpInstances)
+          System.out.println("prediction TP: " + e);
+
+        // False Negatives
+//        List<HypEdge> srl3FNs = p.get1().getFalseNegatives(u.getEdgeType("srl3"));
+        List<HypEdge> srl3FNs = p.get1().getFalseNegatives();
+        System.out.println();
+        for (HypEdge e : srl3FNs)
+          System.out.println("prediction FN: " + e);
+      }
+
+      if (DEBUG > 0) {// && perfByRel.size() % 50 == 0) {
 
         // Show some stats about this example
         System.out.println("trajLength=" + p.get2().size());
