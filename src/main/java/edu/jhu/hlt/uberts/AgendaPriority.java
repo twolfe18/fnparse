@@ -26,10 +26,16 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     WeightedSum w = new WeightedSum();
     for (int i = 0; i < toks.length; i++) {
       String[] wp = toks[i].trim().split("\\*");
-      assert wp.length == 2;
-      double weight = Double.parseDouble(wp[0].trim());
-      AgendaPriority p = byName(wp[1].trim());
-      w.add(p, weight);
+      if (wp.length == 1) {
+        assert toks.length == 1 : "assuming weight=1 only works if there are no other terms! " + description;
+        AgendaPriority p = byName(wp[0].trim());
+        w.add(p, 1);
+      } else {
+        assert wp.length == 2;
+        double weight = Double.parseDouble(wp[0].trim());
+        AgendaPriority p = byName(wp[1].trim());
+        w.add(p, weight);
+      }
     }
     return w;
   }
