@@ -841,8 +841,10 @@ public class OldFeaturesWrapper {
         Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(yhat);
         t = s3.t;
         s = s3.s; // may be null if srl3(t,f,k)
-        ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(s3.f));
-        ctx.setRoleS(s3.k);
+//        ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(s3.f));
+//        ctx.setRoleS(s3.k);
+        f = s3.f;
+        k = s3.k;
         break;
       case "srl4":
         t = UbertsPipeline.getTargetFromSrl4(yhat);

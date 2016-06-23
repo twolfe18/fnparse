@@ -8,7 +8,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
@@ -340,13 +339,10 @@ public interface DecisionFunction {
       HypEdge e = he.getEdge();
       if (e.getRelation() != relation)
         return;  // Doesn't apply
-
       List<Object> key = new ArrayList<>(keyArgs.length);
       for (int i = 0; i < keyArgs.length; i++)
         key.add(e.getTail(keyArgs[i]));
-      boolean newEdge = observedKeys.add(key);
-
-//      Log.info(mode + "  " + (newEdge ? "NEW" : "OLD") + "  key=" + key + " edge=" + e);
+      observedKeys.add(key);
     }
   }
 
