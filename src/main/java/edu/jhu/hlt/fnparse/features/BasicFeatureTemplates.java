@@ -26,7 +26,6 @@ import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateSS;
-import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -106,50 +105,53 @@ public class BasicFeatureTemplates {
   }
 
   public static String spanPosRel(Span s1, Span s2) {
-//    return posRel(s1.start, s2.start)
-//        + "-" + posRel(s1.end, s2.end)
-//        + "-" + posRel(s1.start, s2.end)
-//        + "-" + posRel(s1.end, s2.start);
     return posRel(s1.start, s2.start)
-        + posRel(s1.end, s2.end)
-        + posRel(s1.start, s2.end)
-        + posRel(s1.end, s2.start);
+        + posRel(s1.end-1, s2.end-1)
+        + posRel(s1.start, s2.end-1)
+        + posRel(s1.end-1, s2.start);
   }
 
   public static String posRel(int i, int j) {
-    if (i+1 == j) return "B";
-    if (j+1 == i) return "A";
+    if (i+1 == j) return "b";
+    if (i+2 == j) return "B";
+    if (j+1 == i) return "a";
+    if (j+2 == i) return "A";
     if (i < j) return "L";
-    if (j > i) return "R";
+    if (i > j) return "R";
     return "E";
   }
 
-  private static ProductIndex[] sprMemo = new ProductIndex[5 * 5 * 5 * 5];
+  private static ProductIndex PI_b = new ProductIndex(0, 7);
+  private static ProductIndex PI_B = new ProductIndex(1, 7);
+  private static ProductIndex PI_a = new ProductIndex(2, 7);
+  private static ProductIndex PI_A = new ProductIndex(3, 7);
+  private static ProductIndex PI_L = new ProductIndex(4, 7);
+  private static ProductIndex PI_R = new ProductIndex(5, 7);
+  private static ProductIndex PI_E = new ProductIndex(6, 7);
+  public static ProductIndex posRel2(int i, int j) {
+    if (i+1 == j) return PI_b;
+    if (i+2 == j) return PI_B;
+    if (j+1 == i) return PI_a;
+    if (j+2 == i) return PI_A;
+    if (i < j) return PI_L;
+    if (i > j) return PI_R;
+    return PI_E;
+  }
+
+  private static ProductIndex[] sprMemo = new ProductIndex[7 * 7 * 7 * 7];
   static {
     for (int i = 0; i < sprMemo.length; i++)
       sprMemo[i] = new ProductIndex(i, sprMemo.length);
   }
   public static ProductIndex spanPosRel2(Span s1, Span s2) {
     long f = 0;
-    f = f * 5 + posRel2(s1.start, s2.start).getFeature();
-    f = f * 5 + posRel2(s1.end, s2.end).getFeature();
-    f = f * 5 + posRel2(s1.start, s2.end).getFeature();
-    f = f * 5 + posRel2(s1.end, s2.start).getFeature();
+    f = f * 7 + posRel2(s1.start, s2.start).getFeature();
+    f = f * 7 + posRel2(s1.end-1, s2.end-1).getFeature();
+    f = f * 7 + posRel2(s1.start, s2.end-1).getFeature();
+    f = f * 7 + posRel2(s1.end-1, s2.start).getFeature();
     return sprMemo[(int) f];
   }
 
-  private static ProductIndex PI_B = new ProductIndex(0, 5);
-  private static ProductIndex PI_A = new ProductIndex(1, 5);
-  private static ProductIndex PI_L = new ProductIndex(2, 5);
-  private static ProductIndex PI_R = new ProductIndex(3, 5);
-  private static ProductIndex PI_E = new ProductIndex(4, 5);
-  public static ProductIndex posRel2(int i, int j) {
-    if (i+1 == j) return PI_B;
-    if (j+1 == i) return PI_A;
-    if (i < j) return PI_L;
-    if (j > i) return PI_R;
-    return PI_E;
-  }
 
   private static int bound(int i, int width) {
     assert width >= 0;
