@@ -13,6 +13,7 @@ import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleVector;
+import edu.jhu.util.Alphabet;
 
 /**
  * See http://www.ciml.info/dl/v0_8/ciml-v0_8-ch03.pdf
@@ -192,19 +193,19 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   }
 
   @Override
-  public Adjoints score(List<ProductIndex> features, boolean convertToIntArray) {
+  public Adj score(List<ProductIndex> features, boolean convertToIntArray) {
     return this.new Adj(features, convertToIntArray);
   }
 
   /** converts to int[] */
-  public Adjoints score2(List<Integer> features, boolean reindex) {
+  public Adj score2(List<Integer> features, boolean reindex) {
     int[] a = new int[features.size()];
     for (int i = 0; i < a.length; i++)
       a[i] = features.get(i);
     return score(a, reindex);
   }
 
-  public Adjoints score(int[] features, boolean reindex) {
+  public Adj score(int[] features, boolean reindex) {
     return this.new Adj(features, reindex);
   }
 
@@ -310,17 +311,47 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     private List<ProductIndex> features2;
     private LL<ProductIndex> features3;
 
+    // For showing feature names if you know them
+    public Alphabet<?> dbgAlphabet;
+
+    private String show(int[] features) {
+      if (dbgAlphabet != null) {
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        for (int i = 0; i < features.length; i++) {
+          if (i > 0)
+            sb.append(", ");
+          sb.append(dbgAlphabet.lookupObject(features[i]));
+        }
+        sb.append(']');
+        return sb.toString();
+      }
+      int limit = 80;
+      int maxCharsPerElem = 2;
+      return StringUtils.trunc(hexToString(features, maxCharsPerElem), limit);
+    }
+    public String show(List<ProductIndex> features) {
+      // TODO
+      int limit = 80;
+      int maxCharsPerElem = 2;
+      return StringUtils.trunc(hexToString(features, maxCharsPerElem), limit);
+    }
+    public String show(LL<ProductIndex> features) {
+      // TODO
+      int limit = 80;
+      int maxCharsPerElem = 2;
+      return StringUtils.trunc(hexToString(features, maxCharsPerElem), limit);
+    }
+
     @Override
     public String toString() {
       StringBuilder sb = new StringBuilder("(AvgPctW");
-      int limit = 80;
-      int maxCharsPerElem = 2;
       if (features != null)
-        sb.append("f=" + StringUtils.trunc(hexToString(features, maxCharsPerElem), limit));
+        sb.append("f=" + show(features));
       if (features2 != null)
-        sb.append("f2=" + StringUtils.trunc(hexToString(features2, maxCharsPerElem), limit));
+        sb.append("f2=" + show(features2));
       if (features3 != null)
-        sb.append("f3=" + StringUtils.trunc(hexToString(features3, maxCharsPerElem), limit));
+        sb.append("f3=" + show(features3));
       sb.append(')');
       return sb.toString();
     }

@@ -156,6 +156,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     String gfm = config.getString("globalFeatMode");
     Log.info("[main] globalFeatMode=" + gfm);
     switch (gfm.toLowerCase()) {
+    case "debug":
+      enableGlobalFactors = true;
+      NumArgsRoleCoocArgLoc.numArgs = false;
+      NumArgsRoleCoocArgLoc.argLocPairwise = false;
+      NumArgsRoleCoocArgLoc.argLocGlobal = true;
+      NumArgsRoleCoocArgLoc.roleCooc = false;
+      break;
     case "none":
     case "off":
       enableGlobalFactors = false;
