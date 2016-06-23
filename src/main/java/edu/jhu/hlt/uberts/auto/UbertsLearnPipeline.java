@@ -67,7 +67,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   static String[] oracleFeats = new String[] {};
   static boolean graphFeats = false;
-  static boolean templateFeats = false;
+  static boolean templateFeats = true;
   static boolean pipeline = false;
   static TrainMethod trainMethod = TrainMethod.DAGGER1;
 
@@ -142,13 +142,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] argument4ByArg=" + argument4ByArg);
 
     oracleFeats = config.getStrings("oracleFeats", oracleFeats);
-    graphFeats = config.getBoolean("graphFeats", false);
-    templateFeats = config.getBoolean("templateFeats", true);
+    graphFeats = config.getBoolean("graphFeats", graphFeats);
+    templateFeats = config.getBoolean("templateFeats", templateFeats);
 
     trainMethod = TrainMethod.valueOf(config.getString("trainMethod", trainMethod.toString()));
     Log.info("[main] trainMethod=" + trainMethod);
 
-    predicate2Mutex = config.getBoolean("pred2Mutex", true);
+    predicate2Mutex = config.getBoolean("pred2Mutex", predicate2Mutex);
     Log.info("predicate2Mutex=" + predicate2Mutex);
 
     String gfm = config.getString("globalFeatMode");

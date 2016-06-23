@@ -399,6 +399,7 @@ public class Env {
       lhsCovered.set(nextLhsTermIdx, false);
     }
 
+    private static boolean warnedOnce = false;
     /**
      * Returns the index of a LHS term which is not yet covered.
      * Rank based on (in order):
@@ -407,7 +408,11 @@ public class Env {
      * 3) order of appearance as the rule was given (leftmost terms come first)
      */
     private int chooseNextArgPos(Trigger t, BitSet lhsCovered) {
-      Log.warn("TODO write optimized implementation!");
+      if (!warnedOnce) {
+        Log.warn("TODO write optimized implementation!");
+        warnedOnce = true;
+      }
+
       // Just choose the first for now
       int n = t.length();
       for (int i = 0; i < n; i++) {

@@ -8,6 +8,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
@@ -163,6 +164,12 @@ public interface DecisionFunction {
   /**
    * Super class for AtLeastOne, AtMostOne, ExactlyOne.
    *
+   * ONLY use this class when there is an "easyFirst" term in your {@link AgendaPriority}.
+   * These don't really have the declarative meaning that they appear to have,
+   * but rather an imperative one along the lines of "take the first one" (for
+   * EXACTLY_ONE for example). If you don't include an easyFirst term, then the
+   * first is not guaranteed to be the best.
+   *
    * Only applies a fact-at-a-time.
    * Meaning that in enforcing "at least one Y per X",
    * Y is characterized as any fact of a given relation and
@@ -238,6 +245,12 @@ public interface DecisionFunction {
               + parts[i+1] + " in term " + t);
         }
       }
+
+      // Try to verify that there is an easyFirst term in the agendaPriority.
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      assert config.getString("agendaPriority").toLowerCase().contains("easyfirst")
+          && !config.getBoolean("ignoreByGroupErrMsg", false)
+          : "You must include an easyFirst term in agendaPriority to at least break ties if you want to use this class";
 
       u.addNewStateEdgeListener(this);
     }
