@@ -122,6 +122,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     performTest = config.getBoolean("performTest", performTest);
     Log.info("[main] performTest=" + performTest);
 
+    showDevFN = config.getBoolean("showDevFN", showDevFN);
+
     skipSrlFilterStages = config.getBoolean("skipSrlFilterStages", skipSrlFilterStages);
     Log.info("[main] skipSrlFilterStages=" + skipSrlFilterStages);
 
