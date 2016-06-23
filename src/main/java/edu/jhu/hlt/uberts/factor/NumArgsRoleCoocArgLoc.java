@@ -556,7 +556,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         double w1 = Math.abs(o1.get2());
         double w2 = Math.abs(o2.get2());
         if (w1 > w2) return -1;
-        if (w2 < w2) return +1;
+        if (w1 < w2) return +1;
         return 0;
       }
     });
