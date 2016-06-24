@@ -157,9 +157,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     switch (gfm.toLowerCase()) {
     case "debug":
       allowableGlobals.frameCooc = false;
-      allowableGlobals.numArgs = false;
-      allowableGlobals.argLocPairwise = false;
-      allowableGlobals.argLocGlobal = false;
+      allowableGlobals.numArgs = true;
+      allowableGlobals.argLocPairwise = true;
+      allowableGlobals.argLocGlobal = true;
       allowableGlobals.roleCooc = false;
       allowableGlobals.argLocRoleCooc = true;
       break;
@@ -622,7 +622,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 1)
       Log.info("starting on " + doc.getId());
 
-    int verbose = 1;
+    int verbose = 0;
     switch (trainMethod) {
     case EARLY_UPDATE:
       timer.start("train/earlyUpdate");
@@ -703,12 +703,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           boolean a4 = s.edge.getRelation().getName().equals("argument4");
 
           if (s.gold && !pred) {
-            if (verbose >= 1 && a4) System.out.println("FN: " + s);
+            if ((verbose >= 1 && a4) || verbose >= 2) System.out.println("FN: " + s);
             s.score.backwards(-lr);
           } else if (!s.gold && pred) {
-            if (verbose >= 1 && a4) System.out.println("FP: " + s);
+            if ((verbose >= 1 && a4) || verbose >= 2) System.out.println("FP: " + s);
             s.score.backwards(+lr * cfp.getOrDefault(s.edge.getRelation(), 1d));
-          } else if (verbose >= 1 && a4) {
+          } else if ((verbose >= 1 && a4) || verbose >= 2) {
             if (s.gold)
               System.out.println("TP: " + s);
             else if (verbose >= 2)

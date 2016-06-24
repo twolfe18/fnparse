@@ -110,7 +110,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       if (roleCooc) sb.append(" +roleCooc");
       if (frameCooc) sb.append(" +frameCooc");
       if (argLocRoleCooc) sb.append(" +argLocRoleCooc");
-      return sb.toString();
+      return sb.toString().trim();
     }
   }
   private Params params;
