@@ -37,6 +37,7 @@ import edu.jhu.hlt.uberts.Uberts.Traj;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
+import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.Params;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
@@ -71,11 +72,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static boolean pipeline = false;
   static TrainMethod trainMethod = TrainMethod.DAGGER1;
 
+  // Global features which aggregate based on s instead of t in argument2(t,f,s,k)
   static boolean srl2ByArg = true;
   static boolean argument4ByArg = true;
 
-  static boolean predicate2Mutex = true;
-  static boolean enableGlobalFactors = true;
+  static NumArgsRoleCoocArgLoc.Params allowableGlobals;
 
   static double costFP_srl3 = 1;
   static double costFP_srl2 = 1;
@@ -148,69 +149,52 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     trainMethod = TrainMethod.valueOf(config.getString("trainMethod", trainMethod.toString()));
     Log.info("[main] trainMethod=" + trainMethod);
 
-    predicate2Mutex = config.getBoolean("pred2Mutex", predicate2Mutex);
-    Log.info("predicate2Mutex=" + predicate2Mutex);
+    allowableGlobals = new Params();
+    allowableGlobals.frameCooc = config.getBoolean("frameCooc");
 
-    // TODO add FRAMES as one of these global feature types, also add to ALL/FULL
-    // This is currently predicate2Mutex
     String gfm = config.getString("globalFeatMode");
     Log.info("[main] globalFeatMode=" + gfm);
     switch (gfm.toLowerCase()) {
     case "debug":
-      enableGlobalFactors = true;
-      NumArgsRoleCoocArgLoc.numArgs = false;
-      NumArgsRoleCoocArgLoc.argLocPairwise = false;
-      NumArgsRoleCoocArgLoc.argLocGlobal = true;
-      NumArgsRoleCoocArgLoc.roleCooc = false;
+      allowableGlobals.frameCooc = false;
+      allowableGlobals.numArgs = false;
+      allowableGlobals.argLocPairwise = false;
+      allowableGlobals.argLocGlobal = false;
+      allowableGlobals.roleCooc = false;
+      allowableGlobals.argLocRoleCooc = true;
       break;
     case "none":
     case "off":
-      enableGlobalFactors = false;
-      NumArgsRoleCoocArgLoc.numArgs = false;
-      NumArgsRoleCoocArgLoc.argLocPairwise = false;
-      NumArgsRoleCoocArgLoc.argLocGlobal = false;
-      NumArgsRoleCoocArgLoc.roleCooc = false;
+      allowableGlobals = null;
       break;
     case "argloc":
-      enableGlobalFactors = true;
-      NumArgsRoleCoocArgLoc.numArgs = false;
-      NumArgsRoleCoocArgLoc.argLocPairwise = true;
-      NumArgsRoleCoocArgLoc.argLocGlobal = true;
-      NumArgsRoleCoocArgLoc.roleCooc = false;
+      allowableGlobals.argLocPairwise = true;
+      allowableGlobals.argLocGlobal = true;
       break;
     case "arglocpairwise":
-      enableGlobalFactors = true;
-      NumArgsRoleCoocArgLoc.numArgs = false;
-      NumArgsRoleCoocArgLoc.argLocPairwise = true;
-      NumArgsRoleCoocArgLoc.argLocGlobal = false;
-      NumArgsRoleCoocArgLoc.roleCooc = false;
+      allowableGlobals.argLocPairwise = true;
       break;
     case "numarg":
     case "numargs":
-      enableGlobalFactors = true;
-      NumArgsRoleCoocArgLoc.numArgs = true;
-      NumArgsRoleCoocArgLoc.argLocPairwise = false;
-      NumArgsRoleCoocArgLoc.argLocGlobal = false;
-      NumArgsRoleCoocArgLoc.roleCooc = false;
+      allowableGlobals.numArgs = true;
       break;
     case "rolecooc":
-      enableGlobalFactors = true;
-      NumArgsRoleCoocArgLoc.numArgs = false;
-      NumArgsRoleCoocArgLoc.argLocPairwise = false;
-      NumArgsRoleCoocArgLoc.argLocGlobal = false;
-      NumArgsRoleCoocArgLoc.roleCooc = true;
+      allowableGlobals.roleCooc = true;
       break;
     case "full":
     case "all":
-      enableGlobalFactors = true;
-      NumArgsRoleCoocArgLoc.numArgs = true;
-      NumArgsRoleCoocArgLoc.argLocPairwise = true;
-      NumArgsRoleCoocArgLoc.argLocGlobal = true;
-      NumArgsRoleCoocArgLoc.roleCooc = true;
+      allowableGlobals.frameCooc = true;
+      allowableGlobals.numArgs = true;
+      allowableGlobals.argLocPairwise = true;
+      allowableGlobals.argLocGlobal = true;
+      allowableGlobals.roleCooc = true;
+      allowableGlobals.argLocRoleCooc = true;
       break;
     default:
       throw new RuntimeException("unknown globalFeatMode: " + gfm);
     }
+
+    Log.info("[main] allowableGlobals=" + allowableGlobals);
 
     // This is how many passes over ALL training files are given. If there are
     // 10 train files, each of which is all the data shuffled in a particular
@@ -328,8 +312,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
     super(u, grammarFile, schemaFiles, relationDefs);
 
-    if (predicate2Mutex) {
-      NumArgsRoleCoocArgLoc p = new NumArgsRoleCoocArgLoc(u.getEdgeType("predicate2"), 0, 1, u);
+    if (allowableGlobals.frameCooc) {
+      Params gp = new Params();
+      gp.frameCooc = true;
+      NumArgsRoleCoocArgLoc p = new NumArgsRoleCoocArgLoc(u.getEdgeType("predicate2"), 0, 1, gp, u);
       p.storeExactFeatureIndices();
       globalFactors.add(p);
       u.addGlobalFactor(p.getTrigger2(), p);
@@ -343,57 +329,83 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] pOracleRollIn=" + pOracleRollIn);
     Log.info("[main] batchSize=" + batchSize);
 
-    if (srl2ByArg && enableGlobalFactors && !skipSrlFilterStages) {
+    if (srl2ByArg && !skipSrlFilterStages) {
       // srl2(t,s) with mutexArg=s
       Relation srl2 = u.getEdgeType("srl2", true);
       if (srl2 == null) {
         Log.warn("there is no srl2 relation, did you want skipSrlFilterStages=true? NOT ADDING GLOBAL FACTOR.");
       } else {
-        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2, 1, -1, u);
+        Params p = new Params();
+        p.argLocGlobal = true;
+        p.argLocPairwise = true;
+        p.numArgs = true;
+        p.and(allowableGlobals);
+        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2, 1, -1, p, u);
         a.storeExactFeatureIndices();
         globalFactors.add(a);
         u.addGlobalFactor(a.getTrigger2(), a);
       }
     }
 
-    if (argument4ByArg && enableGlobalFactors) {
+    if (argument4ByArg) {
       // argument4(t,f,s,k) with mutexArg=s
-      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 2, 1, u);
+      Params p = new Params();
+      p.argLocGlobal = true;
+      p.argLocPairwise = true;
+      p.argLocRoleCooc = true;
+      p.numArgs = true;
+      p.roleCooc = true;
+      p.and(allowableGlobals);
+      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 2, 1, p, u);
       a.storeExactFeatureIndices();
       globalFactors.add(a);
       u.addGlobalFactor(a.getTrigger2(), a);
     }
 
-    if (enableGlobalFactors && !skipSrlFilterStages) {
+    if (!skipSrlFilterStages) {
       Relation srl2 = u.getEdgeType("srl2", true);
       if (srl2 == null) {
         Log.warn("there is no srl2 relation, did you want skipSrlFilterStages=true? NOT ADDING GLOBAL FACTOR.");
       } else {
-        numArgsArg2 = new NumArgsRoleCoocArgLoc(srl2, 0, -1, u);
+        Params p = new Params();
+        p.argLocGlobal = true;
+        p.argLocPairwise = true;
+        p.numArgs = true;
+        p.and(allowableGlobals);
+        numArgsArg2 = new NumArgsRoleCoocArgLoc(srl2, 0, -1, p, u);
         numArgsArg2.storeExactFeatureIndices();
         globalFactors.add(numArgsArg2);
         u.addGlobalFactor(numArgsArg2.getTrigger2(), numArgsArg2);
       }
     }
 
-    if (enableGlobalFactors && !skipSrlFilterStages) {
+    if (!skipSrlFilterStages) {
       Relation srl3 = u.getEdgeType("srl3", true);
       if (srl3 == null) {
         Log.warn("there is no srl3 relation, did you want skipSrlFilterStages=true? NOT ADDING GLOBAL FACTOR.");
       } else {
-        numArgsArg3 = new NumArgsRoleCoocArgLoc(srl3, 0, -1, u);
+        Params p = new Params();
+        p.numArgs = true;
+        p.roleCooc = true;
+        p.and(allowableGlobals);
+        numArgsArg3 = new NumArgsRoleCoocArgLoc(srl3, 0, -1, p, u);
         numArgsArg3.storeExactFeatureIndices();
         globalFactors.add(numArgsArg3);
         u.addGlobalFactor(numArgsArg3.getTrigger2(), numArgsArg3);
       }
     }
 
-    if (enableGlobalFactors) {
-      numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, u);
-      numArgsArg4.storeExactFeatureIndices();
-      globalFactors.add(numArgsArg4);
-      u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
-    }
+    Params p = new Params();
+    p.argLocGlobal = true;
+    p.argLocPairwise = true;
+    p.argLocRoleCooc = true;
+    p.numArgs = true;
+    p.roleCooc = true;
+    p.and(allowableGlobals);
+    numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, p, u);
+    numArgsArg4.storeExactFeatureIndices();
+    globalFactors.add(numArgsArg4);
+    u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
   }
 
   @Override
@@ -610,7 +622,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 1)
       Log.info("starting on " + doc.getId());
 
-    int verbose = 0;
+    int verbose = 1;
     switch (trainMethod) {
     case EARLY_UPDATE:
       timer.start("train/earlyUpdate");
