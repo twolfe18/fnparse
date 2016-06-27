@@ -2,6 +2,7 @@ package edu.jhu.hlt.uberts.auto;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -12,6 +13,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import com.google.common.collect.Iterators;
 
@@ -20,6 +22,7 @@ import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.OrderStatistics;
@@ -42,6 +45,7 @@ import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
+import edu.jhu.hlt.uberts.io.PerlRegexFileInputStream;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.prim.tuple.Pair;
 
@@ -165,7 +169,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case "none":
     case "off":
-      allowableGlobals = null;
       break;
     case "argloc":
       allowableGlobals.argLocPairwise = true;
@@ -225,6 +228,23 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     int miniDevSize = config.getInt("miniDevSize", 300);
     int trainSegSize = config.getInt("trainSegSize", miniDevSize * 20);
 
+    // Option: run a perl regex over the train/dev/test files
+    String dataRegex = config.getString("dataRegex", "");
+    List<Supplier<InputStream>> train2 = new ArrayList<>();
+    Supplier<InputStream> dev2;
+    Supplier<InputStream> test2;
+    if (!dataRegex.isEmpty()) {
+      Log.info("[main] applying dataRegex=" + dataRegex);
+      for (File f : train)
+        train2.add(() -> new PerlRegexFileInputStream(f, dataRegex).startOrBlowup());
+      dev2 = () -> new PerlRegexFileInputStream(dev, dataRegex).startOrBlowup();
+      test2 = () -> new PerlRegexFileInputStream(test, dataRegex).startOrBlowup();
+    } else {
+      for (File f : train)
+        train2.add(() -> FileUtil.getInputStreamOrBlowup(f));
+      dev2 = () -> FileUtil.getInputStreamOrBlowup(dev);
+      test2 = () -> FileUtil.getInputStreamOrBlowup(test);
+    }
 
     /*
      * for each pass over all train data:
@@ -235,9 +255,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
      *    eval(test)
      */
     for (int i = 0; i < passes; i++) {
-      for (File f : train) {
-        Log.info("[main] pass=" + (i+1) + " of=" + passes + " trainFile=" + f.getPath());
-        try (RelationFileIterator rels = new RelationFileIterator(f, false);
+      for (int trainIdx = 0; trainIdx < train.size(); trainIdx++) {
+        Log.info("[main] pass=" + (i+1) + " of=" + passes + " trainFile=" + train.get(trainIdx).getPath());
+        try (InputStream is = train2.get(trainIdx).get();
+            RelationFileIterator rels = new RelationFileIterator(is);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
           Iterator<List<RelDoc>> segItr = Iterators.partition(many, trainSegSize);
           int s = 0;
@@ -247,7 +268,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             pipe.runInference(segment.iterator(), "train-epoch" + i + "-segment" + s);
 
             // Evaluate on mini-dev
-            try (RelationFileIterator dr = new RelationFileIterator(dev, false);
+            try (InputStream dev2is = dev2.get();
+                RelationFileIterator dr = new RelationFileIterator(dev2is);
                 ManyDocRelationFileIterator devDocs = new ManyDocRelationFileIterator(dr, true)) {
               Iterator<RelDoc> miniDev = Iterators.limit(devDocs, miniDevSize);
               pipe.runInference(miniDev, "dev-mini-epoch" + i + "-segment" + s);
@@ -259,14 +281,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         // Full evaluate on dev
         pipe.useAvgWeights(true);
         Log.info("[main] pass=" + (i+1) + " of=" + passes + " devFile=" + dev.getPath());
-        try (RelationFileIterator rels = new RelationFileIterator(dev, false);
+        try (InputStream dev2is = dev2.get();
+            RelationFileIterator rels = new RelationFileIterator(dev2is);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
           pipe.runInference(many, "dev-full-epoch" + i);
         }
         // Full evaluate on test
         if (performTest) {
           Log.info("[main] pass=" + (i+1) + " of=" + passes + " testFile=" + test.getPath());
-          try (RelationFileIterator rels = new RelationFileIterator(test, false);
+          try (InputStream test2is = test2.get();
+              RelationFileIterator rels = new RelationFileIterator(test2is);
               ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
             pipe.runInference(many, "test-full-epoch" + i);
           }

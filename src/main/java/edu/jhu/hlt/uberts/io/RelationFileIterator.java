@@ -3,6 +3,8 @@ package edu.jhu.hlt.uberts.io;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -98,14 +100,23 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
   public RelationFileIterator(File f, boolean includeProvidence) throws IOException {
     Log.info("includeProvidence=" + includeProvidence + " f=" + f.getPath());
     this.includeProvidence = includeProvidence;
-    this.file = f;
+    this.file = null;
     this.reader = FileUtil.getReader(f);
+    this.lineNo = -1;
+    next();
+  }
+  public RelationFileIterator(InputStream is) throws IOException {
+    this.includeProvidence = false;
+    this.file = null;
+    this.reader = new BufferedReader(new InputStreamReader(is));
     this.lineNo = -1;
     next();
   }
 
   @Override
   public String toString() {
+    if (file == null)
+      return "(RelFileItr null lineNo=" + lineNo + ")";
     return "(RelFileItr " + file.getPath() + " lineNo=" + lineNo + ")";
   }
 
@@ -166,8 +177,11 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
 
   @Override
   public void close() throws IOException {
-    Log.info("closing " + file.getPath());
-    reader.close();
+    if (file != null) {
+      Log.info("closing " + file.getPath());
+      reader.close();
+    }
+    // If an InputStream was provided, then the onus is on the caller to close
   }
 
 }
