@@ -58,6 +58,7 @@ public class Sentence implements HasId, Serializable {
    */
   private DependencyParse collapsedDeps;
   private DependencyParse basicDeps;
+  private DependencyParse parseyDeps; // syntaxnet, parsey mcparseface
   private ConstituencyParse stanfordParse;
   private ConstituencyParse goldParse;
   private boolean hideSyntax = false;
@@ -479,6 +480,19 @@ public class Sentence implements HasId, Serializable {
 
   public void setBasicDeps(DependencyParse basicDeps) {
     this.basicDeps = basicDeps;
+  }
+
+  public DependencyParse getParseyDeps() {
+    return getParseyDeps(true);
+  }
+  public DependencyParse getParseyDeps(boolean askPermission) {
+    if (askPermission && hideSyntax)
+      return null;
+    return parseyDeps;
+  }
+
+  public void setParseyDeps(DependencyParse parseyDeps) {
+    this.parseyDeps = parseyDeps;
   }
 
   public ConstituencyParse getStanfordParse() {

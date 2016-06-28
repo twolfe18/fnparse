@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.function.BiFunction;
 
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -36,6 +37,7 @@ import edu.jhu.hlt.uberts.rules.Env.Trie3;
 import edu.jhu.hlt.uberts.transition.TransGen;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.Alphabet;
 
 /**
  * An uber transition system for joint predictions. Holds a state and agenda,
@@ -107,6 +109,11 @@ public class Uberts {
   // This must be cleared after each round of inference by the user.
   public IntArrayList statsAgendaSizePerStep = new IntArrayList();
 
+
+  // If this document represents a sentence and you need to call older code
+  // which only knows how to read Sentences, then set this.
+  public Sentence dbgSentenceCache;
+  public Alphabet<String> dbgSentenceCacheDepsAlph = new Alphabet<>();
 
   // TODO Remove
   // Ancillary data for features which don't look at the State graph.
@@ -244,8 +251,8 @@ public class Uberts {
       // But maybe don't add apply it (add it to state)
       if (hitLim)
         continue;
-//      if ((oracle && y) || (!oracle && pred)) {
-      if ((oracle && y) || pred) {
+      if ((oracle && y) || (!oracle && pred)) {
+//      if ((oracle && y) || pred) {
         if (perf != null)
           perf.add(ai.edge);
         addEdgeToState(ai);

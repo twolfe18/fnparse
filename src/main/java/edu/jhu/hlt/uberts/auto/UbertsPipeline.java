@@ -222,6 +222,7 @@ public abstract class UbertsPipeline {
     timer.start("cleanupUbertsForDoc");
     if (DEBUG > 1)
       System.out.println("[cleanupUbertsForDoc] " + doc.getId());
+    u.dbgSentenceCache = null;
 
     // It is certainly impossible to never call this or do something to clean
     // up the set of interned HypNodes, most obviously because of head nodes.

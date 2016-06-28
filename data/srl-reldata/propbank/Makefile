@@ -63,7 +63,12 @@ srl.facts.gz: all.facts.gz
 		keepRelations argument4,predicate2 \
 		relInput all.facts.gz \
 		relOutput srl.facts.gz
-	ln -s all.facts.gz srl.facts.gz
+	#ln -s all.facts.gz srl.facts.gz
+	$(FNPARSE)/scripts/uberts/augment-facts-with-parsey-mcparseface.sh \
+		all.facts.gz \
+		srl.facts.gz \
+		temp-all.facts.conll \
+		temp-srl.facts.conll
 
 # Split off train/dev/test
 #COE = test2

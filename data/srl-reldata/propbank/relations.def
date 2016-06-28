@@ -1,0 +1,22 @@
+def word2 <tokenIndex> <word>
+def cpos2 <tokenIndex> <pos>    # coarse grain POS tags from parsey, universal POS tags
+def pos2 <tokenIndex> <pos>     # fine grain POS tags from parsey, PTB POS tags
+def pos2-stanford <tokenIndex> <pos>
+def lemma2 <tokenIndex> <lemma>
+def wnss2 <tokenIndex> <synset>   # wn = WordNet
+
+def dsyn3-basic <tokenIndex> <tokenIndex> <edgeLabel>   # gov token, dep token, edge label
+def dsyn3-col <tokenIndex> <tokenIndex> <edgeLabel>     # gov token, dep token, edge label
+def dsyn3-colcc <tokenIndex> <tokenIndex> <edgeLabel>   # gov token, dep token, edge label
+def dsyn3-parsey <tokenIndex> <tokenIndex> <edgeLabel>  # gov token, dep token, edge label
+
+def csyn5-stanford <csyn5id> <csyn5id> <tokenIndex> <span> <phrase> # id, parent id, head token, span (inclusive-exclusive), phrase label
+def csyn5-gold <csyn5id> <csyn5id> <tokenIndex> <span> <phrase> # id, parent id, head token, span (inclusive-exclusive), phrase label
+
+def predicate2 <span> <frame>
+def argument4 <span> <frame> <span> <role>
+
+def xue-palmer-args2 <span> <span>
+def xue-palmer-deps-args2 <span> <span>
+def xue-palmer-otf-args2 <span> <span>    # otf == "on the fly", for debugging
+

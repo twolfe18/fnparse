@@ -25,6 +25,7 @@ import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -249,7 +250,10 @@ public class Pred2ArgPaths {
    * method of Hermann et al. (2014), achieving R=72.6 and P=25.1.
    */
   public static class ArgCandidates {
+    public static boolean DEBUG = false;
+    public static boolean USE_PARSEY = true;
 //    private Map<String, Trie<Path2.Edge>> role2path2arg;
+
     /*
       In our candidate argument extraction algorithm,
       first, we select all the children subtrees of a given
@@ -289,10 +293,16 @@ public class Pred2ArgPaths {
      * given position, not including Span.nullSpan.
      */
     public static List<Span> getArgCandidates(int predicate, Sentence sent) {
+      if (DEBUG) {
+        System.out.println("looking for arguments, USE_PARSEY=" + USE_PARSEY);
+        System.out.println(Describe.spanWithPos(Span.widthOne(predicate), sent, 3));
+        System.out.println(Describe.sentenceWithDeps(sent, true));
+        System.currentTimeMillis();
+      }
       // Note: the bit about checking (role, pred->arg) can be enforced after
       // the fact by some other hard LocalFactor for argument4
       List<Span> args = new ArrayList<>();
-      DependencyParse d = sent.getBasicDeps();
+      DependencyParse d = USE_PARSEY ? sent.getParseyDeps() : sent.getBasicDeps();
       for (int p = predicate; p >= 0; p = d.getHead(p)) {
 
         int[] ci = d.getChildren(p);

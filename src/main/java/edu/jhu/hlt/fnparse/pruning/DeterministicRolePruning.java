@@ -299,7 +299,7 @@ public class DeterministicRolePruning implements Serializable {
 
 //          possibleSpans = DependencyBasedXuePalmerRolePruning
 //              .getMask(input, mode);
-          assert mode == Mode.XUE_PALMER_DEP_HERMANN : "this is not really imlemented properly";
+//          assert mode == Mode.XUE_PALMER_DEP_HERMANN : "this is not really imlemented properly";
           HeadFinder hf = new DependencyHeadFinder();
           for (FrameInstance fi : input.getFrameInstances()) {
             int predicate = hf.head(fi.getTarget(), sent);

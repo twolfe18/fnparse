@@ -7,10 +7,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -18,7 +20,14 @@ import java.util.function.Supplier;
 import com.google.common.collect.Iterators;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.Pred2ArgPaths;
+import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
+import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
@@ -26,10 +35,13 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.OrderStatistics;
+import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.AgendaPriority;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.Labels.Perf;
 import edu.jhu.hlt.uberts.Relation;
@@ -526,11 +538,60 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     mode = null;
   }
 
+  /**
+   * Assumes pos,lemma,dparse,cparse has been added, builds {@link Sentence}
+   * and calls {@link DeterministicRolePruning}.
+   */
+  private void buildOldDataStructures() {
+    // Build Sentence, DependencyParses, and ConsituencyParses
+    assert u.dbgSentenceCache == null;
+    Sentence sent = u.dbgSentenceCache = OldFeaturesWrapper.readSentenceFromState(u);
+
+    // Run arg triage
+    // 1) Read predicates/targets out of the state (they should be added already)
+    Relation ev1 = u.getEdgeType("event1");
+    List<FrameInstance> frameMentions = new ArrayList<>();
+    Set<Span> uniq = new HashSet<>();
+    Set<Span> goldTargets = new HashSet<>();
+    Frame f = new Frame(0, "propbank/dummyframe", null, new String[] {"ARG0", "ARG1"});
+    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
+      assert target.getEdge().getNumTails() == 1;
+      Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
+      if (goldTargets.add(t) && uniq.add(t))
+        frameMentions.add(FrameInstance.frameMention(f, t, sent));
+    }
+    FNTagging argsFor = new FNTagging(sent, frameMentions);
+
+    // 1b) DEBUG: Show all of the arguments that we're looking for
+//    Relation a4 = u.getEdgeType("argument4");
+//    for (HashableHypEdge e : u.getLabels().getGoldEdges(a4)) {
+//      Span t = Span.inverseShortString((String) e.getEdge().getTail(0).getValue());
+//      Span s = Span.inverseShortString((String) e.getEdge().getTail(2).getValue());
+//      System.out.println("looking for: t=" + t + " s=" + s);
+//    }
+
+    // 2) Call the argument finding code
+    DeterministicRolePruning drp = new DeterministicRolePruning(
+        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
+    FNParseSpanPruning args = drp.setupInference(Arrays.asList(argsFor), null).decodeAll().get(0);
+    for (SpanPair ts : args.getAllArgs()) {
+      Span t = ts.get1();
+      Span s = ts.get2();
+      if (t == Span.nullSpan || s == Span.nullSpan)
+        continue;
+      // OTF == "on the fly"
+      u.readRelData("x xue-palmer-otf-args2 " + t.shortString() + " " + s.shortString());
+    }
+  }
+
   @Override
   public void consume(RelDoc doc) {
     if (MEM_LEAK_DEBUG)
       return;
 //    System.out.println("[consume] " + doc.getId());
+
+    // Add xue-palmer-args2
+    buildOldDataStructures();
 
     eventCounts.increment("consume/" + mode.toString());
     if (eventCounts.getTotalCount() % 500 == 0) {
@@ -544,7 +605,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case DEV:
     case TEST:
-      if (DEBUG > 0 && perfByRel.size() % 25 == 0) {
+      if (DEBUG > 0 && perfByRel.size() % 50 == 0) {
         System.out.println("mode=" + mode + " doc=" + doc.getId() + " [memLeak] perfByRel.size=" + perfByRel.size());
       }
       boolean oracle = false;
@@ -554,7 +615,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, actionLimit);
       timer.stop("inf/" + mode);
       perfByRel.add(p.get1().perfByRel());
-
 
       if (showDevFN && mode == Mode.DEV) {
 
@@ -577,7 +637,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           System.out.println("prediction FN: " + e);
       }
 
-      if (DEBUG > 0) {// && perfByRel.size() % 50 == 0) {
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      if (DEBUG > 0 && config.getBoolean("showDevTestDetails", true)) {// && perfByRel.size() % 50 == 0) {
 
         // Show some stats about this example
         System.out.println("trajLength=" + p.get2().size());
@@ -709,13 +770,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       }
       boolean oracle = u.getRandom().nextDouble() < pOracleRollIn;
       Pair<Perf, List<Step>> x = u.dbgRunInference(oracle, actionLimit);
+      Perf perf = x.get1();
+      List<Step> traj = x.get2();
       batch.add(lr -> {
         Map<Relation, Double> cfp = getCostFP();
         if (verbose >= 2) {
-          System.out.println("about to update against length=" + x.get2().size()
+          System.out.println("about to update against length=" + traj.size()
                 + " trajectory, costFP=" + cfp + " oracleRollIn=" + oracle);
         }
-        for (Step s : x.get2()) {
+        for (Step s : traj) {
 
           // NOTE: We are NOT using minScorePerRelation here since we only want
           // to move scores about 0, not the threshold.
@@ -740,6 +803,27 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           }
         }
       });
+
+      // Show xue-palmer for all fn(srl2)
+      for (HypEdge e : perf.getFalseNegatives(u.getEdgeType("srl2"))) {
+        assert e.getNumTails() == 2;
+        Span t = Span.inverseShortString((String) e.getTail(0).getValue());
+        Span s = Span.inverseShortString((String) e.getTail(1).getValue());
+        System.out.println("didn't find arg=" + s.shortString() + " for pred=" + t.start);
+        assert t.width() == 1;
+        boolean orig = Pred2ArgPaths.ArgCandidates.DEBUG;
+        Pred2ArgPaths.ArgCandidates.DEBUG = true;
+        Pred2ArgPaths.ArgCandidates.getArgCandidates(t.start, u.dbgSentenceCache);
+        Pred2ArgPaths.ArgCandidates.DEBUG = orig;
+      }
+
+      // NOTE: It just occurred to me that I may be updating w.r.t. argument4
+      // edges which are unreachable...
+      // I don't think thats true actually, the only edges that get updated
+      // are the ones that come off the agenda, and the only ones that go on the
+      // agenda are those generated by the grammar; so this shouldn't include
+      // gold edges which are unreachable.
+
       u.showTrajDiagnostics = stdOld;
       timer.stop("train/dagger1");
       break;

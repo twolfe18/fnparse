@@ -7,12 +7,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.Node;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
@@ -26,10 +24,9 @@ import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
-import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
-import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
@@ -37,8 +34,9 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.uberts.io.FactWriter;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
-import edu.jhu.util.Alphabet;
+import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.HPair;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.IWord;
@@ -52,7 +50,7 @@ import edu.mit.jwi.item.IWord;
  *
  * @author travis
  */
-public class FNParseToRelations {
+public class FNParseToRelations extends FactWriter {
 
   // If true, run DeterministicRolePruning.XUE_PALMER
   // It treats all width-1 spans as possible targets, plus all gold targets,
@@ -81,62 +79,32 @@ public class FNParseToRelations {
   // Keep track of the quality of our argument span retrieval heuristic
   private Map<DeterministicRolePruning.Mode, FPR> argHeuristic = new HashMap<>();
 
-  public static String norm(String x) {
-    x = x.trim();
-    x = x.replaceAll("\\s+", "_");
-    x = x.replaceAll("#", "-HASH-");
-    return x;
-  }
+  private Set<DeterministicRolePruning.Mode> showArgHeuristicFNs = new HashSet<>();
 
-  public static String join(String... tokens) {
-    StringBuilder sb = new StringBuilder();
-    sb.append(norm(tokens[0]));
-    for (int i = 1; i < tokens.length; i++) {
-      sb.append(' '); // Could replace with tab
-      sb.append(norm(tokens[i]));
-    }
-    return sb.toString();
-  }
-
-  public static String join(Object... tokens) {
-    StringBuilder sb = new StringBuilder();
-    sb.append(norm(tokens[0].toString()));
-    for (int i = 1; i < tokens.length; i++) {
-      sb.append(' '); // Could replace with tab
-      sb.append(norm(tokens[i].toString()));
-    }
-    return sb.toString();
-  }
-
-  public static void write(BufferedWriter w, Object... tokens) throws IOException {
-    w.write(join(tokens));
-    w.newLine();
-  }
-
-  private void write(Sentence s, BufferedWriter w) throws IOException {
+  private void writeSentence(Sentence s) throws IOException {
     IWord iw;
     ISynset is;
     int n = s.size();
     for (int i = 0; i < n; i++) {
-      write(w, "x", "word2", i, s.getWord(i));
-      write(w, "x", "pos2", i, s.getPos(i));
-      write(w, "x", "lemma2", i, s.getLemma(i).toLowerCase());
+      write("x", "word2", i, s.getWord(i));
+      write("x", "pos2", i, s.getPos(i));
+      write("x", "lemma2", i, s.getLemma(i).toLowerCase());
       if ((iw = s.getWnWord(i)) != null && (is = iw.getSynset()) != null)
-        write(w, "x", "wnss2", i, is.getID());
+        write("x", "wnss2", i, is.getID());
     }
-    write(s.getBasicDeps(false), "basic", n, w);
-    write(s.getCollapsedDeps2(false), "col", w);
-    write(s.getCollapsedDeps2(false), "colcc", w);
+    writeDeps(s.getBasicDeps(false), "basic", n);
+    writeDeps(s.getCollapsedDeps2(false), "col");
+    writeDeps(s.getCollapsedDeps2(false), "colcc");
     if (csyn6Mode) {
-      write2(s.getStanfordParse(false), "stanford", w, true);
-      write2(s.getGoldParse(false), "gold", w, false);
+      writeCons2(s.getStanfordParse(false), "stanford", true);
+      writeCons2(s.getGoldParse(false), "gold", false);
     } else {
-      write(s.getStanfordParse(false), "stanford", w, true);
-      write(s.getGoldParse(false), "gold", w, false);
+      writeCons(s.getStanfordParse(false), "stanford", true);
+      writeCons(s.getGoldParse(false), "gold", false);
     }
   }
 
-  private void write(StringLabeledDirectedGraph deps, String name, BufferedWriter w) throws IOException {
+  private void writeDeps(StringLabeledDirectedGraph deps, String name) throws IOException {
     if (deps == null) {
       Log.warn("skipping deps since they're not present: " + name);
       return;
@@ -154,12 +122,12 @@ public class FNParseToRelations {
       int lab = LabeledDirectedGraph.unpackEdge(e);
       if (uniq.add(new IntTrip(g, d, lab))) {
         String l = deps.getEdge(lab);
-        write(w, "x ", tn, g, d, l);
+        write("x ", tn, g, d, l);
       }
     }
   }
 
-  private void write(DependencyParse deps, String name, int n, BufferedWriter w) throws IOException {
+  private void writeDeps(DependencyParse deps, String name, int n) throws IOException {
     if (deps == null) {
       Log.warn("skipping deps since they're not present: " + name);
       return;
@@ -168,11 +136,11 @@ public class FNParseToRelations {
     for (int d = 0; d < n; d++) {
       int g = deps.getHead(d);
       String l = deps.getLabel(d);
-      write(w, "x", tn, g, d, l);
+      write("x", tn, g, d, l);
     }
   }
 
-  private void write(ConstituencyParse cons, String name, BufferedWriter w, boolean skipLeaf) throws IOException {
+  private void writeCons(ConstituencyParse cons, String name, boolean skipLeaf) throws IOException {
     if (cons == null) {
       Log.warn("skipping cons since they're not present: " + name);
       return;
@@ -200,14 +168,14 @@ public class FNParseToRelations {
         // 5035:x csyn3-gold 12 16 NP
         // 5036:x csyn3-gold 12 16 NP
         if (spansInsteadOfTokens)
-          write(w, "x", tn, s.shortString(), t);
+          write("x", tn, s.shortString(), t);
         else
-          write(w, "x", tn, s.start, s.end, t);
+          write("x", tn, s.start, s.end, t);
       }
     }
   }
 
-  private void write2(ConstituencyParse cons, String name, BufferedWriter w, boolean skipLeaf) throws IOException {
+  private void writeCons2(ConstituencyParse cons, String name, boolean skipLeaf) throws IOException {
     if (cons == null) {
       Log.warn("skipping cons since they're not present: " + name);
       return;
@@ -246,64 +214,52 @@ public class FNParseToRelations {
       String t = n.getTag();
       if (uniq.add(new HashableIntArray(n.id, p, h, s.start, s.end, t.hashCode()))) {
         if (spansInsteadOfTokens)
-          write(w, "x", tn, n.id, p, h, s.shortString(), t);
+          write("x", tn, n.id, p, h, s.shortString(), t);
         else
-          write(w, "x", tn, n.id, p, h, s.start, s.end, t);
+          write("x", tn, n.id, p, h, s.start, s.end, t);
       }
     }
   }
 
-  public void definitions(File f) throws IOException {
-    Log.info("writing definitions to " + f.getPath());
-    try (BufferedWriter w = FileUtil.getWriter(f)) {
-      definitions(w);
-    }
-  }
-
-  public void definitions(BufferedWriter w) throws IOException {
-    write(w, "def", "word2", "<tokenIndex>", "<word>");
-    write(w, "def", "pos2", "<tokenIndex>", "<pos>");
-    write(w, "def", "lemma2", "<tokenIndex>", "<lemma>");
-    write(w, "def", "wnss2", "<tokenIndex>", "<synset>");
+  public void definitions() throws IOException {
+    write("def", "word2", "<tokenIndex>", "<word>");
+    write("def", "pos2", "<tokenIndex>", "<pos>");
+    write("def", "lemma2", "<tokenIndex>", "<lemma>");
+    write("def", "wnss2", "<tokenIndex>", "<synset>");
     for (String t : Arrays.asList("basic", "col", "colcc")) {
-      w.write("def dsyn3-" + t + " <tokenIndex> <tokenIndex> <edgeLabel> # gov token, dep token, edge label");
-      w.newLine();
+      write("def", "dsyn3-" + t, "<tokenIndex>", "<tokenIndex>", "<edgeLabel>", "# gov token, dep token, edge label");
     }
     for (String t : Arrays.asList("stanford", "gold")) {
       if (csyn6Mode) {
         if (spansInsteadOfTokens)
-          w.write("def csyn5-" + t + " <csyn5id> <csyn5id> <tokenIndex> <span> <phrase> # id, parent id, head token, span (inclusive-exclusive), phrase label");
+          write("def", "csyn5-" + t, " <csyn5id>", "<csyn5id>", "<tokenIndex>", "<span>", "<phrase>", "# id, parent id, head token, span (inclusive-exclusive), phrase label");
         else
-          w.write("def csyn6-" + t + " <csyn6id> <csyn6id> <tokenIndex> <tokenIndex> <tokenIndex> <phrase> # id, parent id, head token, start token (inclusive), end token (exclusive), phrase label");
-        w.newLine();
+          write("def", "csyn6-" + t, " <csyn6id>", "<csyn6id>", "<tokenIndex>", "<tokenIndex>", "<tokenIndex>", "<phrase>", "# id, parent id, head token, start token (inclusive), end token (exclusive), phrase label");
       } else {
         if (spansInsteadOfTokens)
-          w.write("def csyn2-" + t + " <span> <phrase> # span (inclusive-exclusive), phrase label");
+          write("def", "csyn2-" + t, " <span>", "<phrase>", "# span (inclusive-exclusive), phrase label");
         else
-          w.write("def csyn3-" + t + " <tokenIndex> <tokenIndex> <phrase> # start token (inclusive), end token (exclusive), phrase label");
-        w.newLine();
+          write("def", "csyn3-" + t, "<tokenIndex>", "<tokenIndex>", "<phrase>", "# start token (inclusive), end token (exclusive), phrase label");
       }
     }
     if (spansInsteadOfTokens) {
-      w.write("def predicate2 <span> <frame>");
-      w.newLine();
-      w.write("def argument4 <span> <frame> <span> <role>");
-      w.newLine();
+      write("def", "predicate2", "<span>", "<frame>");
+      write("def", "argument4", "<span>", "<frame>", "<span>", "<role>");
     } else {
-      w.write("def srl4 <tokenIndex> <tokenIndex> <frame> <tokenIndex> <tokenIndex> <role> # pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
-      w.newLine();
+      write("def", "srl4", "<tokenIndex>", "<tokenIndex>", "<frame>", "<tokenIndex>", "<tokenIndex>", "<role>", "# pred start tok (inc), pred end tok (exc), frame, arg start tok (inc), arg end tok (exc), role");
     }
     if (outputArgPruning) {
-      if (spansInsteadOfTokens)
-        w.write("def xue-palmer-args2 <span> <span>");
-      else
-        w.write("def xue-palmer-args4 <tokenIndex> <tokenIndex> <tokenIndex> <tokenIndex> # ts, te, ss, se");
-      w.newLine();
+      if (spansInsteadOfTokens) {
+        write("def", "xue-palmer-args2", "<span>", "<span>");
+        write("def", "xue-palmer-deps-args2", "<span>", "<span>");
+      } else {
+        write("def", "xue-palmer-args4", "<tokenIndex>", "<tokenIndex>", "<tokenIndex>", "<tokenIndex>", "# ts, te, ss, se");
+        write("def", "xue-palmer-deps-args4", "<tokenIndex>", "<tokenIndex>", "<tokenIndex>", "<tokenIndex>", "# ts, te, ss, se");
+      }
     }
   }
 
-  private void writeArgs(String name, DeterministicRolePruning.Mode mode, FNParse y, BufferedWriter w) throws IOException {
-//  private void writeArgs(FNParse y, BufferedWriter w) throws IOException {
+  private void writeArgTriage(String name, DeterministicRolePruning.Mode mode, FNParse y) throws IOException {
     Sentence sent = y.getSentence();
     Frame f = new Frame(0, "propbank/dummyframe", null, new String[] {"ARG0", "ARG1"});
 
@@ -324,8 +280,6 @@ public class FNParseToRelations {
     }
     FNTagging argsFor = new FNTagging(sent, frameMentions);
 
-//    DeterministicRolePruning drp = new DeterministicRolePruning(
-//        Mode.XUE_PALMER_HERMANN, null, null);
     DeterministicRolePruning drp = new DeterministicRolePruning(mode, null, null);
     FNParseSpanPruning args = drp.setupInference(Arrays.asList(argsFor), null).decodeAll().get(0);
 
@@ -337,17 +291,31 @@ public class FNParseToRelations {
         continue;
       predArgs.add(s);
       if (spansInsteadOfTokens)
-        w.write("x " + name + " " + t.shortString() + " " + s.shortString());
+        write("x", name, t.shortString(), s.shortString());
       else
-        w.write("x " + name + " " + t.start + " " + t.end + " " + s.start + " " + s.end);
-      if (goldTargets.contains(t))
-        w.write(" # gold");
-      w.newLine();
+        write("x", name, t.start, t.end, s.start, s.end);
+//      if (goldTargets.contains(t))
+//        w.write(" # gold");
     }
 
     Set<Span> goldArgs = new HashSet<>();
     for (FrameInstance fi : y.getFrameInstances())
       fi.getRealizedArgs(goldArgs);
+
+    if (showArgHeuristicFNs.contains(mode)) {
+      for (FrameInstance fi : y.getFrameInstances()) {
+        for (Pair<String, Span> p : fi.getRealizedRoleArgs()) {
+          if (!predArgs.contains(p.get2())) {
+            int context = 3;
+            System.out.println("missed: " + p.get1());
+            System.out.println("target: " + Describe.spanWithPos(fi.getTarget(), sent, context));
+            System.out.println("arg:    " + Describe.spanWithPos(p.get2(), sent, context));
+            System.out.println(Describe.sentenceWithDeps(sent, true));
+            System.out.println();
+          }
+        }
+      }
+    }
 
     FPR fpr = FPR.fromSets(goldArgs, predArgs);
     FPR accum = argHeuristic.get(mode);
@@ -358,18 +326,18 @@ public class FNParseToRelations {
     accum.accum(fpr);
   }
 
-  public void write(FNParse y, BufferedWriter w) throws IOException {
+  public void writeFNParse(FNParse y) throws IOException {
     // x:
     // word(i,t) pos2(i,t), lemma(i,t)
     // dsyn3-basic(g,d,l), dsyn3-col(g,d,l), dsyn3-colcc(g,d,l)
     // csyn3-stanford(i,j,l)
-    write(y.getSentence(), w);
+    writeSentence(y.getSentence());
 
     // arg-pruning
     if (outputArgPruning) {
       try {
-        writeArgs("xue-palmer-args2", Mode.XUE_PALMER_HERMANN, y, w);
-        writeArgs("xue-palmer-deps-args2", Mode.XUE_PALMER_DEP_HERMANN, y, w);
+        writeArgTriage("xue-palmer-args2", Mode.XUE_PALMER_HERMANN, y);
+        writeArgTriage("xue-palmer-deps-args2", Mode.XUE_PALMER_DEP_HERMANN, y);
       } catch (Exception e) {
         e.printStackTrace();
       }
@@ -381,7 +349,7 @@ public class FNParseToRelations {
       Span t = fi.getTarget();
       Frame f = fi.getFrame();
       String fs = f.getName();
-      write(t, fs, w);
+      writePredicate(t, fs);
       String fsn = SrlSchemaToRelations.norm(fs);
       int K = f.numRoles();
       for (int k = 0; k < K; k++) {
@@ -389,55 +357,28 @@ public class FNParseToRelations {
         if (s == Span.nullSpan)
           continue;
         String ks = f.getRole(k);
-        write(t, fsn, s, ks, w);
+        writeArgument(t, fsn, s, ks);
         for (Span cs : fi.getContinuationRoleSpans(k))
-          write(t, fsn, cs, ks + "/C", w);
+          writeArgument(t, fsn, cs, ks + "/C");
         for (Span rs : fi.getReferenceRoleSpans(k))
-          write(t, fsn, rs, ks + "/R", w);
+          writeArgument(t, fsn, rs, ks + "/R");
       }
     }
   }
 
-  private void write(Span t, String f, BufferedWriter w) throws IOException {
+  private void writePredicate(Span t, String f) throws IOException {
     if (spansInsteadOfTokens) {
-      w.write("y predicate2 " + t.shortString() + " " + f);
-      w.newLine();
+      write("y", "predicate2", t.shortString(), f);
     } else {
-      String ts = t.start + " " + t.end;
-      w.write("y event2 " + ts + " " + f);
-      w.newLine();
+      write("y", "event2", t.shortString(), f);
     }
   }
 
-  private void write(Span t, String f, Span s, String k, BufferedWriter w) throws IOException {
+  private void writeArgument(Span t, String f, Span s, String k) throws IOException {
     if (spansInsteadOfTokens)
-      write(w, "y", "argument4", t.shortString(), f, s.shortString(), k);
+      write("y", "argument4", t.shortString(), f, s.shortString(), k);
     else
-      write(w, "y", "srl4", t.start, t.end, f, s.start, s.end, k);
-  }
-
-  /**
-   * Write relation definitions and xy values to a single file, for one FNParse.
-   */
-  public static void singleDocExample() throws IOException {
-    // Just extract a single FNParse relation set for debugging
-    Iterator<FNParse> itr = FileFrameInstanceProvider.fn15trainFIP.getParsedSentences();
-    itr.next();
-    FNParse y = itr.next();
-
-    ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
-    Sentence s = y.getSentence();
-    csw.addAllParses(s, new Alphabet<>(), true);
-//    s.setStanfordParse(csw.getCParse(s));
-//    s.setBasicDeps(csw.getBasicDParse(s));
-    s.lemmatize();
-
-    File output = new File("data/srl-reldata/srl-" + y.getId() + ".rel");
-    FNParseToRelations fn2r = new FNParseToRelations();
-    try (BufferedWriter w = FileUtil.getWriter(output)) {
-      fn2r.definitions(w);
-      fn2r.write(y, w);
-    }
+      write("y", "srl4", t.start, t.end, f, s.start, s.end, k);
   }
 
   /**
@@ -452,14 +393,20 @@ public class FNParseToRelations {
     File outputVals = config.getFile("outputVals");
     Log.info("writing values to " + outputVals.getPath());
 
-    FNParseToRelations fn2r = new FNParseToRelations();
-    fn2r.definitions(config.getFile("outputDefs"));
+    try (FNParseToRelations fn2r = new FNParseToRelations()) {
+      fn2r.showArgHeuristicFNs.add(DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN);
 
-    Iterable<FNParse> l = FeaturePrecomputation.getData(dataset, addParses);
+      Log.info("writing definitions...");
+      fn2r.writeToFile(config.getFile("outputDefs"));
+      fn2r.definitions();
+      fn2r.close();
 
-    TimeMarker tm = new TimeMarker();
-    int docs = 0, empty = 0;
-    try (BufferedWriter w = FileUtil.getWriter(outputVals)) {
+      Iterable<FNParse> l = FeaturePrecomputation.getData(dataset, addParses);
+
+      Log.info("writing instances...");
+      TimeMarker tm = new TimeMarker();
+      int docs = 0, empty = 0;
+      fn2r.writeToFile(outputVals);
       int done = 0;
       for (FNParse y : l) {
         if (fn2r.skipEmptySentences && y.numFrameInstances() == 0) {
@@ -470,18 +417,17 @@ public class FNParseToRelations {
         s.lemmatize();
         Log.info("sentenceLength=" + s.size());
         docs++;
-        w.write("startdoc " + y.getId() + " # " + dataset);
-        w.newLine();
-        fn2r.write(y, w);
+        fn2r.write("startdoc", y.getId(), "# " + dataset);
+        fn2r.writeFNParse(y);
         done++;
         if (tm.enoughTimePassed(15)) {
-          w.flush();
           Log.info("wrote out " + done + " parses (" + empty + " empty ones skipped) in "
               + tm.secondsSinceFirstMark()
               + " seconds, argRetrievalHeuristic: " + fn2r.argHeuristic);
         }
       }
+      fn2r.close();
+      Log.info("done, wrote " + docs + " docs, skipped " + empty + " empty");
     }
-    Log.info("done, wrote " + docs + " docs, skipped " + empty + " empty");
   }
 }
