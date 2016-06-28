@@ -26,6 +26,8 @@ import edu.jhu.prim.tuple.Triple;
  * and the startdocs align 1-to-1, then produce a new many-doc file with the
  * union of those annotations.
  *
+ * Converts all CoNLL indices (ID) from 1-indexed to 0-indexed for output.
+ *
  * @author travis
  */
 public class ManyDocAndConllZipper extends FactWriter {
@@ -40,6 +42,17 @@ public class ManyDocAndConllZipper extends FactWriter {
   public static final int DEPREL = 7;
   public static final int PHEAD = 8;
   public static final int PDEPREL = 9;
+
+  public static boolean oneIndexedField(int conllColumn) {
+    switch (conllColumn) {
+    case ID:
+    case HEAD:
+    case PHEAD:
+      return true;
+    default:
+      return false;
+    }
+  }
 
 //  private List<Pair<int[], String>> conllColumn2RelationName;
   private List<Triple<String, String, int[]>> conllColumn2RelationName;
@@ -117,8 +130,12 @@ public class ManyDocAndConllZipper extends FactWriter {
           Object[] fact = new Object[k.length + 2];
           fact[0] = t.get1();
           fact[1] = t.get2();
-          for (int i = 0; i < k.length; i++)
-            fact[2 + i] = toks[k[i]];
+          for (int i = 0; i < k.length; i++) {
+            if (oneIndexedField(k[i]))
+              fact[2 + i] = String.valueOf(Integer.parseInt(toks[k[i]]) - 1);
+            else
+              fact[2 + i] = toks[k[i]];
+          }
           write(fact);
         }
       }
