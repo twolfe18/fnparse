@@ -1,12 +1,25 @@
 
 #FNPARSE = ~/code/fnparse-build/fnparse
-FNPARSE = ~/code/fnparse
+#FNPARSE = ~/code/fnparse
+FNPARSE = ~/fnparse-build/fnparse
 JAR = $(FNPARSE)/target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 #DATA = ~/scratch/fnparse-data
-DATA = $(FNPARSE)/toydata
+#DATA = $(FNPARSE)/toydata
+DATA = /export/projects/twolfe/fnparse-data
 SHELL = /bin/bash
 DATASET = propbank
 
+
+null-span1.facts:
+	echo "def null-span1 <span>" >$@
+	echo "schema null-span1 0-0" >>$@
+
+coarsenPos2.rel:
+	cp $(FNPARSE)/data/srl-reldata/coarsenPos2.rel $@
+
+grammar.trans:
+	cp $(FNPARSE)/data/srl-reldata/grammar/srl-grammar-noFilter.trans grammar.trans
+	#cp $(FNPARSE)/data/srl-reldata/grammar/srl-grammar-current.trans grammar.trans
 
 frameTriage4.rel.gz: ../unified/frameTriage4.rel.gz
 	zcat ../unified/frameTriage4.rel.gz | head -n 1 >frameTriage4.rel
@@ -97,7 +110,10 @@ ids.traindev.txt:
 		data.ontonotes5 $(DATA)/LDC2013T19/data/files/data/english/annotations \
 		data.propbank.conll $(DATA)/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data
 
-ids.train.txt: ids.traindev.txt srl.facts.gz
+make-train-dev-ids.sh:
+	cp $(FNPARSE)/data/srl-reldata/propbank/$@ $@
+
+ids.train.txt: ids.traindev.txt srl.facts.gz make-train-dev-ids.sh
 	./make-train-dev-ids.sh
 
 ids.dev.txt: ids.train.txt
@@ -137,7 +153,7 @@ srl.train.shuf%.facts.gz:
 			input srl.train.facts.gz \
 			output $@
 
-all:
+all: grammar.trans frameTriage4.rel.gz coarsenFrame2.rel.gz role2.rel.gz spans.schema.facts.gz null-span1.facts coarsenPos2.rel
 	make srl.train.shuf0.facts.gz
 	make srl.train.shuf1.facts.gz
 	make srl.train.shuf2.facts.gz
