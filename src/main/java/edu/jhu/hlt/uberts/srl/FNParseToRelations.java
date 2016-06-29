@@ -57,6 +57,11 @@ public class FNParseToRelations extends FactWriter {
   // of the width-1 rule), so you can grep them out if you need to.
   public boolean outputArgPruning = true;
 
+  // If true, include concrete-stanford output, POS tags, dep and cons parses, lemmas.
+  // You can disable this and outputArgPruning and set addParses=false if you just
+  // want the predicate2 and argument4 labels quickly.
+  public boolean outputAnnotations = true;
+
   // def csyn6-stanford id parentId headToken startToken endToken label
   // NOTE: Written out in topological order, root (0,n,S) is first, so you can
   // add nodes as you go and parent (except when its -1 for root) will always
@@ -332,7 +337,8 @@ public class FNParseToRelations extends FactWriter {
     // word(i,t) pos2(i,t), lemma(i,t)
     // dsyn3-basic(g,d,l), dsyn3-col(g,d,l), dsyn3-colcc(g,d,l)
     // csyn3-stanford(i,j,l)
-    writeSentence(y.getSentence());
+    if (outputAnnotations)
+      writeSentence(y.getSentence());
 
     // arg-pruning
     if (outputArgPruning) {
@@ -396,6 +402,9 @@ public class FNParseToRelations extends FactWriter {
 
     try (FNParseToRelations fn2r = new FNParseToRelations()) {
       fn2r.showArgHeuristicFNs.add(DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN);
+      fn2r.outputAnnotations = config.getBoolean("outputAnnotations", true);
+      fn2r.outputArgPruning = config.getBoolean("outputArgPruning", true);
+      fn2r.skipEmptySentences = config.getBoolean("skipEmptySentences", true);
 
       Log.info("writing definitions...");
       fn2r.writeToFile(config.getFile("outputDefs"));
@@ -418,7 +427,7 @@ public class FNParseToRelations extends FactWriter {
         s.lemmatize();
         Log.info("sentenceLength=" + s.size());
         docs++;
-        fn2r.write("startdoc", y.getId(), "# " + dataset);
+        fn2r.write("startdoc", y.getId());
         fn2r.writeFNParse(y);
         done++;
         if (tm.enoughTimePassed(15)) {
