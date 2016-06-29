@@ -33,25 +33,32 @@ echo "args: $@"
 #     role2.rel.gz
 WD=$1
 
+# Directory into which we can write dev/test predictions
+PREDICTIONS_DIR=$2
+
 # This should be a string of the form "weight * priorityFuncName + ..."
 # e.g. "1 * easyFirst + 1 + dfs"
 # see AgendaPriority.java for a list of all legal values.
-PRIORITY=$2
+PRIORITY=$3
 
 # A directory which contains a <relationName>.fs file for every Relation.
 # Each file is the 8-column TSV format.
-FEATURE_SET_DIR=$3
+FEATURE_SET_DIR=$4
 
 # Either "none", "argLoc", "roleCooc", "numArg", or "full"
-GLOBAL_FEAT_MODE=$4
+GLOBAL_FEAT_MODE=$5
 
 # A JAR file in a location which will not change/be removed.
-JAR_STABLE=$5
+JAR_STABLE=$6
 
+if [[ ! -d $PREDICTIONS_DIR ]]; then
+  echo "PREDICTIONS_DIR=$PREDICTIONS_DIR is not a directory"
+  exit 1
+fi
 
 if [[ ! -d $FEATURE_SET_DIR ]]; then
   echo "FEATURE_SET_DIR=$FEATURE_SET_DIR is not a directory"
-  exit 1
+  exit 2
 fi
 
 RD=$WD/rel-data
@@ -109,7 +116,8 @@ java -cp $JAR_STABLE -ea -server -Xmx7G \
     oracleFeats event1,predicate2 \
     agendaPriority "$PRIORITY" \
     globalFeatMode $GLOBAL_FEAT_MODE \
-    featureSetDir $FEATURE_SET_DIR
+    featureSetDir $FEATURE_SET_DIR \
+    predictions.outputDir $PREDICTIONS_DIR
 
 echo "done at `date`, ret code $?"
 

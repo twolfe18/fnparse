@@ -56,6 +56,7 @@ if __name__ == '__main__':
   logs = os.path.join(p, 'logs')
   if not os.path.exists(logs):
     os.makedirs(logs)
+  predictions_dir = os.path.join(p, 'predictions')
 
   jar_stable = os.path.join(p, 'uberts.jar')
   shutil.copy(jar, jar_stable)
@@ -71,7 +72,15 @@ if __name__ == '__main__':
   for gf in global_feats():
     for w in weights():
       c = 'qsub' if qsub else 'sbatch'
-      cmd = [c, '-o', logs, sc, wd, wformat(w), fs_stable, gf, jar_stable]
+
+      pd = os.path.join(predictions_dir, job_name)
+      if not os.path.exists(pd):
+        print 'writing predictions to', pd
+        os.makedirs(pd)
+
+      cmd = [c, '-o', logs, sc, \
+        wd, pd, wformat(w), fs_stable, gf, jar_stable]
+
       print i, cmd
       i += 1
       subprocess.check_call(cmd)

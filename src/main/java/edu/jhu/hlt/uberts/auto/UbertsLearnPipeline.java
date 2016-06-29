@@ -1,5 +1,6 @@
 package edu.jhu.hlt.uberts.auto;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -124,6 +125,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // For now these store all performances for the last data segment
   private List<Map<String, FPR>> perfByRel = new ArrayList<>();
 
+  // For writing out predictions for dev/test data
+  private File predictionsDir;
+  private BufferedWriter predictionsWriter;
+  private boolean includeNegativePredictions = false;
 
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
@@ -226,6 +231,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
+    pipe.predictionsDir = config.getFile("predictions.outputDir", null);
+    if (pipe.predictionsDir != null) {
+      pipe.includeNegativePredictions = config.getBoolean(
+          "predictions.includeNegativePredictions", pipe.includeNegativePredictions);
+      Log.info("[main] writing predictions to " + pipe.predictionsDir.getPath()
+          + " includeNegativePredictions=" + pipe.includeNegativePredictions);
+    }
 
     // Train and dev should be shuffled. Test doesn't need to be.
     List<File> train = config.getExistingFiles("train.facts");
@@ -504,6 +516,19 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       mode = Mode.TRAIN;
     else
       throw new RuntimeException("don't know how to handle " + dataName);
+
+    // Setup to write out predictions
+    if (predictionsDir != null && mode != Mode.TRAIN) {
+      if (!predictionsDir.isDirectory())
+        predictionsDir.mkdirs();
+      try {
+        File f = new File(predictionsDir, dataName + ".facts.gz");
+        Log.info("writing predictions to " + f.getPath());
+        predictionsWriter = FileUtil.getWriter(f);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
   }
 
   @Override
@@ -511,6 +536,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     super.finish(dataName);
     eventCounts.increment("pass/" + mode.toString());
     Log.info("mode=" + mode + " dataName=" + dataName + "\t" + eventCounts.toString());
+
+    // Close predictions writer
+    if (predictionsWriter != null) {
+      try {
+        predictionsWriter.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      predictionsWriter = null;
+    }
 
     // Compute performance over last segment
     Map<String, FPR> perf = new HashMap<>();
@@ -539,7 +574,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     mode = null;
   }
 
-  Pred2ArgPaths.ArgCandidates tackstromArgs = null;
+  private Pred2ArgPaths.ArgCandidates tackstromArgs = null;
 
   private void buildTackstromArgs() {
     Sentence sent = u.dbgSentenceCache;
@@ -659,6 +694,25 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, actionLimit);
       timer.stop("inf/" + mode);
       perfByRel.add(p.get1().perfByRel());
+
+      // Write out predictions to a file in (many doc) fact file format with
+      // comments which say gold, pred, score.
+      if (predictionsWriter != null) {
+        try {
+          predictionsWriter.write(doc.def.toLine());
+          predictionsWriter.newLine();
+          for (Step s : p.get2()) {
+            if (!includeNegativePredictions && !s.pred && !s.gold)
+              continue;
+            predictionsWriter.write(
+                String.format("%s # gold=%s pred=%s score=%.4f",
+                s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, s.score.forwards()));
+            predictionsWriter.newLine();
+          }
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+      }
 
       if (showDevFN && mode == Mode.DEV) {
 
