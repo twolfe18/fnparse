@@ -218,7 +218,6 @@ public class Sentence implements HasId, Serializable {
     case "-RRB-":
     case "$":
     case "HYPH":
-    case "POS":
       return true;
     default:
       return false;
