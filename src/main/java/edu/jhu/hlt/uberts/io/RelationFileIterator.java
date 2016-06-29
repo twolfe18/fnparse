@@ -38,12 +38,16 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
     }
 
     public String toLine() {
+      return toLine(true);
+    }
+
+    public String toLine(boolean includeCommentIfPresent) {
       StringBuilder sb = new StringBuilder(tokens[0]);
       for (int i = 1; i < tokens.length; i++) {
         sb.append(' ');
         sb.append(tokens[i]);
       }
-      if (comment != null) {
+      if (includeCommentIfPresent && comment != null) {
         sb.append(" # ");
         sb.append(comment);
       }

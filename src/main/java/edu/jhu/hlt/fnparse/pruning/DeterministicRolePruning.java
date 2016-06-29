@@ -306,10 +306,9 @@ public class DeterministicRolePruning implements Serializable {
           for (FrameInstance fi : input.getFrameInstances()) {
             int predicate = hf.head(fi.getTarget(), sent);
             if (predicate < 0) {
-              Log.info("problem target=" + fi.getTarget().shortString());
+              Log.info("problem target=" + fi.getTarget().shortString() + " in " + sent.getId());
               System.out.println(Describe.spanWithDeps(fi.getTarget(), sent, hf.getDeps(sent)));
               System.out.println(Describe.sentenceWithDeps(sent, hf.getDeps(sent)));
-//              predicate = hf.head(fi.getTarget(), sent);
               predicate = fi.getTarget().end - 1;
             }
             List<Span> args = Pred2ArgPaths.ArgCandidates.getArgCandidates(predicate, sent);

@@ -100,7 +100,6 @@ public class ManyDocAndConllZipper extends FactWriter {
 
   /**
    * You specify the output using {@link FactWriter} methods.
-   * @throws IOException 
    */
   public void zip(Iterator<RelDoc> manyDocInput, BufferedReader conllInput) throws IOException {
     TimeMarker tm = new TimeMarker();
