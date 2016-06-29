@@ -6,11 +6,13 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.function.BiConsumer;
 
@@ -24,13 +26,22 @@ import edu.jhu.hlt.fnparse.features.Path2.Entry;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
+import edu.jhu.hlt.uberts.Relation;
+import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
+import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -117,6 +128,18 @@ public class Pred2ArgPaths {
       return c.getCount(path.next);
     }
 
+    public Trie<T> getNode(List<T> path) {
+      Trie<T> cur = this;
+      int n = path.size();
+      for (int i = 0; i < n; i++) {
+        T key = path.get(i);
+        cur = cur.children.get(key);
+        if (cur == null)
+          return null;
+      }
+      return cur;
+    }
+
     /** returns the old count */
     public int setCount(int c, LL<T> path) {
       Trie<T> child = children.get(path.cur);
@@ -143,45 +166,51 @@ public class Pred2ArgPaths {
   // First item is the role, e.g. ARG0, followed by the pred -> arg head path, similar to above
   private Trie<String> role2pred2argHead;
 
+  private DependencyHeadFinder hf;
+
   public Pred2ArgPaths() {
     pred2argHead = new Trie<>(null);
     role2pred2argHead = new Trie<String>(null);
+    hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
   }
 
-  public void add(FNParse y, HeadFinder hf) {
+  public void add(FNParse y) {
     for (FrameInstance fi : y.getFrameInstances())
-      add(fi, hf);
+      add(fi);
   }
-  public void add(FrameInstance fi, HeadFinder hf) {
+  public void add(FrameInstance fi) {
     Sentence sent = fi.getSentence();
-    DependencyParse deps = sent.getBasicDeps();
-    int p = hf.head(fi.getTarget(), sent);
     for (Pair<String, Span> rs : fi.getRealizedRoleArgs()) {
       String role = rs.get1();
       Span s = rs.get2();
-      int a = hf.head(s, sent);
-
-//      System.out.println("[p2a] sent: " + sent.getId());
-//      System.out.println("[p2a] pred: " + sent.getWord(p));
-//      System.out.println("[p2a] arg:  " + Describe.span(s, sent));
-//      if (a < 0) {
-//        System.out.println("[p2a] couldn't compute head of arg!");
-//        continue;
-//      }
-//      System.out.println("[p2a] head: " + sent.getWord(a));
-
-      Path2 path = new Path2(p, a, deps, sent);
-      List<String> edges = new ArrayList<>();
-      for (Entry e : path.getEntries())
-        if (e.isEdge())
-          edges.add(e.show(null, EdgeType.DEP));
-      System.out.println("[p2a] edge: " + edges);
-      System.out.println("[p2a] path: " + path.getEntries());
-      System.out.println();
-      pred2argHead.add(edges);
-      edges.add(0, role);
-      role2pred2argHead.add(edges);
+      add(fi.getTarget(), s, role, sent);
     }
+  }
+
+  public void add(HypEdge argument4Fact, Sentence sent) {
+    Span t = Span.inverseShortString((String) argument4Fact.getTail(0).getValue());
+    Span s = Span.inverseShortString((String) argument4Fact.getTail(2).getValue());
+    String k = (String) argument4Fact.getTail(3).getValue();
+    add(t, s, k, sent);
+  }
+
+  public void add(Span t, Span s, String k, Sentence sent) {
+    DependencyParse deps = hf.getDeps(sent);
+    int p = hf.head(t, sent);
+    int a = hf.head(s, sent);
+    List<String> edges = getPath(p, a, deps, sent);
+    pred2argHead.add(edges);
+    edges.add(0, k);
+    role2pred2argHead.add(edges);
+  }
+
+  public static List<String> getPath(int predHead, int argHead, DependencyParse deps, Sentence sent) {
+    Path2 path = new Path2(predHead, argHead, deps, sent);
+    List<String> edges = new ArrayList<>();
+    for (Entry e : path.getEntries())
+      if (e.isEdge())
+        edges.add(e.show(null, EdgeType.DEP));
+    return edges;
   }
 
   /**
@@ -214,28 +243,96 @@ public class Pred2ArgPaths {
       Log.info("writing pred->arg counts by role to " + outByRole.getPath());
 
     Pred2ArgPaths paths = new Pred2ArgPaths();
-    HeadFinder hf = new DependencyHeadFinder();
-
-    String dataset = config.getString("dataset");
-    boolean addParses = config.getBoolean("addParses", true);
     int n = 0;
     int target = 32;
-    Iterable<FNParse> data = FeaturePrecomputation.getData(dataset, addParses);
-    for (FNParse y : data) {
-      paths.add(y, hf);
-      n++;
-      if (n >= target) {
-        Log.info("added " + n + " paths");
-        target *= 2;
-        paths.writePathsWithCounts(out, false);
-        if (outByRole != null)
-          paths.writePathsWithCounts(outByRole, true);
+
+    File mdf = config.getFile("srl.facts", null);
+    if (mdf != null) {
+      Log.info("reading rel data from " + mdf.getPath());
+      Uberts u = new Uberts(new Random(9001));
+      u.readRelData(config.getExistingFile("relations.def", new File("data/srl-reldata/propbank/relations.def")));
+      Relation a4 = u.getEdgeType("argument4");
+      boolean dedup = true;
+      try (RelationFileIterator i1 = new RelationFileIterator(mdf, false);
+          ManyDocRelationFileIterator i2 = new ManyDocRelationFileIterator(i1, dedup)) {
+        while (i2.hasNext()) {
+          RelDoc d = i2.next();
+          assert d.facts.isEmpty();
+          u.readRelData(d);
+          Sentence sent = OldFeaturesWrapper.readSentenceFromState(u);
+//          edu.jhu.hlt.tutils.LL<HypEdge> a4fs = u.getState().match2(a4);
+//          assert a4fs != null : "no argument4 facts?";
+//          for (edu.jhu.hlt.tutils.LL<HypEdge> cur = a4fs; cur != null; cur = cur.next)
+//            paths.add(cur.item, sent);
+          Collection<HashableHypEdge> a4fs = u.getLabels().getGoldEdges(a4);
+          for (HashableHypEdge he : a4fs)
+            paths.add(he.getEdge(), sent);
+          u.clearNonSchemaNodes();
+          u.clearLabels();
+          u.dbgSentenceCache = null;
+
+          // Write out intermediate results
+          n++;
+          if (n >= target) {
+            Log.info("added " + n + " sentences");
+            target *= 2;
+            paths.writePathsWithCounts(out, false);
+            if (outByRole != null)
+              paths.writePathsWithCounts(outByRole, true);
+          }
+        }
+      }
+    } else {
+      String dataset = config.getString("dataset");
+      Log.info("re-parsing " + dataset + " data");
+      boolean addParses = config.getBoolean("addParses", true);
+      Iterable<FNParse> data = FeaturePrecomputation.getData(dataset, addParses);
+      for (FNParse y : data) {
+        paths.add(y);
+
+        // Write out intermediate results
+        n++;
+        if (n >= target) {
+          Log.info("added " + n + " sentences");
+          target *= 2;
+          paths.writePathsWithCounts(out, false);
+          if (outByRole != null)
+            paths.writePathsWithCounts(outByRole, true);
+        }
       }
     }
+
+    // Write out final results
     paths.writePathsWithCounts(out, false);
     if (outByRole != null)
       paths.writePathsWithCounts(outByRole, true);
+
     Log.info("done");
+  }
+
+  public static Trie<String> getPathTrie(File countAndPathTsv, boolean byRole) throws IOException {
+    Trie<String> paths = new Trie<>(null);
+    try (BufferedReader r = FileUtil.getReader(countAndPathTsv)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        String[] tok = line.split("\t");
+        int c = Integer.parseInt(tok[0]);
+        List<String> e = new ArrayList<>(tok.length - 1);
+        if (byRole) {
+          String role = tok[1];
+          for (int i = 2; i < tok.length; i++)
+            e.add(Path2.Edge.fromString(tok[i]).toString());
+          e.add(role);
+        } else {
+          for (int i = 1; i < tok.length; i++)
+            e.add(Path2.Edge.fromString(tok[i]).toString());
+        }
+        int oldCount = paths.setCount(c, e);
+        assert oldCount == 0 : "not uniq? path=" + e + " c=" + c + " oldCount=" + oldCount;
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    return paths;
   }
 
   /**
@@ -252,7 +349,41 @@ public class Pred2ArgPaths {
   public static class ArgCandidates {
     public static boolean DEBUG = false;
     public static boolean USE_PARSEY = true;
-//    private Map<String, Trie<Path2.Edge>> role2path2arg;
+    public static boolean EXTRA_SPANS = true;
+
+    public static Counts<String> EVENTS = null; // = new Counts<>();
+    public static TimeMarker tm = null; //new TimeMarker();
+
+    private Trie<String> pathThenRole;
+    private DependencyHeadFinder hf;
+
+    public ArgCandidates(File f) throws IOException {
+      Log.info(f.getPath());
+      pathThenRole = getPathTrie(f, true);
+      hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
+    }
+
+    public List<Pair<Span, String>> getArgCandidates2(int predicate, Sentence sent) {
+      List<Span> spans = getArgCandidates(predicate, sent);
+      List<Pair<Span, String>> spansWithRoles = new ArrayList<>();
+      DependencyParse deps = hf.getDeps(sent);
+      for (Span s : spans) {
+        int shead = hf.head(s, sent);
+        List<String> path = getPath(predicate, shead, deps, sent);
+        Trie<String> node = pathThenRole.getNode(path);
+        if (node == null)
+          continue;
+        for (java.util.Map.Entry<String, Trie<String>> x : node.children.entrySet()) {
+          boolean terminal = x.getValue().nObjs > 0;
+          if (!terminal)
+            continue;
+          String role = x.getKey();
+//          int count = x.getValue().nObjs; // TODO consider count restriction
+          spansWithRoles.add(new Pair<>(s, role));
+        }
+      }
+      return spansWithRoles;
+    }
 
     /*
       In our candidate argument extraction algorithm,
@@ -293,20 +424,31 @@ public class Pred2ArgPaths {
      * given position, not including Span.nullSpan.
      */
     public static List<Span> getArgCandidates(int predicate, Sentence sent) {
+      if (EVENTS != null)
+        EVENTS.increment("calls");
+      DependencyParse d = USE_PARSEY ? sent.getParseyDeps() : sent.getBasicDeps();
       if (DEBUG) {
         System.out.println("looking for arguments, USE_PARSEY=" + USE_PARSEY);
         System.out.println(Describe.spanWithPos(Span.widthOne(predicate), sent, 3));
-        System.out.println(Describe.sentenceWithDeps(sent, true));
+        System.out.println(Describe.sentenceWithDeps(sent, d));
         System.currentTimeMillis();
       }
       // Note: the bit about checking (role, pred->arg) can be enforced after
       // the fact by some other hard LocalFactor for argument4
       List<Span> args = new ArrayList<>();
-      DependencyParse d = USE_PARSEY ? sent.getParseyDeps() : sent.getBasicDeps();
       for (int p = predicate; p >= 0; p = d.getHead(p)) {
 
         int[] ci = d.getChildren(p);
         Arrays.sort(ci);
+
+        if (DEBUG) {
+          System.out.println();
+          System.out.printf("p=%-16s @ %-2s proj=%s\n", sent.getWord(p), p, d.getProj(p).shortString());
+          for (int i = 0; i < ci.length; i++) {
+            System.out.printf("child.%-8s%-12s @ %-2s proj=%s\n",
+                d.getLabel(ci[i]), sent.getWord(ci[i]), ci[i], d.getProj(ci[i]).shortString());
+          }
+        }
 
         for (int i = 0; i < ci.length; i++) {
           String l = d.getLabel(ci[i]);
@@ -314,54 +456,71 @@ public class Pred2ArgPaths {
             // Add grand-children
             int[] gci = d.getChildren(ci[i]);
             for (int j = 0; j < gci.length; j++)
-              addNode(gci[j], d, args);
+              addNode(gci[j], sent, d, args);
           }
         }
 
         // Add children
         for (int i = 0; i < ci.length; i++)
-          addNode(ci[i], d, args);
+          addNode(ci[i], sent, d, args);
 
-        // Their algorithm is very poorly explained, and as implemented doesn't
-        // seem to work. I think its good enough if we get arguments of the parent.
-//        if (p == predicate) {
-//          // Partial sub-trees are only relevant to the predicate's parent and higher
-//          continue;
-//        }
-//
-//        // Walk from the nearest left child leftwards
-//        int nearestLC = 0;
-//        for (int i = 1; i < ci.length; i++) {
-//          if (ci[i] >= p)
-//            break;
-//          if (ci[i] > ci[nearestLC])
-//            nearestLC = i;
-//        }
-//        for (int i = nearestLC; i >= 0; i--) {
-//          if (ci[i] == predicate || offensive(ci[i], d, sent))
-//            break;
-//          args.add(Span.getSpan(ci[i], p));
-//        }
-//
-//        // Walk from the nearest right child rightwards
-//        int nearestRC = 0;
-//        for (int i = 0; i < ci.length; i++) {
-//          if (ci[i] > p) {
-//            nearestRC = i;
-//            break;
-//          }
-//        }
-//        for (int i = nearestRC; i < ci.length; i++) {
-//          if (ci[i] == predicate || offensive(ci[i], d, sent))
-//            break;
-//          args.add(Span.getSpan(p+1, ci[i]+1));
-//        }
+        if (EXTRA_SPANS) {
+          // Their algorithm is very poorly explained, and as implemented doesn't
+          // seem to work. I think its good enough if we get arguments of the parent.
+          if (p == predicate) {
+            // Partial sub-trees are only relevant to the predicate's parent and higher
+            continue;
+          }
+
+          // Walk from the nearest left child leftwards
+          int nearestLC = -1;
+          for (int i = 1; i < ci.length; i++) {
+            if (ci[i] >= p)
+              break;
+            if (nearestLC < 0 || ci[i] > ci[nearestLC])
+              nearestLC = i;
+          }
+          for (int i = nearestLC; i >= 0; i--) {
+            if (ci[i] == predicate || offensive(ci[i], d, sent))
+              break;
+            int left = d.getProjLeft(ci[i]);
+            assert left <= ci[i];
+            assert left < p;
+            args.add(Span.getSpan(left, p+1));
+          }
+
+          // Walk from the nearest right child rightwards
+          int nearestRC = ci.length;
+          for (int i = 0; i < ci.length; i++) {
+            if (ci[i] > p) {
+              nearestRC = i;
+              break;
+            }
+          }
+          for (int i = nearestRC; i < ci.length; i++) {
+            if (ci[i] == predicate || offensive(ci[i], d, sent))
+              break;
+            int right = d.getProjRight(ci[i]);
+            args.add(Span.getSpan(p, right+1));
+          }
+        }
+
       }
 
       // Remove any duplicates
       Set<Span> uniq = new HashSet<>(args);
       args.clear();
       args.addAll(uniq);
+
+      if (DEBUG) {
+        System.out.println("[Pred2ArgPaths.ArgCandidates] nArgs=" + args.size()
+            + " nTok=" + sent.size() + " EXTRA_SPANS=" + EXTRA_SPANS + " sent.id=" + sent.getId());
+      }
+      if (EVENTS != null) {
+        EVENTS.update("args", args.size());
+        if (tm.enoughTimePassed(15))
+          Log.info("EXTRA_SPANS=" + EXTRA_SPANS + "\t" + EVENTS.toString());
+      }
 
       return args;
     }
@@ -379,10 +538,13 @@ public class Pred2ArgPaths {
       return !notOffensiveDeprels.contains(deprel.toLowerCase());
     }
 
-    private static void addNode(int i, DependencyParse d, List<Span> args) {
-      int s = d.getProjLeft(i);
-      int e = d.getProjRight(i) + 1;
-      args.add(Span.getSpan(s, e));
+    private static void addNode(int i, Sentence sent, DependencyParse d, List<Span> args) {
+      if (!sent.isPunc(i)) {
+        Span s = d.getProj(i);
+        if (DEBUG)
+          System.out.println("adding arg: " + s.shortString());
+        args.add(s);
+      }
     }
 
   }
