@@ -118,7 +118,8 @@ srl.dev.facts.gz: srl.train.facts.gz
 
 srl.test.facts.gz: srl.train.facts.gz
 
-srl.dev.shuf.facts.gz: srl.dev.facts.gz
+# srl.dev.facts.gz
+srl.dev.shuf.facts.gz:
 	java -Xmx7G -cp $(JAR) -ea \
 		edu.jhu.hlt.uberts.io.ManyDocShuffler \
 			seed 9001 \
@@ -128,7 +129,8 @@ srl.dev.shuf.facts.gz: srl.dev.facts.gz
 
 # Shuffle the train set a few times.
 
-srl.train.shuf%.facts.gz: srl.train.facts.gz
+#srl.train.facts.gz
+srl.train.shuf%.facts.gz:
 	java -Xmx7G -cp $(JAR) -ea \
 		edu.jhu.hlt.uberts.io.ManyDocShuffler \
 			seed `echo $@ | md5sum | cut -d' ' -f1 | xargs -I {} python -c 'print int("{}", 16) % (2**16)'` \

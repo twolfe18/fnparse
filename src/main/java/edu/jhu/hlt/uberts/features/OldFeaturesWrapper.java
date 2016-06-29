@@ -673,7 +673,9 @@ public class OldFeaturesWrapper {
       edu.jhu.hlt.concrete.Constituent c = pc.get2();
       c.setHeadChildIndex(-1);
       if (!c.isSetChildList() || c.getChildListSize() == 0) {
-        assert c.getStart()+1 == c.getEnding();
+//        assert c.getStart()+1 == c.getEnding() : "TODO attach all POS tags in this span as children.";
+        if (c.getStart()+1 != c.getEnding())
+          Log.warn("TODO attach all POS tags in this span as children.");
         continue;
       }
       int headToken = c.getHeadChildIndex();

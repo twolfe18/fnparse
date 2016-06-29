@@ -1,3 +1,6 @@
+def startDoc <docid>  # starts a new document in a many-doc fact file
+def doneAnno <docid>  # added by UbertsPipeline after all "x relation ..." facts have been added
+
 def word2 <tokenIndex> <word>
 def cpos2 <tokenIndex> <pos>    # coarse grain POS tags from parsey, universal POS tags
 def pos2 <tokenIndex> <pos>     # fine grain POS tags from parsey, PTB POS tags
@@ -19,4 +22,5 @@ def argument4 <span> <frame> <span> <role>
 def xue-palmer-args2 <span> <span>
 def xue-palmer-deps-args2 <span> <span>
 def xue-palmer-otf-args2 <span> <span>    # otf == "on the fly", for debugging
+def tackstrom-args4 <span> <span> <tokenIndex> <role>
 

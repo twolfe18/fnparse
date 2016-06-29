@@ -3,9 +3,7 @@ package edu.jhu.hlt.uberts.srl;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.MentionArgument;

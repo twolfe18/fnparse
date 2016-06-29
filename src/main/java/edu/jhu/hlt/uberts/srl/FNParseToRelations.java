@@ -1,6 +1,5 @@
 package edu.jhu.hlt.uberts.srl;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -222,6 +221,8 @@ public class FNParseToRelations extends FactWriter {
   }
 
   public void definitions() throws IOException {
+    write("def", "startDoc", "<docid>");
+    write("def", "doneAnno", "<docid>");
     write("def", "word2", "<tokenIndex>", "<word>");
     write("def", "pos2", "<tokenIndex>", "<pos>");
     write("def", "lemma2", "<tokenIndex>", "<lemma>");
@@ -310,7 +311,7 @@ public class FNParseToRelations extends FactWriter {
             System.out.println("missed: " + p.get1());
             System.out.println("target: " + Describe.spanWithPos(fi.getTarget(), sent, context));
             System.out.println("arg:    " + Describe.spanWithPos(p.get2(), sent, context));
-            System.out.println(Describe.sentenceWithDeps(sent, true));
+            System.out.println(Describe.sentenceWithDeps(sent));
             System.out.println();
           }
         }

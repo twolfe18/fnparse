@@ -42,6 +42,8 @@ import edu.jhu.hlt.tutils.Span;
 public class DeterministicRolePruning implements Serializable {
   private static final long serialVersionUID = -7855499046834746665L;
 
+  public static boolean VERBOSE = false;
+
   public static enum Mode {
     // Take all constituents in Stanford's constituency parse
     // (regardless of frame/role)
@@ -240,7 +242,7 @@ public class DeterministicRolePruning implements Serializable {
             if (pred == null) {
               // Single-token targets are guaranteed to be nodes in the
               // tree, but multi-word targets often won't be.
-              HeadFinder hf = new DependencyHeadFinder();
+              HeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
               int h = hf.head(fi.getTarget(), input.getSentence());
               pred = parse.getConstituent(Span.widthOne(h));
             }
@@ -300,9 +302,16 @@ public class DeterministicRolePruning implements Serializable {
 //          possibleSpans = DependencyBasedXuePalmerRolePruning
 //              .getMask(input, mode);
 //          assert mode == Mode.XUE_PALMER_DEP_HERMANN : "this is not really imlemented properly";
-          HeadFinder hf = new DependencyHeadFinder();
+          DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
           for (FrameInstance fi : input.getFrameInstances()) {
             int predicate = hf.head(fi.getTarget(), sent);
+            if (predicate < 0) {
+              Log.info("problem target=" + fi.getTarget().shortString());
+              System.out.println(Describe.spanWithDeps(fi.getTarget(), sent, hf.getDeps(sent)));
+              System.out.println(Describe.sentenceWithDeps(sent, hf.getDeps(sent)));
+//              predicate = hf.head(fi.getTarget(), sent);
+              predicate = fi.getTarget().end - 1;
+            }
             List<Span> args = Pred2ArgPaths.ArgCandidates.getArgCandidates(predicate, sent);
             args.add(Span.nullSpan);
 
@@ -348,11 +357,13 @@ public class DeterministicRolePruning implements Serializable {
       }
       //LOG.debug(String.format("[decode] possible args for n=%d nFI=%d is %d",
       //    input.getSentence().size(), input.numFrameInstances(), output.numPossibleArgs()));
-      if (input instanceof FNParse) {
-        if (showPruningRecall)
-          Log.info("pruning recall: " + output.recall((FNParse) input));
-      } else {
-        Log.info("not showing recall since input is not FNParse: " + input.getClass().getName());
+      if (VERBOSE) {
+        if (input instanceof FNParse) {
+          if (showPruningRecall)
+            Log.info("pruning recall: " + output.recall((FNParse) input));
+        } else {
+          Log.info("not showing recall since input is not FNParse: " + input.getClass().getName());
+        }
       }
       return output;
     }
@@ -401,7 +412,7 @@ public class DeterministicRolePruning implements Serializable {
       Log.info(Describe.fnParse(parse));
       for (int i = 0; i < mask.numFrameInstances(); i++) {
         FrameInstance frame = mask.getFrameInstance(i);
-        Log.info("sentence:\n" + Describe.sentenceWithDeps(mask.getSentence(), true));
+        Log.info("sentence:\n" + Describe.sentenceWithDeps(mask.getSentence()));
         Log.info("possible args for " + Describe.frameInstance(frame));
         for (Span s : mask.getPossibleArgs(i))
           Log.info("\t" + Describe.span(s, parse.getSentence()));

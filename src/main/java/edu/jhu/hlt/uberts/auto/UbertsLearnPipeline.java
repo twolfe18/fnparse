@@ -26,6 +26,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.Pred2ArgPaths;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -538,14 +539,55 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     mode = null;
   }
 
-  /**
-   * Assumes pos,lemma,dparse,cparse has been added, builds {@link Sentence}
-   * and calls {@link DeterministicRolePruning}.
-   */
-  private void buildOldDataStructures() {
-    // Build Sentence, DependencyParses, and ConsituencyParses
-    assert u.dbgSentenceCache == null;
-    Sentence sent = u.dbgSentenceCache = OldFeaturesWrapper.readSentenceFromState(u);
+  Pred2ArgPaths.ArgCandidates tackstromArgs = null;
+
+  private void buildTackstromArgs() {
+    Sentence sent = u.dbgSentenceCache;
+    if (sent == null)
+      throw new IllegalStateException("call buildSentenceCacheInUberts first");
+    /*
+     * def tackstrom-args4 <span> <span> <token> <path>  # t, s, head of s, path from head of t to head of s
+     * def observed-pa-path2 <path> <role> <count>
+     *
+     * MAYBE (not currently):
+     * predicate2(t,f) & tackstrom-args4(t,s,shead,tspath) & observed-pa-path2(tspath,k,_) => srl2(t,s)
+     */
+
+    // Setup
+    if (tackstromArgs == null) {
+      // Currently tackstromArgs.getArgCandidates2 does the join on pred-arg path,
+      // so the grammar only needs to include:
+      //   predicate2(t,f) & tackstrom-args4(t,s,sHead,k) => argument4(t,s,f,k)
+//      u.readRelData("def tackstrom-args4 <span> <span> <tokenIndex> <role>");
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      File rolePathCounts = config.getExistingFile("rolePathCounts");
+      try {
+        tackstromArgs = new Pred2ArgPaths.ArgCandidates(rolePathCounts);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
+    Relation ev1 = u.getEdgeType("event1");
+    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
+      assert target.getEdge().getNumTails() == 1;
+      Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
+      assert t.width() == 1;
+      List<Pair<Span, String>> rss = tackstromArgs.getArgCandidates2(t.start, sent);
+      for (Pair<Span, String> rs : rss) {
+        String role = rs.get2();
+        int shead = hf.head(rs.get1(), sent);
+        assert shead >= 0;
+        u.readRelData("x tackstrom-args4 " + t.shortString() + " " + rs.get1().shortString() + " " + shead + " " + role);
+      }
+    }
+  }
+
+  private void buildXuePalmerOTF() {
+    Sentence sent = u.dbgSentenceCache;
+    if (sent == null)
+      throw new IllegalStateException("call buildSentenceCacheInUberts first");
 
     // Run arg triage
     // 1) Read predicates/targets out of the state (they should be added already)
@@ -562,7 +604,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
     FNTagging argsFor = new FNTagging(sent, frameMentions);
 
-    // 1b) DEBUG: Show all of the arguments that we're looking for
+//    // 1b) DEBUG: Show all of the arguments that we're looking for
 //    Relation a4 = u.getEdgeType("argument4");
 //    for (HashableHypEdge e : u.getLabels().getGoldEdges(a4)) {
 //      Span t = Span.inverseShortString((String) e.getEdge().getTail(0).getValue());
@@ -591,14 +633,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //    System.out.println("[consume] " + doc.getId());
 
     // Add xue-palmer-args2
-    buildOldDataStructures();
+    buildSentenceCacheInUberts();
+    buildXuePalmerOTF();
+    buildTackstromArgs();
 
     eventCounts.increment("consume/" + mode.toString());
-    if (eventCounts.getTotalCount() % 500 == 0) {
-      Log.info("event counts: " + eventCounts);
+    if (eventCounts.getTotalCount() % 1000 == 0) {
+      System.out.println("pipeline counts: " + eventCounts.toStringWithEq());
+      System.out.println("uberts counts: " + u.stats.toStringWithEq());
       System.out.println("[memLeak] " + u.getState());
     }
-    u.stats.clear();
     switch (mode) {
     case TRAIN:
       train(doc);
@@ -805,16 +849,18 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       });
 
       // Show xue-palmer for all fn(srl2)
-      for (HypEdge e : perf.getFalseNegatives(u.getEdgeType("srl2"))) {
-        assert e.getNumTails() == 2;
-        Span t = Span.inverseShortString((String) e.getTail(0).getValue());
-        Span s = Span.inverseShortString((String) e.getTail(1).getValue());
-        System.out.println("didn't find arg=" + s.shortString() + " for pred=" + t.start);
-        assert t.width() == 1;
-        boolean orig = Pred2ArgPaths.ArgCandidates.DEBUG;
-        Pred2ArgPaths.ArgCandidates.DEBUG = true;
-        Pred2ArgPaths.ArgCandidates.getArgCandidates(t.start, u.dbgSentenceCache);
-        Pred2ArgPaths.ArgCandidates.DEBUG = orig;
+      if (showDevFN) {
+        for (HypEdge e : perf.getFalseNegatives(u.getEdgeType("srl2"))) {
+          assert e.getNumTails() == 2;
+          Span t = Span.inverseShortString((String) e.getTail(0).getValue());
+          Span s = Span.inverseShortString((String) e.getTail(1).getValue());
+          System.out.println("didn't find arg=" + s.shortString() + " for pred=" + t.start);
+          assert t.width() == 1;
+          boolean orig = Pred2ArgPaths.ArgCandidates.DEBUG;
+          Pred2ArgPaths.ArgCandidates.DEBUG = true;
+          Pred2ArgPaths.ArgCandidates.getArgCandidates(t.start, u.dbgSentenceCache);
+          Pred2ArgPaths.ArgCandidates.DEBUG = orig;
+        }
       }
 
       // NOTE: It just occurred to me that I may be updating w.r.t. argument4

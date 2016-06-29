@@ -217,7 +217,8 @@ public class Labels {
   }
 
   public Collection<HashableHypEdge> getGoldEdges(Relation r) {
-    return edges2.get(r);
+    Collection<HashableHypEdge> c = edges2.get(r);
+    return c == null ? Collections.emptyList() : c;
   }
 
   public static <T> Map<T, FPR> combinePerfByRel(Map<T, FPR> a, Map<T, FPR> b) {
@@ -407,9 +408,11 @@ public class Labels {
     public List<HypEdge> getFalseNegatives(Relation rel) {
       List<HypEdge> fn = new ArrayList<>();
       Set<HashableHypEdge> s = edges2.get(rel);
-      for (HashableHypEdge he : s) {
-        if (!seen.contains(he))
-          fn.add(he.getEdge());
+      if (s != null) {
+        for (HashableHypEdge he : s) {
+          if (!seen.contains(he))
+            fn.add(he.getEdge());
+        }
       }
       return fn;
     }
