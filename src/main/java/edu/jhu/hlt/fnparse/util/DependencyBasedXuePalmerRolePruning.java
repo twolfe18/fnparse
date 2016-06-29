@@ -127,7 +127,7 @@ public class DependencyBasedXuePalmerRolePruning {
                 + "the right in English...");
             Log.info("3) target=" + fi.getTarget());
             Log.info("3) parent=\n" + Describe.spanWithDeps(
-                deps.getSpan(p), fi.getSentence(), true));
+                deps.getSpan(p), fi.getSentence(), deps));
           }
         }
       }

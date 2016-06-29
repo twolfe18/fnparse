@@ -4,7 +4,10 @@ def global_feats():
 
 # 17 satisfying assignments
 def weights():
-  w = [0, 3, 4, 6, 12]  # sum to 12
+  #w = [0, 2, 3, 4, 6, 8, 9, 12]  # 55 options which sum to 12
+  w = [0, 3, 4, 6, 8, 12]  # 27 options which sum to 12
+  #w = [0, 3, 4, 6, 9, 12]  # 27 options which sum to 12
+  #w = [0, 3, 4, 6, 12]  # 17 options which sum to 12
   for bfs in w:
     for dfs in w:
       if bfs * dfs > 0:

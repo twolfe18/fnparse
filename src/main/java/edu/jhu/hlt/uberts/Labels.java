@@ -1,6 +1,7 @@
 package edu.jhu.hlt.uberts;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -60,7 +61,7 @@ public class Labels {
   }
 
   static final String NULL_SPAN = "0-0";
-  static final Object NIL = "NIL";  // TODO
+//  static final Object NIL = "NIL";  // TODO
 
   /**
    * Returns a bit mask (set) of tail/argument positions which are NIL
@@ -213,6 +214,11 @@ public class Labels {
       all.add(hhe.getEdge());
     Collections.sort(all, HypEdge.BY_RELATION_THEN_TAIL);
     return all;
+  }
+
+  public Collection<HashableHypEdge> getGoldEdges(Relation r) {
+    Collection<HashableHypEdge> c = edges2.get(r);
+    return c == null ? Collections.emptyList() : c;
   }
 
   public static <T> Map<T, FPR> combinePerfByRel(Map<T, FPR> a, Map<T, FPR> b) {
@@ -402,9 +408,11 @@ public class Labels {
     public List<HypEdge> getFalseNegatives(Relation rel) {
       List<HypEdge> fn = new ArrayList<>();
       Set<HashableHypEdge> s = edges2.get(rel);
-      for (HashableHypEdge he : s) {
-        if (!seen.contains(he))
-          fn.add(he.getEdge());
+      if (s != null) {
+        for (HashableHypEdge he : s) {
+          if (!seen.contains(he))
+            fn.add(he.getEdge());
+        }
       }
       return fn;
     }

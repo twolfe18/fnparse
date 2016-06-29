@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.function.BiFunction;
 
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -31,11 +32,13 @@ import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.rules.Env.Trie3;
 import edu.jhu.hlt.uberts.transition.TransGen;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.Alphabet;
 
 /**
  * An uber transition system for joint predictions. Holds a state and agenda,
@@ -108,6 +111,11 @@ public class Uberts {
   public IntArrayList statsAgendaSizePerStep = new IntArrayList();
 
 
+  // If this document represents a sentence and you need to call older code
+  // which only knows how to read Sentences, then set this.
+  public Sentence dbgSentenceCache;
+  public Alphabet<String> dbgSentenceCacheDepsAlph = new Alphabet<>();
+
   // TODO Remove
   // Ancillary data for features which don't look at the State graph.
   // New data backend (used to be fnparse.Sentence and FNParse)
@@ -165,7 +173,9 @@ public class Uberts {
    * the data you're processing.
    */
   public void clearNonSchemaNodes() {
+    stats.increment("clearNonSchemaNodes");
     nodes3.clearNonSchema();
+    state.clearNonSchema();
   }
 
   public Uberts(Random rand) {
@@ -244,8 +254,8 @@ public class Uberts {
       // But maybe don't add apply it (add it to state)
       if (hitLim)
         continue;
-//      if ((oracle && y) || (!oracle && pred)) {
-      if ((oracle && y) || pred) {
+      if ((oracle && y) || (!oracle && pred)) {
+//      if ((oracle && y) || pred) {
         if (perf != null)
           perf.add(ai.edge);
         addEdgeToState(ai);
@@ -724,8 +734,6 @@ public class Uberts {
 
   public void clearAgenda() {
     agenda.clear();
-//    if (preAgendaAddMapper != null)
-//      preAgendaAddMapper.clear();
     thresh.clear();
   }
 
@@ -778,6 +786,16 @@ public class Uberts {
     return defs;
   }
 
+  public void readRelData(RelDoc d) {
+    readRelData(d.def);
+    if (!d.facts.isEmpty())
+      throw new IllegalArgumentException();
+    for (RelLine l : d.items)
+      readRelData(l);
+  }
+  public Relation readRelData(RelLine line) {
+    return readRelData(line.toLine());
+  }
   public Relation readRelData(String line) {
     return readRelData(line, false);
   }
@@ -791,7 +809,15 @@ public class Uberts {
     String command = toks[0];
     switch (command) {
     case "startdoc":
-      Log.warn("skipping multi-doc line: " + line);
+//      Log.warn("skipping multi-doc line: " + line);
+//      dbgMakeEdge(factString, isSchema)
+//      this.addEdgeToStateNoMatch(e, Adjoints.Constant.ZERO);
+      assert toks.length == 2;
+      String docid = toks[1];
+      NodeType docidNT = lookupNodeType("docid", false);
+      Relation startDocRel = getEdgeType("startDoc");
+      HypNode docidN = lookupNode(docidNT, docid, true /* addIfNotPresent */, false /* isSchema */);
+      addEdgeToState(makeEdge(false /* isSchema */, startDocRel, docidN), Adjoints.Constant.ZERO);
       break;
     case "def":
       relName = toks[1];
@@ -943,8 +969,8 @@ public class Uberts {
     if (DEBUG > 1)
       System.out.println("Uberts addEdgeToState: " + e.toString() + " " + score.forwards() + " " + score);
     if (stats != null) {
-      stats.increment("pop");
-      stats.increment("pop/" + e.getRelation().getName());
+      stats.increment("state");
+      stats.increment("state/" + e.getRelation().getName());
     }
     assert nodesContains(e);
     state.add(e, score);
@@ -975,7 +1001,8 @@ public class Uberts {
    */
   public void addEdgeToStateNoMatch(HypEdge e, Adjoints score) {
     assert nodesContains(e) : e + " has some HypNodes which aren't in Uberts.nodes";
-    stats.increment("pop/noMatch");
+    stats.increment("state/noMatch");
+    stats.increment("state/noMatch/" + e.getRelation().getName());
     state.add(e, score);
   }
 
@@ -990,20 +1017,18 @@ public class Uberts {
         System.out.println("Uberts addEdgeToAgenda: " + e.toString());
     }
     if (stats != null) {
-      stats.increment("push");
-      stats.increment("push/" + e.getRelation().getName());
+      stats.increment("agenda");
+      stats.increment("agenda/" + e.getRelation().getName());
     }
     assert nodesContains(e);
     HashableHypEdge hhe = new HashableHypEdge(e);
     if (agenda.contains(hhe)) {
-      stats.increment("push/dup/agenda");
-      stats.increment("push/dup/agenda/" + e.getRelation().getName());
+      stats.increment("agenda/dup/agenda");
+      stats.increment("agenda/dup/agenda/" + e.getRelation().getName());
     } else if (state.getScore(hhe) != null) {
-      stats.increment("push/dup/state");
-      stats.increment("push/dup/state/" + e.getRelation().getName());
+      stats.increment("agenda/dup/state");
+      stats.increment("agenda/dup/state/" + e.getRelation().getName());
     } else {
-//      if (preAgendaAddMapper != null)
-//        score = preAgendaAddMapper.map(hhe, score);
       agenda.add(hhe, score);
     }
   }

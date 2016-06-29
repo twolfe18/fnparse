@@ -1,5 +1,4 @@
 
-
 # Find the train documents/sentence which have some annotations.
 # Intersection of previous filtering and train ids.
 cat ids.traindev.txt \

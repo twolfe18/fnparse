@@ -37,10 +37,10 @@ public class Describe {
   }
 
   public static String sentenceWithDeps(Sentence sent) {
-    return sentenceWithDeps(sent, false);
+    return sentenceWithDeps(sent, sent.getBasicDeps());
   }
-  public static String sentenceWithDeps(Sentence sent, boolean basicDeps) {
-    return spanWithDeps(Span.getSpan(0, sent.size()), sent, basicDeps);
+  public static String sentenceWithDeps(Sentence sent, DependencyParse deps) {
+    return spanWithDeps(Span.getSpan(0, sent.size()), sent, deps);
   }
 
   public static String spanWithPos(Span s, Sentence sent) {
@@ -65,14 +65,9 @@ public class Describe {
   }
 
   public static String spanWithDeps(Span s, Sentence sent) {
-    return spanWithDeps(s, sent, false);
+    return spanWithDeps(s, sent, sent.getBasicDeps());
   }
-  public static String spanWithDeps(Span s, Sentence sent, boolean basicDeps) {
-    DependencyParse deps =
-        basicDeps ? sent.getBasicDeps() : sent.getCollapsedDeps();
-//    if (deps == null) {
-//      throw new IllegalStateException("deps not populated or wrong deps, askedForBasic=" + basicDeps);
-//    }
+  public static String spanWithDeps(Span s, Sentence sent, DependencyParse deps) {
     StringBuilder sb = new StringBuilder();
     for (int i = s.start; i < s.end; i++) {
       int head = deps == null ? -1 : deps.getHead(i);

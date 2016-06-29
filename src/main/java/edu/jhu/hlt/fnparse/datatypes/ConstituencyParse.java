@@ -292,8 +292,10 @@ public class ConstituencyParse implements Serializable {
 
   public void addConstituent(edu.jhu.hlt.concrete.Constituent c) {
     assert usingConcrete;
-    Node old = nodes.put(c.getId(), new Node(c));
-    if (old != null) throw new RuntimeException();
+    Node nn = new Node(c);
+    Node old = nodes.put(c.getId(), nn);
+    if (old != null)
+      throw new RuntimeException("key=" + c.getId() + " prevVal=" + old + " newVal=" + nn);
   }
 
   public edu.jhu.hlt.concrete.Parse getConcreteParse() {

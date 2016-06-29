@@ -218,6 +218,10 @@ public class DependencyParse implements Serializable {
     return projRight[i];
   }
 
+  public Span getProj(int i) {
+    return Span.getSpan(getProjLeft(i), getProjRight(i)+1);
+  }
+
   public Span getSpan(int i) {
     int l = getProjLeft(i);
     int r = getProjRight(i) + 1;

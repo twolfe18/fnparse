@@ -31,11 +31,17 @@ import edu.mit.jwi.item.IWord;
  */
 public class SrlSchemaToRelations {
 
+  // role2 can be a small relation if you're willing to use rules like:
+  // predicate2(t,f) & coarsenFrame2(f,fc) & role2(fc,k) => srl3(t,f,k)
+  public static boolean ROLE2_COARSE_FRAMES = false;
+
   public static String norm(String x) {
     return FNParseToRelations.norm(x);
   }
 
   private static String coarsenFrame(String frame) {
+    if (!ROLE2_COARSE_FRAMES)
+      return frame;
     if (frame.startsWith("propbank/")) {
       int c = frame.lastIndexOf('-');
       String coarse = frame.substring(0, c);

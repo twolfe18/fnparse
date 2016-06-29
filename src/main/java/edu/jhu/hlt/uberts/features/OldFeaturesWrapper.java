@@ -10,13 +10,11 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import com.google.common.base.Charsets;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Parse;
-import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -675,7 +673,9 @@ public class OldFeaturesWrapper {
       edu.jhu.hlt.concrete.Constituent c = pc.get2();
       c.setHeadChildIndex(-1);
       if (!c.isSetChildList() || c.getChildListSize() == 0) {
-        assert c.getStart()+1 == c.getEnding();
+//        assert c.getStart()+1 == c.getEnding() : "TODO attach all POS tags in this span as children.";
+        if (c.getStart()+1 != c.getEnding())
+          Log.warn("TODO attach all POS tags in this span as children.");
         continue;
       }
       int headToken = c.getHeadChildIndex();
@@ -698,11 +698,34 @@ public class OldFeaturesWrapper {
     return new ConstituencyParse(sentenceId, p);
   }
 
+  private static DependencyParse getDepTree(String depsRelName, Uberts u, List<HypNode> tokens) {
+    Relation depsRel = u.getEdgeType(depsRelName);
+    State st = u.getState();
+    int n = tokens.size();
+    String[] lab = new String[n];
+    int[] gov = new int[n];
+    for (int i = 0; i < n; i++) {
+      // Find the 0 or 1 tokens which govern this token
+      HypNode dep = tokens.get(i);
+      LL<HypEdge> gov2dep = st.match(1, depsRel, dep);
+      if (gov2dep == null) {
+        gov[i] = -1;
+        lab[i] = "UKN";
+      } else {
+        assert gov2dep.next == null : "two gov (not tree) for basic?";
+        HypEdge e = gov2dep.item;
+        gov[i] = Integer.parseInt((String) e.getTail(0).getValue());
+        lab[i] = (String) e.getTail(2).getValue();
+      }
+    }
+    return new DependencyParse(gov, lab);
+  }
+
   /**
    * @param root should probably be the length of the sentence. It must be >=0.
    * @param depRel should have columns gov, dep, label.
    */
-  private StringLabeledDirectedGraph getDepGraph(Uberts u, int root, Relation depRel) {
+  private static StringLabeledDirectedGraph getDepGraph(Uberts u, int root, Relation depRel, Alphabet<String> depGraphEdges) {
     if (depRel == null)
       return null;
     if (root < 0)
@@ -723,12 +746,9 @@ public class OldFeaturesWrapper {
     return g;
   }
 
-  private void checkForNewSentence(Uberts u) {
-    // How do we know how many tokens are in the document?
+  // NEW
+  public static Sentence readSentenceFromState(Uberts u) {
     String id = getSentenceId(u);
-    if (sentCache != null && sentCache.getId().equals(id))
-      return;
-    timer.start("convert-sentence");
 
     // See FNParseToRelations for these definitions
     NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
@@ -754,12 +774,75 @@ public class OldFeaturesWrapper {
       HypNode word = wordE.getTail(1);
       HypNode pos = st.match1(0, posRel, tok).getTail(1);
 
-//      HypNode lemma = st.match1(0, lemmaRel, tok).getTail(1);
       LL<HypEdge> lemma = st.match(0, lemmaRel, tok);
 
       wordL.add((String) word.getValue());
       posL.add((String) pos.getValue());
-//      lemmaL.add((String) lemma.getValue());
+      if (lemma != null) {
+        assert lemma.next == null : "two lemmas?";
+        lemmaL.add((String) lemma.item.getTail(1).getValue());
+      } else {
+        lemmaL.add("na");
+      }
+    }
+    int n = wordL.size();
+    String[] wordA = wordL.toArray(new String[n]);
+    String[] posA = posL.toArray(new String[n]);
+    String[] lemmaA = lemmaL.toArray(new String[n]);
+
+    String dataset = "na";
+    Sentence sentCache = new Sentence(dataset, id, wordA, posA, lemmaA);
+
+    // Shapes and WN are computed on the fly
+    // deps (basic, col, colcc) and constituents need to be added
+    sentCache.setBasicDeps(getDepTree("dsyn3-basic", u, tokens));
+    sentCache.setParseyDeps(getDepTree("dsyn3-parsey", u, tokens));
+    boolean allowNull = true;
+    Alphabet<String> depGraphEdges = u.dbgSentenceCacheDepsAlph;
+    sentCache.setCollapsedDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-col", allowNull), depGraphEdges));
+    sentCache.setCollapsedCCDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-colcc", allowNull), depGraphEdges));
+    sentCache.setStanfordParse(buildCP(u, id));
+    sentCache.computeShapes();
+    sentCache.getWnWord(0);
+
+    return sentCache;
+  }
+
+  private void checkForNewSentence(Uberts u) {
+    String id = getSentenceId(u);
+    if (sentCache != null && sentCache.getId().equals(id))
+      return;
+    timer.start("convert-sentence");
+    sentCache = readSentenceFromState(u);
+    /*
+    // See FNParseToRelations for these definitions
+    NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
+    Relation wordRel = u.getEdgeType("word2");
+    Relation posRel = u.getEdgeType("pos2");
+    Relation lemmaRel = u.getEdgeType("lemma2");
+
+    State st = u.getState();
+    List<HypNode> tokens = new ArrayList<>();
+    List<String> wordL = new ArrayList<>();
+    List<String> posL = new ArrayList<>();
+    List<String> lemmaL = new ArrayList<>();
+    for (int i = 0; true; i++) {
+      HypNode tok = u.lookupNode(tokenIndex, String.valueOf(i));
+      if (tok == null)
+        break;
+      tokens.add(tok);
+      LL<HypEdge> maybeWord = st.match(0, wordRel, tok);
+      if (maybeWord == null)
+        break;
+      assert maybeWord.next == null : "more than one word at " + tok + ": " + maybeWord;
+      HypEdge wordE = maybeWord.item;
+      HypNode word = wordE.getTail(1);
+      HypNode pos = st.match1(0, posRel, tok).getTail(1);
+
+      LL<HypEdge> lemma = st.match(0, lemmaRel, tok);
+
+      wordL.add((String) word.getValue());
+      posL.add((String) pos.getValue());
       if (lemma != null) {
         assert lemma.next == null : "two lemmas?";
         lemmaL.add((String) lemma.item.getTail(1).getValue());
@@ -796,11 +879,12 @@ public class OldFeaturesWrapper {
     }
     sentCache.setBasicDeps(new DependencyParse(govB, labB));
     boolean allowNull = true;
-    sentCache.setCollapsedDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-col", allowNull)));
-    sentCache.setCollapsedCCDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-colcc", allowNull)));
+    sentCache.setCollapsedDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-col", allowNull), depGraphEdges));
+    sentCache.setCollapsedCCDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-colcc", allowNull), depGraphEdges));
     sentCache.setStanfordParse(buildCP(u, id));
     sentCache.computeShapes();
     sentCache.getWnWord(0);
+    */
     timer.stop("convert-sentence");
   }
 

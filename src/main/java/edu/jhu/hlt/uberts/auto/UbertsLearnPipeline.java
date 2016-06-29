@@ -2,31 +2,47 @@ package edu.jhu.hlt.uberts.auto;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import com.google.common.collect.Iterators;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.Pred2ArgPaths;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
+import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
+import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.OrderStatistics;
+import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.AgendaPriority;
 import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.Labels.Perf;
 import edu.jhu.hlt.uberts.Relation;
@@ -42,6 +58,7 @@ import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
+import edu.jhu.hlt.uberts.io.PerlRegexFileInputStream;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.prim.tuple.Pair;
 
@@ -165,7 +182,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case "none":
     case "off":
-      allowableGlobals = null;
       break;
     case "argloc":
       allowableGlobals.argLocPairwise = true;
@@ -225,6 +241,23 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     int miniDevSize = config.getInt("miniDevSize", 300);
     int trainSegSize = config.getInt("trainSegSize", miniDevSize * 20);
 
+    // Option: run a perl regex over the train/dev/test files
+    String dataRegex = config.getString("dataRegex", "");
+    List<Supplier<InputStream>> train2 = new ArrayList<>();
+    Supplier<InputStream> dev2;
+    Supplier<InputStream> test2;
+    if (!dataRegex.isEmpty()) {
+      Log.info("[main] applying dataRegex=" + dataRegex);
+      for (File f : train)
+        train2.add(() -> new PerlRegexFileInputStream(f, dataRegex).startOrBlowup());
+      dev2 = () -> new PerlRegexFileInputStream(dev, dataRegex).startOrBlowup();
+      test2 = () -> new PerlRegexFileInputStream(test, dataRegex).startOrBlowup();
+    } else {
+      for (File f : train)
+        train2.add(() -> FileUtil.getInputStreamOrBlowup(f));
+      dev2 = () -> FileUtil.getInputStreamOrBlowup(dev);
+      test2 = () -> FileUtil.getInputStreamOrBlowup(test);
+    }
 
     /*
      * for each pass over all train data:
@@ -235,9 +268,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
      *    eval(test)
      */
     for (int i = 0; i < passes; i++) {
-      for (File f : train) {
-        Log.info("[main] pass=" + (i+1) + " of=" + passes + " trainFile=" + f.getPath());
-        try (RelationFileIterator rels = new RelationFileIterator(f, false);
+      for (int trainIdx = 0; trainIdx < train.size(); trainIdx++) {
+        Log.info("[main] pass=" + (i+1) + " of=" + passes + " trainFile=" + train.get(trainIdx).getPath());
+        try (InputStream is = train2.get(trainIdx).get();
+            RelationFileIterator rels = new RelationFileIterator(is);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
           Iterator<List<RelDoc>> segItr = Iterators.partition(many, trainSegSize);
           int s = 0;
@@ -247,7 +281,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             pipe.runInference(segment.iterator(), "train-epoch" + i + "-segment" + s);
 
             // Evaluate on mini-dev
-            try (RelationFileIterator dr = new RelationFileIterator(dev, false);
+            try (InputStream dev2is = dev2.get();
+                RelationFileIterator dr = new RelationFileIterator(dev2is);
                 ManyDocRelationFileIterator devDocs = new ManyDocRelationFileIterator(dr, true)) {
               Iterator<RelDoc> miniDev = Iterators.limit(devDocs, miniDevSize);
               pipe.runInference(miniDev, "dev-mini-epoch" + i + "-segment" + s);
@@ -259,14 +294,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         // Full evaluate on dev
         pipe.useAvgWeights(true);
         Log.info("[main] pass=" + (i+1) + " of=" + passes + " devFile=" + dev.getPath());
-        try (RelationFileIterator rels = new RelationFileIterator(dev, false);
+        try (InputStream dev2is = dev2.get();
+            RelationFileIterator rels = new RelationFileIterator(dev2is);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
           pipe.runInference(many, "dev-full-epoch" + i);
         }
         // Full evaluate on test
         if (performTest) {
           Log.info("[main] pass=" + (i+1) + " of=" + passes + " testFile=" + test.getPath());
-          try (RelationFileIterator rels = new RelationFileIterator(test, false);
+          try (InputStream test2is = test2.get();
+              RelationFileIterator rels = new RelationFileIterator(test2is);
               ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
             pipe.runInference(many, "test-full-epoch" + i);
           }
@@ -502,25 +539,117 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     mode = null;
   }
 
+  Pred2ArgPaths.ArgCandidates tackstromArgs = null;
+
+  private void buildTackstromArgs() {
+    Sentence sent = u.dbgSentenceCache;
+    if (sent == null)
+      throw new IllegalStateException("call buildSentenceCacheInUberts first");
+    /*
+     * def tackstrom-args4 <span> <span> <token> <path>  # t, s, head of s, path from head of t to head of s
+     * def observed-pa-path2 <path> <role> <count>
+     *
+     * MAYBE (not currently):
+     * predicate2(t,f) & tackstrom-args4(t,s,shead,tspath) & observed-pa-path2(tspath,k,_) => srl2(t,s)
+     */
+
+    // Setup
+    if (tackstromArgs == null) {
+      // Currently tackstromArgs.getArgCandidates2 does the join on pred-arg path,
+      // so the grammar only needs to include:
+      //   predicate2(t,f) & tackstrom-args4(t,s,sHead,k) => argument4(t,s,f,k)
+//      u.readRelData("def tackstrom-args4 <span> <span> <tokenIndex> <role>");
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      File rolePathCounts = config.getExistingFile("rolePathCounts");
+      try {
+        tackstromArgs = new Pred2ArgPaths.ArgCandidates(rolePathCounts);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
+    Relation ev1 = u.getEdgeType("event1");
+    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
+      assert target.getEdge().getNumTails() == 1;
+      Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
+      assert t.width() == 1;
+      List<Pair<Span, String>> rss = tackstromArgs.getArgCandidates2(t.start, sent);
+      for (Pair<Span, String> rs : rss) {
+        String role = rs.get2();
+        int shead = hf.head(rs.get1(), sent);
+        assert shead >= 0;
+        u.readRelData("x tackstrom-args4 " + t.shortString() + " " + rs.get1().shortString() + " " + shead + " " + role);
+      }
+    }
+  }
+
+  private void buildXuePalmerOTF() {
+    Sentence sent = u.dbgSentenceCache;
+    if (sent == null)
+      throw new IllegalStateException("call buildSentenceCacheInUberts first");
+
+    // Run arg triage
+    // 1) Read predicates/targets out of the state (they should be added already)
+    Relation ev1 = u.getEdgeType("event1");
+    List<FrameInstance> frameMentions = new ArrayList<>();
+    Set<Span> uniq = new HashSet<>();
+    Set<Span> goldTargets = new HashSet<>();
+    Frame f = new Frame(0, "propbank/dummyframe", null, new String[] {"ARG0", "ARG1"});
+    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
+      assert target.getEdge().getNumTails() == 1;
+      Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
+      if (goldTargets.add(t) && uniq.add(t))
+        frameMentions.add(FrameInstance.frameMention(f, t, sent));
+    }
+    FNTagging argsFor = new FNTagging(sent, frameMentions);
+
+//    // 1b) DEBUG: Show all of the arguments that we're looking for
+//    Relation a4 = u.getEdgeType("argument4");
+//    for (HashableHypEdge e : u.getLabels().getGoldEdges(a4)) {
+//      Span t = Span.inverseShortString((String) e.getEdge().getTail(0).getValue());
+//      Span s = Span.inverseShortString((String) e.getEdge().getTail(2).getValue());
+//      System.out.println("looking for: t=" + t + " s=" + s);
+//    }
+
+    // 2) Call the argument finding code
+    DeterministicRolePruning drp = new DeterministicRolePruning(
+        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
+    FNParseSpanPruning args = drp.setupInference(Arrays.asList(argsFor), null).decodeAll().get(0);
+    for (SpanPair ts : args.getAllArgs()) {
+      Span t = ts.get1();
+      Span s = ts.get2();
+      if (t == Span.nullSpan || s == Span.nullSpan)
+        continue;
+      // OTF == "on the fly"
+      u.readRelData("x xue-palmer-otf-args2 " + t.shortString() + " " + s.shortString());
+    }
+  }
+
   @Override
   public void consume(RelDoc doc) {
     if (MEM_LEAK_DEBUG)
       return;
 //    System.out.println("[consume] " + doc.getId());
 
+    // Add xue-palmer-args2
+    buildSentenceCacheInUberts();
+    buildXuePalmerOTF();
+    buildTackstromArgs();
+
     eventCounts.increment("consume/" + mode.toString());
-    if (eventCounts.getTotalCount() % 500 == 0) {
-      Log.info("event counts: " + eventCounts);
+    if (eventCounts.getTotalCount() % 1000 == 0) {
+      System.out.println("pipeline counts: " + eventCounts.toStringWithEq());
+      System.out.println("uberts counts: " + u.stats.toStringWithEq());
       System.out.println("[memLeak] " + u.getState());
     }
-    u.stats.clear();
     switch (mode) {
     case TRAIN:
       train(doc);
       break;
     case DEV:
     case TEST:
-      if (DEBUG > 0 && perfByRel.size() % 25 == 0) {
+      if (DEBUG > 0 && perfByRel.size() % 50 == 0) {
         System.out.println("mode=" + mode + " doc=" + doc.getId() + " [memLeak] perfByRel.size=" + perfByRel.size());
       }
       boolean oracle = false;
@@ -530,7 +659,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, actionLimit);
       timer.stop("inf/" + mode);
       perfByRel.add(p.get1().perfByRel());
-
 
       if (showDevFN && mode == Mode.DEV) {
 
@@ -553,7 +681,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           System.out.println("prediction FN: " + e);
       }
 
-      if (DEBUG > 0) {// && perfByRel.size() % 50 == 0) {
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      if (DEBUG > 0 && config.getBoolean("showDevTestDetails", true)) {// && perfByRel.size() % 50 == 0) {
 
         // Show some stats about this example
         System.out.println("trajLength=" + p.get2().size());
@@ -685,13 +814,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       }
       boolean oracle = u.getRandom().nextDouble() < pOracleRollIn;
       Pair<Perf, List<Step>> x = u.dbgRunInference(oracle, actionLimit);
+      Perf perf = x.get1();
+      List<Step> traj = x.get2();
       batch.add(lr -> {
         Map<Relation, Double> cfp = getCostFP();
         if (verbose >= 2) {
-          System.out.println("about to update against length=" + x.get2().size()
+          System.out.println("about to update against length=" + traj.size()
                 + " trajectory, costFP=" + cfp + " oracleRollIn=" + oracle);
         }
-        for (Step s : x.get2()) {
+        for (Step s : traj) {
 
           // NOTE: We are NOT using minScorePerRelation here since we only want
           // to move scores about 0, not the threshold.
@@ -716,6 +847,29 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           }
         }
       });
+
+      // Show xue-palmer for all fn(srl2)
+      if (showDevFN) {
+        for (HypEdge e : perf.getFalseNegatives(u.getEdgeType("srl2"))) {
+          assert e.getNumTails() == 2;
+          Span t = Span.inverseShortString((String) e.getTail(0).getValue());
+          Span s = Span.inverseShortString((String) e.getTail(1).getValue());
+          System.out.println("didn't find arg=" + s.shortString() + " for pred=" + t.start);
+          assert t.width() == 1;
+          boolean orig = Pred2ArgPaths.ArgCandidates.DEBUG;
+          Pred2ArgPaths.ArgCandidates.DEBUG = true;
+          Pred2ArgPaths.ArgCandidates.getArgCandidates(t.start, u.dbgSentenceCache);
+          Pred2ArgPaths.ArgCandidates.DEBUG = orig;
+        }
+      }
+
+      // NOTE: It just occurred to me that I may be updating w.r.t. argument4
+      // edges which are unreachable...
+      // I don't think thats true actually, the only edges that get updated
+      // are the ones that come off the agenda, and the only ones that go on the
+      // agenda are those generated by the grammar; so this shouldn't include
+      // gold edges which are unreachable.
+
       u.showTrajDiagnostics = stdOld;
       timer.stop("train/dagger1");
       break;

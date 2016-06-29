@@ -76,7 +76,12 @@ srl.facts.gz: all.facts.gz
 		keepRelations argument4,predicate2 \
 		relInput all.facts.gz \
 		relOutput srl.facts.gz
-	ln -s all.facts.gz srl.facts.gz
+	#ln -s all.facts.gz srl.facts.gz
+	$(FNPARSE)/scripts/uberts/augment-facts-with-parsey-mcparseface.sh \
+		all.facts.gz \
+		srl.facts.gz \
+		temp-all.facts.conll \
+		temp-srl.facts.conll
 
 # Split off train/dev/test
 #COE = test2
@@ -129,7 +134,8 @@ srl.dev.facts.gz: srl.train.facts.gz
 
 srl.test.facts.gz: srl.train.facts.gz
 
-srl.dev.shuf.facts.gz: srl.dev.facts.gz
+# srl.dev.facts.gz
+srl.dev.shuf.facts.gz:
 	java -Xmx7G -cp $(JAR) -ea \
 		edu.jhu.hlt.uberts.io.ManyDocShuffler \
 			seed 9001 \
@@ -139,7 +145,8 @@ srl.dev.shuf.facts.gz: srl.dev.facts.gz
 
 # Shuffle the train set a few times.
 
-srl.train.shuf%.facts.gz: srl.train.facts.gz
+#srl.train.facts.gz
+srl.train.shuf%.facts.gz:
 	java -Xmx7G -cp $(JAR) -ea \
 		edu.jhu.hlt.uberts.io.ManyDocShuffler \
 			seed `echo $@ | md5sum | cut -d' ' -f1 | xargs -I {} python -c 'print int("{}", 16) % (2**16)'` \

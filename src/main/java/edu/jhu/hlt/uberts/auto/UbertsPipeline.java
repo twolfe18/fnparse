@@ -33,6 +33,7 @@ import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
+import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
@@ -92,15 +93,22 @@ public abstract class UbertsPipeline {
     // succTok(i,j)
 //    helperRelations.add(u.addSuccTok(1000));
 
-    startDocRel = u.readRelData("def startDoc <docid>");
-    doneAnnoRel = u.readRelData("def doneAnno <docid>");
-    docidNT = doneAnnoRel.getTypeForArg(0);
-
     // Read in the defs file which defines (and creates w.r.t. Uberts) the
     // relations which will appear in the values file.
     if (DEBUG > 0)
       Log.info("reading in relation/node type definitions...");
     u.readRelData(relationDefs);
+
+//    startDocRel = u.readRelData("def startDoc <docid>");
+//    doneAnnoRel = u.readRelData("def doneAnno <docid>");
+    startDocRel = u.getEdgeType("startDoc", true);
+    doneAnnoRel = u.getEdgeType("doneAnno", true);
+    if (startDocRel == null || doneAnnoRel == null) {
+      throw new RuntimeException("make sure startDoc and doneAnno have been "
+          + "defined in the relations file (" + relationDefs.getPath() + ")");
+    }
+    docidNT = doneAnnoRel.getTypeForArg(0);
+    assert docidNT == startDocRel.getTypeForArg(0);
 
     Log.info("reading schema files...");
     for (File f : schemaFiles) {
@@ -222,6 +230,7 @@ public abstract class UbertsPipeline {
     timer.start("cleanupUbertsForDoc");
     if (DEBUG > 1)
       System.out.println("[cleanupUbertsForDoc] " + doc.getId());
+    u.dbgSentenceCache = null;
 
     // It is certainly impossible to never call this or do something to clean
     // up the set of interned HypNodes, most obviously because of head nodes.
@@ -232,8 +241,17 @@ public abstract class UbertsPipeline {
     u.clearNonSchemaNodes();
 
     u.clearLabels();
-    u.getState().clearNonSchema();
     timer.stop("cleanupUbertsForDoc");
+  }
+
+  /**
+   * OPTIONAL, call after setupUbertsForDoc (say, at the start of consume) if
+   * needed. Sets {@link Uberts#dbgSentenceCache}
+   */
+  protected void buildSentenceCacheInUberts() {
+    // Build Sentence, DependencyParses, and ConsituencyParses
+    assert u.dbgSentenceCache == null;
+    u.dbgSentenceCache = OldFeaturesWrapper.readSentenceFromState(u);
   }
 
   /**
@@ -256,16 +274,6 @@ public abstract class UbertsPipeline {
     int cx = 0, cy = 0;
     assert doc.items.isEmpty();
     assert !doc.facts.isEmpty() : "facts: " + doc.facts;
-
-//    // Idiosyncratic: change all event* edges from y to x
-//    for (HypEdge.WithProps fact : doc.facts) {
-//      if (fact.getRelation().getName().startsWith("event")) {
-//        if (this.debug)
-//          Log.info("changing from y=>x: " + fact);
-//        fact.setProperty(HypEdge.IS_X, true);
-//        fact.setProperty(HypEdge.IS_Y, false);
-//      }
-//    }
 
     // Add all labels first
     for (HypEdge.WithProps fact : doc.facts) {
