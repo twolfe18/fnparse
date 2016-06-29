@@ -12,7 +12,7 @@ def weights():
       for easyfirst in w:
         for leftright in w:
           if bfs + dfs + easyfirst + leftright == 12:
-            yield {'bfs':bfs, 'dfs':dfs, 'easyfirst':easyfirst, 'leftright':leftright}
+            yield {'bfs':bfs, 'dfs':dfs, 'easyfirst':max(0.0001, easyfirst), 'leftright':leftright}
 
 def wformat(d):
   s = ''
@@ -37,6 +37,8 @@ if __name__ == '__main__':
   fs = sys.argv[2]
   jar = sys.argv[3]
 
+  qsub = True
+
   if not os.path.isdir(wd):
     print 'working directory doesn\'t exist:', wd
     sys.exit(1)
@@ -56,8 +58,8 @@ if __name__ == '__main__':
   shutil.copy(jar, jar_stable)
 
   fs_stable = os.path.join(p, 'priority-feature-sets')
-  if not os.path.isdir(fs):
-    print 'not a feature set directory:', fs
+  if not os.path.isdir(fs_stable):
+    print 'copying features to', fs_stable
     shutil.copytree(fs, fs_stable)
 
   d = os.path.dirname(os.path.abspath(__file__))
@@ -65,7 +67,8 @@ if __name__ == '__main__':
   i = 0
   for gf in global_feats():
     for w in weights():
-      cmd = ['sbatch', sc, wd, wformat(w), fs_stable, gf, jar_stable]
+      c = 'qsub' if qsub else 'sbatch'
+      cmd = [c, '-o', logs, sc, wd, wformat(w), fs_stable, gf, jar_stable]
       print i, cmd
       i += 1
       subprocess.check_call(cmd)
