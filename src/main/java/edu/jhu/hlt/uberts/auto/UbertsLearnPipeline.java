@@ -96,8 +96,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   static NumArgsRoleCoocArgLoc.Params allowableGlobals;
 
-  static double costFP_srl3 = 1;
-  static double costFP_srl2 = 1;
+  // small costFP for srl2/srl3 so far have no paid off, HOWEVER, I think this
+  // may have been due to having a small intercept feature.
+  static double costFP_srl3 = 0.1;
+  static double costFP_srl2 = 0.1;
   static double costFP_event1 = 1;
 
   private Mode mode;
@@ -467,23 +469,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     if (Arrays.asList(oracleFeats).contains(r.rhs.relName)) {
       Log.info("using oracle feats for " + r);
-//      f = new LocalFactor.Sum(new FeatureExtractionFactor.Oracle(r.rhs.relName), f);
       return new FeatureExtractionFactor.Oracle(r.rhs.relName);
     }
 
     if (templateFeats) {
       ExperimentProperties config = ExperimentProperties.getInstance();
       Log.info("using template feats");
-      if (bft == null) {
+      if (bft == null)
         bft = new BasicFeatureTemplates();
-//        File featureSet = config.getExistingFile("featureSet");
-//        ofw = new OldFeaturesWrapper(bft, featureSet);
-      }
-//      if (feFast2 == null) {
-//        int dimension = config.getInt("hashFeatDim", 1 << 18);
-//        feFast2 = new OldFeaturesWrapper.Ints2(ofw, dimension);
-//      }
-//      f = new LocalFactor.Sum(feFast2, f);
       if (feFast3 == null)
         feFast3 = new ArrayList<>();
       OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(bft, r.rhs.rel, config);
@@ -495,7 +488,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       Log.info("using graph feats");
       FeatureExtractionFactor.GraphWalks gw = new FeatureExtractionFactor.GraphWalks();
       gw.maxArgs = 6;
-      //    gw.maxValues = gw.maxArgs;
       f = new LocalFactor.Sum(gw, f);
     }
 
@@ -706,7 +698,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
               continue;
             predictionsWriter.write(
                 String.format("%s # gold=%s pred=%s score=%.4f",
-                s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, s.score.forwards()));
+                s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, s.getReason().forwards()));
             predictionsWriter.newLine();
           }
         } catch (IOException e) {
@@ -882,17 +874,17 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           // to move scores about 0, not the threshold.
 //          boolean pred = s.score.forwards() > 0;
           boolean pred = s.pred;
-          if (verbose >= 2 && s.pred != (s.score.forwards() > 0)) {
-            System.out.println("[DAGGER1] disagreement! step.pred=" + s.pred + " score=" + s.score.forwards());
-          }
+//          Adjoints reason = s.score;
+          Adjoints reason = s.decisionAdj == null ? s.score : s.decisionAdj;
+
           boolean a4 = s.edge.getRelation().getName().equals("argument4");
 
           if (s.gold && !pred) {
             if ((verbose >= 1 && a4) || verbose >= 2) System.out.println("FN: " + s);
-            s.score.backwards(-lr);
+            reason.backwards(-lr);
           } else if (!s.gold && pred) {
             if ((verbose >= 1 && a4) || verbose >= 2) System.out.println("FP: " + s);
-            s.score.backwards(+lr * cfp.getOrDefault(s.edge.getRelation(), 1d));
+            reason.backwards(+lr * cfp.getOrDefault(s.edge.getRelation(), 1d));
           } else if ((verbose >= 1 && a4) || verbose >= 2) {
             if (s.gold)
               System.out.println("TP: " + s);

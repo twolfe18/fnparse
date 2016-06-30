@@ -4,8 +4,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -14,6 +16,7 @@ import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.Uberts.NewStateEdgeListener;
 import edu.jhu.hlt.uberts.auto.Term;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * Given an (edge, score) just popped off the agenda, decide whether this edge
@@ -41,6 +44,21 @@ public interface DecisionFunction {
    * function in the cascade should be queried).
    */
   public Boolean decide(HypEdge e, Adjoints s);
+
+  /**
+   * The idea here is that you not only return a decision, but a way to change
+   * the outcome next time (the Adjoints).
+   *
+   * If pred=true is returned and e is gold=false (a FP), then call
+   * backwards(dErr_dForwards=+1) to "lower" the score of this pred=true decision
+   * (on the pun that the decision function is score>0). Similarly, for FNs
+   * backwards(dErr_dForwards=-1).
+   */
+  public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s);
+
+  default public Pair<Boolean, Adjoints> decide2(AgendaItem ai) {
+    return decide2(ai.edge, ai.score);
+  }
 
   default public boolean decide(AgendaItem ai) {
     return decide(ai.edge, ai.score);
@@ -72,6 +90,7 @@ public interface DecisionFunction {
       for (DecisionFunction df : committee)
         df.clear();
     }
+
     @Override
     public Boolean decide(HypEdge e, Adjoints s) {
 //      if (DEBUG > 1 && e.getRelation().getName().equals("srl3"))
@@ -93,6 +112,28 @@ public interface DecisionFunction {
 //        Log.info("d=" + d + " decider=" + decider + " score>0=" + (s.forwards() > 0) + " " + s.forwards());
       return d;
     }
+
+    @Override
+    public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
+      // keep track of all deciders, make sure they agree
+      // construct Adjoints to backprop to all of the deciders
+      Boolean d = null;
+      Adjoints da = null;
+      for (DecisionFunction df : committee) {
+        Pair<Boolean, Adjoints> dfd = df.decide2(e, s);
+        if (dfd.get1() == null)
+          continue;
+        if (d != null && d != dfd.get1())
+          throw new RuntimeException();
+        d = dfd.get1();
+        if (da == null)
+          da = dfd.get2();
+        else
+          da = Adjoints.sum(da, dfd.get2());
+      }
+      return new Pair<>(d, da);
+    }
+
     @Override
     public String toString() {
       StringBuilder sb = new StringBuilder();
@@ -145,6 +186,16 @@ public interface DecisionFunction {
       if (next != null)
         return next.decide(e, s);
       return null;
+    }
+
+    @Override
+    public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
+      Pair<Boolean, Adjoints> b = cur.decide2(e, s);
+      if (b.get1() != null)
+        return b;
+      if (next != null)
+        return next.decide2(e, s);
+      return new Pair<>(null, null);
     }
 
     @Override
@@ -222,6 +273,7 @@ public interface DecisionFunction {
     // A set of lists of argument (determined by keyArgs).
     // E.g. for "at least one predicate2(t,f) per event1(t)", we might use
     private Set<List<Object>> observedKeys;
+    private Map<List<Object>, Pair<HypEdge, Adjoints>> firstGoldInBucket;
 
     private ByGroupMode mode;
 
@@ -231,6 +283,7 @@ public interface DecisionFunction {
     public ByGroup(ByGroupMode mode, String description, Uberts u) {
       this.mode = mode;
       this.observedKeys = new HashSet<>();
+      this.firstGoldInBucket = new HashMap<>();
       String[] parts = description.split(":");
       assert parts.length >= 2;
       keyArgs = new int[parts.length - 1];
@@ -275,6 +328,7 @@ public interface DecisionFunction {
       this.relation = relation;
       this.keyArgs = keyArgs;
       this.observedKeys = new HashSet<>();
+      this.firstGoldInBucket = new HashMap<>();
     }
 
     @Override
@@ -306,41 +360,24 @@ public interface DecisionFunction {
 
     @Override
     public void clear() {
-      if ("argument4".equals(relation.getName()) && !observedKeys.isEmpty())
-        System.currentTimeMillis();
       observedKeys.clear();
+      firstGoldInBucket.clear();
     }
 
     @Override
     public Boolean decide(HypEdge e, Adjoints s) {
       if (e.getRelation() != relation)
         return null;  // Doesn't apply
-      // See if we've already let one through
       List<Object> key = new ArrayList<>(keyArgs.length);
       for (int i = 0; i < keyArgs.length; i++)
         key.add(e.getTail(keyArgs[i]));
-
-      // This is not enough!
-      // I have assumed that observedKeys is the set of edges that we put onto
-      // the state, but that may not be the case.
-      // E.g. score(e1) = -2, score(e2) = -3, etc
-      // assume key(e1) == key(e2)
-      // AT_MOST_ONE on e1 => new addition of e1 and return null
-      // AT_MOST_ONE on e2 => not new, return false
-      // This is actually probably not a problem since nothing is going to come
-      // in between popping e1 and e2 which might change the score of e2...
-//      boolean newEdge = observedKeys.add(key);
       boolean newEdge = !observedKeys.contains(key);
-
       switch (mode) {
       case AT_LEAST_ONE:
         return newEdge ? true : null;
       case AT_MOST_ONE:
-//        Log.info(mode + "  " + (newEdge ? "NEW" : "OLD") + "  key=" + key + " edge=" + e);
         return !newEdge ? false : null;
       case EXACTLY_ONE:
-        if (DEBUG > 1)
-          System.out.println("[Exactly1] first=" + newEdge + "\t" + e + "\t" + toString());
         return newEdge;
       default:
         throw new RuntimeException("unknown mode:" + mode);
@@ -348,14 +385,79 @@ public interface DecisionFunction {
     }
 
     @Override
-    public void addedToState(HashableHypEdge he) {
+    public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
+      if (e.getRelation() != relation)
+        return new Pair<>(null, null);  // Doesn't apply
+      List<Object> key = new ArrayList<>(keyArgs.length);
+      for (int i = 0; i < keyArgs.length; i++)
+        key.add(e.getTail(keyArgs[i]));
+      boolean newEdge = !observedKeys.contains(key);
+      switch (mode) {
+      case AT_LEAST_ONE:
+        // This can only force a FP
+        // At the time of returning true here, we will not know what the next
+        // edge which will fall into this bucket which is gold==true whose
+        // score we could shift to make this constraint satisfied.
+        // ALSO, if that other edges score>0, then AT_LEAST_ONE is not relevant,
+        // maybe only wait of another edge whose score<=0.
+//        return newEdge ? true : null;
+        throw new RuntimeException("implement me!");
+      case AT_MOST_ONE:
+        if (newEdge) {
+          // No opinion: constraint not violated
+          return new Pair<>(null, null);
+        } else {
+          // To satisfy this constraint, assuming this edge is a FN, dErr_dForward=-1
+//          Adjoints prev = firstGoldInBucket.get(key).get2();
+//          Adjoints p = Adjoints.sum(s, new Adjoints.Scale(-1, prev));
+//          return new Pair<>(false, p);
+
+          // if false, either FN or nothing
+          // FNs get dErr_dForwards = -1
+
+          // FUCK, we have no idea if prev is right or not!
+          // if prev is a FP, then fosodijfsldk
+//          Pair<HypEdge, Adjoints> gold = firstGoldInBucket.get(key);
+
+          return new Pair<>(false, new Adjoints() {
+            private Adjoints gold = null;
+            @Override
+            public double forwards() {
+              if (gold == null) {
+                Pair<HypEdge, Adjoints> p = firstGoldInBucket.get(key);
+                if (p != null)
+                  gold = p.get2();
+              }
+              if (gold != null)
+                return s.forwards() - gold.forwards();
+              return s.forwards();
+            }
+            @Override
+            public void backwards(double dErr_dForwards) {
+              assert dErr_dForwards < 0 : "should be FN, right?";
+              s.backwards(+dErr_dForwards);
+              if (gold != null)
+                gold.backwards(-dErr_dForwards);
+            }
+          });
+        }
+      case EXACTLY_ONE:
+        throw new RuntimeException("implement me!");
+      default:
+        throw new RuntimeException("unknown mode:" + mode);
+      }
+    }
+
+    @Override
+    public void addedToState(HashableHypEdge he, Adjoints score, Boolean y) {
       HypEdge e = he.getEdge();
       if (e.getRelation() != relation)
         return;  // Doesn't apply
       List<Object> key = new ArrayList<>(keyArgs.length);
       for (int i = 0; i < keyArgs.length; i++)
         key.add(e.getTail(keyArgs[i]));
-      observedKeys.add(key);
+      if (observedKeys.add(key) && y)
+        firstGoldInBucket.put(key, new Pair<>(he.getEdge(), score));
     }
   }
 
@@ -380,12 +482,14 @@ public interface DecisionFunction {
       if (relevant != null && e.getRelation() != relevant)
         return null;
       double f = s.forwards();
-//      if (DEBUG > 0) {
-//        if (relevant != null && relevant.getName().equals("srl3"))
-//          System.currentTimeMillis();
-//        System.out.println("[Constant] keep=" + (f>threshold) + "\t" + e + "\t" + toString());
-//      }
       return f > threshold;
+    }
+    @Override
+    public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
+      if (relevant != null && e.getRelation() != relevant)
+        return new Pair<>(null, null);
+      double f = s.forwards();
+      return new Pair<>(f > threshold, s);
     }
     @Override
     public void clear() {

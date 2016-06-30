@@ -17,10 +17,17 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class Step {
   public final HypEdge edge;
-  public final Adjoints score;
+  public Adjoints score;
   public final boolean pred;    // true means Commit, false means Prune
   public final Boolean gold;    // can be null if you don't know
   public final double priority;
+
+  public Adjoints decisionAdj;
+  public Adjoints getReason() {
+    if (decisionAdj != null)
+      return decisionAdj;
+    return score;
+  }
 
   public Step(AgendaItem ai, Boolean gold, boolean pred) {
     this(ai.edge, ai.score, gold, pred, ai.priority);
@@ -56,6 +63,7 @@ public class Step {
 
   @Override
   public String toString() {
-    return "(Step " + edge + " gold=" + gold + " pred=" + pred + " priority=" + priority + " score=" + score.forwards() + " " + score + ")";
+    double f = score == null ? Double.NaN : score.forwards();
+    return "(Step " + edge + " gold=" + gold + " pred=" + pred + " priority=" + priority + " score=" + f + " " + score + ")";
   }
 }

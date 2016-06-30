@@ -201,6 +201,59 @@ public class OldFeaturesWrapper {
     }
   }
 
+  public static class Intercept {
+    private double weight;
+    private double sumOfWeights;
+    private int numUpdates;
+    private double magnitudeOfFeature;  // The bigger this is, the faster weight will be updated
+
+    public Intercept(double magnitude) {
+      this.magnitudeOfFeature = magnitude;
+    }
+
+    public Adjoints score() {
+      return new Adjoints() {
+        private double w = weight;
+        @Override
+        public double forwards() {
+          return w;
+        }
+        @Override
+        public void backwards(double dErr_dForwards) {
+          weight -= dErr_dForwards * magnitudeOfFeature;
+        }
+        @Override
+        public String toString() {
+          return String.format("(Intercept forwards=%.2f mag=%.2f theta=%.2f)",
+              w, magnitudeOfFeature, weight);
+        }
+      };
+    }
+
+    public Adjoints avgScore() {
+      return new Adjoints() {
+        private double w = sumOfWeights / numUpdates;
+        @Override
+        public double forwards() {
+          return w;
+        }
+        @Override
+        public void backwards(double dErr_dForwards) {
+          Log.info("WARNING: shouldn't be updating this, dErr_dForwards=" + dErr_dForwards);
+        }
+        @Override
+        public String toString() {
+          return String.format("(AvgIntercept forwards=%.2f numUpdates=%d)", w, numUpdates);
+        }
+      };
+    }
+
+    public void completedObservation() {
+      sumOfWeights += weight;
+      numUpdates++;
+    }
+  }
+
   public static class Ints3 implements LocalFactor {
 
     public static Ints3 build(BasicFeatureTemplates bft, Relation r, ExperimentProperties config) {
@@ -226,11 +279,11 @@ public class OldFeaturesWrapper {
     private OldFeaturesWrapper inner;
     private Relation rel;
     private AveragedPerceptronWeights theta;
+    private Intercept intercept;
     private boolean useAvg = false;
     private Counts<String> cnt = new Counts<>();
-    private Timer timer;
 
-    private HashFunction hf = Hashing.murmur3_32(42); // slightly slower than Jenkins, but worth the peace of mind
+    private HashFunction hf = Hashing.murmur3_32(42); // slightly slower than Jenkins, maybe worth the peace of mind, empirically no better
     private Alphabet<String> alph;  // don't use, too much memory
     private LongIntHashMap alph2;   // don't use, probably too much memory
 
@@ -241,7 +294,14 @@ public class OldFeaturesWrapper {
       this.rel = r;
       int numIntercept = 0;
       this.theta = new AveragedPerceptronWeights(dimension, numIntercept);
-      this.timer = new Timer("Int3/" + rel.getName() + "/score", 250_000, true);
+
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      String k = r.getName() + ".intercept.mag";
+      double mag = config.getDouble(k, -1);
+      if (mag > 0) {
+        Log.info("[main] using " + k + "=" + mag);
+        this.intercept = new Intercept(mag);
+      }
 
 //      this.alph = new Alphabet<>();
 //      this.alph2 = new LongIntHashMap();
@@ -270,17 +330,20 @@ public class OldFeaturesWrapper {
 
     public void completedObservation() {
       theta.completedObservation();
+      if (intercept != null)
+        intercept.completedObservation();
     }
 
     @Override
     public Adjoints score(HypEdge y, Uberts x) {
-      timer.start();
-
+      assert y.getRelation() == rel;
       cnt.increment("score/" + y.getRelation().getName());
       List<Pair<TemplateAlphabet, String>> fyx = inner.features(y, x);
       if (fyx.isEmpty()) {
         cnt.increment("score/noFeat/" + y.getRelation().getName());
-        return Adjoints.Constant.ZERO;
+        if (intercept == null)
+          return Adjoints.Constant.ZERO;
+        return useAvg ? intercept.avgScore() : intercept.score();
       }
       if (cnt.getTotalCount() % 75000 == 0)
         System.out.println("Int3 events: " + cnt.toString());
@@ -333,11 +396,15 @@ public class OldFeaturesWrapper {
 
       boolean reindex = true;
       Adjoints a;
-      if (useAvg)
+      if (useAvg) {
         a = theta.averageView().score(features, reindex);
-      else
+        if (intercept != null)
+          a = Adjoints.sum(a, intercept.avgScore());
+      } else {
         a = theta.score(features, reindex);
-      timer.stop();
+        if (intercept != null)
+          a = Adjoints.sum(a, intercept.score());
+      }
       return a;
     }
   }
@@ -409,11 +476,8 @@ public class OldFeaturesWrapper {
 
   // See TemplatedFeatures.parseTemplate(String), etc
   private edu.jhu.hlt.fnparse.features.precompute.Alphabet features;
-  private Sentence sentCache;
   private TemplateContext ctx;
-  private Alphabet<String> depGraphEdges;
   private HeadFinder hf;
-  private MultiTimer timer;
   private Counts<String> skipped;
 
   // If you can setup a TemplateContext given a HypEdge, then you can use this class.
@@ -436,9 +500,7 @@ public class OldFeaturesWrapper {
       features.add(new TemplateAlphabet(prod, StringUtils.join("*", feat), features.size()));
     }
     ctx = new TemplateContext();
-    depGraphEdges = new Alphabet<>();
     hf = new DependencyHeadFinder();
-    timer = new MultiTimer();
     skipped = new Counts<>();
   }
 
@@ -481,12 +543,7 @@ public class OldFeaturesWrapper {
       return new int[] {1, 2 + (k.hashCode() & mask)};
     };
 
-    timer = new MultiTimer();
-    timer.put("convert-sentence", new Timer("convert-sentence", INTERVAL_CONV_SENT, true));
-    timer.put("compute-features", new Timer("compute-features", INTERVAL_COMP_FEAT, true));
-
     ctx = new TemplateContext();
-    depGraphEdges = new Alphabet<>();
     hf = new DependencyHeadFinder();
     skipped = new Counts<>();
   }
@@ -502,12 +559,7 @@ public class OldFeaturesWrapper {
       features.add(new TemplateAlphabet(ft, n, features.size()));
     }
 
-    timer = new MultiTimer();
-    timer.put("convert-sentence", new Timer("convert-sentence", INTERVAL_CONV_SENT, true));
-    timer.put("compute-features", new Timer("compute-features", INTERVAL_COMP_FEAT, true));
-
     ctx = new TemplateContext();
-    depGraphEdges = new Alphabet<>();
     hf = new DependencyHeadFinder();
     skipped = new Counts<>();
   }
@@ -595,12 +647,7 @@ public class OldFeaturesWrapper {
       }
     }
 
-    timer = new MultiTimer();
-    timer.put("convert-sentence", new Timer("convert-sentence", 100, true));
-    timer.put("compute-features", new Timer("compute-features", 10000, true));
-
     ctx = new TemplateContext();
-    depGraphEdges = new Alphabet<>();
     hf = new DependencyHeadFinder();
     skipped = new Counts<>();
   }
@@ -808,89 +855,7 @@ public class OldFeaturesWrapper {
     return sentCache;
   }
 
-  private void checkForNewSentence(Uberts u) {
-    String id = getSentenceId(u);
-    if (sentCache != null && sentCache.getId().equals(id))
-      return;
-    timer.start("convert-sentence");
-    sentCache = readSentenceFromState(u);
-    /*
-    // See FNParseToRelations for these definitions
-    NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
-    Relation wordRel = u.getEdgeType("word2");
-    Relation posRel = u.getEdgeType("pos2");
-    Relation lemmaRel = u.getEdgeType("lemma2");
-
-    State st = u.getState();
-    List<HypNode> tokens = new ArrayList<>();
-    List<String> wordL = new ArrayList<>();
-    List<String> posL = new ArrayList<>();
-    List<String> lemmaL = new ArrayList<>();
-    for (int i = 0; true; i++) {
-      HypNode tok = u.lookupNode(tokenIndex, String.valueOf(i));
-      if (tok == null)
-        break;
-      tokens.add(tok);
-      LL<HypEdge> maybeWord = st.match(0, wordRel, tok);
-      if (maybeWord == null)
-        break;
-      assert maybeWord.next == null : "more than one word at " + tok + ": " + maybeWord;
-      HypEdge wordE = maybeWord.item;
-      HypNode word = wordE.getTail(1);
-      HypNode pos = st.match1(0, posRel, tok).getTail(1);
-
-      LL<HypEdge> lemma = st.match(0, lemmaRel, tok);
-
-      wordL.add((String) word.getValue());
-      posL.add((String) pos.getValue());
-      if (lemma != null) {
-        assert lemma.next == null : "two lemmas?";
-        lemmaL.add((String) lemma.item.getTail(1).getValue());
-      } else {
-        lemmaL.add("na");
-      }
-    }
-    int n = wordL.size();
-    String[] wordA = wordL.toArray(new String[n]);
-    String[] posA = posL.toArray(new String[n]);
-    String[] lemmaA = lemmaL.toArray(new String[n]);
-
-    String dataset = "na";
-    sentCache = new Sentence(dataset, id, wordA, posA, lemmaA);
-
-    // Shapes and WN are computed on the fly
-    // deps (basic, col, colcc) and constituents need to be added
-    Relation depsBRel = u.getEdgeType("dsyn3-basic");
-    String[] labB = new String[n];
-    int[] govB = new int[n];
-    for (int i = 0; i < n; i++) {
-      // Find the 0 or 1 tokens which govern this token
-      HypNode dep = tokens.get(i);
-      LL<HypEdge> gov2dep = st.match(1, depsBRel, dep);
-      if (gov2dep == null) {
-        govB[i] = -1;
-        labB[i] = "UKN";
-      } else {
-        assert gov2dep.next == null : "two gov (not tree) for basic?";
-        HypEdge e = gov2dep.item;
-        govB[i] = Integer.parseInt((String) e.getTail(0).getValue());
-        labB[i] = (String) e.getTail(2).getValue();
-      }
-    }
-    sentCache.setBasicDeps(new DependencyParse(govB, labB));
-    boolean allowNull = true;
-    sentCache.setCollapsedDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-col", allowNull), depGraphEdges));
-    sentCache.setCollapsedCCDeps2(getDepGraph(u, n, u.getEdgeType("dsyn3-colcc", allowNull), depGraphEdges));
-    sentCache.setStanfordParse(buildCP(u, id));
-    sentCache.computeShapes();
-    sentCache.getWnWord(0);
-    */
-    timer.stop("convert-sentence");
-  }
-
   public List<Pair<TemplateAlphabet, String>> features(HypEdge yhat, Uberts x) {
-    checkForNewSentence(x);
-    timer.start("compute-features");
     Span t = null, s = null;
     String f = null, k = null;
     ctx.clear();
@@ -898,7 +863,8 @@ public class OldFeaturesWrapper {
       ctx.debugMessage = "setup for " + yhat.toString();
       ctx.debugEdge = yhat;
     }
-    ctx.setSentence(sentCache);
+    assert x.dbgSentenceCache != null;
+    ctx.setSentence(x.dbgSentenceCache);
     if (customEdgeCtxSetup == null) {
       switch (yhat.getRelation().getName()) {
       case "srl1":
@@ -962,7 +928,7 @@ public class OldFeaturesWrapper {
         ctx.setArg(s);
         ctx.setSpan1(s);
         if (s != Span.nullSpan) {
-          int sh = hf.head(s, sentCache);
+          int sh = hf.head(s, ctx.getSentence());
           if (sh >= 0) {
             ctx.setArgHead(sh);
             ctx.setHead1(ctx.getArgHead());
@@ -973,7 +939,7 @@ public class OldFeaturesWrapper {
         ctx.setTarget(t);
         ctx.setSpan2(t);
         if (t != Span.nullSpan) {
-          int th = hf.head(t, sentCache);
+          int th = hf.head(t, ctx.getSentence());
           if (th >= 0) {
             ctx.setTargetHead(th);
             ctx.setHead2(ctx.getTargetHead());
@@ -1011,7 +977,6 @@ public class OldFeaturesWrapper {
     if (DEBUG > 1)
       System.out.println(feats.size() + " features for " + yhat);
 
-    timer.stop("compute-features");
     return feats;
   }
 

@@ -16,14 +16,15 @@ event1(t) & span-w1(t,i,j) & pos2(i,posFine) & lemma2(i,lemma) & coarsenPos2(pos
 # We are still way short of Tackstrom's claim of 88.2% recall
 
 
-### #event1(t) & xue-palmer-args2(t,s) => srl2(t,s)
-### #event1(t) & xue-palmer-deps-args2(t,s) => srl2(t,s)
-### event1(t) & xue-palmer-otf-args2(t,s) => srl2(t,s)
-###
-### #predicate2(t,f) & role2(f,k) => srl3(t,f,k)
-### predicate2(t,f) & coarsenFrame2(f,fc) & role2(fc,k) => srl3(t,fc,k)
-###
-### srl2(t,s) & srl3(t,fc,k) => argument4(t,fc,s,k)
+##### #event1(t) & xue-palmer-args2(t,s) => srl2(t,s)
+##### #event1(t) & xue-palmer-deps-args2(t,s) => srl2(t,s)
+##### #event1(t) & xue-palmer-otf-args2(t,s) => srl2(t,s)
+##### event1(t) & tackstrom-args4(t,s,sHead,k) => srl2(t,s)
+#####
+##### #predicate2(t,f) & role2(f,k) => srl3(t,f,k)
+##### predicate2(t,f) & coarsenFrame2(f,fc) & role2(fc,k) => srl3(t,fc,k)
+#####
+##### srl2(t,s) & srl3(t,fc,k) => argument4(t,fc,s,k)
 
 # state=3008671
 # state/tackstrom-args4=2576483
@@ -94,5 +95,9 @@ event1(t) & span-w1(t,i,j) & pos2(i,posFine) & lemma2(i,lemma) & coarsenPos2(pos
 # tp(argument4)=50338    fp(argument4)=0 fn(argument4)=8360      R(argument4)=85.8       P(argument4)=100.0      F(argument4)=92.3
 # tp(event1)=25165       fp(event1)=0    fn(event1)=0    R(event1)=100.0 P(event1)=100.0 F(event1)=100.0
 # tp(predicate2)=24897   fp(predicate2)=48       fn(predicate2)=268      R(predicate2)=98.9      P(predicate2)=99.8      F(predicate2)=99.4
+
+
+# NOTE: I don't think I'll ever be able to beat Tackstrom args for srl2 pruning.
+# srl3 pruning is still an option, but as of now this is fast enough.
 predicate2(t,f) & tackstrom-args4(t,s,sHead,k) & coarsenFrame2(f,fc) => argument4(t,fc,s,k)
 

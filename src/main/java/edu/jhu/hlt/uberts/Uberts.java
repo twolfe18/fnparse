@@ -57,7 +57,7 @@ public class Uberts {
   public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
 
   interface NewStateEdgeListener {
-    void addedToState(HashableHypEdge e);
+    void addedToState(HashableHypEdge e, Adjoints s, Boolean gold);
   }
   private List<NewStateEdgeListener> newStateEdgeListeners = new ArrayList<>();
   public void addNewStateEdgeListener(NewStateEdgeListener l) {
@@ -248,8 +248,14 @@ public class Uberts {
 
       // Always record the action
       boolean hitLim = actionLimit > 0 && i >= actionLimit;
-      boolean pred = thresh.decide(ai);
-      steps.add(new Step(ai, y, pred));
+
+//      boolean pred = thresh.decide(ai);
+      Pair<Boolean, Adjoints> dec = thresh.decide2(ai);
+      boolean pred = dec.get1();
+      Step s = new Step(ai, y, pred);
+      s.decisionAdj = dec.get2();
+      s.score = null;
+      steps.add(s);
 
       // But maybe don't add apply it (add it to state)
       if (hitLim)
@@ -976,8 +982,9 @@ public class Uberts {
     state.add(e, score);
 
     HashableHypEdge he = new HashableHypEdge(e);
+    Boolean y = getLabel(he);
     for (NewStateEdgeListener l : newStateEdgeListeners)
-      l.addedToState(he);
+      l.addedToState(he, score, y);
 
     trie3.match(state, e, m -> {
       Trigger t = m.getTrigger();

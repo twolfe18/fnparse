@@ -48,6 +48,10 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   private double c;
   private int dimension;
 
+  // TODO I'm such an idiot, I haven't added this to forwards()!
+  // Nor have I specified how/when you specify which intercept features fire.
+  // I believe originally I had been doing some monkey-hacking into the w/u fields to make this happen.
+  //
   // Reserves the first K indices in w and u for special "intercept" features
   // which are not given out when score() is called. Calls to dimension() will
   // include these intercept indices.
@@ -88,7 +92,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   }
 
   /**
-   * Only allows calls to getWeight, which is overriddent to actually call
+   * Only allows calls to getWeight, which is overridden to actually call
    * getAverageWeight. Allocates no space other than a pointer to the
    * {@link AveragedPerceptronWeights} which it is a view of.
    */

@@ -73,7 +73,8 @@ public class BasicFeatureTemplates {
     String p = s.getPos(predicateTokenIndex);
     if (!p.startsWith("V"))
       return "na";
-    DependencyParse d = s.getBasicDeps();
+//    DependencyParse d = s.getBasicDeps();
+    DependencyParse d = s.getParseyDeps();
     int[] children = d.getChildren(predicateTokenIndex);
     for (int i = 0; i < children.length; i++) {
       String deprel = d.getLabel(children[i]);
@@ -490,7 +491,8 @@ public class BasicFeatureTemplates {
       @Override
       String extractSS(TemplateContext context) {
         Sentence s = context.getSentence();
-        DependencyParse d = s.getBasicDeps(false);
+//        DependencyParse d = s.getBasicDeps(false);
+        DependencyParse d = s.getParseyDeps();
         int t = context.getTargetHead();
         int a = context.getArgHead();
         if (s == null || t < 0 || a < 0)
@@ -503,7 +505,8 @@ public class BasicFeatureTemplates {
       @Override
       public Iterable<String> extract(TemplateContext context) {
         Sentence s = context.getSentence();
-        DependencyParse d = s.getBasicDeps(false);
+//        DependencyParse d = s.getBasicDeps(false);
+        DependencyParse d = s.getParseyDeps();
         Span as = context.getSpan1();
         int a = context.getHead1();
         if (s == null || as == null || a < 0)
@@ -522,7 +525,8 @@ public class BasicFeatureTemplates {
       @Override
       public Iterable<String> extract(TemplateContext context) {
         Sentence s = context.getSentence();
-        DependencyParse d = s.getBasicDeps(false);
+//        DependencyParse d = s.getBasicDeps(false);
+        DependencyParse d = s.getParseyDeps();
         Span as = context.getSpan1();
         int t = context.getTargetHead();
         int a = context.getHead1();
@@ -584,6 +588,7 @@ public class BasicFeatureTemplates {
     }
 
     Map<String, Function<Sentence, DependencyParse>> dps = new HashMap<>();
+    dps.put("Parsey", s -> s.getParseyDeps());
     dps.put("Basic", s -> s.getBasicDeps());
     dps.put("Collapsed", s -> s.getCollapsedDeps());
     for (Entry<String, Function<Sentence, DependencyParse>> dp : dps.entrySet()) {
@@ -909,7 +914,8 @@ public class BasicFeatureTemplates {
           if (t == null)
             return null;
           Sentence s = context.getSentence();
-          DependencyParse deps = s.getBasicDeps();
+//          DependencyParse deps = s.getBasicDeps();
+          DependencyParse deps = s.getParseyDeps();
           if (deps == null)
             return null;
           int min = 99;
@@ -988,7 +994,8 @@ public class BasicFeatureTemplates {
           if (t == null)
             return null;
           Sentence s = context.getSentence();
-          DependencyParse deps = s.getBasicDeps();
+//          DependencyParse deps = s.getBasicDeps();
+          DependencyParse deps = s.getParseyDeps();
           if (deps == null)
             return null;
           int min = s.size() + 1;
@@ -1008,7 +1015,8 @@ public class BasicFeatureTemplates {
           if (t == null)
             return null;
           Sentence s = context.getSentence();
-          DependencyParse deps = s.getBasicDeps();
+//          DependencyParse deps = s.getBasicDeps();
+          DependencyParse deps = s.getParseyDeps();
           if (deps == null)
             return null;
           int min = s.size() + 1;
@@ -1031,7 +1039,8 @@ public class BasicFeatureTemplates {
           if (t == null)
             return null;
           Sentence s = context.getSentence();
-          DependencyParse deps = s.getBasicDeps();
+          DependencyParse deps = s.getParseyDeps();
+//          DependencyParse deps = s.getBasicDeps();
           if (deps == null)
             return null;
           int max = 0;
@@ -1050,7 +1059,8 @@ public class BasicFeatureTemplates {
           if (t == null)
             return null;
           Sentence s = context.getSentence();
-          DependencyParse deps = s.getBasicDeps();
+//          DependencyParse deps = s.getBasicDeps();
+          DependencyParse deps = s.getParseyDeps();
           if (deps == null)
             return null;
           int max = 0;
@@ -1534,7 +1544,8 @@ public class BasicFeatureTemplates {
       public Iterable<String> extract(TemplateContext context) {
         List<String> feats = new ArrayList<>();
         Sentence s = context.getSentence();
-        DependencyParse d = s.getBasicDeps();
+//        DependencyParse d = s.getBasicDeps();
+        DependencyParse d = s.getParseyDeps();
         Span a = context.getArg();
         int ah = context.getArgHead();
         int p = context.getTargetHead();
@@ -1816,7 +1827,8 @@ public class BasicFeatureTemplates {
         int aHead = context.getArgHead();
         Sentence sent = context.getSentence();
         ConstituencyParse cp = sent.getStanfordParse();
-        DependencyParse dp = sent.getBasicDeps();
+//        DependencyParse dp = sent.getBasicDeps();
+        DependencyParse dp = sent.getParseyDeps();
 
         /*
         Features with both null and non-null variants: These features come in

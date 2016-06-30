@@ -292,16 +292,16 @@ public class DeterministicRolePruning implements Serializable {
           }
         } else if (mode == Mode.XUE_PALMER_DEP
             || mode == Mode.XUE_PALMER_DEP_HERMANN) {
-          if (sent.getBasicDeps() == null) {
-            if (dParser == null)
-              throw new RuntimeException("no dParse and no dParser! sent.id=" + sent.getId());
-            sent.setBasicDeps(dParser.apply(sent));
-            //sent.setBasicDeps(parser.getBasicDParse(sent));
-          }
 
-//          possibleSpans = DependencyBasedXuePalmerRolePruning
-//              .getMask(input, mode);
-//          assert mode == Mode.XUE_PALMER_DEP_HERMANN : "this is not really imlemented properly";
+//          if (sent.getBasicDeps() == null) {
+//            if (dParser == null)
+//              throw new RuntimeException("no dParse and no dParser! sent.id=" + sent.getId());
+//            sent.setBasicDeps(dParser.apply(sent));
+//            //sent.setBasicDeps(parser.getBasicDParse(sent));
+//          }
+
+          if (sent.getParseyDeps() == null)
+            throw new RuntimeException("no parsey deps?");
           DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
           for (FrameInstance fi : input.getFrameInstances()) {
             int predicate = hf.head(fi.getTarget(), sent);
