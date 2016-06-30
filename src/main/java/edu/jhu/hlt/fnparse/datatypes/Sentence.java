@@ -472,7 +472,6 @@ public class Sentence implements HasId, Serializable {
     return getBasicDeps(true);
   }
   public DependencyParse getBasicDeps(boolean askPermission) {
-    assert false : "use parsey!";
     if (askPermission && hideSyntax)
       return null;
     return basicDeps;

@@ -875,7 +875,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //          boolean pred = s.score.forwards() > 0;
           boolean pred = s.pred;
 //          Adjoints reason = s.score;
-          Adjoints reason = s.decisionAdj == null ? s.score : s.decisionAdj;
+          Adjoints reason = s.getReason();
 
           boolean a4 = s.edge.getRelation().getName().equals("argument4");
 

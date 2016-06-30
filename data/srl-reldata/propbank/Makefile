@@ -1,11 +1,11 @@
 
 #FNPARSE = ~/code/fnparse-build/fnparse
-#FNPARSE = ~/code/fnparse
-FNPARSE = ~/fnparse-build/fnparse
+FNPARSE = ~/code/fnparse
+#FNPARSE = ~/fnparse-build/fnparse
 JAR = $(FNPARSE)/target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 #DATA = ~/scratch/fnparse-data
-#DATA = $(FNPARSE)/toydata
-DATA = /export/projects/twolfe/fnparse-data
+DATA = $(FNPARSE)/toydata
+#DATA = /export/projects/twolfe/fnparse-data
 SHELL = /bin/bash
 DATASET = propbank
 
@@ -70,13 +70,14 @@ relations.def: all.facts.gz
 
 # Remove any documents/sentences which don't have annotations
 # (This is deprecated, FNParse2Relations now filters these out)
-srl.facts.gz: all.facts.gz
 	#java -ea -cp $(JAR) \
 		edu.jhu.hlt.uberts.io.KeepDocsWithRelation \
 		keepRelations argument4,predicate2 \
 		relInput all.facts.gz \
 		relOutput srl.facts.gz
-	#ln -s all.facts.gz srl.facts.gz
+
+# Add in parsey mcparseface dependency parses
+srl.facts.gz: all.facts.gz
 	$(FNPARSE)/scripts/uberts/augment-facts-with-parsey-mcparseface.sh \
 		all.facts.gz \
 		srl.facts.gz \
@@ -118,7 +119,8 @@ ids.train.txt: ids.traindev.txt srl.facts.gz make-train-dev-ids.sh
 
 ids.dev.txt: ids.train.txt
 
-srl.train.facts.gz: ids.test.txt ids.dev.txt srl.facts.gz
+#ids.test.txt ids.dev.txt srl.facts.gz
+srl.train.facts.gz:
 	java -cp $(JAR) -ea \
 		edu.jhu.hlt.uberts.io.ManyDocSplitter \
 			mode trainDevTest \
@@ -134,19 +136,14 @@ srl.dev.facts.gz: srl.train.facts.gz
 
 srl.test.facts.gz: srl.train.facts.gz
 
-# srl.dev.facts.gz
-srl.dev.shuf.facts.gz:
+srl.dev.shuf.facts.gz: srl.dev.facts.gz
 	java -Xmx7G -cp $(JAR) -ea \
 		edu.jhu.hlt.uberts.io.ManyDocShuffler \
 			seed 9001 \
 			input srl.dev.facts.gz \
 			output $@
 
-
-# Shuffle the train set a few times.
-
-#srl.train.facts.gz
-srl.train.shuf%.facts.gz:
+srl.train.shuf%.facts.gz: srl.train.facts.gz
 	java -Xmx7G -cp $(JAR) -ea \
 		edu.jhu.hlt.uberts.io.ManyDocShuffler \
 			seed `echo $@ | md5sum | cut -d' ' -f1 | xargs -I {} python -c 'print int("{}", 16) % (2**16)'` \

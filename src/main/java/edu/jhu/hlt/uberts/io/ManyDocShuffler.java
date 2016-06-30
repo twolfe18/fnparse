@@ -30,6 +30,10 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
  */
 public class ManyDocShuffler {
 
+  // TODO Instead of reading in all of the documents into memory, scan the file
+  // for "startdoc " string indices, store those in memory, shuffle those offsets
+  // and then write them out by seeking around.
+
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
     File in = config.getExistingFile("input");
