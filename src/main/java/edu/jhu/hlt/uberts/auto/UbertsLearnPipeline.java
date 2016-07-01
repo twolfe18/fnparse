@@ -111,6 +111,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   /** @deprecated */
   private OldFeaturesWrapper.Ints feFast;
 
+  private ParameterIO parameterIO;
+
   private List<Consumer<Double>> batch = new ArrayList<>();
   private int batchSize = 1;
   private boolean updateAccordingToPriority = false;
@@ -369,6 +371,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
     super(u, grammarFile, schemaFiles, relationDefs);
 
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    parameterIO = new ParameterIO();
+    parameterIO.configure(config);
+
     if (allowableGlobals.frameCooc) {
       Params gp = new Params();
       gp.frameCooc = true;
@@ -378,7 +384,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       u.addGlobalFactor(p.getTrigger2(), p);
     }
 
-    ExperimentProperties config = ExperimentProperties.getInstance();
     updateAccordingToPriority = config.getBoolean("dagger/updateAccordingToPriority", false);
     pOracleRollIn = config.getDouble("dagger/pOracleRollIn", pOracleRollIn);
     batchSize = config.getInt("batchSize", batchSize);
@@ -478,6 +483,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       return new FeatureExtractionFactor.Oracle(r.rhs.relName);
     }
 
+    LocalFactor f2 = parameterIO.get(r);
+    if (f2 != null)
+      return f2;
+
     if (templateFeats) {
       ExperimentProperties config = ExperimentProperties.getInstance();
       Log.info("using template feats");
@@ -500,6 +509,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 0)
       Log.info("scoreFor(" + r + "): " + f);
     assert f != LocalFactor.Constant.ZERO;
+    parameterIO.put(r, f);
     return f;
   }
 
@@ -534,6 +544,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     super.finish(dataName);
     eventCounts.increment("pass/" + mode.toString());
     Log.info("mode=" + mode + " dataName=" + dataName + "\t" + eventCounts.toString());
+
+    if (mode == Mode.TRAIN)
+      parameterIO.saveAll();
 
     // Close predictions writer
     if (predictionsWriter != null) {
@@ -661,8 +674,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   @Override
   public void consume(RelDoc doc) {
-    if (MEM_LEAK_DEBUG)
-      return;
 //    System.out.println("[consume] " + doc.getId());
 
     // Add xue-palmer-args2

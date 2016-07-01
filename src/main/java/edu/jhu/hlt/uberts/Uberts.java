@@ -981,7 +981,7 @@ public class Uberts {
     state.add(e, score);
 
     HashableHypEdge he = new HashableHypEdge(e);
-    Boolean y = getLabel(he);
+    Boolean y = goldEdges == null ? null : getLabel(he);
     for (NewStateEdgeListener l : newStateEdgeListeners)
       l.addedToState(he, score, y);
 

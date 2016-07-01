@@ -48,11 +48,8 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator;
 public abstract class UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
 
-  public static boolean MEM_LEAK_DEBUG = false;
-
   protected Uberts u;
   protected List<Rule> rules;
-  protected Set<Relation> rhsOfRules;
   protected List<Relation> helperRelations;
   protected TypeInference typeInf;
 
@@ -64,6 +61,8 @@ public abstract class UbertsPipeline {
   // Keeps track of how frequently types of events happen
   protected Counts<String> eventCounts = new Counts<>();
 
+  // When running TypeInference.Expander, for which relations should we not
+  // generate facts which are implied by the label (e.g. schema relations).
   protected Set<String> dontBackwardsGenerate;
 
   public boolean debug = false;
@@ -87,7 +86,6 @@ public abstract class UbertsPipeline {
     dontBackwardsGenerate.add("succTok");
 
     rules = new ArrayList<>();
-    rhsOfRules = new HashSet<>();
     helperRelations = new ArrayList<>();
 
     // succTok(i,j)
@@ -124,7 +122,6 @@ public abstract class UbertsPipeline {
     if (DEBUG > 0)
       Log.info("running type inference...");
     this.typeInf = new TypeInference(u);
-//    this.typeInf.debug = true;
     for (Rule untypedRule : Rule.parseRules(grammarFile, null))
       typeInf.add(untypedRule);
 
@@ -141,8 +138,6 @@ public abstract class UbertsPipeline {
     typedRules = temp;
     temp = null;
 
-    for (Rule r : typedRules)
-      rhsOfRules.add(r.rhs.rel);
     for (Rule typedRule : typedRules)
       addRule(typedRule);
 
@@ -191,10 +186,6 @@ public abstract class UbertsPipeline {
     Log.info("finished with " + dataName);
   }
 
-  /**
-   * Order of when you calls this matters, see constructor. Notably, it depends
-   * on rhsOfRules and helperRules to be populated.
-   */
   private void addRule(Rule r) {
     assert r.rhs.rel != null;
     assert r.rhs.allArgsAreTyped();
@@ -203,18 +194,6 @@ public abstract class UbertsPipeline {
     rules.add(r);
     LocalFactor phi = getScoreFor(r);
     u.addTransitionGenerator(r, phi);
-  }
-
-  public List<Relation> getHelperRelations() {
-    return helperRelations;
-  }
-  public Set<Relation> getHelperRelationsAsSet() {
-    Set<Relation> s = new HashSet<>();
-    for (Relation r : getHelperRelations()) {
-      Log.info("skipping " + r);
-      s.add(r);
-    }
-    return s;
   }
 
   public void addRelData(File xyValuesFile) throws IOException {
