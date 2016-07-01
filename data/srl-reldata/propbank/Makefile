@@ -18,12 +18,11 @@ coarsenPos2.rel:
 	cp $(FNPARSE)/data/srl-reldata/coarsenPos2.rel $@
 
 grammar.trans:
-	cp $(FNPARSE)/data/srl-reldata/grammar/srl-grammar-noFilter.trans grammar.trans
-	#cp $(FNPARSE)/data/srl-reldata/grammar/srl-grammar-current.trans grammar.trans
+	cp $(FNPARSE)/data/srl-reldata/grammar/srl-grammar-current.trans grammar.trans
 
 frameTriage4.rel.gz: ../unified/frameTriage4.rel.gz
 	zcat ../unified/frameTriage4.rel.gz | head -n 1 >frameTriage4.rel
-	zgrep propbank ../unified/frameTriage4.rel.gz >>frameTriage4.rel
+	zgrep $(DATASET) ../unified/frameTriage4.rel.gz >>frameTriage4.rel
 	gzip frameTriage4.rel
 
 ../unified/frameTriage4.rel.gz:
@@ -39,14 +38,14 @@ frameTriage4.rel.gz: ../unified/frameTriage4.rel.gz
 
 role2.rel.gz:  ../unified/role2.rel.gz
 	zcat ../unified/role2.rel.gz | head -n 1 >role2.rel
-	zgrep propbank ../unified/role2.rel.gz >>role2.rel
+	zgrep $(DATASET) ../unified/role2.rel.gz >>role2.rel
 	gzip role2.rel
 
 ../unified/coarsenFrame2.rel.gz: ../unified/frameTriage4.rel.gz
 
 coarsenFrame2.rel.gz:  ../unified/coarsenFrame2.rel.gz
 	zcat ../unified/coarsenFrame2.rel.gz | head -n 1 >coarsenFrame2.rel
-	zgrep propbank ../unified/coarsenFrame2.rel.gz >>coarsenFrame2.rel
+	zgrep $(DATASET) ../unified/coarsenFrame2.rel.gz >>coarsenFrame2.rel
 	gzip coarsenFrame2.rel
 
 
