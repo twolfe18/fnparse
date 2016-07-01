@@ -229,6 +229,11 @@ public interface DecisionFunction {
    * NOTE: This makes an assumption that if decide(e1, ...) is called before
    * decide(e2, ...), then e1 was actually added to the state... which isn't
    * really true.
+   *
+   * WARNING: This class is not compatible with {@link Uberts#dbgRunInference()}
+   * because it doesn't respect the {@link DecisionFunction}s choice as final.
+   * For example, the EXACTLY_ONE function assumes that when it returns true
+   * that that edge will actually be added to the state.
    */
   public static class ByGroup implements DecisionFunction, NewStateEdgeListener {
 
@@ -274,6 +279,7 @@ public interface DecisionFunction {
     // E.g. for "at least one predicate2(t,f) per event1(t)", we might use
     private Set<List<Object>> observedKeys;
     private Map<List<Object>, Pair<HypEdge, Adjoints>> firstGoldInBucket;
+    private Map<List<Object>, Pair<HypEdge, Adjoints>> firstPredInBucket;
 
     private ByGroupMode mode;
 
@@ -283,6 +289,7 @@ public interface DecisionFunction {
     public ByGroup(ByGroupMode mode, String description, Uberts u) {
       this.mode = mode;
       this.observedKeys = new HashSet<>();
+      this.firstPredInBucket = new HashMap<>();
       this.firstGoldInBucket = new HashMap<>();
       String[] parts = description.split(":");
       assert parts.length >= 2;
@@ -328,6 +335,7 @@ public interface DecisionFunction {
       this.relation = relation;
       this.keyArgs = keyArgs;
       this.observedKeys = new HashSet<>();
+      this.firstPredInBucket = new HashMap<>();
       this.firstGoldInBucket = new HashMap<>();
     }
 
@@ -361,6 +369,7 @@ public interface DecisionFunction {
     @Override
     public void clear() {
       observedKeys.clear();
+      firstPredInBucket.clear();
       firstGoldInBucket.clear();
     }
 
@@ -388,10 +397,11 @@ public interface DecisionFunction {
     public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
       if (e.getRelation() != relation)
         return new Pair<>(null, null);  // Doesn't apply
+
       List<Object> key = new ArrayList<>(keyArgs.length);
       for (int i = 0; i < keyArgs.length; i++)
         key.add(e.getTail(keyArgs[i]));
-      boolean newEdge = !observedKeys.contains(key);
+
       switch (mode) {
       case AT_LEAST_ONE:
         // This can only force a FP
@@ -403,46 +413,89 @@ public interface DecisionFunction {
 //        return newEdge ? true : null;
         throw new RuntimeException("implement me!");
       case AT_MOST_ONE:
+        if (true) {
+          throw new RuntimeException("this implementation is broken in cases "
+              + "where there is no gold edge, because the first will get through "
+              + "and receive a score-- update on a FP");
+        }
+
+        boolean newEdge = !observedKeys.contains(key);
         if (newEdge) {
           // No opinion: constraint not violated
           return new Pair<>(null, null);
         } else {
-          // To satisfy this constraint, assuming this edge is a FN, dErr_dForward=-1
-//          Adjoints prev = firstGoldInBucket.get(key).get2();
-//          Adjoints p = Adjoints.sum(s, new Adjoints.Scale(-1, prev));
-//          return new Pair<>(false, p);
 
-          // if false, either FN or nothing
-          // FNs get dErr_dForwards = -1
+          // See my notes in ~/research/2016-spring/daily-notes/2016-07-01.txt
 
-          // FUCK, we have no idea if prev is right or not!
-          // if prev is a FP, then fosodijfsldk
-//          Pair<HypEdge, Adjoints> gold = firstGoldInBucket.get(key);
-
+          // Return lazy Adjoints so that all edges can be added to make appropriate
+          // updates to firstPredInBucket and firstGoldInBucket
           return new Pair<>(false, new Adjoints() {
-            private Adjoints gold = null;
             @Override
             public double forwards() {
-              if (gold == null) {
-                Pair<HypEdge, Adjoints> p = firstGoldInBucket.get(key);
-                if (p != null)
-                  gold = p.get2();
-              }
-              if (gold != null)
-                return s.forwards() - gold.forwards();
               return s.forwards();
             }
             @Override
             public void backwards(double dErr_dForwards) {
               assert dErr_dForwards < 0 : "should be FN, right?";
-              s.backwards(+dErr_dForwards);
-              if (gold != null)
-                gold.backwards(-dErr_dForwards);
+              // Only update if this was the first (presumably MV) or gold
+              Pair<HypEdge, Adjoints> p = firstPredInBucket.get(key);
+              Pair<HypEdge, Adjoints> g = firstGoldInBucket.get(key);
+
+              if (g == null) {
+                // If there is no gold, then pushing down the score of some
+                // mistake can't possibly lead to a correct decision.
+                // This can happen e.g. if a path to a gold label was pruned
+                // by some other fact. In this case that pruning step should
+                // receive an update, not this step which can do nothing to recover.
+                return;
+              }
+
+              assert p != g : "this implies no mistake, yet dErr_dForwards=" + dErr_dForwards;
+              if (p != null || g != null) {
+                assert (e == p.get1()) ^ (e == g.get1()) : "this edge should be pred or gold";
+                s.backwards(+dErr_dForwards);
+              }
             }
           });
+
+//          return new Pair<>(false, new Adjoints() {
+//            private Adjoints gold = null;
+//            @Override
+//            public double forwards() {
+//              if (gold == null) {
+//                Pair<HypEdge, Adjoints> p = firstGoldInBucket.get(key);
+//                if (p != null)
+//                  gold = p.get2();
+//              }
+//              if (gold != null)
+//                return s.forwards() - gold.forwards();
+//              return s.forwards();
+//            }
+//            @Override
+//            public void backwards(double dErr_dForwards) {
+//              assert dErr_dForwards < 0 : "should be FN, right?";
+//              s.backwards(+dErr_dForwards);
+//              if (gold != null)
+//                gold.backwards(-dErr_dForwards);
+//            }
+//          });
         }
       case EXACTLY_ONE:
-        throw new RuntimeException("implement me!");
+        Pair<HypEdge, Adjoints> p = firstPredInBucket.get(key);
+        Pair<HypEdge, Adjoints> g = firstGoldInBucket.get(key);
+
+        if (p == null) {
+          assert g == null;
+          return new Pair<>(true, s);
+        } else if (g == null) {
+          return new Pair<>(false, s);
+        } else {
+          System.out.println("returnin no-backprop for " + e);
+          Adjoints a = new Adjoints.WithLearningRate(0, s);
+          a = new Adjoints.Named("BLOCKED: " + e, a);
+          return new Pair<>(false, a);
+        }
+
       default:
         throw new RuntimeException("unknown mode:" + mode);
       }
@@ -456,8 +509,15 @@ public interface DecisionFunction {
       List<Object> key = new ArrayList<>(keyArgs.length);
       for (int i = 0; i < keyArgs.length; i++)
         key.add(e.getTail(keyArgs[i]));
-      if (observedKeys.add(key) && y)
-        firstGoldInBucket.put(key, new Pair<>(he.getEdge(), score));
+      Pair<HypEdge, Adjoints> x = new Pair<>(he.getEdge(), score);
+
+      observedKeys.add(key);
+
+      if (firstPredInBucket.get(key) == null)
+        firstPredInBucket.put(key, x);
+
+      if (y && firstGoldInBucket.get(key) == null)
+        firstGoldInBucket.put(key, x);
     }
   }
 

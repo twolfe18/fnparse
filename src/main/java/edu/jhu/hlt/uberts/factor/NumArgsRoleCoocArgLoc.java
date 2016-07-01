@@ -82,6 +82,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       // everything is false
     }
 
+    public boolean any() {
+      return frameCooc || numArgs || argLocPairwise || argLocGlobal || argLocRoleCooc || roleCooc;
+    }
+
     public Params(Params copy) {
       frameCooc = copy.frameCooc;
       roleCooc = copy.roleCooc;
@@ -409,7 +413,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private Adjoints rescoreMutable(HypEdge e, Adjoints oldScore, Agenda a, HypEdge srl4Fact, HypNode t, Iterable<HypEdge> affected, LL<HypEdge> existing) {
     oldScore = Adjoints.uncacheIfNeeded(oldScore);
     if (!(oldScore instanceof GlobalFactorAdjoints))
-      oldScore = new GlobalFactorAdjoints(oldScore, globalToLocalScale);
+      oldScore = new GlobalFactorAdjoints(e, oldScore, globalToLocalScale);
     GlobalFactorAdjoints gs = (GlobalFactorAdjoints) oldScore;
 
     if (params.numArgs) {
@@ -474,11 +478,11 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     if (oldScore instanceof GlobalFactorAdjoints) {
       events.increment("rescoreImmutable/oldIsGlobal");
       gsOld = (GlobalFactorAdjoints) oldScore;
-      gs = new GlobalFactorAdjoints(gsOld.getLocalScore(), globalToLocalScale);
+      gs = new GlobalFactorAdjoints(e, gsOld.getLocalScore(), globalToLocalScale);
     } else {
       events.increment("rescoreImmutable/oldIsLocal");
       gsOld = null;
-      gs = new GlobalFactorAdjoints(oldScore, globalToLocalScale);
+      gs = new GlobalFactorAdjoints(e, oldScore, globalToLocalScale);
     }
 
     if (params.numArgs) {

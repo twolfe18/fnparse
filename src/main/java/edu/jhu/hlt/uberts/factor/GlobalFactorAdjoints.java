@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.HypEdge;
 
 /**
  * When re-scoring items on the agenda with global features, we will often need
@@ -15,11 +16,13 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  */
 public class GlobalFactorAdjoints implements Adjoints {
 
+  public final HypEdge edge;
   private Adjoints localScore;
   private LinkedHashMap<String, Adjoints> globalScores;
   private double globalToLocalScale = 0.25;
 
-  public GlobalFactorAdjoints(Adjoints localScore, double globalToLocalScale) {
+  public GlobalFactorAdjoints(HypEdge e, Adjoints localScore, double globalToLocalScale) {
+    this.edge = e;
     this.localScore = Adjoints.cacheIfNeeded(localScore);
     this.globalScores = new LinkedHashMap<>();
     this.globalToLocalScale = globalToLocalScale;
@@ -28,16 +31,16 @@ public class GlobalFactorAdjoints implements Adjoints {
   /**
    * Assumes local features are immutable!
    */
-  public static GlobalFactorAdjoints copy(Adjoints a, double globalToLocalScale) {
+  public static GlobalFactorAdjoints copy(HypEdge e, Adjoints a, double globalToLocalScale) {
     if (a instanceof GlobalFactorAdjoints) {
       GlobalFactorAdjoints gsOld = (GlobalFactorAdjoints) a;
-      GlobalFactorAdjoints gsNew = new GlobalFactorAdjoints(gsOld.getLocalScore(), globalToLocalScale);
+      GlobalFactorAdjoints gsNew = new GlobalFactorAdjoints(gsOld.edge, gsOld.getLocalScore(), globalToLocalScale);
       for (Entry<String, Adjoints> x : gsOld.globalScores.entrySet())
         gsNew.addToGlobalScore(x.getKey(), x.getValue());
       return gsNew;
     } else {
       // Assumes local features are immutable
-      return new GlobalFactorAdjoints(a, globalToLocalScale);
+      return new GlobalFactorAdjoints(e, a, globalToLocalScale);
     }
   }
 
@@ -83,7 +86,9 @@ public class GlobalFactorAdjoints implements Adjoints {
 
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("(GFAdj local=" + localScore);
+    sb.append("(GFAdj ");
+    sb.append(edge);
+    sb.append(" local=" + localScore);
     for (Entry<String, Adjoints> x : globalScores.entrySet())
       sb.append(" "  + x.getKey() + "=" + x.getValue());
     sb.append(')');

@@ -135,7 +135,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private boolean includeNegativePredictions = false;
 
   // See DAGGER1
-  private boolean newMarginUpdate = false;
+  private boolean newMarginUpdate = true;
 
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
@@ -371,10 +371,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
     super(u, grammarFile, schemaFiles, relationDefs);
 
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    parameterIO = new ParameterIO();
-    parameterIO.configure(config);
-
     if (allowableGlobals.frameCooc) {
       Params gp = new Params();
       gp.frameCooc = true;
@@ -384,6 +380,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       u.addGlobalFactor(p.getTrigger2(), p);
     }
 
+    ExperimentProperties config = ExperimentProperties.getInstance();
     updateAccordingToPriority = config.getBoolean("dagger/updateAccordingToPriority", false);
     pOracleRollIn = config.getDouble("dagger/pOracleRollIn", pOracleRollIn);
     batchSize = config.getInt("batchSize", batchSize);
@@ -464,10 +461,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     p.numArgs = true;
     p.roleCooc = true;
     p.and(allowableGlobals);
-    numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, p, u);
-    numArgsArg4.storeExactFeatureIndices();
-    globalFactors.add(numArgsArg4);
-    u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
+    if (p.any()) {
+      numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, p, u);
+      numArgsArg4.storeExactFeatureIndices();
+      globalFactors.add(numArgsArg4);
+      u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
+    }
   }
 
   @Override
@@ -483,6 +482,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       return new FeatureExtractionFactor.Oracle(r.rhs.relName);
     }
 
+    if (parameterIO == null) {
+      parameterIO = new ParameterIO();
+      parameterIO.configure(ExperimentProperties.getInstance());
+    }
     LocalFactor f2 = parameterIO.get(r);
     if (f2 != null)
       return f2;
@@ -815,7 +818,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 1)
       Log.info("starting on " + doc.getId());
 
-    int verbose = 0;
+    int verbose = 1;
     switch (trainMethod) {
     case EARLY_UPDATE:
       timer.start("train/earlyUpdate");
@@ -897,10 +900,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           boolean a4 = s.edge.getRelation().getName().equals("argument4");
 
           if (s.gold && !pred) {
-            if ((verbose >= 1 && a4) || verbose >= 2) System.out.println("FN: " + s);
+            if ((verbose >= 1 && a4) || verbose >= 2)
+              System.out.println("FN: " + s);
             reason.backwards(-lr);
           } else if (!s.gold && pred) {
-            if ((verbose >= 1 && a4) || verbose >= 2) System.out.println("FP: " + s);
+            if ((verbose >= 1 && a4) || verbose >= 2)
+              System.out.println("FP: " + s);
             reason.backwards(+lr * cfp.getOrDefault(s.edge.getRelation(), 1d));
           } else if ((verbose >= 1 && a4) || verbose >= 2) {
             if (s.gold)

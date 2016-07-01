@@ -85,6 +85,10 @@ public class ParameterIO {
    */
   public void configure(ExperimentProperties config) {
     String key = "parameterIO";
+    if (!config.containsKey(key)) {
+      Log.info("[main] WARNING: " + key + " not specified, not setting up any parameter loading/saving");
+      return;
+    }
     String[] values = config.getStrings(key);
     for (String v : values) {
       Instance i = Instance.parse(v);

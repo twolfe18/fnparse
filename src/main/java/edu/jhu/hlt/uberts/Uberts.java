@@ -249,11 +249,13 @@ public class Uberts {
       // Always record the action
       boolean hitLim = actionLimit > 0 && i >= actionLimit;
 
+//      if (ai.edge.getRelation().getName().equals("argument4"))
+//        System.currentTimeMillis();
 //      boolean pred = thresh.decide(ai);
       Pair<Boolean, Adjoints> dec = thresh.decide2(ai);
       boolean pred = dec.get1();
       Step s = new Step(ai, y, pred);
-      s.decisionAdj = dec.get2();
+      s.setDecision(dec.get2());
       steps.add(s);
 
       // But maybe don't add apply it (add it to state)

@@ -22,11 +22,16 @@ public class Step {
   public final Boolean gold;    // can be null if you don't know
   public final double priority;
 
-  public Adjoints decisionAdj;
+  private Adjoints decisionAdj;
   public Adjoints getReason() {
     if (decisionAdj != null)
       return decisionAdj;
     return score;
+  }
+  public void setDecision(Adjoints dec) {
+    assert decisionAdj == null;
+    System.out.println("this: " + this + " dec: " + dec);
+    this.decisionAdj = dec;
   }
 
   public Step(AgendaItem ai, Boolean gold, boolean pred) {
@@ -64,6 +69,8 @@ public class Step {
   @Override
   public String toString() {
     double f = score == null ? Double.NaN : score.forwards();
+    if (decisionAdj != null)
+      return "(Step " + edge + " gold=" + gold + " pred=" + pred + " dec=" + decisionAdj + " priority=" + priority + " score=" + f + " " + score + ")";
     return "(Step " + edge + " gold=" + gold + " pred=" + pred + " priority=" + priority + " score=" + f + " " + score + ")";
   }
 }

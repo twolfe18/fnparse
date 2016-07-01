@@ -5,6 +5,7 @@ import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.Uberts;
 
 public interface LocalFactor {
+  public static boolean DEBUG = true;
 
   public Adjoints score(HypEdge y, Uberts x);
 
@@ -21,11 +22,17 @@ public interface LocalFactor {
     public Adjoints score(HypEdge y, Uberts x) {
       Adjoints l = left.score(y, x);
       Adjoints r = right.score(y, x);
-      if (l == Adjoints.Constant.ZERO)
-        return r;
-      if (r == Adjoints.Constant.ZERO)
-        return l;
-      return Adjoints.sum(l, r);
+      Adjoints a;
+      if (l == Adjoints.Constant.ZERO) {
+        a = r;
+      } else if (r == Adjoints.Constant.ZERO) {
+        a = l;
+      } else {
+        a = Adjoints.sum(l, r);
+      }
+      if (DEBUG)
+        a = new Adjoints.Named("" + y, a);
+      return a;
     }
     @Override
     public String toString() {
@@ -40,6 +47,8 @@ public interface LocalFactor {
     }
     @Override
     public Adjoints score(HypEdge y, Uberts x) {
+      if (DEBUG)
+        return new Adjoints.NamedConstant("" + y, constant.forwards());
       return constant;
     }
     public String toString() {

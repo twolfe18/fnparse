@@ -36,6 +36,7 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public abstract class FeatureExtractionFactor<T> implements LocalFactor {
+  public static boolean DEBUG = true;
 
   // Set this to non-null values to enable.
   // When enabled, an empty list, this.SKIP will be return from features().
@@ -95,9 +96,11 @@ public abstract class FeatureExtractionFactor<T> implements LocalFactor {
         weights.add(w);
       }
     }
-    if (cacheAdjointsForwards)
-      return Adjoints.cacheIfNeeded(weights);
-    return weights;
+
+    Adjoints r = cacheAdjointsForwards ? Adjoints.cacheIfNeeded(weights) : weights;
+    if (DEBUG)
+      r = new Adjoints.Named(yhat + "", r);
+    return r;
 
 //    // Look up weight vector based on Relation of the given edge
 //    Map<T, Weight<T>> t = theta.get(yhat.getRelation());

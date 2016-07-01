@@ -43,6 +43,9 @@ public class AtMost1 {
    *        exclusion, e.g. 0 to represent t in predicate2(t,f)
    */
   public static void add(Uberts u, Relation rel, int mutexArg, boolean hard) {
+
+    assert false : "see DecisionFunction.ByGroup";
+
     if (DEBUG > 0) {
       Log.info("AtMost1 " + rel.getName() + " per "
           + rel.getTypeForArg(mutexArg).getName() + " hard=" + hard);
@@ -103,6 +106,9 @@ public class AtMost1 {
      * mutual exclusion is enforced. Typically this is an argument of relation.
      */
     public RelNode1(Relation relation, boolean hard, Function<GraphTraversalTrace, HypNode> getBoundNode, String nameOfBoundNode) {
+
+      assert false : "see DecisionFunction.ByGroup";
+
       this.relationMatch = relation;
       this.getBoundNode = getBoundNode;
       this.boundNodeName = nameOfBoundNode;
@@ -146,7 +152,7 @@ public class AtMost1 {
             Adjoints score = a.getScore(e);
             a.remove(e);
             if (!(score instanceof GlobalFactorAdjoints))
-              score = new GlobalFactorAdjoints(score, 1d);          // TODO take this as arg
+              score = new GlobalFactorAdjoints(e, score, 1d);          // TODO take this as arg
             GlobalFactorAdjoints gs = (GlobalFactorAdjoints) score;
 
             if (NumArgsRoleCoocArgLoc.IMMUTABLE_FACTORS)
@@ -211,6 +217,9 @@ public class AtMost1 {
         Function<GraphTraversalTrace, HypNode> getBoundNode2,
         String boundNode1Name,
         String boundNode2Name) {
+
+      assert false : "see DecisionFunction.ByGroup";
+
       this.relationMatch = relationMatch;
       this.getBoundNode1 = getBoundNode1;
       this.getBoundNode2 = getBoundNode2;
