@@ -1,0 +1,5235 @@
+20	Entity
+145	Entity	num<
+2	Entity	num<	nsubj>
+1	Entity	num<	amod>
+1	Entity	num<	pobj<	prep<	appos>
+1	Entity	rcmod<
+1	Entity	rcmod<	det>
+4	Entity	pobj<	prep<
+1	Entity	pobj<	prep<	poss>
+2	Entity	pobj<	prep<	nsubj>
+1	Entity	pobj<	prep<	pobj<	prep<	dobj>
+1	Entity	pobj<	prep<	prep>
+342	Entity	amod<
+1	Entity	amod<	poss>
+2	Entity	amod<	conj>
+1	Entity	amod<	appos<
+1	Entity	amod<	conj<
+2	Entity	amod<	nsubj>
+1	Entity	amod<	nsubj>	dep>
+1	Entity	amod<	pobj<	prep<
+3	Entity	amod<	nn<
+2	Entity	amod<	nn<	appos<	prep>	pobj>	prep>	pobj>
+1	Entity	amod<	prep>
+3	Entity	amod<	nn>
+2	Entity	number<	num<
+1	Entity	aux<	conj<	nsubj>
+1	Entity	aux<	conj<	dobj>
+8	Entity	aux<	rcmod<
+1	Entity	aux<	rcmod<	conj>
+1	Entity	aux<	rcmod<	conj<
+2	Entity	aux<	rcmod<	pobj<	prep<
+51	Entity	aux<	nsubj>
+1	Entity	aux<	nsubj>	det>
+1	Entity	aux<	nsubj>	appos>
+18	Entity	aux<	nsubjpass>
+1	Entity	aux<	advmod>
+1	Entity	cop<	conj<	xcomp<	nsubjpass>
+1	Entity	cop<	csubj<	ccomp>
+44	Entity	cop<	nsubj>
+1	Entity	cop<	pcomp<	conj<	prep<	nsubjpass>
+1	Entity	cop<	infmod<	poss>
+4	Entity	cop<	xcomp<	nsubj>
+1	Entity	cop<	xcomp<	dobj>
+6	Entity	amod>
+1	Entity	pcomp<	prep<	poss>
+1	Entity	pcomp<	prep<	nsubj>
+1	Entity	pcomp<	prep<	dobj>
+2	Entity	ccomp>
+1	Entity	ccomp>	nsubj>
+1	Entity	advcl>	dobj>
+1	Entity	advcl<
+29	Entity	poss>
+1	Entity	dep>	dobj>	prep>
+1	Entity	dep>	nn>
+2	Entity	dep<
+1	Entity	dep<	conj>	dobj>
+3	Entity	dep<	nsubj>
+1	Entity	dep<	xcomp<	nsubj>
+1	Entity	dep<	dobj<	nsubj>
+1	Entity	dep<	advcl<	dobj>
+1	Entity	nsubj<	mark>
+1	Entity	nsubj<	dobj>
+1	Entity	det>
+93	Entity	nsubj>
+1	Entity	nsubj>	prep>
+1	Entity	nsubj>	prep>	pobj>
+14	Entity	nsubjpass>
+6	Entity	expl<
+42	Entity	expl<	nsubj>
+1	Entity	expl<	nsubj>	rcmod>
+1	Entity	expl<	neg>
+1	Entity	iobj>
+52	Entity	prep>
+1	Entity	prep>	pobj>	prep>
+5	Entity	auxpass<	nsubjpass>
+17	Entity	prep<
+1	Entity	prep<	conj>
+1	Entity	prep<	pobj<	prep<	nsubj>
+4	Entity	prep<	dobj>
+1	Entity	prep<	dobj>	conj>
+5	Entity	conj<	amod<
+2	Entity	conj<	poss>
+4	Entity	conj<	num<
+5	Entity	conj<	nsubj>
+1	Entity	conj<	nsubjpass>
+1	Entity	conj<	xcomp<	nsubj>
+5	Entity	conj<	dobj<	nsubj>
+2	Entity	conj<	prep>
+12	Entity	partmod<
+1	Entity	partmod<	dep<
+1	Entity	partmod<	appos<
+1	Entity	partmod<	nsubj>
+1	Entity	partmod<	nsubjpass>
+3	Entity	partmod<	pobj<	prep<
+1	Entity	xcomp<	rcmod<	pobj<	prep<	nsubj>
+9	Entity	xcomp<	nsubj>
+1	Entity	xcomp<	nsubjpass>
+1	Entity	xcomp<	dobj>
+12	Entity	xcomp>	nsubj>
+1	Entity	xcomp>	prep>
+1	Entity	dobj<	rcmod<
+20	Entity	dobj<	nsubj>
+1	Entity	dobj<	nsubj>	det>
+1	Entity	dobj<	infmod<	dobj<	pcomp<	prep<	nsubjpass>
+1	Entity	dobj<	infmod<	dobj<	iobj>
+1	Entity	dobj<	pcomp<	prep<	nsubjpass>
+1	Entity	dobj<	pcomp<	prep<	advmod<	nsubj>
+1	Entity	dobj<	iobj>
+1	Entity	dobj<	prep>
+15	Entity	nn<
+1	Entity	nn<	nn<
+38	Entity	dobj>
+1	Entity	dobj>	prep>
+1	Entity	advmod<	nsubj>
+1	Entity	advmod<	nsubjpass>
+14	Entity	nn>
+2	Focal_entity
+3	Focal_entity	amod>
+1	Focal_entity	pobj<	prep<	prep>
+1	Focal_entity	dobj<	prep>
+1	Focal_entity	dobj>
+2	Focal_entity	nn>
+1	Escapee	nsubj>
+3	Product	poss>
+1	Product	dep<	dobj>
+1	Product	rcmod>
+2	Product	nsubj<
+2	Product	rcmod<
+1	Product	nsubj>
+1	Product	nsubj>	prep>	pobj>
+8	Product	nsubjpass>
+1	Product	infmod<	punct>
+1	Product	infmod<	pobj<	prep<	dep<	dep>
+1	Product	pobj<	prep<	dobj<	prep>
+1	Product	pobj<	prep<	ccomp<	nsubj>
+1	Product	pobj<	prep<	appos>
+1	Product	pobj<	prep<	prep>
+1	Product	iobj>
+40	Product	prep>
+7	Product	amod<
+1	Product	conj>	dobj>
+1	Product	conj<	conj>
+3	Product	conj<	conj>	dobj>
+1	Product	conj<	dep>
+1	Product	conj<	poss>
+1	Product	conj<	nsubj>
+8	Product	conj<	prep>
+7	Product	conj<	dobj>
+2	Product	conj<	nn>
+19	Product	amod>
+1	Product	xcomp<	partmod<	dobj<	infmod<	dobj<	punct>
+1	Product	xcomp<	nsubj>
+1	Product	xcomp>
+1	Product	dobj<	nsubj>
+2	Product	dobj<	prep>
+1	Product	ccomp<	nsubj>
+1	Product	nn<
+1	Product	nn<	conj<
+1	Product	nn<	appos<
+4	Product	nn<	amod>
+1	Product	nn<	prep>
+9	Product	nn<	nn>
+100	Product	dobj>
+1	Product	dobj>	det>
+2	Product	dobj>	appos>	rcmod>	xcomp>	dobj>
+1	Product	dobj>	nn>
+40	Product	nn>
+1	Participants
+1	Participants	prep<	partmod<
+2	Participants	nsubj>
+3	Participants	nsubjpass>
+2	Participants	prep>
+2	Comparison_set	amod<
+4	Comparison_set	amod<	prep>
+1	Comparison_set	advmod>
+5	Comparison_set	prep>
+1	Comparison_set	advmod<	amod<	prep>
+20	Container_possessor	poss>
+2	Container_possessor	amod<
+1	Container_possessor	amod<	amod>
+2	Container_possessor	partmod>
+3	Container_possessor	conj<	poss>
+1	Container_possessor	conj<	prep>
+16	Container_possessor	amod>
+1	Container_possessor	pobj<	prep<
+1	Container_possessor	pobj<	prep<	amod>
+2	Container_possessor	pobj<	prep<	prep>
+1	Container_possessor	dobj<	prep>
+1	Container_possessor	nn<
+1	Container_possessor	nn<	nn>
+1	Container_possessor	appos>	prep>
+25	Container_possessor	prep>
+27	Container_possessor	nn>
+2	Unconfirmed_content	amod<
+2	Unconfirmed_content	dep<	xcomp<	nsubj>
+1	Unconfirmed_content	acomp>	ccomp>
+1	Unconfirmed_content	conj<	nsubjpass>
+1	Unconfirmed_content	rcmod<
+1	Unconfirmed_content	nsubj>
+5	Unconfirmed_content	nsubjpass>
+1	Unconfirmed_content	pcomp<	prep<	cc>
+6	Unconfirmed_content	ccomp>
+1	Unconfirmed_content	pobj<	conj<	conj>	prep>
+6	Unconfirmed_content	dobj>
+2	Unconfirmed_content	prep>
+1	Fastener
+782	Weapon
+17	Weapon	amod<
+3	Weapon	amod<	nn>
+8	Weapon	conj>
+1	Weapon	conj<
+3	Weapon	conj<	conj>
+2	Weapon	appos<
+2	Weapon	nsubj>
+6	Weapon	amod>
+1	Weapon	amod>	conj>
+1	Weapon	num>
+6	Weapon	nn<
+3	Weapon	prep>
+16	Weapon	nn>
+1	Place_of_employment	amod>
+1	Place_of_employment	xcomp<	prep>	pobj>	prep>	pobj>
+1	Place_of_employment	xcomp>	prep>
+1	Place_of_employment	dobj<	prep>
+1	Place_of_employment	advmod>
+5	Place_of_employment	prep>
+2	Place_of_employment	nn>
+2	Current_instance
+13	Current_instance	amod<
+1	Current_instance	amod<	pobj<	prep<	prep>
+1	Current_instance	nsubj>
+1	Domain_of_Relevance	conj<	prep>
+1	Domain_of_Relevance	prep>
+1	Domain_of_Relevance	infmod>
+2	Eclipsed	amod<
+1	Landmark_entity	dep<
+1	Landmark_entity	pobj>
+2	Status	nsubj<
+3	Status	amod>
+1	Status	advmod>
+1	Re_encoding	xcomp>
+1	Re_encoding	prep>
+1	Limits_of_consideration	amod<	poss>
+1	Limits_of_consideration	amod<	amod>
+2	Limits_of_consideration	amod<	prep>
+1	Limits_of_consideration	dobj>	prep>
+1	Responding_entity	partmod<	nsubj>
+1	Responding_entity	rcmod>	nsubj>
+1	Responding_entity	nsubj>
+1	Responding_entity	infmod<	amod>
+1	Responding_entity	pobj<	prep<	nsubj>
+1	Responding_entity	prep>
+1	Co_theme	prep>
+2	State_of_affairs
+1	State_of_affairs	rcmod<	pobj<	prep<	conj>
+1	State_of_affairs	nsubj>
+2	State_of_affairs	nsubjpass>
+1	State_of_affairs	pobj>
+1	State_of_affairs	pobj<	prep<
+7	State_of_affairs	prep>
+2	State_of_affairs	prep<
+6	State_of_affairs	amod<
+1	State_of_affairs	amod<	xcomp>
+1	State_of_affairs	conj<
+1	State_of_affairs	conj<	nsubj>
+1	State_of_affairs	conj<	dobj>
+4	State_of_affairs	partmod<
+9	State_of_affairs	aux<
+2	State_of_affairs	aux<	nsubj>
+3	State_of_affairs	aux<	nsubjpass>
+9	State_of_affairs	xcomp>
+1	State_of_affairs	mark>
+2	State_of_affairs	nn<	nn>
+11	State_of_affairs	dobj>
+16	State_of_affairs	advmod<
+1	State_of_affairs	advmod<	cop>
+1	State_of_affairs	advmod<	rcmod<
+3	State_of_affairs	advmod<	nsubj>
+1	State_of_affairs	advmod<	advmod>
+1	State_of_affairs	advmod<	prep>
+1	State_of_affairs	advcl<
+3	State_of_affairs	nn>
+4	Employer
+7	Employer	poss>
+1	Employer	partmod>
+1	Employer	conj<	prep>
+1	Employer	det>
+4	Employer	nsubj>
+1	Employer	amod>
+1	Employer	xcomp<	nsubj>
+1	Employer	pobj<	pcomp<	prep<	prep>
+1	Employer	dobj<	nsubj>
+1	Employer	dobj<	advmod>
+3	Employer	prep>
+5	Employer	nn>
+1	Concessive	conj<	advcl>
+1	Concessive	xcomp<	conj<	advcl>
+2	Concessive	advcl>
+24	Landmark	pobj>
+7	Impactor	nsubj>
+1	Impactor	pcomp<	prep<	dobj>
+1	Sound
+1	Sound	partmod<	pobj<	prep<
+1	Sound	dobj>
+1	Method	nsubj>
+1	Orientation	nn>
+1	Undertaking	amod<
+5	Undertaking	amod<	prep>
+10	Undertaking	amod>
+4	Undertaking	xcomp>
+1	Undertaking	pobj<	prep<	prep>
+1	Undertaking	nn<	nn>
+1	Undertaking	infmod>
+15	Undertaking	prep>
+3	Undertaking	advmod<
+36	Alter
+3	Alter	poss>
+1	Alter	pobj<	prep<	nsubjpass>
+1	Type_Property	partmod>
+1	Type_Property	rcmod>
+17	Type_Property	amod>
+1	Type_Property	pobj<	prep<
+1	Type_Property	num>
+1	Type_Property	nn<	nn<	nn>
+1	Type_Property	nn>
+3	Jurisdiction	amod>
+4	Jurisdiction	nn<	amod>
+1	Jurisdiction	nn<	amod>	conj>
+1	Jurisdiction	nn<	nn<	amod>
+2	Jurisdiction	prep>
+1	Grantor	conj<	nsubj>
+2	Grantor	conj<	xcomp<	nsubj>
+2	Grantor	partmod<
+1	Grantor	partmod<	dobj<	nsubj>
+8	Grantor	nsubj>
+1	Grantor	amod>
+1	Grantor	infmod<	dobj<	ccomp<	nsubj>
+1	Grantor	xcomp<	conj<	nsubj>
+1	Grantor	xcomp<	nsubj>
+1	Grantor	dobj<	iobj>
+1	Grantor	ccomp<	nsubj>
+1	Grantor	advmod>
+1	Grantor	prep>
+1	Grantor	nn>
+1	Experience	amod<	conj<	nsubj>
+4	Experience	advmod<
+1	Experience	advmod<	prep<
+2	Experience	advmod<	nsubj>
+1	Experience	advmod<	aux>
+1	Experience	prep>
+38	Employee
+3	Employee	poss>
+1	Employee	amod<
+3	Employee	partmod<
+1	Employee	partmod<	nsubj>
+1	Employee	nsubj<	rcmod<
+7	Employee	nsubj>
+1	Employee	xcomp<	nsubjpass>
+1	Employee	xcomp<	dobj>
+1	Employee	pobj<	prep<	nsubj>
+1	Employee	pobj<	prep<	dobj<	nsubj>
+5	Employee	dobj<	nsubj>
+1	Employee	nn<	pobj<	prep<	dobj<	nsubj>
+1	Employee	prep>
+6	Employee	dobj>
+3	Expressor	amod<
+100	Part
+1	Part	nsubj<
+1	Part	det>
+1	Part	rcmod<	dep>
+5	Part	nsubj>
+1	Part	nsubjpass>
+45	Part	pobj>
+1	Part	pobj<	prep<	nsubj>
+1	Part	pobj<	prep<	dobj>
+1	Part	prep>
+1	Part	prep>	pobj>	appos>
+1	Part	prep<
+1	Part	prep<	rcmod>
+3	Part	prep<	nsubj>
+1	Part	prep<	pobj<	prep<	pobj<	prep<	punct>
+1	Part	prep<	dobj<	punct>
+1	Part	prep<	prep>
+1	Part	prep<	cc>
+1	Part	conj>	prep>	pobj>
+28	Part	amod<
+1	Part	conj<	amod<
+1	Part	appos<
+1	Part	amod>
+1	Part	xcomp<	nsubj>
+1	Part	xcomp<	dobj>
+1	Part	pcomp>
+1	Part	ccomp<	rcmod<	dobj<	infmod<
+12	Part	nn<
+39	Part	dobj>
+1	Part	dobj>	conj>	conj>
+2	Crime_jurisdiction	prep>
+1	Influencing_variable	dobj<	nsubj>
+1	Influencing_variable	prep>
+1	Author
+3	Author	poss>
+1	Author	amod<	poss>
+1	Author	conj<	xcomp<	dobj>
+1	Author	conj<	dobj<	nsubj>
+1	Author	conj<	prep>
+1	Author	iobj<	dobj>
+3	Author	nsubj>
+1	Author	dobj<	nsubj>
+14	Author	prep>
+1	Author	prep>	pobj>
+11	Author	nn>
+1	Consideration	ccomp>	nsubj>
+2	Consideration	dobj<	prep>
+8	Consideration	prep>
+148	Building
+1	Building	nsubj>
+2	Final_state	acomp>
+3	Final_state	dep<
+16	Final_state	cop<
+1	Final_state	xcomp>
+1	Final_state	advmod>
+11	Final_state	prep>
+5	Final_state	auxpass<
+1	Set	nsubj>
+1	Set	dobj<
+1	Set	nn<	nn>
+2	Set	prep>
+1	Referent	nsubjpass>
+22	Instance
+2	Instance	amod<
+1	Instance	prep>
+1	Authority	nsubj>
+1	Subevent
+1	Subevent	amod<
+1	Subevent	advmod<
+1	Subevent	prep>
+1	Persistent_characteristic	conj<	amod>
+3	Persistent_characteristic	amod>
+1	Persistent_characteristic	pobj<	prep<	nsubj<
+1	Persistent_characteristic	dobj<	prep>
+3	Persistent_characteristic	prep>
+1	Exchanger_2	prep>
+1	Contrast_set	amod<	prep>
+1	Contrast_set	prep>
+1	Exchanger_1	pcomp<	prep<	acomp<	nsubj>
+1	Exchanger_1	xcomp<	nsubj>
+1	Exchanger_1	xcomp<	xcomp<	nsubj>
+1	Inspector	conj<	infmod<	dobj<	nsubj>
+1	Inspector	partmod<
+1	Inspector	rcmod<
+7	Inspector	nsubj>
+2	Inspector	infmod<	dobj<	nsubj>
+1	Inspector	xcomp<	dobj>
+1	Inspector	dobj<	nsubj>
+1	Inspector	nn<
+2	Inspector	nn<	nn>
+3	Inspector	prep>
+9	Inspector	nn>
+1	Limit2	prep<	prep>	pobj>
+1	Limit2	prep>	pobj>
+1	Constant_location	prep>
+2	Limit1	pobj>
+1	Conveyed_emotion	amod>
+4	Speaker
+1	Speaker	rcmod>	nsubj>
+1	Speaker	rcmod<	appos<
+1	Speaker	rcmod<	pobj<	prep<
+1	Speaker	pobj<	prep<	poss>
+1	Speaker	pobj<	prep<	nsubj>
+1	Speaker	pobj<	prep<	pobj<	prep<	dep>	nsubj>
+4	Speaker	amod>
+5	Speaker	pcomp<	prep<	nsubj>
+1	Speaker	pcomp<	prep<	nsubjpass>
+1	Speaker	pcomp<	prep<	dobj<	nsubj>
+24	Speaker	pcomp>	pobj>
+1	Speaker	pcomp>	pcomp>
+1	Speaker	ccomp>
+1	Speaker	advcl<	dep<	nsubj>
+1	Speaker	acomp<	nsubj>
+23	Speaker	poss>
+1	Speaker	dep>
+1	Speaker	nsubjpass<	prep>
+2	Speaker	dep<	nsubj>
+1	Speaker	dep<	nsubj>	dep>
+1	Speaker	dep<	pcomp<	prep<	dobj<	nsubj>
+1	Speaker	dep<	xcomp<	nsubj>
+1	Speaker	det>
+333	Speaker	nsubj>
+1	Speaker	nsubj>	conj>
+1	Speaker	nsubj>	rcmod>
+1	Speaker	nsubj>	det>
+1	Speaker	nsubj>	appos>
+2	Speaker	nsubjpass>
+2	Speaker	infmod<	dobj<	nsubj>
+20	Speaker	prep>
+1	Speaker	prep<
+1	Speaker	prep<	punct>
+3	Speaker	partmod>	prep>
+1	Speaker	conj<	amod<
+16	Speaker	conj<	nsubj>
+1	Speaker	conj<	pcomp<	prep<	nsubj>
+1	Speaker	conj<	xcomp<	nsubj>
+1	Speaker	conj<	xcomp<	prep>	pobj>
+2	Speaker	partmod<
+2	Speaker	partmod<	nsubj>
+22	Speaker	xcomp<	nsubj>
+1	Speaker	xcomp<	nsubjpass>
+8	Speaker	dobj<	nsubj>
+1	Speaker	dobj<	xcomp<	nsubj>
+1	Speaker	dobj>
+14	Speaker	nn>
+21	Food
+1	Food	partmod<
+1	Food	nsubj>	dep>	prep>	pobj>
+1	Food	dobj>
+19	Path
+1	Path	amod<
+2	Path	prt>
+5	Path	advmod>
+12	Path	prep>
+5	Path	dobj>
+1	Path	dobj>	amod>
+22	Noise_maker
+4	Reported_fact	amod<
+1	Reported_fact	nsubj<	ccomp>
+23	Reported_fact	advmod<
+1	Reported_fact	advmod<	prep<
+1	Reported_fact	advmod<	amod<	nsubj<
+1	Reported_fact	advmod<	rcmod<
+1	Reported_fact	advmod<	rcmod<	pobj<	prep<
+4	Reported_fact	advmod<	nsubj>
+3	Reported_fact	advmod<	nsubjpass>
+2	Reported_fact	advmod<	dobj>
+2	Reported_fact	advmod<	prep>
+1	Reported_fact	prep>
+6	Rank
+3	Rank	amod>
+2	Rank	advmod>
+3	Rank	nn>
+1	Offense
+1	Offense	partmod<
+1	Offense	partmod<	pobj<	prep<
+1	Offense	amod>
+1	Offense	prep>
+1	Offense	nn>
+1	Dependent_entity
+1	Dependent_entity	partmod<	nn>
+1	Dependent_entity	rcmod<
+1	Dependent_entity	nsubjpass>
+1	Dependent_entity	pobj<	prep<	nsubj>
+1	Dependent_entity	pobj<	prep<	xcomp<	nsubj>
+1	Dependent_entity	dobj<	prep>
+1	Dependent_entity	nn<
+1	Dependent_entity	nn<	nn>
+11	Dependent_entity	dobj>
+9	Dependent_entity	prep>
+2	Dependent_entity	prep>	pobj>	prep>
+2	Dependent_entity	nn>
+1	Manipulator	conj<	nsubj>
+1	Manipulator	infmod<	dobj<	nsubj>
+1	Manipulator	pcomp<	prep<	nsubj>
+2	Agreement	partmod<
+1	Agreement	xcomp<	nsubj>
+1	Agreement	pobj<	prep<
+36	Agreement	dobj>
+12	Agreement	prep>
+75	Act
+1	Act	dep<
+1	Act	dep<	nsubjpass>	prep>	pcomp>
+4	Act	rcmod<
+1	Act	rcmod<	pobj<	prep<
+1	Act	rcmod<	dobj<
+4	Act	nsubj>
+11	Act	nsubjpass>
+1	Act	pobj<	prep<
+19	Act	prep>
+1	Act	prep>	pobj>	infmod>
+1	Act	infmod>
+4	Act	partmod<
+6	Act	amod>
+1	Act	xcomp<	dobj>
+1	Act	xcomp<	cc>
+7	Act	advmod>
+1	Act	advmod>	advmod>
+1	Act	dobj<	prep>
+43	Act	dobj>
+1	Act	dobj>	rcmod>
+4	Act	nn>
+2	Undergoer
+1	Undergoer	poss>
+1	Undergoer	conj<	amod<
+1	Undergoer	conj<	rcmod<
+2	Undergoer	conj<	dobj>
+5	Undergoer	nsubj>
+9	Undergoer	nsubjpass>
+2	Undergoer	amod>
+1	Undergoer	xcomp<	nsubj>
+2	Undergoer	nn<
+20	Undergoer	dobj>
+1	Undergoer	dobj>	cc>
+7	Undergoer	prep>
+1	Undergoer	nn>
+14	Landmark_period
+1	Landmark_period	quantmod<
+84	Landmark_period	pobj>
+1	Landmark_period	pobj>	num>
+1	Enabled_situation	amod<	dobj<	prep>
+3	Enabled_situation	amod<	infmod>
+1	Enabled_situation	amod<	prep>
+2	Enabled_situation	xcomp>
+1	Enabled_situation	advcl>
+2	Enabled_situation	advmod<	xcomp>
+1	Enabled_situation	advmod<	advcl>
+1	Governed
+15	Governed	poss>
+1	Governed	det>
+4	Governed	nsubjpass>
+2	Governed	pobj<	prep<	nsubj>
+1	Governed	pobj<	prep<	dobj<	prep>
+1	Governed	pobj<	prep<	prep>
+24	Governed	prep>
+3	Governed	amod<
+6	Governed	partmod<
+1	Governed	partmod<	appos<
+1	Governed	conj<	amod>
+1	Governed	conj<	pobj<	prep<	prep>
+1	Governed	appos<	pobj<	prep<	pobj<	prep<	ccomp>
+59	Governed	amod>
+1	Governed	nn<	amod>
+4	Governed	nn<	prep>
+1	Governed	nn<	nn>
+13	Governed	dobj>
+49	Governed	nn>
+1	Governed	nn>	conj>
+2	Defender
+1	Defender	nsubj>
+1	Defender	nsubj>	poss>
+1	Defender	amod>
+1	Defender	pcomp<	prep<	nsubjpass>
+1	Defender	xcomp<	xcomp<	nsubj>
+1	Defender	prep>
+1	Defender	nn>
+1	Entity_2	prep<	rcmod>
+1	Entity_2	amod<	prep>
+1	Entity_2	cop<
+9	Entity_2	pobj>
+1	Entity_2	pcomp>
+3	Entity_2	prep>
+1	Entity_2	prep>	pobj>	prep>
+1	Ordinality	dep>
+4	Ordinality	amod>
+1	Parameter	prep>
+1	Entity_1
+1	Entity_1	prep<	conj<	nsubj>
+6	Entity_1	prep<	nsubj>
+1	Entity_1	prep<	nsubjpass>
+1	Entity_1	prep<	pobj<	prep<
+1	Entity_1	prep<	pobj<	prep<	nsubjpass>
+8	Entity_1	amod<
+1	Entity_1	cop<	nsubj>
+1	Entity_1	nsubj>
+1	Entity_1	dobj<
+137	Aggregate
+1	Aggregate	rcmod>	nsubj>
+1	Aggregate	rcmod<
+1	Aggregate	nsubj>
+1	Aggregate	prep>
+1	Expectation	prep>	pobj>
+44	Terrorist
+1	Place
+1	Place	nsubjpass<	prep>
+1	Place	dep>	prep>
+2	Place	poss>
+1	Place	dep<	advmod>
+1	Place	nsubj<	dobj>	prep>
+1	Place	nsubj<	prep>
+1	Place	rcmod<	dep<
+1	Place	rcmod<	pobj<	prep<
+1	Place	rcmod<	advmod>
+1	Place	nsubj>	dep>	conj>	prep>
+1	Place	nsubj>	advmod>
+2	Place	nsubj>	prep>
+1	Place	expl<	nsubj>	advmod>
+1	Place	expl<	nsubj>	prep>
+1	Place	expl<	nsubj>	prep>	pobj>	prep>
+1	Place	expl<	advmod>
+1	Place	expl<	prep>
+1	Place	pobj<	prep<
+1	Place	pobj<	prep<	prep>
+151	Place	prep>
+1	Place	prep>	pobj>	advmod>
+13	Place	prep>	pobj>	prep>
+2	Place	prep>	pobj>	prep>	pobj>	prep>
+1	Place	amod<	amod>
+1	Place	amod<	dobj<	prep>	pobj>	prep>
+1	Place	conj>	prep>
+1	Place	partmod>	prep>
+2	Place	conj<	amod>
+1	Place	conj<	dobj>	prep>
+3	Place	conj<	prep>
+1	Place	partmod<	nsubj<	prep>
+1	Place	partmod<	prep>
+16	Place	amod>
+1	Place	xcomp<	nsubj>
+1	Place	xcomp<	nsubj>	prep>
+1	Place	xcomp<	advmod>
+1	Place	ccomp>	prep>
+1	Place	xcomp>	prep>
+1	Place	xcomp>	prep>	pobj>	prep>
+1	Place	xcomp>	dobj>	prep>	pobj>	prep>
+26	Place	advmod>
+5	Place	dobj<	prep>
+1	Place	nn<
+1	Place	nn<	conj<	dobj<	prep>
+1	Place	dobj>	advmod>
+10	Place	dobj>	prep>
+1	Place	dobj>	prep>	pobj>	advmod>
+2	Place	dobj>	prep>	pobj>	prep>
+17	Place	nn>
+1	Period_of_iterations	advcl>
+4	Period_of_iterations	prep>
+2	Cognizer_agent	partmod<
+1	Cognizer_agent	partmod<	nsubj>
+3	Cognizer_agent	nsubj>
+1	Cognizer_agent	xcomp<	dobj>
+1	Issue
+1	Issue	amod<
+1	Issue	partmod>
+1	Issue	nsubj<	prep>
+1	Issue	amod>
+3	Issue	pobj>
+1	Issue	ccomp>
+1	Issue	nn<	poss<
+7	Issue	prep>
+4	Issue	dobj>
+2	Issue	infmod>
+2	Issue	nn>
+1	Cotheme	nsubj>
+5	Cotheme	dobj>
+4	Co_participant	prep>
+1	Co_participant	dobj>	prep>
+2	Explanation	partmod>
+1	Explanation	conj>	prep>
+1	Explanation	aux<	advmod>	advmod>
+1	Explanation	cop<	partmod>
+1	Explanation	ccomp>	prep>
+1	Explanation	xcomp>
+1	Explanation	xcomp>	prep>
+1	Explanation	xcomp>	dobj>	appos>	rcmod>	xcomp>	prep>
+3	Explanation	advcl>
+1	Explanation	advmod>	dep>
+9	Explanation	prep>
+1	Explanation	advmod<	prep>
+1	Explanation	advcl<	partmod>
+1	Explanation	dobj>	prep>
+1	Explanation	dobj>	infmod>
+1	Perceiver_agentive	conj<	ccomp<	nsubj>
+1	Perceiver_agentive	partmod<	conj<	nsubj>
+4	Perceiver_agentive	nsubj>
+1	Perceiver_agentive	amod>
+1	Perceiver_agentive	xcomp<	conj<	nsubj>
+2	Perceiver_agentive	xcomp<	nsubj>
+1	Perceiver_agentive	xcomp<	ccomp<	nsubj>
+1	Perceiver_agentive	dobj<	xcomp<	nsubj>
+1	Tourist	nsubj>
+2	Creator
+5	Creator	poss>
+19	Creator	nsubj>
+2	Creator	infmod<
+1	Creator	infmod<	dobj<	nsubj>
+1	Creator	infmod<	ccomp<	partmod<	pobj<	prep<	acomp<	nsubj>
+3	Creator	prep>
+1	Creator	amod<	det>
+5	Creator	conj<	nsubj>
+1	Creator	conj<	infmod<	pobj<	prep<	nsubj>
+1	Creator	partmod<	nsubj>
+1	Creator	parataxis<	nsubj>
+7	Creator	amod>
+1	Creator	pcomp<	prep<	nsubj>
+1	Creator	pcomp<	prep<	ccomp>	nsubj>
+1	Creator	xcomp<	partmod<	pobj<	pcomp<	prep<	advmod<	partmod<	pobj<	prep<	ccomp<	nsubj>
+3	Creator	xcomp<	nsubj>
+1	Creator	xcomp<	nsubj>	prep>	pobj>	poss>
+2	Creator	ccomp<	nsubj>
+1	Creator	dobj<	conj<	ccomp<	nsubj>
+1	Creator	dobj<	nsubj>
+1	Creator	dobj<	xcomp<	nsubj>
+2	Creator	advcl>	conj>	xcomp>	dobj>	rcmod>	nsubj>
+1	Creator	nn<	amod>
+1	Creator	nn>
+1	Difference	advmod>
+1	Difference	prep>
+1	Arguer	conj<	nsubj>
+6	Arguer	nsubj>
+1	Arguer	pcomp<	prep<	xcomp<	nsubj>
+1	Arguer	ccomp<	nsubj>
+1	Final_correlate	prep>
+55	Vehicle
+1	Vehicle	nsubjpass>
+7	Vehicle	dobj>
+2	Vehicle	prep>
+4	Vehicle	nn>
+3	Penal_institution
+1	Target_location	advmod>
+1	Execution
+1	Goal_area	prep>
+8	Proposed_action	xcomp>
+2	Light
+2	Influencing_situation	partmod<
+2	Influencing_situation	nsubj>
+1	Influencing_situation	xcomp<	partmod<	pobj<	prep<	partmod<
+1	Influencing_situation	dobj<	conj<
+1	Influencing_situation	dobj<	nsubj>
+1	Influencing_situation	dobj<	advcl>
+3	Influencing_situation	prep>
+1	Course	amod<
+2	Course	prep>
+12	Protection
+2	Protection	nsubj>
+1	Protection	infmod<
+1	Protection	infmod<	nsubj>
+1	Protection	xcomp<	dobj>
+1	Protection	dobj<	conj<	nsubj>
+1	Protection	dobj<	nsubj>
+1	Protection	nn<	nn>
+1	Subordinate
+1	Subordinate	prep>
+61	Business
+1	Business	amod<
+1	Business	appos<
+1	Business	appos<	dep<
+1	Business	nsubj<
+1	Purpose_of_Event	xcomp>
+1	Purpose_of_theme	xcomp>
+1	Purpose_of_theme	prep>
+1	Exporting_area	amod>
+5	Exporting_area	prep>
+9	Color
+2	Profiled_item	amod<
+1	Profiled_item	conj<	nsubj>
+3	Profiled_item	nsubjpass>
+1	Profiled_item	nsubjpass>	poss>
+1	Profiled_item	xcomp<	dobj>
+2	Searcher	nsubj>
+4	Judicial_body
+3	Duration	conj<	prep>
+6	Duration	amod>
+1	Duration	expl<	prep>
+1	Duration	xcomp>	conj>	prep>
+1	Duration	xcomp>	prep>
+1	Duration	num>
+3	Duration	advmod>
+3	Duration	advcl>
+1	Duration	advcl>	advcl>
+25	Duration	prep>
+1	Duration	prep>	prep>
+2	Duration	dobj>
+1	Duration	dobj>	prep>
+4	Duration	nn>
+1	Term
+2	Term	dep>
+1	Term	dep>	dobj>
+1	Term	nn<
+1	Transferors	nn<	nn<	nsubj<	ccomp<	xcomp<	nsubj>
+1	Unresolved_referent	conj>
+1	Preparatory_phase	amod<
+7	Role
+1	Role	amod<
+1	Role	partmod>
+1	Role	conj<	dobj>
+1	Role	partmod<
+1	Role	parataxis<	advcl<
+2	Role	amod>
+1	Role	xcomp>
+1	Role	pobj<	prep<	prep>
+1	Role	nn<	amod>
+17	Role	prep>
+4	Role	dobj>
+1	Role	dobj>	prep>	pobj>	conj>	prep>
+1	Role	dobj>	infmod>	prep>
+2	Role	nn>
+1	Dangerous_entity	dep<	prep>
+1	Dangerous_entity	nsubj>
+1	Dangerous_entity	nsubj>	prep>	pobj>
+2	Dangerous_entity	amod>
+1	Dangerous_entity	nn<
+1	Dangerous_entity	prep>
+3	Emotional_state	acomp>
+1	Emotional_state	advcl>
+1	Emotional_state	advmod>
+1	Emotional_state	prep>
+2	Area	dep>
+1	Area	amod<	conj<
+1	Area	advmod>
+1	Area	advmod>	conj>
+6	Area	prep>
+1	Area	prep>	prep>
+1	Area	dobj>
+1	Area	nn>
+1	Harmful_event	prep>
+4	State
+2	State	dep>
+15	State	cop<
+1	State	nsubj>
+1	State	nsubjpass>
+1	State	prt>
+1	State	advmod>
+15	State	prep>
+1	State	prep>	pobj>	advmod>	prep>
+1	State	dobj>
+1	State	dobj>	prep>
+1	State	dobj>	prep>	pobj>	partmod>	prep>	pobj>	conj>	prep>	pobj>	rcmod>	xcomp>	prep>
+1	Old_leader	amod<
+1	Old_leader	conj<	dobj>
+1	Old_leader	dobj>
+3	Old_leader	prep>
+7	Measurement
+1	Measurement	npadvmod>
+1	Measurement	pobj<	prep<	conj<
+1	Measurement	prep>
+1	Measurement	advmod<	dobj>
+8	Connector
+1	Connector	partmod<
+1	Connector	prep>
+3	Communicator
+1	Communicator	prep<
+1	Communicator	prep<	xcomp<	nsubj>
+1	Communicator	poss>
+3	Communicator	conj<	nsubj>
+3	Communicator	conj<	ccomp<	nsubj>
+1	Communicator	partmod<	nn>
+16	Communicator	nsubj>
+2	Communicator	amod>
+4	Communicator	xcomp<	nsubj>
+1	Communicator	nn<	nn>
+3	Communicator	prep>
+1	Restrictor	amod>
+1	Form	amod<	appos<	appos>
+1	Form	nsubj>
+1	Form	dobj>
+4	Political_region	poss>
+1	Political_region	amod<	nn<	amod>
+2	Political_region	amod>
+2	Political_region	prep>
+1	Standard	prep>
+1	Ingestor	pcomp<	prep<	nsubjpass>
+1	Time_of_creation	poss>
+1	Time_of_creation	rcmod>	prep>	pobj>
+3	Time_of_creation	amod>
+2	Time_of_creation	num>
+1	Time_of_creation	dobj<	tmod>
+2	Time_of_creation	prep>
+1	Time_of_creation	nn>
+1	Offender	partmod>	prep>
+1	Offender	pobj<	prep<	rcmod<
+1	Offender	dobj<	nsubj>
+7	Offender	prep>
+1	Offender	prep>	pobj>	amod>
+1	Firearm	nsubj>
+15	Money
+1	Money	dobj<	prep>	pcomp>	prep>	pobj>
+2	Money	dobj>
+2	Field	amod<	prep>
+14	Field	amod>
+1	Field	dobj<
+1	Field	nn<	amod>	conj>
+1	Field	nn<	nn>
+3	Field	prep>
+5	Field	nn>
+221	Number
+5	Employment
+1	Criterion	prep>
+3	Researcher	poss>
+1	Researcher	conj<	pobj<	prep<	pobj<	prep<	nsubj>
+5	Researcher	nsubj>
+1	Researcher	xcomp<	nsubj>
+1	Researcher	pobj<	prep<	infmod<	dobj<	nsubj>
+3	Researcher	dobj<	nsubj>
+1	Researcher	dobj<	xcomp<	prep>	pobj>
+1	Researcher	nn<	dobj<	nsubj>
+1	Increment
+1	Increment	amod<	det>
+2	Increment	amod<	amod>
+3	Increment	amod<	num>
+1	Increment	npadvmod>
+2	Increment	quantmod<
+1	Increment	advmod>
+1	Increment	advmod<	nsubj>
+1	Increment	advmod<	dobj>
+1	Increment	prep>
+1	Bad_outcome	ccomp>
+1	Bad_outcome	prep>
+1	Entity2	dobj<	rcmod<
+2	Evidence	ccomp>	advcl>
+1	Evidence	dobj<	prep>
+3	Evidence	prep>
+1	Entity1	dobj<	nsubj>
+1	Claimant	nsubj>
+38	Proposition	prep<
+1	Proposition	prep<	conj>
+1	Proposition	prep<	conj<
+1	Proposition	prep<	nsubj>
+2	Proposition	prep<	prep>
+2	Proposition	amod<
+1	Proposition	dep>
+1	Proposition	dep<	dobj<
+1	Proposition	nsubj<	ccomp>
+1	Proposition	nsubj>
+2	Proposition	amod>
+29	Proposition	ccomp>
+2	Proposition	advcl>
+1	Proposition	mark>
+5	Proposition	prep>
+14	Proposition	dobj>
+1	Component	conj<	cc>
+1	Component	nsubj>
+3	Component	dobj>
+4	Component	prep>
+51	Age
+1	Age	det>
+5	Age	amod>
+1	Age	appos>
+1	Age	prep>
+11	State_of_Affairs
+1	State_of_Affairs	nsubj<
+1	State_of_Affairs	amod>
+1	State_of_Affairs	pobj<	prep<	dobj>
+2	Condition	conj<	prep>
+1	Condition	rcmod<
+1	Condition	dobj<	advcl>
+3	Condition	prep>
+3	Speed
+4	Speed	advmod>
+1	Addressee	rcmod>	nsubj>
+1	Addressee	nsubj>
+8	Addressee	nsubjpass>
+1	Addressee	nsubjpass>	conj>
+1	Addressee	iobj>
+16	Addressee	prep>
+1	Addressee	prep>	pobj>
+1	Addressee	infmod>	nsubj>
+1	Addressee	amod<	nsubj>
+1	Addressee	partmod>
+1	Addressee	conj<	dobj>
+1	Addressee	parataxis<	nsubjpass>
+1	Addressee	advmod>
+50	Addressee	dobj>
+1	Addressee	dobj>	poss>
+2	Addressee	dobj>	prep>
+1	Addressee	dobj>	prep>	pobj>	prep>
+1	Addressee	nn>
+71	Material
+1	Material	poss>
+1	Material	det>
+2	Material	nsubj>
+1	Material	nsubjpass>
+1	Material	prep>
+27	Material	amod<
+1	Material	amod<	amod>	dep>
+3	Material	amod<	nn>
+1	Material	amod<	nn>	nn>
+1	Material	conj<	amod<
+1	Material	conj<	amod>
+1	Material	conj<	dobj>
+1	Material	conj<	nn>
+2	Material	partmod<
+1	Material	partmod<	prep>	pobj>
+1	Material	appos<
+4	Material	amod>
+1	Material	pcomp<	prep<	dobj<	prep>
+1	Material	parataxis>	nsubj>
+1	Material	ccomp<	dobj>
+1	Material	nn<	conj<	nn>
+2	Material	nn<	nn>
+14	Material	dobj>
+24	Material	nn>
+1	Material	nn>	conj>
+1	Controlling_act	pobj<	prep<	conj<	rcmod<	prep>	pobj>
+1	Attendee	poss>
+1	Attendee	dep<	dep>	dep>	prep>	pobj>
+1	Attendee	dobj>	prep>
+5	Indicator
+1	Indicator	dep<	nsubj>
+1	Indicator	partmod<	xcomp<	dobj>
+1	Indicator	nsubj<	ccomp>
+1	Indicator	csubj>
+1	Side_1	conj<	pobj<	prep<	nsubj>
+1	Side_1	partmod<
+4	Side_1	nsubj>
+1	Side_1	pobj<	prep<
+1	Side_1	pobj<	prep<	nsubj>
+1	Side_1	dobj<	dep<	xcomp<	nsubj>
+1	Side_1	nn<	poss>
+1	Side_1	nn<	pobj<	prep<	infmod<
+1	Side_1	dobj>
+1	Side_1	prep>
+1	Side_1	nn>
+1	Controlling_entity	poss>
+1	Controlling_entity	conj<	nsubj>
+2	Controlling_entity	nsubj>
+1	Controlling_entity	amod>
+1	Controlling_entity	pobj<	prep<
+1	Controlling_entity	pobj<	prep<	nsubj>
+3	Controlling_entity	dobj<	nsubj>
+1	Controlling_entity	nn<
+1	Controlling_entity	prep>
+1	Controlling_entity	nn>
+12	Side_2	prep>
+4	Side_2	dobj>
+6	Possession
+1	Possession	rcmod<
+4	Possession	nsubj>
+1	Possession	det<
+1	Possession	pobj<	prep<	cc>
+13	Possession	prep>
+2	Possession	amod<
+1	Possession	conj<	conj>	dobj>
+2	Possession	partmod<
+1	Possession	xcomp<	rcmod<
+1	Possession	xcomp<	advcl<
+3	Possession	ccomp>
+1	Possession	ccomp>	nsubj>
+1	Possession	nn<
+105	Possession	dobj>
+1	Possession	advmod<	amod<
+4	Social_event
+1	Social_event	xcomp<	nsubj>
+1	Social_event	dobj>
+47	Denoted_quantity
+2	Seller
+5	Seller	poss>
+14	Seller	nsubj>
+1	Seller	pcomp<	prep<	nsubjpass>
+1	Seller	pcomp<	prep<	xcomp<	dobj>
+1	Seller	pcomp<	prep<	dobj>
+1	Seller	xcomp<	conj<	nsubj>
+7	Seller	xcomp<	nsubj>
+1	Seller	xcomp<	ccomp<	parataxis>	nsubj>	conj>	amod>	prep>
+1	Seller	advcl>	prep>
+2	Seller	appos>
+11	Seller	prep>
+2	Seller	dobj>	amod>
+1	Time_span	conj<	nsubj<	prep>
+1	Time_span	det<
+1	Time_span	amod>
+1	Time_span	neg<	prep>
+4	Binding_principle	nsubj>
+1	Binding_principle	xcomp<	nsubj>
+1	Binding_principle	pobj<	prep<	nsubj>
+1	Final_value	nsubj>
+2	Final_value	xcomp>
+4	Final_value	prep>
+6	Occasion
+3	Occasion	amod>
+1	Occasion	advcl>
+1	Occasion	dobj<	prep>
+5	Occasion	prep>
+2	Occasion	nn>
+1	New_tool	prep>
+1	Item_2	prep>
+1	Dedicated_entity
+1	Means_of_Gathering	amod>
+1	Means_of_Gathering	nn>
+1	Item_1	nsubj>
+1	Cognate_event	dobj>
+10	Institution
+3	Institution	amod<
+1	Institution	conj<	infmod<
+1	Institution	conj<	xcomp<	nsubjpass>
+1	Institution	xcomp<	dobj>
+1	Institution	pobj>
+6	Institution	prep>
+2	Institution	nn>
+1	Sleeper	infmod<
+1	Sleeper	dobj>
+1	Coordinated_event	prep>
+4	Preventing_cause	nsubj>
+1	Preventing_cause	pcomp<	prep<	xcomp<	nsubj>
+1	Preventing_cause	pcomp<	prep<	dobj<	nsubj>
+2	Preventing_cause	pcomp<	prep<	prep>	pobj>
+1	Preventing_cause	infmod<	amod>
+2	Preventing_cause	infmod<	pobj<	prep<
+1	Preventing_cause	xcomp<
+1	Preventing_cause	xcomp<	partmod<
+1	Preventing_cause	xcomp<	nsubj>
+1	Preventing_cause	xcomp<	xcomp<	nsubj>
+1	Preventing_cause	xcomp<	dobj>
+1	Preventing_cause	advcl<
+1	Preventing_cause	advcl<	nsubj>
+1	Preventing_cause	prep>
+2	Part_1	partmod<
+1	Part_1	nsubj>
+2	Part_1	dobj>
+1	Part_2	dobj>	prep>
+4	Part_2	prep>
+1	Asset
+2	Asset	poss>
+1	Asset	nsubjpass<
+1	Asset	dep<	conj<	conj>
+1	Asset	dep<	nsubj>
+1	Asset	dep<	dobj>
+1	Asset	rcmod<
+2	Asset	nsubj>
+1	Asset	nsubjpass>
+1	Asset	pobj<	prep<	dobj>
+3	Asset	prep>
+3	Asset	amod<
+1	Asset	conj<	dobj>
+4	Asset	amod>
+1	Asset	dobj<	nsubj>
+1	Asset	dobj<	prep>
+1	Asset	nn<
+1	Asset	nn<	amod>
+6	Asset	nn<	nn>
+13	Asset	dobj>
+5	Asset	nn>
+1	Guardian	xcomp<	nsubjpass>
+1	Arguer2	prep>
+1	Location_of_perceiver	conj<	nsubj>	prep>
+1	Location_of_perceiver	nsubj>	prep>
+1	Location_of_perceiver	dobj>	prep>
+1	Stuff	conj>	prep>
+36	Stuff	prep>
+1	Sides	nsubj>
+2	Sides	amod>
+2	Sides	nn<	nn>
+1	Sides	prep>
+8	Sides	nn>
+8	Distance
+1	Distance	mark<	dep>
+1	Distance	nsubj>
+2	Distance	pobj>
+1	Distance	num>
+6	Distance	prep>
+1	Distance	prep<	npadvmod>
+1	Distance	prep<	pobj<	prep<	prep>
+1	Distance	prep<	prep>
+17	Distance	npadvmod>
+1	Distance	appos<	dep>
+9	Distance	amod>
+1	Distance	pcomp<
+1	Distance	advmod>
+1	Distance	nn<	amod>
+1	Distance	nn<	nn<	amod>
+3	Distance	dobj>
+1	Distance	advmod<	prep>
+1	Distance	advmod<	prep>	pobj>	conj>
+1	Distance	prt<
+3	Distance	nn>
+1	Selector
+1	Selector	conj<	conj<	xcomp<	partmod<	conj<	cc>
+1	Selector	nsubj>
+4	Selector	amod>
+1	Selector	xcomp<	nsubj>
+1	Selector	advmod>
+1	Affliction	amod<
+1	Affliction	xcomp<	rcmod<
+1	Affliction	pobj<	prep<	partmod>
+2	Affliction	prep>
+1	Affliction	dobj>
+1	Affliction	nn>
+1	Affected	conj<	nsubj>
+2	Affected	nsubjpass>
+1	Affected	ccomp>	nsubj>
+1	Affected	xcomp>
+3	Affected	xcomp>	nsubj>
+1	Affected	xcomp>	prep>
+5	Affected	dobj>
+37	Agent
+2	Agent	rcmod>	nsubj>
+1	Agent	rcmod>	prep>
+7	Agent	rcmod<
+3	Agent	pobj<	prep<
+2	Agent	pobj<	prep<	poss>
+1	Agent	pobj<	prep<	partmod>	prep>
+5	Agent	pobj<	prep<	nsubj>
+1	Agent	pobj<	prep<	nsubjpass>
+1	Agent	pobj<	prep<	dobj<	nsubj>
+1	Agent	pobj<	prep<	advmod<	nsubj>
+1	Agent	pobj<	prep<	dobj>
+8	Agent	amod<
+2	Agent	amod<	poss>
+1	Agent	amod<	pobj<	prep<
+1	Agent	amod<	nn>
+31	Agent	amod>
+1	Agent	aux>
+1	Agent	pcomp<	prep<	acomp<	nsubjpass>
+1	Agent	pcomp<	prep<	poss>
+1	Agent	pcomp<	prep<	conj<	dep<	dobj<	nsubj>
+2	Agent	pcomp<	prep<	conj<	nsubj>
+1	Agent	pcomp<	prep<	rcmod<	dobj<	xcomp<	nsubj>
+6	Agent	pcomp<	prep<	nsubj>
+3	Agent	pcomp<	prep<	nsubjpass>
+1	Agent	pcomp<	prep<	pobj<	prep<	conj<	nsubj>
+1	Agent	pcomp<	prep<	pobj<	prep<	nsubj>
+1	Agent	pcomp<	prep<	pobj<	prep<	nsubjpass>
+1	Agent	pcomp<	prep<	pobj<	prep<	dobj>
+1	Agent	pcomp<	prep<	dobj<	rcmod<
+2	Agent	pcomp<	prep<	dobj<	nsubj>
+1	Agent	pcomp<	prep<	dobj<	xcomp<	nsubj>
+1	Agent	pcomp<	prep<	dobj<	xcomp<	dobj>
+1	Agent	pcomp<	prep<	dobj<	iobj>
+8	Agent	pcomp<	prep<	dobj>
+1	Agent	pcomp<	conj<	prep<	nsubj>
+5	Agent	ccomp<	nsubj>
+3	Agent	advcl<	nsubj>
+2	Agent	advcl<	xcomp<	conj<	nsubjpass>
+129	Agent	poss>
+1	Agent	dep>
+1	Agent	acomp<	nsubj>
+2	Agent	dep<
+1	Agent	dep<	poss>
+1	Agent	dep<	nsubj>
+1	Agent	dep<	ccomp<	xcomp<	partmod<
+1	Agent	dep<	dobj<	nsubj>
+1	Agent	nsubj<
+1	Agent	nsubj<	rcmod<
+2	Agent	nsubj<	ccomp<	nsubj>
+1	Agent	det>
+357	Agent	nsubj>
+1	Agent	nsubj>	conj>
+1	Agent	nsubj>	poss>
+3	Agent	nsubj>	appos>
+1	Agent	nsubj>	prep>	pobj>
+1	Agent	nsubj>	nn>
+2	Agent	nsubjpass>
+1	Agent	nsubjpass>	conj>
+7	Agent	infmod<
+7	Agent	infmod<	poss>
+1	Agent	infmod<	conj>
+1	Agent	infmod<	conj<
+2	Agent	infmod<	conj<	dobj<	nsubj>
+1	Agent	infmod<	nsubj<	conj<	nsubj>
+1	Agent	infmod<	nsubj>
+1	Agent	infmod<	xcomp<	nsubj>
+1	Agent	infmod<	pobj<	prep<	nsubj>
+1	Agent	infmod<	pobj<	prep<	dobj<	pcomp<	prep<	xcomp<	prep>	pobj>
+1	Agent	infmod<	dobj<	partmod<	nsubj>
+2	Agent	infmod<	dobj<	conj<	conj<	nsubj>
+2	Agent	infmod<	dobj<	conj<	nsubj>
+1	Agent	infmod<	dobj<	conj<	infmod<	dobj<	nsubj>
+9	Agent	infmod<	dobj<	nsubj>
+1	Agent	infmod<	dobj<	iobj>
+1	Agent	infmod<	prep>	pobj>
+1	Agent	infmod<	nn>
+31	Agent	prep>
+1	Agent	prep>	pobj>	rcmod>	nsubjpass>
+1	Agent	prep<
+2	Agent	prep<	nsubj>
+5	Agent	conj<	poss>
+1	Agent	conj<	dep<	nsubj>
+4	Agent	conj<	conj<	nsubj>
+1	Agent	conj<	parataxis<	nsubjpass>
+37	Agent	conj<	nsubj>
+1	Agent	conj<	infmod<	poss>
+2	Agent	conj<	infmod<	dobj<	iobj>
+3	Agent	conj<	pcomp<	prep<	nsubj>
+1	Agent	conj<	pcomp<	prep<	dobj<	nsubj>
+1	Agent	conj<	xcomp<	conj<	nsubj>
+2	Agent	conj<	xcomp<	nsubj>
+1	Agent	conj<	xcomp<	nsubj>	prep>	pobj>
+3	Agent	conj<	ccomp<	nsubj>
+1	Agent	conj<	ccomp<	dobj<	xcomp<	xcomp<	nsubj>	prep>	pobj>	poss>
+5	Agent	conj<	dobj<	nsubj>
+1	Agent	conj<	prep>
+1	Agent	conj<	prep>	pobj>	rcmod>	nsubj>
+1	Agent	conj<	prep>	pobj>	prep>
+1	Agent	conj<	dobj>	poss>
+10	Agent	partmod<
+4	Agent	partmod<	nsubj>
+1	Agent	partmod<	infmod<	amod>
+1	Agent	partmod<	xcomp<	nsubj>
+1	Agent	partmod<	pobj<	prep<	nsubjpass>
+1	Agent	partmod<	dobj<	infmod<	dobj<	nsubj>
+1	Agent	partmod<	prep>	pobj>
+1	Agent	iobj<	xcomp<	dobj>
+2	Agent	xcomp<	amod<
+5	Agent	xcomp<	conj<	nsubj>
+2	Agent	xcomp<	conj<	nsubjpass>
+2	Agent	xcomp<	dep<	nsubj>
+1	Agent	xcomp<	partmod<
+1	Agent	xcomp<	partmod<	dobj<	nsubj>
+1	Agent	xcomp<	rcmod<
+70	Agent	xcomp<	nsubj>
+1	Agent	xcomp<	nsubj>	appos>
+3	Agent	xcomp<	nsubj>	infmod>	dobj>	appos>
+1	Agent	xcomp<	nsubj>	prep>	pobj>
+9	Agent	xcomp<	nsubjpass>
+1	Agent	xcomp<	infmod<	dobj<	nsubj>
+6	Agent	xcomp<	xcomp<	nsubj>
+2	Agent	xcomp<	xcomp<	nsubjpass>
+3	Agent	xcomp<	prep>	pobj>
+1	Agent	xcomp<	prep>	pobj>	poss>
+9	Agent	xcomp<	dobj>
+1	Agent	xcomp<	dobj>	dobj>	det>
+4	Agent	dobj<	conj<	nsubj>
+1	Agent	dobj<	partmod<	nsubj>
+38	Agent	dobj<	nsubj>
+1	Agent	dobj<	pcomp<	prep<	partmod<
+1	Agent	dobj<	pcomp<	prep<	nsubj>
+2	Agent	dobj<	pcomp<	prep<	nsubjpass>
+1	Agent	dobj<	infmod<	dobj<	nsubj>
+5	Agent	dobj<	xcomp<	nsubj>
+1	Agent	dobj<	xcomp<	nsubjpass>
+1	Agent	dobj<	prep>	pobj>
+1	Agent	mark>
+1	Agent	nn<	poss>
+1	Agent	nn<	conj<	dobj<	xcomp<	nsubj>
+2	Agent	nn<	amod>
+1	Agent	nn<	pobj<	prep<	nsubj>
+1	Agent	nn<	nn>	amod>
+3	Agent	dobj>
+1	Agent	dobj>	prep>
+1	Agent	advmod<	nsubj>
+11	Agent	nn>
+1	Agent	nn>	amod>
+1	Circumstances	acomp<	prep>
+1	Circumstances	mark<	advcl<	partmod>
+1	Circumstances	nsubj>	appos>
+1	Circumstances	punct>
+1	Circumstances	pobj<	prep<	xcomp>
+1	Circumstances	pobj<	prep<	prep>
+21	Circumstances	prep>
+1	Circumstances	prep>	pobj>	amod>
+1	Circumstances	auxpass<	advcl>
+2	Circumstances	partmod>
+1	Circumstances	amod<	infmod>
+1	Circumstances	amod<	prep>
+1	Circumstances	conj<	advcl>
+1	Circumstances	partmod<	dobj<	prep>
+1	Circumstances	aux<	partmod>
+1	Circumstances	aux<	conj<	prep>
+1	Circumstances	aux<	xcomp>	prep>
+1	Circumstances	aux<	advmod>
+3	Circumstances	aux<	advcl>
+2	Circumstances	aux<	prep>
+1	Circumstances	xcomp<	partmod>
+2	Circumstances	xcomp<	advcl>
+1	Circumstances	ccomp>
+2	Circumstances	xcomp>	prep>
+12	Circumstances	advcl>
+1	Circumstances	dobj<	prep>	pobj>	prep>
+1	Circumstances	advmod>
+2	Circumstances	advmod<	prep>
+1	Circumstances	dobj>	prep>
+1	Circumstances	dobj>	prep>	pobj>	advmod>
+1	Complainer	poss>
+2	Ingestibles	dobj>
+1	Previous_instance	pobj<	prep<
+2	Position
+1	Position	amod<
+1	Position	prep>
+1	Position	dobj>
+1	Rate
+1	Rate	conj<	nsubj<
+2	Rate	det<
+2	Rate	amod>
+2	Rate	advmod>
+2	Determinant
+1	Determinant	infmod<
+1	Determinant	xcomp<	nsubj>
+2	Determinant	pcomp>
+1	Determinant	advmod>
+5	Determinant	prep>
+23	Q_Prop	amod>
+1	Q_Prop	advmod>
+1	Q_Prop	prep>	pobj>	rcmod>
+1	Q_Prop	nn>
+19	Student
+2	Student	amod<
+2	Student	poss>
+1	Student	conj<	dobj>
+5	Student	nsubj>
+1	Student	nsubjpass>
+1	Student	pobj<	prep<	conj<
+1	Student	pobj<	prep<	dobj>
+1	Student	dobj<	prep>
+1	Student	nn<
+6	Student	dobj>
+3	Student	prep>
+1	Contrast	xcomp>	cc>
+1	Contrast	dobj>	prep>
+1	Sender	conj<	rcmod<	dobj<	nsubj>
+1	Sender	conj<	nsubj>
+5	Sender	nsubj>
+1	Sender	xcomp<	conj<	nsubj>
+2	Sender	xcomp<	nsubj>
+1	Sender	xcomp<	dobj>
+1	Sender	dobj<	infmod<	nn>
+1	Sender	advmod>
+4	Requirement
+9	Requirement	amod<
+1	Requirement	conj<	nsubj>
+7	Requirement	partmod<
+2	Requirement	rcmod<
+1	Requirement	rcmod<	pobj<	prep<	pobj<	prep<
+2	Requirement	nsubj>
+2	Requirement	nsubjpass>
+4	Requirement	xcomp>
+19	Requirement	dobj>
+1	Requirement	infmod>
+1	Contents	partmod<	appos<	dobj<	dep>
+1	Contents	rcmod<	conj<	pobj<	prep<	cc>
+1	Contents	rcmod<	dobj<	xcomp<	dobj>
+9	Contents	dobj>
+1	Contents	prep>
+1	Distributor	nsubj>
+1	Body_mark
+1	Precision	number<	quantmod>
+1	Precision	num<
+3	Precision	quantmod>
+1	Convict	conj<	nsubjpass>
+1	Convict	dobj>
+1	Documents	nsubjpass>
+3	Documents	dobj>
+1	Documents	prep>
+1	Official	nsubj>
+3	Official	nsubjpass>
+1	Individuals	poss<
+1	Individuals	dep<	dep>
+2	Individuals	dep<	num<
+1	Individuals	rcmod>
+2	Individuals	nsubj<
+2	Individuals	num<
+1	Individuals	rcmod<
+3	Individuals	nsubj>
+27	Individuals	det<
+1	Individuals	det<	nsubj<
+1	Individuals	det<	amod>
+2	Individuals	det<	nn>
+1	Individuals	nsubjpass>
+1	Individuals	pobj>
+2	Individuals	predet<
+109	Individuals	prep>
+78	Individuals	amod<
+1	Individuals	amod<	nsubj<
+1	Individuals	amod<	nsubj<	prep>
+1	Individuals	amod<	prep>
+1	Individuals	amod<	nn>
+1	Individuals	partmod<
+1	Individuals	conj<
+1	Individuals	conj<	dobj>
+19	Individuals	amod>
+1	Individuals	quantmod<
+9	Individuals	quantmod<	num<
+2	Individuals	quantmod<	prep>
+1	Individuals	xcomp<	rcmod<
+1	Individuals	preconj<
+1	Individuals	nn<	amod>
+3	Individuals	dobj>
+1	Individuals	advmod<	amod<
+1	Individuals	advmod<	prep>	pobj>
+4	Individuals	nn>
+1	Last_subevent	pobj<	prep<	prep>
+236	Person
+2	Person	amod<
+1	Person	dep<
+1	Person	nsubj>
+3	Person	nn<
+1	Person	appos>
+2	Legal_Basis	prep>	pobj>	prep>
+15	Interval
+2	Interval	npadvmod>
+2	Interval	det<
+1	Interval	advmod>
+1	Interval	prep>
+1	Margin	amod>
+17	Means
+1	Means	rcmod>
+1	Means	rcmod<
+7	Means	pobj>
+6	Means	pobj<	prep<
+2	Means	pobj<	prep<	nsubj>
+1	Means	pobj<	prep<	xcomp<	nsubj>
+2	Means	pobj<	prep<	prep>
+1	Means	pobj<	prep<	dobj>
+5	Means	amod<
+6	Means	amod>
+5	Means	pcomp>
+1	Means	ccomp>	xcomp>	prep>
+1	Means	advcl>
+1	Means	dep>
+2	Means	poss>
+1	Means	nsubj<
+2	Means	nsubj<	xcomp>
+1	Means	nsubj<	prep>
+10	Means	nsubj>
+2	Means	infmod<
+34	Means	prep>
+2	Means	prep>	pobj>	prep>
+1	Means	infmod>	partmod>
+1	Means	infmod>	prep>
+1	Means	infmod>	dobj>	prep>	pobj>	partmod>	prep>
+4	Means	prep<
+1	Means	prep<	dep>
+1	Means	prep<	xcomp<
+1	Means	prep<	ccomp<	nsubj>	det>
+1	Means	partmod>
+1	Means	partmod<
+1	Means	partmod<	conj<	cc>
+1	Means	conj<	prep>
+1	Means	xcomp<	prep>
+4	Means	xcomp>
+4	Means	xcomp>	prep>
+1	Means	dobj<	nsubj>
+1	Means	dobj<	xcomp>
+2	Means	dobj<	prep>
+2	Means	advmod>
+2	Means	nn<
+1	Means	nn<	prep>
+2	Means	dobj>
+1	Means	dobj>	partmod>
+2	Means	dobj>	prep>
+6	Means	nn>
+58	Organization
+1	Organization	pobj<	prep<	rcmod<
+5	Organization	prep>
+3	Organization	nn>
+1	Initial_state	prep>
+1	Expected_event	conj>	advcl>
+1	Expected_event	advcl>
+1	Expected_event	prep>
+1	Decision_maker	amod<
+1	Decision_maker	xcomp<	nsubj>
+1	Decision_maker	dobj<	rcmod<	conj>	prep>	pobj>
+1	Injury
+1	Injury	pobj<	prep<	prep>
+3	Injury	dobj<	prep>
+2	Injury	prep>
+31	Supply
+1	Signatory	poss>
+4	Signatory	conj<	nsubj>
+1	Signatory	conj<	xcomp<
+1	Signatory	conj<	xcomp<	nsubj>
+1	Signatory	conj<	xcomp<	prep>	pobj>
+31	Signatory	nsubj>
+1	Signatory	pcomp<	prep<	nsubj>
+1	Signatory	xcomp<	conj<	nsubj>
+1	Signatory	xcomp<	nsubj>
+2	Signatory	xcomp<	nsubjpass>
+2	Signatory	prep>
+1	Reader
+2	Reader	nsubj>
+1	Reader	xcomp<	xcomp<	advcl>	nsubj>
+1	Reader	xcomp<	dobj>
+1	Relative_location	partmod>
+1	Relative_location	dep>
+4	Relative_location	poss>
+1	Relative_location	conj<	poss>
+1	Relative_location	conj<	pobj<	prep<	prep>
+1	Relative_location	nsubj<	prep>
+20	Relative_location	amod>
+1	Relative_location	pobj<	prep<	pobj<	prep<	prep>
+1	Relative_location	pobj<	prep<	prep>
+1	Relative_location	dobj<	prep>
+2	Relative_location	advmod>
+1	Relative_location	nn<	amod>
+1	Relative_location	nn<	nn>
+62	Relative_location	prep>
+17	Relative_location	nn>
+66	Direction
+1	Direction	prep<
+1	Direction	prep<	nsubj>
+1	Direction	acomp>
+1	Direction	prt>
+1	Direction	pcomp<
+1	Direction	pobj>	prep>
+9	Direction	advmod>
+5	Direction	prep>
+1	Direction	prt<	appos>
+1	Direction	advmod<	xcomp<	prep>
+23	Protagonist
+6	Protagonist	poss>
+1	Protagonist	acomp<	nsubjpass>	appos>
+1	Protagonist	dep<	conj<	nsubj>
+2	Protagonist	rcmod<
+37	Protagonist	nsubj>
+4	Protagonist	nsubjpass>
+2	Protagonist	pobj<	prep<
+1	Protagonist	pobj<	prep<	nsubj>
+1	Protagonist	pobj<	prep<	xcomp<	nsubj>
+1	Protagonist	pobj<	prep<	dobj>
+13	Protagonist	amod<
+1	Protagonist	amod<	poss>
+1	Protagonist	amod<	rcmod>
+1	Protagonist	partmod>	prep>	pobj>	prep>
+1	Protagonist	partmod<
+2	Protagonist	partmod<	nsubj>
+2	Protagonist	conj<	amod<
+1	Protagonist	conj<	dep<	dobj>
+1	Protagonist	conj<	nsubj<	ccomp<	nsubj>
+2	Protagonist	conj<	nsubj>
+1	Protagonist	conj<	prep>
+1	Protagonist	amod>
+1	Protagonist	xcomp<
+1	Protagonist	xcomp<	conj<	nsubj>
+3	Protagonist	xcomp<	nsubj>
+1	Protagonist	xcomp<	pcomp<	prep<	nsubj>
+1	Protagonist	xcomp<	dobj>
+1	Protagonist	dobj<	conj<	nsubj>
+1	Protagonist	dobj<	nsubj>
+1	Protagonist	advcl<	xcomp<	xcomp<	nsubj>
+7	Protagonist	dobj>
+3	Remainder
+1	Remainder	cop<	nsubj>
+1	Remainder	nsubj>
+1	Location_of_confinement	prep>
+1	Side
+1	Side	poss>
+1	Side	dep<	dobj>
+1	Side	partmod<
+1	Side	amod>
+1	Side	xcomp<	prep>	pobj>
+6	Side	pobj>
+1	Side	pobj>	prep>
+1	Side	nn<
+6	Side	dobj>
+1	Side	dobj>	poss>
+1	Side	dobj>	rcmod>	nsubj>
+1	Side	dobj>	amod>
+3	Side	prep>
+1	Target	nsubjpass>	appos>
+1	Target	dobj>
+6	Events
+4	Events	prep>
+73	Sub_part
+3	Sub_part	amod<
+8	Population	amod<
+2	Population	poss>
+6	Population	amod>
+1	Population	amod>	conj>
+1	Population	prep>
+3	Population	nn>
+1	Style	amod>
+1	Style	nn>
+6	Supplier
+1	Supplier	amod<	amod>
+1	Supplier	partmod<	conj<	nsubj>
+2	Supplier	partmod<	nsubj>
+1	Supplier	partmod<	dobj<	nsubj>
+1	Supplier	conj<	conj<	nsubj>
+1	Supplier	conj<	infmod<	dobj<	prep>	pobj>
+1	Supplier	conj<	dobj>
+1	Supplier	rcmod<
+59	Supplier	nsubj>
+1	Supplier	nsubj>	prep>	pobj>
+1	Supplier	amod>
+1	Supplier	pcomp<	prep<	conj<	nsubj>
+1	Supplier	pcomp<	prep<	nsubj>
+1	Supplier	pcomp<	prep<	nsubjpass>
+1	Supplier	pcomp<	prep<	pobj<	prep<	dobj<	nsubj>
+1	Supplier	pcomp<	prep<	dobj>
+2	Supplier	infmod<	dobj<	nsubj>
+2	Supplier	infmod<	prep>
+1	Supplier	infmod<	prep>	pobj>
+4	Supplier	xcomp<	nsubj>
+1	Supplier	xcomp<	nsubj>	amod>	nsubj>
+2	Supplier	xcomp<	nsubjpass>
+1	Supplier	xcomp<	prep>	pobj>
+1	Supplier	xcomp<	dobj>
+1	Supplier	pobj<	prep<	dobj>
+9	Supplier	prep>
+1	Supplier	dobj>
+1	Bodypart_of_agent	prep>
+1	Property	advcl>
+1	Property	dobj>
+1	Symptom	conj<
+2	Killer	nsubj>
+2	Killer	xcomp<	nsubj>
+1	Killer	nn<	pobj<	prep<	pobj<	prep<	nsubj>
+1	Killer	prep>
+2	Judgment	amod>
+1	Judgment	advmod>
+1	Constancy	prep>
+10	Intoxicant
+1	Survivor	nsubj>
+1	Survivor	xcomp<	xcomp<	nsubj>
+1	Survivor	prep>
+1	Defining_event	nn>
+5	Use
+1	Use	poss>
+4	Use	rcmod>
+1	Use	nsubj<
+1	Use	pobj<	prep<
+1	Use	pobj<	prep<	prep>
+1	Use	num>
+26	Use	prep>
+1	Use	prep>	pobj>	rcmod>
+6	Use	infmod>
+1	Use	partmod>
+2	Use	conj<
+1	Use	conj<	conj>
+3	Use	conj<	amod>
+1	Use	conj<	pobj<	prep<	xcomp>
+1	Use	conj<	infmod>
+2	Use	conj<	nn>
+1	Use	appos<
+84	Use	amod>
+1	Use	dobj<
+1	Use	dobj<	dep>
+1	Use	dobj<	partmod<	dobj<	xcomp>
+1	Use	dobj<	xcomp<	advcl<
+2	Use	dobj<	prep>
+4	Use	nn<	amod>
+1	Use	nn<	nn>
+186	Use	nn>
+1	Use	nn>	conj>
+19	Experiencer	poss>
+1	Experiencer	acomp<	nsubj>
+1	Experiencer	dep<	advcl>	mark>
+3	Experiencer	rcmod<
+1	Experiencer	rcmod<	pobj<	prep<	advcl<
+67	Experiencer	nsubj>
+6	Experiencer	nsubjpass>
+1	Experiencer	infmod<	conj>
+2	Experiencer	pobj<	prep<	nsubj>
+8	Experiencer	prep>
+5	Experiencer	amod<
+1	Experiencer	amod<	dobj<	nsubj>
+1	Experiencer	amod<	infmod>	mark>
+1	Experiencer	partmod>	prep>
+1	Experiencer	conj>	prep>
+1	Experiencer	partmod<
+1	Experiencer	partmod<	nsubj>
+1	Experiencer	partmod<	pobj<	prep<
+1	Experiencer	conj<	poss>
+5	Experiencer	conj<	nsubj>
+1	Experiencer	conj<	pobj<	prep<	ccomp<	mark>
+1	Experiencer	conj<	dobj<	nsubj>
+1	Experiencer	conj<	dobj>
+1	Experiencer	parataxis<	nsubj>
+6	Experiencer	amod>
+1	Experiencer	xcomp<	nsubj>
+1	Experiencer	xcomp<	nsubjpass>
+1	Experiencer	dobj<	conj<	nsubj>
+6	Experiencer	dobj<	nsubj>
+1	Experiencer	dobj<	iobj>
+1	Experiencer	advcl>	mark>
+1	Experiencer	advcl<	nsubj>
+5	Experiencer	dobj>
+1	Experiencer	advmod<	conj<
+2	Experiencer	nn>
+1	Whole_patient	nsubjpass>
+1	Whole_patient	infmod<
+1	Whole_patient	dobj>
+5	Salient_event	amod>
+2	Salient_event	prep>
+1	Salient_event	nn>
+2	Impactee	dobj>
+2	Impactee	prep>
+1	Misdeed
+1	Interlocutor	xcomp<	nsubj>
+1	Interlocutor	dobj>	nn>
+1	Evaluee
+3	Evaluee	dep>
+1	Evaluee	acomp<	nsubj>
+1	Evaluee	dep<	nsubj>
+1	Evaluee	dep<	xcomp<	nsubjpass>
+1	Evaluee	nsubj<	prep>
+1	Evaluee	rcmod<	pobj<	prep<
+12	Evaluee	nsubj>
+8	Evaluee	nsubjpass>
+1	Evaluee	pobj<	prep<	nsubjpass>
+1	Evaluee	pobj<	prep<	dobj>
+6	Evaluee	prep>
+1	Evaluee	prep>	pcomp>	dobj>
+48	Evaluee	amod<
+1	Evaluee	conj<	amod<
+2	Evaluee	conj<	nsubj>
+1	Evaluee	conj<	prep>
+1	Evaluee	partmod<
+3	Evaluee	ccomp>
+1	Evaluee	xcomp>
+3	Evaluee	dobj<	nsubj>
+1	Evaluee	nn<
+15	Evaluee	dobj>
+1	Evaluee	dobj>	poss>
+1	Evaluee	advcl<	nsubj>
+79	Text
+1	Text	nsubj<
+4	Text	nsubj>
+2	Text	nsubjpass>
+1	Text	pobj>
+1	Text	iobj>
+4	Text	prep>
+8	Text	prep<
+2	Text	prep<	amod<
+1	Text	prep<	partmod>
+1	Text	prep<	nsubj>
+1	Text	prep<	nsubjpass>
+1	Text	prep<	prep>	pobj>
+1	Text	amod<
+5	Text	partmod<
+1	Text	partmod<	prep>	pobj>
+1	Text	amod>
+15	Text	pcomp>	pobj>
+2	Text	ccomp>
+1	Text	advmod>
+2	Text	dobj>
+1	Text	nn>
+3	Specification	amod>
+2	Specification	num>
+1	Specification	prep>
+1	Forgoer	xcomp<	dobj>
+1	Old_order	nsubjpass>
+1	Old_order	pobj<	prep<	conj<	dep>
+1	Whole
+2	Whole	poss>
+1	Whole	nsubj>
+5	Whole	nsubjpass>
+2	Whole	pobj>
+6	Whole	num>
+1	Whole	predet<
+57	Whole	prep>
+1	Whole	prep>	pobj>
+26	Whole	amod<
+2	Whole	amod<	poss>
+6	Whole	amod<	prep>
+1	Whole	conj<	amod<
+1	Whole	conj<	num<
+1	Whole	conj<	nn>
+3	Whole	amod>
+1	Whole	quantmod<
+15	Whole	nn<
+12	Whole	nn>
+1	Related_event	pobj<	prep<	pobj<	prep<	pobj<	prep<	xcomp>
+1	Entities
+7	Entities	amod<
+1	Entities	partmod>	prep>	pobj>	prep>
+1	Entities	rcmod>
+1	Entities	nsubj>	advmod>
+1	Entities	amod>
+7	Entities	prep>
+2	Entities	nn>
+1	Grantee	conj<	nsubj>
+2	Grantee	nsubj>
+4	Grantee	nsubjpass>
+1	Grantee	xcomp<	dobj>
+1	Grantee	ccomp>	nsubj>
+1	Grantee	xcomp>
+5	Grantee	xcomp>	nsubj>
+2	Grantee	dobj>
+1	Grantee	dobj>	prep>
+1	Deliverer	conj<	xcomp<	partmod<	dobj<	nsubj>
+3	Deliverer	nsubj>
+2	Deliverer	infmod<	dobj<	nsubj>
+1	Deliverer	prep>
+1	Deliverer	advcl<	nsubjpass>
+16	Wielder	poss>
+1	Wielder	amod<	conj<	dobj<	dobj>	det>
+1	Wielder	conj<	poss>
+1	Wielder	conj<	dobj<	pcomp<	prep<	conj<	nsubj>
+1	Wielder	conj<	dobj<	dobj>	det>
+2	Wielder	amod>
+4	Wielder	dobj<	nsubj>
+1	Wielder	dobj<	infmod<
+1	Wielder	dobj<	pcomp<	prep<	conj<	nsubj>
+1	Wielder	dobj<	dobj>	det>
+1	Wielder	nn<	poss>
+1	Wielder	nn<	dobj<	nsubj>
+1	Wielder	nn>
+2	Expression
+1	Individual1	poss>
+1	Individual1	amod<	conj<	appos<
+1	Individual1	nsubj>
+1	Individual1	dobj<	nsubj>
+10	Theme
+8	Theme	rcmod<
+1	Theme	rcmod<	conj<
+1	Theme	rcmod<	pobj<
+1	Theme	rcmod<	pobj<	prep<
+1	Theme	pobj<	prep<	nsubj>
+1	Theme	pobj<	prep<	nsubjpass>
+1	Theme	pobj<	prep<	dobj>
+12	Theme	amod<
+1	Theme	amod<	nn>
+1	Theme	npadvmod<	amod<
+7	Theme	amod>
+4	Theme	pcomp<	prep<	nsubj>
+1	Theme	ccomp>	nsubj>	rcmod>	prep>
+1	Theme	advcl<	ccomp<	nsubj>
+1	Theme	advcl<	dobj>
+9	Theme	poss>
+6	Theme	dep>
+1	Theme	nsubjpass<	rcmod<
+3	Theme	dep<
+1	Theme	dep<	nsubj>
+1	Theme	dep<	dobj>	appos>	partmod>	dobj>
+108	Theme	nsubj>
+1	Theme	nsubj>	appos>
+46	Theme	nsubjpass>
+1	Theme	infmod<
+3	Theme	infmod<	rcmod>
+1	Theme	infmod<	pobj<	prep<
+1	Theme	infmod<	dobj<	conj<	dobj>	cc>
+1	Theme	infmod<	dobj<	punct>
+1	Theme	infmod<	cc>
+100	Theme	prep>
+1	Theme	prep>	pobj>	prep>
+1	Theme	prep>	pobj>	prep>	pobj>	rcmod>
+2	Theme	conj>	xcomp>	dobj>
+3	Theme	conj>	dobj>
+26	Theme	partmod<
+1	Theme	partmod<	conj>
+1	Theme	partmod<	conj<
+1	Theme	partmod<	dep<	partmod<
+2	Theme	partmod<	appos<
+1	Theme	partmod<	nsubj<
+3	Theme	partmod<	pobj<	prep<
+1	Theme	partmod<	dobj<
+1	Theme	partmod<	prep>	pobj>
+1	Theme	conj<	conj>
+1	Theme	conj<	conj>	prep>
+3	Theme	conj<	conj>	dobj>
+3	Theme	conj<	poss>
+1	Theme	conj<	dep<
+2	Theme	conj<	nsubj>
+1	Theme	conj<	nsubjpass>
+1	Theme	conj<	xcomp<	nsubj>
+1	Theme	conj<	pobj<	prep<	nsubjpass>
+1	Theme	conj<	prep>
+7	Theme	conj<	dobj>
+1	Theme	conj<	cc>
+1	Theme	csubj<
+1	Theme	xcomp<	amod<
+1	Theme	xcomp<	conj<	nsubj>
+2	Theme	xcomp<	rcmod<
+11	Theme	xcomp<	nsubj>
+3	Theme	xcomp<	nsubjpass>
+1	Theme	xcomp<	dobj>
+1	Theme	xcomp>
+1	Theme	xcomp>	nsubj>
+1	Theme	dobj<	partmod<	nsubj<	nsubj>
+1	Theme	dobj<	xcomp<	nsubj>
+1	Theme	advmod>
+1	Theme	nn<
+3	Theme	nn<	nn>
+264	Theme	dobj>
+1	Theme	dobj>	partmod>
+3	Theme	dobj>	prep>
+1	Theme	advmod<	dobj>
+18	Theme	nn>
+37	Required_situation	aux<
+2	Required_situation	aux<	nsubj>
+1	Required_situation	aux<	advcl<
+5	Required_situation	nsubj>
+7	Required_situation	xcomp>
+1	Required_situation	advmod<
+1	Authorities	conj<	nsubj>
+2	Authorities	nsubj>
+1	Authorities	prep>
+1	Authorities	dobj>
+1	Individual2	amod<	prep>
+4	Individual2	prep>
+4	Genre	amod>
+1	Genre	dobj<	partmod>
+1	Genre	nn>
+1	Indicated_resident
+1	Indicated_resident	conj>
+1055	Locale
+7	Locale	amod<
+1	Locale	amod<	poss>
+1	Locale	amod<	amod>
+1	Locale	conj<	amod<
+2	Locale	nsubj<
+8	Locale	nsubj>
+1	Locale	pobj<	prep<	conj<	nsubj>
+3	Locale	pobj<	prep<	nsubj>
+1	Locale	pobj<	prep<	nsubjpass>
+1	Locale	pobj<	prep<	dobj>
+1	Locale	dobj<	nsubj>
+2	Locale	appos>
+1	Locale	prep>
+3	Homeland	amod>
+1	New	nsubj>
+1	New	xcomp<	nsubjpass>
+1	New	pobj<	prep<	dobj>
+2	New	prep>
+5	Task
+2	Task	amod>
+1	Task	xcomp>
+3	Task	prep>
+1	Task	dobj>	conj>	amod>
+1	Task	nn>
+21	Law
+296	Unit
+2	Unit	amod>
+3	Requirements
+1	Requirements	ccomp>
+1	Requirements	prep>
+3	Boundary
+1	Boundary	pobj<	conj<	pobj>
+1	Result	dep>
+1	Result	conj<	prep>
+1	Result	rcmod>
+1	Result	nsubj<
+2	Result	prt>
+4	Result	xcomp>
+1	Result	pobj<	prep<
+4	Result	advmod>
+1	Result	dobj<	advmod>
+11	Result	prep>
+1	Result	dobj>	prep>
+1	Trigger	pobj<	prep<	partmod<	dep>
+14	Trigger	prep>
+1	Trigger	prep>	pobj>	prep>
+2	Abundant_entities	nn>
+60	Factor	amod<
+1	Factor	amod<	conj<	dobj<	prep>
+1	Factor	amod<	nsubj<	advmod>	advmod>
+1	Factor	amod<	dobj<	infmod<	conj<
+1	Factor	amod<	nn>
+1	Factor	dep>
+1	Factor	nsubj<
+1	Factor	rcmod<
+1	Factor	rcmod<	nsubj<
+12	Factor	nsubj>
+1	Factor	csubj>
+2	Factor	pobj<	prep<	nsubj>
+1	Factor	xcomp>
+3	Factor	prep>
+1	Factor	advmod<
+1	Baggage	dobj>	prep>
+1	Sentence	rcmod<
+1	Sentence	prep>
+1	Gradable_attribute
+11	Gradable_attribute	advmod<
+2	Importer	nsubj>
+1	Importer	amod>
+1	Importer	pcomp<	prep<	xcomp<	dobj>
+1	Importer	xcomp<	nsubj>
+11	Undesirable_Event
+1	Undesirable_Event	amod<	pobj<	prep<	prep>
+2	Undesirable_Event	prep>
+3	Undesirable_Event	dobj>
+3	Result_size	prep>
+1	Fluid	partmod<	pobj<	prep<
+4	Fluid	nsubj>
+1	Fluid	dobj>
+1	Fluid	advcl<
+1	Guest	poss>
+1	Guest	conj<	nsubj>
+2	Recipient	poss>
+1	Recipient	dep<	nsubj>
+53	Recipient	nsubj>
+6	Recipient	nsubjpass>
+3	Recipient	infmod<	poss>
+1	Recipient	infmod<	amod>
+1	Recipient	infmod<	dobj<	conj<	nsubj>
+1	Recipient	infmod<	dobj<	nsubj>
+1	Recipient	infmod<	dobj<	pcomp<	prep<	nsubjpass>
+9	Recipient	iobj>
+1	Recipient	pobj<	prep<	xcomp<	nsubj>
+42	Recipient	prep>
+1	Recipient	prep>	pobj>
+3	Recipient	prep>	pobj>	prep>
+3	Recipient	amod<
+1	Recipient	amod<	pobj<	prep<	xcomp<	nsubj>
+1	Recipient	amod<	pobj<	prep<	pobj<	prep<	nsubj>
+1	Recipient	conj>
+2	Recipient	partmod<
+1	Recipient	partmod<	nsubj>
+1	Recipient	partmod<	prep>	pobj>
+1	Recipient	conj<	conj>	dep>
+4	Recipient	conj<	nsubj>
+1	Recipient	conj<	dobj<	nsubj>
+1	Recipient	pcomp<	prep<	conj<	poss>
+1	Recipient	pcomp<	prep<	nsubj>
+3	Recipient	pcomp<	prep<	dobj<	nsubj>
+1	Recipient	xcomp<	dep<
+2	Recipient	xcomp<	partmod<
+10	Recipient	xcomp<	nsubj>
+1	Recipient	xcomp<	nsubj>	appos>
+1	Recipient	xcomp<	xcomp<	conj<	nsubj>
+1	Recipient	xcomp<	dobj>	rcmod>	nsubj>
+1	Recipient	ccomp>	nsubj>
+1	Recipient	advmod>
+2	Recipient	dobj<	nsubj>
+1	Recipient	dobj<	prep>
+3	Recipient	ccomp<	nsubj>
+36	Recipient	dobj>
+5	Recipient	dobj>	prep>
+1	Recipient	dobj>	infmod>	mark>
+1	Indicated	nsubj<	ccomp>
+3	Indicated	ccomp>
+2	Indicated	prep>
+2	Indicated	dobj>
+1	Excreta
+2	Excreta	dobj>
+7	Relevant_feature	amod>
+2	Relevant_feature	nn>
+2	Assailant
+4	Assailant	poss>
+1	Assailant	amod<
+1	Assailant	partmod<	nsubj>
+1	Assailant	nsubj<	nsubj>
+6	Assailant	nsubj>
+12	Assailant	amod>
+1	Assailant	xcomp<	conj<	nsubj>
+1	Assailant	xcomp<	dobj>
+1	Assailant	xcomp<	dobj>	rcmod>	nsubj>
+1	Assailant	pobj<	prep<	nsubj>
+5	Assailant	dobj<	nsubj>
+1	Assailant	dobj<	infmod<	dobj<	nsubj>
+1	Assailant	dobj<	xcomp<	xcomp<	nsubj>
+1	Assailant	dobj<	xcomp<	dobj>
+4	Assailant	prep>
+1	Assailant	advcl<	nsubj>
+9	Assailant	nn>
+1	Donor
+2	Donor	poss>
+1	Donor	conj<	nsubj>
+11	Donor	nsubj>
+1	Donor	infmod<	pobj<	prep<	ccomp<	rcmod<	conj>
+1	Donor	pcomp<	prep<	conj<	nsubj>
+2	Donor	pcomp<	prep<	nsubj>
+2	Donor	xcomp<	nsubj>
+1	Donor	dobj>	prep>
+2	Donor	dobj>	prep>	pobj>	prep>
+8	Donor	prep>
+1	Landmark_feature	poss>
+1	Landmark_feature	prep>
+32	Value
+2	Value	amod<
+1	Value	amod<	num>
+1	Value	nsubjpass>
+6	Value	prep>
+2	Value	dobj>
+1	Descriptor
+1	Descriptor	nsubjpass<
+1	Descriptor	dep>
+1	Descriptor	dep<	amod<	amod>
+20	Descriptor	rcmod>
+1	Descriptor	rcmod>	prep>
+1	Descriptor	rcmod>	dobj>	partmod>
+1	Descriptor	nsubj<
+2	Descriptor	det>
+15	Descriptor	num>
+1	Descriptor	pobj<	prep<	rcmod>
+5	Descriptor	pobj<	prep<	prep>
+25	Descriptor	prep>
+1	Descriptor	prep>	pobj>	rcmod>
+2	Descriptor	partmod>
+1	Descriptor	amod<	partmod>
+2	Descriptor	amod<	amod>
+1	Descriptor	amod<	nn>
+2	Descriptor	conj<	partmod>
+9	Descriptor	conj<	amod>
+1	Descriptor	appos<	amod>
+1	Descriptor	appos<	pobj<	prep<	pobj<	prep<	cc>
+309	Descriptor	amod>
+2	Descriptor	amod>	conj>
+1	Descriptor	dobj<
+1	Descriptor	dobj<	pcomp<
+1	Descriptor	advmod>
+1	Descriptor	nn<
+9	Descriptor	nn<	amod>
+1	Descriptor	nn<	amod>	conj>
+1	Descriptor	nn<	pobj<	prep<	prep>
+1	Descriptor	nn<	num>
+78	Descriptor	nn>
+4	Descriptor	nn>	amod>
+1	Descriptor	nn>	nn>
+1	Descriptor	nn>	nn>	nn>
+1	Collection	dep>
+1	Collection	nsubj>
+1	Collection	prep>
+1	Collection	nn>
+5	Conqueror	nsubj>
+1	Conqueror	xcomp<	rcmod<
+3	Conqueror	prep>
+46	Possessor	poss>
+1	Possessor	amod<	amod>
+2	Possessor	amod<	nn>
+2	Possessor	conj<	poss>
+1	Possessor	conj<	conj>
+1	Possessor	conj<	dobj<	xcomp<	nsubjpass>
+11	Possessor	amod>
+1	Possessor	pobj<	prep<	conj<	parataxis<	nsubj>
+1	Possessor	pobj<	prep<	dobj<	nsubj>
+6	Possessor	dobj<	nsubj>
+1	Possessor	nn<	poss>
+4	Possessor	prep>
+12	Possessor	nn>
+4	Colonists
+1	Focal_participant
+11	Focal_participant	amod<
+1	Focal_participant	nsubj>
+2	Focal_participant	amod>
+1	Focal_participant	xcomp<	dobj>
+2	Focal_participant	xcomp>	nsubj>
+1	Focal_participant	advmod<	pobj<	prep<	nsubj>
+2	Focal_participant	nn>
+1	Dependent_situation	nsubjpass>
+1	Dependent_situation	ccomp>	nsubj>
+2	Dependent_situation	prep>
+1	Value_2	advmod>
+7	Value_2	prep>
+1	Profiled_attribute	rcmod<
+1	Profiled_attribute	nsubj>
+1	Profiled_attribute	mark>
+2	Tester	poss>
+1	Tester	conj<	infmod<	dobj<	iobj>
+1	Tester	dep<	nsubj>
+3	Tester	nsubj>
+1	Tester	infmod<
+1	Tester	infmod<	poss>
+1	Tester	xcomp<	conj<	nsubj>
+3	Tester	xcomp<	nsubj>
+3	Tester	dobj<	nsubj>
+1	Perceiver_passive	poss>
+1	Perceiver_passive	conj<	nsubj>
+14	Perceiver_passive	nsubj>
+4	Perceiver_passive	xcomp<	nsubj>
+1	Perceiver_passive	dobj<	conj<	nsubj>
+4	Perceiver_passive	prep>
+1	Value_1	prep>
+1	Container_portal	amod<	nn>
+1	Relation_type	amod>
+46	Information
+5	Information	amod<
+1	Information	partmod<
+1	Information	conj<	prep>
+1	Information	nsubj>
+1	Information	nsubjpass>
+1	Information	xcomp<	nsubj>
+5	Information	ccomp>
+6	Information	dobj>
+1	Information	prep>
+22	Added_set
+89	Added_set	amod<
+1	Added_set	amod<	dobj<	infmod<	nsubj<	parataxis<	prep>
+1	Added_set	mwe<	quantmod<
+7	Added_set	mwe<	quantmod<	num<
+2	Added_set	conj<	amod<
+16	Added_set	det<
+3	Added_set	quantmod<	num<
+2	Added_set	nn<
+3	Added_set	advmod<
+1	Added_set	advmod<	dobj>
+8	Function	amod>
+6	Function	prep>
+13	Function	nn>
+1	Accuracy	advmod>
+1	Concept_1	poss>
+23	Concept_1	amod<
+1	Concept_1	amod<	conj<	pobj<	prep<	infmod<	rcmod>
+1	Concept_1	amod<	nn>
+10	Concept_1	partmod<
+1	Concept_1	partmod<	pobj<	prep<
+1	Concept_1	conj<	conj<	nsubj>
+2	Concept_1	rcmod<
+3	Concept_1	nsubjpass>
+1	Concept_1	xcomp<	nsubj>	conj>
+1	Concept_1	ccomp<	nsubj>
+1	Concept_1	prep>
+12	Concept_2	dep>
+1	Concept_2	amod<	amod>
+2	Concept_2	amod<	nn>
+1	Concept_2	partmod<	pobj<	prep<	cc>
+1	Concept_2	npadvmod>
+1	Concept_2	amod>
+3	Concept_2	advmod>
+19	Concept_2	prep>
+3	Theme_2	prep>
+1	Time_length	tmod>
+2	Time_length	pobj>
+1	Time_length	advmod>
+2	Time_length	dobj>
+1	Sound_source	conj<	nsubj>
+1	Sound_source	det>
+2	Sound_source	nsubj>
+1	Sound_source	xcomp<	dobj>
+1	Sound_source	dobj<	xcomp<	nsubj>
+1	Sound_source	nn<	parataxis>
+6	Sound_source	prep>
+1	Topic
+19	Topic	pobj>
+1	Topic	pobj>	poss>
+1	Topic	pobj<	prep<	dobj<	prep>
+1	Topic	pobj<	prep<	dobj>	nn>
+1	Topic	pobj<	prep<	prep>
+19	Topic	amod>
+2	Topic	amod>	prep>
+5	Topic	ccomp>
+1	Topic	pcomp>
+5	Topic	advcl>
+1	Topic	advcl<	prep>
+1	Topic	poss>
+1	Topic	nsubjpass<
+1	Topic	nsubjpass<	prep>
+1	Topic	dep>
+2	Topic	nsubj<
+2	Topic	nsubj<	prep>
+1	Topic	det>
+5	Topic	nsubjpass>
+80	Topic	prep>
+1	Topic	prep>	pobj>	partmod>
+1	Topic	prep>	pobj>	prep>
+2	Topic	conj>	dobj>
+4	Topic	partmod>
+1	Topic	partmod>	prep>
+1	Topic	partmod<	nsubj<	nsubj>
+1	Topic	partmod<	prep>	pobj>
+1	Topic	conj<	advcl<	prep>
+1	Topic	csubj<
+2	Topic	xcomp>
+1	Topic	advmod>
+1	Topic	dobj<	prep>
+3	Topic	nn<	amod>
+8	Topic	nn<	nn>
+30	Topic	dobj>
+1	Topic	dobj>	prep>
+29	Topic	nn>
+1	Topic	nn>	amod>
+1	Topic	nn>	appos>
+1	Body	amod<
+1	Body	prep>
+1	Body	nn>
+1	Bearer	amod>
+1	Bearer	dobj<	nsubj>
+1	Bearer	dobj<	iobj>
+1	Theme_1	pobj<	prep<	infmod<
+1	Theme_1	pobj<	prep<	prep>	pobj>
+1	Theme_1	prep>
+1	Relative_time	dep>
+1	Relative_time	poss>
+2	Relative_time	dep<
+8	Relative_time	npadvmod<
+11	Relative_time	det>
+45	Relative_time	amod>
+2	Relative_time	num>
+1	Relative_time	pobj<	prep<	dobj>
+1	Relative_time	nn<	conj<	det>
+3	Relative_time	prep>
+2	Relative_time	nn>
+5	Instance_Prop	amod>
+5	Scale	advmod<
+1	Host	nsubj>
+2	Location_of_protagonist	prep>
+9	Figures	prep<
+1	Figures	prep<	dep<	nsubj>
+2	Figures	prep<	partmod<
+1	Figures	prep<	rcmod<
+1	Figures	prep<	nsubj>
+1	Figures	prep<	pobj<	prep<	partmod<
+1	Figures	prep<	prep>	pobj>
+1	Figures	amod<
+1	Figures	amod<	amod>
+2	Figures	pobj>
+1	Figures	advmod<
+1	Figures	advmod<	conj<
+1	Figures	dobj>
+6	Set_of_instances	amod<
+1	Earner	partmod<	nsubj>
+5	Earner	nsubj>
+8	Toxic_substance
+7	Toxic_substance	amod<
+1	Toxic_substance	xcomp<	partmod<
+3	Toxic_substance	nn<
+1	Self_mover	conj<	nsubj>
+2	Self_mover	partmod<
+1	Self_mover	partmod<	xcomp<	nsubj>
+1	Self_mover	parataxis<	nsubjpass>
+17	Self_mover	nsubj>
+2	Self_mover	pcomp<	prep<	nsubj>
+3	Self_mover	xcomp<	nsubj>
+2	Self_mover	dobj<	nsubj>
+2	Self_mover	prep>
+3	Instrument
+1	Instrument	dep>
+1	Instrument	dep<	appos<
+1	Instrument	nsubj<
+6	Instrument	rcmod<
+1	Instrument	rcmod<	conj<	pobj<	prep<
+2	Instrument	rcmod<	appos<
+1	Instrument	rcmod<	pobj<	prep<
+1	Instrument	rcmod<	prep>	pobj>
+1	Instrument	det>
+5	Instrument	nsubj>
+28	Instrument	nsubjpass>
+1	Instrument	infmod<	dobj<	rcmod<
+3	Instrument	pobj<	prep<
+1	Instrument	pobj<	prep<	nsubj>
+2	Instrument	pobj<	prep<	dobj>
+27	Instrument	prep>
+1	Instrument	prep>	pobj>	amod>
+1	Instrument	infmod>	dobj>
+8	Instrument	amod<
+1	Instrument	amod<	pobj<	prep<	pobj<	prep<	pobj<	prep<	dobj>
+1	Instrument	conj>	dep>
+3	Instrument	conj<	amod<
+1	Instrument	conj<	nsubj>
+1	Instrument	conj<	nsubjpass>
+1	Instrument	conj<	dobj<	partmod<	nsubj<	nsubj>
+3	Instrument	conj<	prep>
+3	Instrument	conj<	dobj>
+8	Instrument	partmod<
+1	Instrument	partmod<	prep>	pobj>
+16	Instrument	amod>
+1	Instrument	pcomp<	prep<	nsubj>
+1	Instrument	xcomp<	rcmod<
+1	Instrument	xcomp<	nsubj>
+1	Instrument	xcomp<	nsubjpass>
+1	Instrument	xcomp<	dobj>	partmod>
+1	Instrument	xcomp<	advcl<	partmod<
+1	Instrument	ccomp<	rcmod<
+1	Instrument	dobj<	conj<	nsubj>
+1	Instrument	dobj<	nsubj>
+3	Instrument	nn<
+1	Instrument	nn<	nn>
+70	Instrument	dobj>
+1	Instrument	advcl<	nsubj>
+2	Instrument	advcl<	dobj>
+20	Instrument	nn>
+10	Relatives
+1	Relatives	prep>
+1	Traveler
+2	Traveler	poss>
+4	Traveler	nsubj>
+1	Traveler	pcomp<	prep<	amod<
+1	Traveler	pobj<	prep<	rcmod<
+1	Traveler	dobj<	partmod<
+1	Traveler	dobj<	nsubj>
+1	Traveler	dobj<	xcomp<	xcomp<	nsubj>
+1	Incident	dobj>
+1	Incident	prep>
+3	Undesirable_situation	xcomp>
+4	Undesirable_situation	dobj>
+3	Assessor
+1	Assessor	partmod<
+1	Assessor	nsubj>
+1	Assessor	pcomp<	prep<	nsubj>
+2	Assessor	prep>
+46	Current_country
+131	Origin
+1	Origin	prep<	dep>
+1	Origin	amod<
+2	Origin	amod<	poss>
+1	Origin	amod<	nn>	amod>
+2	Origin	poss>
+18	Origin	amod>
+20	Origin	pobj>
+2	Origin	pcomp>
+1	Origin	pobj<	prep<
+1	Origin	nn<	prep>
+7	Origin	prep>
+4	Competitor	poss>
+1	Competitor	acomp<	parataxis<	nsubj>
+1	Competitor	dep>
+3	Competitor	nsubj>
+1	Competitor	amod>
+1	Competitor	nn<
+1	Dangerous_situation	pobj<	prep<	advcl<	nsubj>
+2	Dangerous_situation	dobj>
+1	Artist	nsubj>
+1	Individual_1	xcomp<	nsubj>
+3	Owner	poss>
+90	Owner	nsubj>
+1	Owner	nsubj>	infmod>	dobj>
+1	Owner	infmod<	poss>
+1	Owner	infmod<	dobj<	nsubj>
+6	Owner	prep>
+1	Owner	amod<	conj<	dobj<	conj<	conj<	nsubj>
+1	Owner	amod<	conj<	prep>
+1	Owner	partmod<	nsubj>
+1	Owner	conj<	appos<
+2	Owner	conj<	nsubj>
+1	Owner	conj<	dobj<	nsubj>
+1	Owner	appos<
+1	Owner	pcomp<	prep<	partmod<
+1	Owner	pcomp<	prep<	nsubj>
+1	Owner	pcomp<	prep<	nsubjpass>
+1	Owner	xcomp<	nsubj>
+4	Owner	xcomp<	nsubjpass>
+1	Owner	dobj<	nsubj>
+1	Owner	nn<	pobj<	prep<	nsubj>
+2	Owner	dobj>
+1	Owner	advmod<	amod<	dobj<	nsubj>
+1	Suspect	amod<
+1	Suspect	partmod<
+1	Suspect	partmod<	pobj<	prep<
+6	Suspect	nsubjpass>
+1	Suspect	ccomp<
+2	Suspect	prep>
+2	Suspect	dobj>
+46	Subset	prep<
+1	Subset	prep<	nsubj>
+1	Subset	prep<	prep>	pobj>
+1	Subset	prep<	dobj>
+12	Obligation
+1	Obligation	nsubjpass<	xcomp>
+1	Obligation	conj<	infmod>
+1	Obligation	rcmod>
+3	Obligation	amod>
+15	Obligation	xcomp>
+4	Obligation	prep>
+7	Obligation	infmod>
+19	Obligation	nn>
+4	Configuration
+1	Configuration	nsubj>
+1	Configuration	nsubjpass>
+1	Configuration	advmod>
+2	Configuration	prep>
+36	Ground
+1	Ground	dep>
+1	Ground	acomp>	advmod>
+1	Ground	nsubjpass>
+1	Ground	infmod<
+316	Ground	pobj>
+4	Ground	pobj>	nn>
+1	Ground	pobj<	prep<	nsubj>
+1	Ground	pobj<	prep<	nsubj>	prep>	pobj>
+1	Ground	pobj<	prep<	dobj>
+23	Ground	prep>
+8	Ground	prep>	pobj>
+1	Ground	prep<
+1	Ground	prep<	conj>	aux>
+1	Ground	prep<	rcmod<
+1	Ground	prep<	appos>
+3	Ground	prep<	prep>
+1	Ground	conj>	pobj>
+1	Ground	amod<	num<
+1	Ground	conj<	amod<	pobj<	prep<	nsubj>
+1	Ground	conj<	dobj>
+2	Ground	amod>
+2	Ground	xcomp<	nsubj>
+1	Ground	pcomp>
+1	Ground	advcl>
+1	Ground	dobj<	nsubj>
+1	Ground	dobj<	prep>
+2	Ground	nn<	nn>
+24	Ground	dobj>
+1	Ground	dobj>	conj>	prep>
+2	Ground	dobj>	prep>
+1	Ground	dobj>	prep>	pobj>	prep>
+1	Ground	advmod<
+6	Ground	advmod<	rcmod<
+1	Ground	advmod<	rcmod<	conj<
+1	Ground	prt<	dobj>
+6	Ground	nn>
+2	Honoree	prep>
+2	Honoree	nn>
+1	New_area	dobj<	prep>
+1	New_area	prep>
+1	New_area	prep>	pobj>	conj>
+1	Old	partmod<	det>
+3	Old	dobj>
+1	Old	prep>
+1	Old	nn>
+1	Individual_2	dobj>
+5	Front
+2	Front	pobj<	prep<	nsubj>
+10	New_member	nsubj>
+2	New_member	pcomp<	prep<	nsubj>
+1	New_member	xcomp<	nsubj>
+1	New_member	xcomp<	dobj>
+1	New_member	mark>
+1	New_member	dobj>
+1	Independent_variable	prep>
+14	Activity
+2	Activity	dep<
+1	Activity	dep<	nsubj>
+1	Activity	dep<	advcl>
+2	Activity	rcmod<
+9	Activity	nsubj>
+9	Activity	nsubjpass>
+1	Activity	csubj>
+1	Activity	pobj<	prep<	dep<	dep>
+14	Activity	prep>
+1	Activity	prep>	pobj>
+1	Activity	prep>	pcomp>
+10	Activity	infmod>
+11	Activity	amod<
+1	Activity	amod<	dep<
+1	Activity	amod<	prep>
+1	Activity	conj>	xcomp>
+1	Activity	conj>	prep>
+1	Activity	conj<
+4	Activity	conj<	nsubj>
+1	Activity	conj<	infmod>
+1	Activity	conj<	prep>
+1	Activity	conj<	cc>
+1	Activity	partmod<	prep>	pobj>
+11	Activity	amod>
+4	Activity	ccomp>
+1	Activity	ccomp>	nsubj>
+77	Activity	xcomp>
+2	Activity	advcl>
+1	Activity	dobj<	nsubj>
+1	Activity	dobj<	xcomp>
+1	Activity	nn<
+64	Activity	dobj>
+1	Activity	dobj>	dep>	cc>
+1	Activity	dobj>	rcmod>
+1	Activity	dobj>	prep>
+2	Activity	advmod<
+1	Activity	advmod<	conj>
+1	Activity	advmod<	nsubjpass>
+34	Activity	nn>
+1	AggregateProperty	rcmod>
+36	AggregateProperty	amod>
+1	AggregateProperty	amod>	conj>
+1	AggregateProperty	pobj<	prep<	conj>
+1	AggregateProperty	nn<	amod>
+2	AggregateProperty	prep>
+8	AggregateProperty	nn>
+21	Document
+1	Mode_of_transportation	dobj<	nsubj>
+1	Mode_of_transportation	prep>
+2	Mode_of_transportation	nn>
+1	Feature	amod<
+1	Feature	conj<	nn<	amod>
+1	Feature	rcmod<
+1	Feature	nsubj>
+2	Feature	dobj>
+2	Feature	prep>
+1	Executed	nsubjpass>
+1	Executed	prep>
+1	Executed	prep>	pobj>	prep>
+2	Characterization	acomp>
+8	Characterization	xcomp>
+1	Characterization	advcl>
+1	Characterization	prep>
+1	Characterization	prep>	pobj>	prep>
+1	Containing_text	iobj<	dobj>	prep>	pobj>	prep>
+2	Containing_text	prep>
+1	Parties	nsubjpass<	prep>
+2	Parties	nsubj>
+4	Parties	amod>
+1	Parties	xcomp<	nsubj>
+1	Parties	pobj<	prep<	nsubj>
+1	Parties	dobj<	nsubj>
+3	Parties	nn>
+1	Parties	nn>	amod>
+1	Constituents	nn<	nn>
+3	Constituents	nn>
+1	Internal_cause	advcl>
+1	Internal_cause	dobj>	infmod>	prep>
+1	Actor	conj<	nsubj>
+1	Actor	nsubj>
+1	Differentiating_fact	dobj>
+2	Trajector_entity	prep<
+18	Trajector_entity	amod<
+1	Trajector_entity	amod<	nn>
+1	Trajector_entity	conj<	amod<
+1	Trajector_entity	poss<
+1	Trajector_entity	advmod<	appos<
+1	Trajector_entity	advmod<	dobj>	det>
+1	Excreter	rcmod<
+1	Excreter	nsubj>
+1	Excreter	dobj<	nsubj>
+3	Victim	poss>
+2	Victim	conj<	nsubj>
+1	Victim	conj<	dobj>
+1	Victim	nsubj>
+13	Victim	nsubjpass>
+2	Victim	pobj<	prep<	nsubj>
+1	Victim	pobj<	prep<	pobj<	prep<	nsubjpass>
+1	Victim	pobj<	prep<	dobj<	prep>
+1	Victim	dobj<	nsubj>
+2	Victim	dobj<	prep>
+1	Victim	nn<	pobj<	prep<	cc>
+29	Victim	dobj>
+1	Victim	dobj>	poss>
+22	Victim	prep>
+1	Victim	nn>
+1	Hunter	conj<	nsubj>
+1	Landmark_occasion
+1	Landmark_occasion	prep<	dobj>
+2	Landmark_occasion	amod<
+16	Landmark_occasion	mark<
+1	Landmark_occasion	partmod<	pobj<	prep<
+18	Landmark_occasion	pobj>
+2	Landmark_occasion	dobj>
+3	Landmark_occasion	prep>
+2	Submittor	nsubj>
+1	Standard_attribute	dobj>
+3	Standard_attribute	prep>
+1	Hindrance
+1	Hindrance	conj<	nsubj>
+1	Hindrance	nsubj>
+1	Hindrance	amod>
+1	Hindrance	prep>
+1	New_leader	amod<
+1	New_leader	amod>
+1	New_leader	prep>
+1	New_leader	dobj>
+1	Principle	partmod<
+6	Principle	nsubj>
+1	Principle	xcomp<	dobj>
+1	Principle	xcomp>
+1	Principle	nn<	nn>
+5	Principle	prep>
+1	Principle	dobj>
+3	Land	dobj>
+1	Winner	nsubj>
+1	Winner	pobj<	prep<	prep>
+1	Winner	prep>
+1	Resulting_action	prt>
+1	Resulting_action	prep>
+9	Partner_1
+5	Partner_1	poss>
+2	Partner_1	amod<
+1	Partner_1	conj<	nsubj>
+8	Partner_1	nsubj>
+1	Partner_1	infmod<	poss>
+2	Partner_1	infmod<	prep>
+1	Partner_1	infmod<	prep>	pobj>
+1	Partner_1	pcomp<	prep<	rcmod<
+1	Partner_1	pcomp<	prep<	dobj<	nsubj>
+1	Partner_1	pobj<	prep<	infmod<	poss>
+1	Partner_1	dobj<	xcomp<	prep>	pobj>	poss>
+1	Partner_1	dobj<	prep>
+2	Partner_1	nn<
+1	Partner_1	advmod<	nsubj>
+2	Partner_1	prep>
+3	Required_entity	amod<
+2	Required_entity	rcmod<
+1	Required_entity	rcmod<	prep>	pobj>	conj>	prep>	pobj>	prep>	pobj>
+1	Required_entity	nsubj>
+2	Required_entity	dobj>
+1	Required_entity	prep>
+41	Project
+1	Project	rcmod>	nsubj>
+1	Project	rcmod<
+1	Project	rcmod<	pobj<	prep<
+2	Project	nsubj>
+3	Project	nsubjpass>
+1	Project	pobj<	prep<	dep>
+1	Project	pobj<	prep<	rcmod<	conj<
+1	Project	pobj<	prep<	csubj>	prep>	pcomp>	conj>
+2	Project	pobj<	prep<	dobj>
+1	Project	pobj<	rcmod<
+26	Project	prep>
+1	Project	conj>	dobj>
+2	Project	partmod<
+2	Project	conj<	conj>	dobj>
+1	Project	conj<	nsubjpass>
+2	Project	conj<	nn<	nn>
+5	Project	conj<	dobj>
+3	Project	conj<	prep>
+2	Project	conj<	nn>
+7	Project	amod>
+1	Project	dobj<	prep>
+1	Project	nn<
+1	Project	nn<	conj<
+1	Project	nn<	amod>
+2	Project	nn<	nn>
+74	Project	dobj>
+11	Project	nn>
+3	Partner_2
+1	Partner_2	poss>
+1	Partner_2	conj<	pobj<	prep<	dobj<	prep>
+1	Partner_2	rcmod<
+1	Partner_2	infmod<	dobj<	punct>
+1	Partner_2	pobj<	prep<	dobj<	prep>
+1	Partner_2	dobj<	prep>	pobj>	prep>
+1	Partner_2	appos>
+17	Partner_2	prep>
+1	Partner_2	advmod<	nsubj>	conj>
+1	Partner_2	nn>
+1	Interested_party	amod<	poss>
+1	Interested_party	amod<	prep>
+1	Interested_party	advmod>
+1	Interested_party	advmod<	nsubjpass>
+1	Concepts	amod<
+1	Concepts	amod>
+1	Known_resident	poss>
+1	Participant	prep<
+1	Participant	prep<	nsubj>
+1	Participant	prep<	infmod<	dobj<	nsubj>
+1	Participant	prep<	pcomp<	prep<	nsubj>
+1	Participant	prep<	advmod<	partmod<	pobj<	prep<
+1	Participant	prep<	dobj>
+6	Participant	poss>
+1	Participant	conj<	nsubj>
+2	Participant	nsubj>
+2	Participant	infmod<	poss>
+1	Participant	pobj>
+1	Participant	dobj<	nsubj>
+3	Participant	prep>
+1	Participant	nn>
+1	Topical_entity	conj<	nsubj>
+10	Topical_entity	nsubj>
+2	Useful_location	amod<
+1	Useful_location	nsubj>
+1	Useful_location	prep>
+6	Responsible_party	poss>
+2	Responsible_party	conj<	poss>
+9	Responsible_party	aux<	nsubj>
+1	Responsible_party	nsubj>
+2	Responsible_party	nsubjpass>
+2	Responsible_party	xcomp>
+2	Responsible_party	dobj<	nsubj>
+2	Responsible_party	dobj<	nsubj>	poss>
+3	Responsible_party	prep>
+4	Responsible_party	dobj>
+2	Responsible_party	nn>
+2	Phenomenon	dep>
+1	Phenomenon	dep<
+1	Phenomenon	dep<	conj<	nsubj>
+6	Phenomenon	rcmod<
+2	Phenomenon	rcmod<	pobj<	prep<
+1	Phenomenon	rcmod<	pobj<	prep<	conj<	cc>
+36	Phenomenon	nsubj>
+1	Phenomenon	nsubj>	conj>
+1	Phenomenon	nsubj>	appos>	conj>	dep>	dep>
+9	Phenomenon	nsubjpass>
+1	Phenomenon	infmod<
+8	Phenomenon	prep>
+1	Phenomenon	prep>	pobj>
+1	Phenomenon	prep>	pobj>	prep>
+55	Phenomenon	amod<
+1	Phenomenon	amod<	pobj<	prep<	dep<	dep>
+1	Phenomenon	amod<	nn>
+2	Phenomenon	partmod<
+1	Phenomenon	partmod<	pobj<	prep<	pobj<	prep<
+1	Phenomenon	conj<	amod<
+1	Phenomenon	conj<	dep<
+2	Phenomenon	conj<	nsubj>
+1	Phenomenon	conj<	xcomp<	xcomp<	nsubj>
+1	Phenomenon	conj<	prep>
+1	Phenomenon	xcomp<	rcmod<	pobj<	prep<
+1	Phenomenon	xcomp<	nsubj>
+1	Phenomenon	xcomp<	nsubjpass>
+28	Phenomenon	ccomp>
+6	Phenomenon	xcomp>
+2	Phenomenon	ccomp<
+2	Phenomenon	ccomp<	nsubj>
+6	Phenomenon	advcl>
+1	Phenomenon	advmod>
+1	Phenomenon	dobj<	xcomp<	rcmod<	pobj<	prep<
+2	Phenomenon	nn<
+50	Phenomenon	dobj>
+1	Phenomenon	dobj>	poss>
+1	Phenomenon	dobj>	prep>	pobj>	partmod>	prep>	pobj>	conj>	prep>	pobj>	rcmod>
+12	Phenomenon	advmod<
+1	Phenomenon	advmod<	conj>
+1	Phenomenon	advmod<	cop>
+2	Phenomenon	advmod<	nsubj>
+1	Phenomenon	advmod<	prep>	pobj>
+1	Phenomenon	advcl<
+1	Phenomenon	nn>
+6	Effect
+2	Effect	mark<
+16	Effect	mark<	advcl<
+1	Effect	mark<	advcl<	rcmod<
+1	Effect	mark<	advcl<	xcomp<
+2	Effect	mark<	advcl<	ccomp<
+1	Effect	mark<	advcl<	advcl<
+1	Effect	rcmod>
+1	Effect	rcmod<
+1	Effect	rcmod<	pobj<	prep<	partmod>
+3	Effect	pobj<	prep<
+21	Effect	prep>
+4	Effect	prep>	pobj>
+4	Effect	prep<
+1	Effect	conj>
+1	Effect	amod<	prep>
+1	Effect	partmod<
+1	Effect	partmod<	prep>
+5	Effect	amod>
+3	Effect	ccomp>
+10	Effect	xcomp>
+1	Effect	xcomp>	dep>
+1	Effect	xcomp>	nsubj>
+1	Effect	xcomp>	xcomp>
+31	Effect	dobj>
+15	Effect	nn>
+1	Extent_of_acclaim	conj<	advmod>
+14	Punishment
+1	Punishment	pobj<	prep<
+3	Punishment	prep>
+2	Group
+2	Group	poss>
+1	Group	nsubj>	prep>	pobj>	appos>
+44	Group	pobj>
+1	Group	pobj<	prep<	ccomp<	pobj<	prep<	dobj>	nn>
+33	Group	prep>
+1	Group	prep<	dobj<	prep>
+3	Group	prep<	prep>
+1	Group	amod<
+1	Group	conj>
+1	Group	conj>	prep>	pobj>
+1	Group	conj<	dobj<	nsubj>
+1	Group	pcomp<	prep<	punct>
+2	Group	pcomp>	pobj>
+1	Group	advmod>
+16	Group	dobj>
+10	Group	nn>
+1	Interlocutors	poss>
+1	Interlocutors	nsubj<	xcomp>	prep>
+5	Interlocutors	nsubj>
+2	Interlocutors	xcomp<	nsubj>
+1	Interlocutors	dobj<	xcomp<	nsubj>
+1	Interlocutors	ccomp<
+4	Interlocutors	prep>
+2	Interlocutors	nn>
+1	Surrenderer	conj<	nsubj>
+1	Surrenderer	dep<	dobj>
+1	Surrenderer	xcomp<	conj<	nsubj>
+201	Leader
+4	Leader	dep>
+1	Leader	poss>
+1	Leader	rcmod<
+11	Leader	nsubj>
+4	Leader	pobj<	prep<	nsubj>
+2	Leader	pobj<	prep<	prep>	pobj>
+1	Leader	pobj<	prep<	dobj>	prep>	pobj>
+15	Leader	prep>
+1	Leader	amod<
+1	Leader	amod<	nn<
+1	Leader	partmod>	prep>	pobj>
+7	Leader	appos<
+2	Leader	partmod<	nsubj>
+3	Leader	amod>
+1	Leader	xcomp<	rcmod<
+3	Leader	xcomp<	nsubj>
+1	Leader	xcomp<	ccomp>	dobj>
+1	Leader	xcomp<	dobj>
+34	Leader	nn<
+6	Leader	appos>
+2	Leader	appos>	nn>
+6	Leader	nn>
+9	Attribute
+10	Attribute	amod<
+13	Attribute	nsubj>
+1	Attribute	nsubjpass>
+2	Attribute	amod>
+1	Attribute	pobj<	prep<
+1	Attribute	pobj<	prep<	nsubj>
+15	Attribute	dobj>
+1	Attribute	dobj>	prep>	pobj>	prep>
+9	Attribute	prep>
+3	Attribute	advmod<
+2	Attribute	nn>
+1	Buyer	conj<	nsubj>
+1	Buyer	rcmod<	conj>
+21	Buyer	nsubj>
+2	Buyer	infmod<	amod>
+2	Buyer	infmod<	dobj<	nsubj>
+1	Buyer	xcomp<	nsubj>
+1	Buyer	xcomp<	xcomp<	nsubj>
+6	Buyer	iobj>
+1	Buyer	dobj<	nsubj>
+1	Buyer	nn<	appos<	poss>
+16	Buyer	prep>
+2	Buyer	prep>	pobj>	prep>
+2	Buyer	dobj>
+1	Buyer	dobj>	amod>	dep>	nn>
+18	Reference_occasion
+2	Landmark_event	prep<
+1	Landmark_event	prep<	rcmod<	appos>
+1	Landmark_event	prep<	prep>
+1	Landmark_event	conj>	pobj>
+9	Landmark_event	mark<
+1	Landmark_event	mark<	nsubjpass>
+1	Landmark_event	conj<	pobj>
+46	Landmark_event	pobj>
+7	Landmark_event	pcomp>
+24	Landmark_event	advmod<
+1	Landmark_event	advmod<	conj<	nsubj>
+2	Landmark_event	advmod<	advcl<
+1	Landmark_event	advmod<	advcl<	dep<
+4	Landmark_event	advmod<	prep>
+1	Landmark_event	advmod<	prep>	pobj>	prep>
+2	Landmark_event	prep>
+1	Previous_context	amod<	poss<	prep>
+1	Benefited_party	dep<	nsubj>
+1	Benefited_party	conj<	prep>
+1	Benefited_party	nsubj<
+1	Benefited_party	rcmod<
+20	Benefited_party	ccomp>	nsubj>
+1	Benefited_party	pobj<	prep<	nsubj>
+1	Benefited_party	pobj<	prep<	dobj>
+1	Benefited_party	dobj<	partmod<	prep>	pobj>
+1	Benefited_party	dobj<	conj<	nsubj>
+2	Benefited_party	dobj<	nsubj>
+1	Benefited_party	dobj<	prep>
+13	Benefited_party	dobj>
+2	Benefited_party	dobj>	nn>
+3	Benefited_party	prep>
+2	Benefited_party	prep>	pobj>	prep>
+25	Body_part
+1	Body_part	amod<
+1	Body_part	dobj>	prep>
+2	Body_part	prep>
+1	Hypothetical_event	acomp<	ccomp>
+1	Hypothetical_event	dep<	amod<
+5	Hypothetical_event	nsubj>
+1	Hypothetical_event	pobj<	prep<	advmod<
+4	Hypothetical_event	prep>
+5	Hypothetical_event	amod<
+32	Hypothetical_event	aux<
+1	Hypothetical_event	aux<	dep>
+1	Hypothetical_event	aux<	conj<	ccomp<	xcomp<	ccomp<	nsubj>
+9	Hypothetical_event	aux<	nsubj>
+1	Hypothetical_event	aux<	pobj>
+1	Hypothetical_event	xcomp<	advcl>
+8	Hypothetical_event	ccomp>
+8	Hypothetical_event	xcomp>
+2	Hypothetical_event	dobj<	nsubj>
+1	Hypothetical_event	dobj<	prep>
+1	Hypothetical_event	advcl>
+1	Hypothetical_event	ccomp<	nsubj>
+14	Hypothetical_event	advmod<
+1	Hypothetical_event	advmod<	prep<
+1	Hypothetical_event	advmod<	conj<	pobj<	prep<
+2	Hypothetical_event	advmod<	nsubj>
+1	Hypothetical_event	advmod<	dobj>
+1	Hypothetical_event	dobj>
+2	Precipitation
+1	Name_source	partmod>
+1	Name_source	amod>
+1	Parts	nsubjpass>
+1	Parts	xcomp<	nsubj>
+1	Parts	pobj<	prep<	prep>
+2	Parts	prep>
+4	Parts	dobj>
+5	Piece
+1	Completeness	advmod>
+2	Created_entity
+2	Created_entity	dep>
+1	Created_entity	dep>	nsubj>
+1	Created_entity	dep>	dobj>
+2	Created_entity	poss>
+1	Created_entity	dep<	prep>	pobj>
+1	Created_entity	rcmod<
+1	Created_entity	rcmod<	prep>
+32	Created_entity	nsubjpass>
+1	Created_entity	nsubjpass>	conj>
+1	Created_entity	infmod<	conj<	cc>
+2	Created_entity	pobj<	prep<
+1	Created_entity	pobj<	prep<	pobj<	prep<
+1	Created_entity	pobj<	prep<	infmod>
+1	Created_entity	pobj<	conj<	nsubj>
+29	Created_entity	prep>
+1	Created_entity	conj>	dobj>
+4	Created_entity	amod<
+5	Created_entity	partmod<
+1	Created_entity	partmod<	dep<
+1	Created_entity	partmod<	nsubj>
+1	Created_entity	conj<	nsubj>
+1	Created_entity	conj<	pobj<	prep<	nsubj<
+1	Created_entity	conj<	prep>
+1	Created_entity	conj<	dobj>
+1	Created_entity	conj<	cc>
+3	Created_entity	amod>
+1	Created_entity	pcomp<	prep<	conj<	cc>
+1	Created_entity	xcomp<	conj<	nsubj>
+1	Created_entity	mark>
+1	Created_entity	advmod>
+1	Created_entity	nn<	conj<	nn>
+1	Created_entity	nn<	amod>
+87	Created_entity	dobj>
+1	Created_entity	dobj>	rcmod>
+1	Created_entity	dobj>	appos>	rcmod>	dobj>	cc>
+3	Created_entity	dobj>	prep>	pobj>	rcmod>
+5	Created_entity	nn>
+2	Infrastructure
+294	Substance
+1	Substance	amod<
+1	Substance	dep>
+5	Substance	appos<
+1	Substance	conj<	nsubj>
+1	Substance	appos>
+4	Substance	prep>
+1	Substance	dobj>	det>
+4	Substance	nn>
+8	Resident
+3	Resident	partmod<
+1	Resident	partmod<	dobj<	rcmod<
+1	Resident	appos<
+8	Resident	nsubj>
+1	Resident	nsubjpass>
+1	Resident	pcomp<	prep<	nsubjpass>
+1	Resident	xcomp<	nsubj>
+1	Resident	xcomp<	dobj>
+1	Resident	nn<
+3	Question
+1	Question	nsubj<	ccomp>
+2	Question	nsubj>
+3	Question	amod>
+1	Question	nsubjpass>
+1	Question	advcl>
+4	Question	prep>
+1	Question	dobj>
+1	Emotion
+2	Emotion	acomp>
+1	Noisy_event	xcomp<	nsubj>
+2	Sought_entity	conj>	dobj>
+2	Sought_entity	partmod<
+1	Sought_entity	nsubjpass>
+2	Sought_entity	ccomp>
+1	Sought_entity	xcomp>
+23	Sought_entity	dobj>
+1	Sought_entity	dobj>	prep>	pobj>	prep>	pobj>	rcmod>
+1	Sought_entity	prep>
+2	Context	prep>
+1	Context	advmod<
+1	Context	advmod<	prep>
+1	Context	advmod<	prep>	pobj>	prep>
+1	Body_Part	nsubj<	rcmod<
+2	Intermediary	prep>
+5	Statement	mark<
+5	Statement	mark<	advcl<
+5	Statement	cc<
+1	Statement	advmod<
+10	Religion
+1	Connection
+1	Connection	amod<
+1	Connection	nsubj>
+2	Initial_subevent	prep>
+2	Appraisal	acomp>
+1	Appraisal	pobj>
+1	Appraisal	xcomp>
+1	Appraisal	prep>
+1	Decision
+1	Decision	conj<	prep>
+1	Decision	nsubjpass>
+3	Decision	xcomp>
+4	Decision	infmod>
+1	Figure
+2	Figure	nsubj>
+1	Figure	expl<	advmod<
+1	Figure	pobj<	prep<	nsubj>
+1	Figure	pobj<	prep<	pobj<	prep<	nsubj>
+1	Figure	pobj<	prep<	prep>
+1	Figure	prep>
+172	Figure	prep<
+1	Figure	prep<	dep>
+1	Figure	prep<	dep<
+3	Figure	prep<	rcmod<
+1	Figure	prep<	rcmod<	dobj<	xcomp<	dobj>
+25	Figure	prep<	nsubj>
+1	Figure	prep<	nsubj>	rcmod>	prep>	pobj>	conj>
+2	Figure	prep<	nsubjpass>
+1	Figure	prep<	infmod<
+1	Figure	prep<	pobj>	conj>
+12	Figure	prep<	pobj<	prep<
+1	Figure	prep<	pobj<	prep<	nsubj<
+1	Figure	prep<	pobj<	prep<	xcomp<
+2	Figure	prep<	pobj<	prep<	pobj<	prep<
+1	Figure	prep<	pobj<	prep<	dobj<	iobj>
+1	Figure	prep<	pobj<	prep<	dobj>
+1	Figure	prep<	prep>
+9	Figure	prep<	prep>	pobj>
+1	Figure	prep<	prep>	pobj>	prep>	pobj>
+2	Figure	prep<	prep>	pcomp>	pobj>
+1	Figure	prep<	prep<	pobj<	prep<
+2	Figure	prep<	amod<
+2	Figure	prep<	conj>
+4	Figure	prep<	appos<
+6	Figure	prep<	partmod<
+1	Figure	prep<	conj<	conj>
+1	Figure	prep<	conj<	dep<
+1	Figure	prep<	conj<	conj<	nsubj>
+1	Figure	prep<	conj<	rcmod<
+1	Figure	prep<	conj<	nsubj>
+1	Figure	prep<	conj<	pobj<	prep<
+1	Figure	prep<	pcomp<	prep<	nsubj>
+5	Figure	prep<	xcomp<
+1	Figure	prep<	ccomp>
+1	Figure	prep<	dobj<
+1	Figure	prep<	dobj<	nsubj>
+1	Figure	prep<	ccomp<
+1	Figure	prep<	appos>
+17	Figure	prep<	dobj>
+1	Figure	prep<	advcl<
+11	Figure	amod<
+1	Figure	amod<	num<	pobj<	prep<
+1	Figure	conj<	prep<	partmod<
+1	Figure	conj<	prep<	nsubj>
+1	Figure	conj<	prep<	pcomp<	prep<	nsubj>
+1	Figure	conj<	prep<	pobj<	prep<
+1	Figure	conj<	appos<	nsubj<
+1	Figure	conj<	pobj<	prep<	nsubj>
+2	Figure	partmod<
+1	Figure	appos<
+1	Figure	appos<	nsubj<
+3	Figure	pcomp<	prep<
+1	Figure	pcomp<	prep<	amod<	dobj<	infmod<	conj<
+1	Figure	pcomp<	prep<	conj<
+4	Figure	dobj<	prep>
+17	Figure	advmod<
+1	Figure	advmod<	dep<	dobj>
+1	Figure	advmod<	partmod<
+2	Figure	advmod<	nsubj<
+1	Figure	advmod<	rcmod<	pobj<
+7	Figure	advmod<	nsubj>
+2	Figure	advmod<	nsubjpass>
+2	Figure	advmod<	xcomp<
+1	Figure	advmod<	ccomp>
+1	Figure	advmod<	advcl>
+1	Figure	advmod<	dobj<
+1	Figure	advmod<	prep>
+1	Figure	advmod<	dobj>
+1	Figure	prt<	nsubj<
+4	Partners
+1	Partners	conj<	xcomp<	nsubj>
+1	Partners	xcomp<	nsubj>
+2	Partners	nn<	amod>
+1	Partners	nn<	nn>
+3	Partners	prep>
+1	Partners	advmod<	nsubj>
+1	Partners	dobj>
+1	Outcome	prep<	xcomp<
+1	Outcome	amod<
+1	Outcome	acomp<	conj<
+1	Outcome	nsubj>
+1	Outcome	nsubjpass>
+2	Outcome	xcomp<	nsubj>
+1	Outcome	ccomp>
+1	Outcome	xcomp>
+1	Outcome	prep>
+1	Outcome	dobj>
+11	Event
+1	Event	rcmod>
+3	Event	rcmod<
+2	Event	rcmod<	pobj<	prep<
+1	Event	pobj>
+1	Event	pobj<	prep<
+1	Event	pobj<	prep<	nsubj>
+1	Event	pobj<	prep<	pobj<	prep<	pobj<	prep<
+1	Event	pobj<	prep<	dobj<
+1	Event	pobj<	conj>	prep>	pcomp>	dobj>
+26	Event	amod<
+1	Event	amod<	pobj<	prep<	prep>
+83	Event	aux<
+1	Event	aux<	rcmod<
+1	Event	aux<	rcmod<	det>
+1	Event	aux<	ccomp<	dobj<	csubj<	cop>
+1	Event	aux<	ccomp<	advmod>
+18	Event	amod>
+1	Event	pcomp<	prep<
+8	Event	ccomp>
+1	Event	advcl>	dobj>
+2	Event	advcl<
+8	Event	neg<
+1	Event	neg<	nsubj>
+1	Event	mark<
+1	Event	mark<	conj<	advcl<
+7	Event	mark<	advcl<
+1	Event	mark<	advcl<	advcl<
+1	Event	dep<
+52	Event	nsubj>
+1	Event	det<
+1	Event	det<	tmod<	prep>
+54	Event	prep>
+30	Event	infmod>
+1	Event	predet>
+44	Event	prep<
+1	Event	prep<	partmod<
+1	Event	prep<	conj<	ccomp>
+1	Event	prep<	rcmod<
+2	Event	prep<	infmod<
+1	Event	prep<	xcomp<
+1	Event	prep<	ccomp>
+2	Event	prep<	pobj<	prep<
+1	Event	prep<	pobj<	prep<	dobj>
+1	Event	prep<	prep>	pobj>
+1	Event	partmod>	xcomp>
+2	Event	conj<
+1	Event	conj<	prep<
+1	Event	conj<	prep<	infmod<
+1	Event	conj<	amod<
+1	Event	conj<	nsubj>
+2	Event	conj<	amod>
+1	Event	conj<	dobj<	xcomp>
+1	Event	conj<	prep>
+2	Event	partmod<
+1	Event	partmod<	nsubj>
+1	Event	xcomp<	rcmod<	pobj<	prep<	partmod<	pobj<	prep<	pobj<	prep<
+2	Event	xcomp<	nsubj>
+2	Event	xcomp<	nsubjpass>
+52	Event	xcomp>
+1	Event	dobj<
+1	Event	dobj<	nsubj>
+1	Event	dobj<	nsubjpass>
+1	Event	dobj<	punct>
+1	Event	dobj<	xcomp>
+3	Event	dobj<	prep>
+1	Event	mark>
+1	Event	nn<	nn>
+55	Event	advmod<
+1	Event	advmod<	prep<
+3	Event	advmod<	conj>
+2	Event	advmod<	amod<
+2	Event	advmod<	rcmod<
+3	Event	advmod<	nsubj>
+1	Event	advmod<	xcomp<
+1	Event	advmod<	xcomp>
+1	Event	advmod<	advmod>
+1	Event	advmod<	ccomp<
+2	Event	advmod<	advcl<
+1	Event	advmod<	prep>
+26	Event	dobj>
+24	Event	nn>
+1	Event	nn>	conj>
+2	Frequency	tmod>
+1	Frequency	rcmod<	cc>
+1	Frequency	amod>
+10	Frequency	advmod>
+1	Frequency	neg>
+1	Frequency	appos>
+1	Frequency	advmod<	tmod>
+1	Frequency	dobj>
+1	Frequency	prep>
+1	Dispute	prep>
+1	Standing
+2	Standing	amod>
+1	Standing	prep>
+1	Standing	nn>
+1	Contract_basis	dobj>	nn>
+1	Connected_item	prep>
+1	Trajector_period	prep<	neg>
+2	Trajector_period	amod<
+1	Trajector_period	pobj>
+1	Trajector_period	advmod<	rcmod<
+1	Exchangers	nsubj>
+1	Exchangers	amod>
+1	Exchangers	pobj<	prep<	partmod<
+1	Exchangers	nn<	amod>
+2	Label	dep>
+2	Label	acomp>
+1	Label	xcomp>
+1	Label	xcomp>	amod>
+1	Label	prep>
+27	Building_part
+3	Process
+2	Process	poss>
+1	Process	dep>
+1	Process	acomp<	nsubj>
+1	Process	rcmod>
+3	Process	rcmod<
+1	Process	rcmod<	conj<	pobj<	prep<
+10	Process	nsubj>
+2	Process	nsubjpass>
+1	Process	nsubjpass>	appos>
+2	Process	pobj<	prep<
+1	Process	pobj<	prep<	rcmod<
+1	Process	pobj<	prep<	xcomp<
+29	Process	prep>
+1	Process	prep>	pobj>
+6	Process	amod<
+1	Process	amod<	pobj<	prep<	nsubj>
+1	Process	conj<	amod<
+1	Process	conj<	partmod<	nsubj>
+1	Process	conj<	nsubj>
+2	Process	xcomp>
+1	Process	dobj<	prep>
+2	Process	nn<
+15	Process	dobj>
+4	Process	advmod<	nsubj>
+2	Process	nn>
+1	Eventuality
+8	Eventuality	amod<
+1	Eventuality	conj<	amod<
+1	Eventuality	rcmod<
+1	Eventuality	advmod<	advcl>
+2	Eventuality	dobj>
+1	Exporter	amod>
+2	Exporter	pcomp<	prep<	poss>
+1	Exporter	xcomp<	nsubj>
+1	Exporter	xcomp<	nsubjpass>
+1	Exporter	nn<	nsubj>
+1	Amount_of_discussion	pobj<	prep<	dep>
+4	Service_provider	nn>
+34	Name
+7	Name	dep>
+1	Name	dep>	num>
+1	Name	poss>
+1	Name	dep<	dep>	dep>
+1	Name	dep<	dep<
+1	Name	dep<	advmod>
+1	Name	rcmod>	dep>
+2	Name	det>
+3	Name	num>
+1	Name	pobj<	prep<	partmod<	appos<	conj<
+1	Name	pobj<	prep<	nsubj>	conj>	nn>
+25	Name	prep>
+3	Name	amod<
+1	Name	amod<	nn<
+1	Name	amod<	nn>
+1	Name	conj>
+1	Name	partmod>	prep>	pobj>	appos>
+1	Name	partmod<	pobj<	prep<	dep>
+1	Name	partmod<	appos>
+3	Name	conj<
+1	Name	conj<	conj>
+1	Name	conj<	nsubj<
+1	Name	conj<	cc>
+7	Name	amod>
+1	Name	amod>	conj>
+1	Name	ccomp>
+1	Name	xcomp>
+1	Name	mark>
+9	Name	nn<
+1	Name	nn<	amod>
+3	Name	appos>
+3	Name	dobj>
+1	Name	advcl<	prep>	pobj>	nn>
+112	Name	nn>
+1	Name	nn>	nn>
+1	Predicate	prep<
+1	Predicate	conj<	advmod<
+5	Predicate	advmod<
+1	Court	nsubj>
+1	Accused	amod<
+1	Accused	ccomp>	nsubj>
+1	Accused	prep>
+2	Illicit_activity	prep>
+1	Intended_event	partmod>
+1	Intended_event	amod<
+1	Intended_event	nsubj>	dep>
+2	Intended_event	xcomp>
+9	Container
+1	Container	poss>
+1	Container	conj<	rcmod<
+1	Container	partmod<
+1	Container	rcmod<	conj<
+8	Container	nsubj>
+1	Container	nsubjpass>
+2	Mass_theme	amod<
+1	Mass_theme	xcomp<	xcomp<	conj<	dobj>
+8	Mass_theme	dobj>
+1	Mass_theme	prep>
+1	Competitors
+3	Carrier	partmod<
+1	Carrier	nsubj>
+1	Carrier	pcomp<	prep<	nsubj>
+1	Carrier	xcomp<	partmod<
+1	Carrier	prep>
+1	Carrier	nn>
+1	Discourse_salient_country
+2	Evaluation	amod>
+3	Percept
+2	Percept	prep>
+1	Power_source	amod>
+1	Venue	amod<	amod>
+1	Clothing	rcmod<
+2	Clothing	dobj>
+4	Estimation
+1	Estimation	partmod<
+1	Estimation	nsubjpass>
+7	Estimation	ccomp>
+3	Estimation	xcomp>
+1	Estimation	prep>
+1	Location_of_inspector	nn>
+15	Teacher
+1	Teacher	poss>
+1	Teacher	nsubjpass<	prep>
+5	Teacher	nsubj>
+1	Teacher	xcomp<	nsubj>
+1	Teacher	dobj<	nsubj>
+1	Sensory_attribute	amod<
+2	Themes	dobj>
+1	Themes	prep>
+3	Themes	nn>
+2	Fact	nsubj>
+1	Fact	ccomp>
+1	Injured_Party	pobj<	prep<	prep>	pobj>	prep>
+3	Specialty
+1	Business_Name	amod<
+1	Business_Name	partmod>
+2	Business_Name	appos<
+1	Business_Name	appos<	dep<
+1	Business_Name	nsubj<
+1	Business_Name	appos>
+1	Business_Name	nn>
+1	Counter_actor	xcomp<	conj<	nsubj>
+6	Medium
+1	Medium	poss>
+1	Medium	det>
+2	Medium	rcmod<
+42	Medium	nsubj>
+1	Medium	nsubj>	prep>	pobj>
+1	Medium	nsubj>	prep>	pobj>	conj>
+1	Medium	nsubj>	nn>
+1	Medium	pobj<	prep<	pobj<	prep<	partmod<	dep>	rcmod>
+16	Medium	prep>
+3	Medium	amod<
+2	Medium	conj<	nsubj>
+1	Medium	conj<	xcomp<	nsubjpass>
+2	Medium	conj<	prep>
+1	Medium	partmod<
+1	Medium	partmod<	dobj>
+1	Medium	xcomp<	conj<	nsubj>
+1	Medium	xcomp<	advcl>	nsubj>
+1	Medium	xcomp<	prep>	pobj>	appos>
+1	Medium	xcomp<	dobj>
+1	Medium	ccomp<	xcomp<
+1	Medium	dobj<	nsubj>
+2	Medium	nn<
+1	Medium	dobj>
+1	Medium	dobj>	prep>
+2	Medium	nn>
+5	Individual
+4	Accoutrement
+2	Class
+98	Class	amod<
+1	Class	mwe<	quantmod<
+7	Class	mwe<	quantmod<	num<
+3	Class	conj<	amod<
+16	Class	det<
+3	Class	quantmod<	num<
+2	Class	nn<
+3	Class	prep>
+3	Class	advmod<
+1	Class	advmod<	amod<
+1	Problem	parataxis<	dobj>
+3	Problem	nsubjpass>
+8	Problem	prep>
+2	Problem	dobj>
+6	Domain
+1	Domain	conj<	amod>
+34	Domain	amod>
+1	Domain	pobj>	prep>
+1	Domain	pobj<	prep<	dobj<	prep>
+1	Domain	pobj<	prep<	prep>
+1	Domain	dobj<	prep>
+1	Domain	advmod>
+5	Domain	prep>
+16	Domain	nn>
+1	Domain	nn>	nn>	amod>
+56	Subtype
+1	Subtype	det>
+1	Wearer	rcmod>	nsubj>
+1	Wearer	parataxis<	nsubj>
+2	Wearer	nsubj>
+1	Wearer	xcomp<	nsubj>
+1	Wearer	prep>
+1	Judge	nsubj>
+1	Operator	conj<	prep>
+4	Operator	nsubj>
+1	Operator	pcomp<	prep<	nsubj>
+1	Operator	xcomp<	nsubj>
+1	Operator	prep>
+5	Action
+1	Action	dep>
+2	Action	rcmod>
+1	Action	rcmod>	nsubj>
+1	Action	nsubj<	xcomp>
+2	Action	nsubj>
+3	Action	nsubjpass>
+1	Action	infmod<	pobj<	prep<	nsubj>
+1	Action	pobj>	prep>
+11	Action	prep>
+2	Action	infmod>
+1	Action	prep<
+1	Action	prep<	appos<
+17	Action	amod<
+1	Action	partmod>
+1	Action	conj>	dobj>
+1	Action	conj<	amod<
+1	Action	conj<	dobj>
+2	Action	amod>
+1	Action	ccomp>
+1	Action	ccomp>	nsubjpass>
+15	Action	xcomp>
+1	Action	dobj<	prep>	pobj>	prep>
+1	Action	advmod<
+28	Action	dobj>
+1	Action	nn>
+3	Particular_iteration	amod>
+6	Particular_iteration	advmod>
+1	Particular_iteration	prep>
+89	Force
+3	Element
+1	Element	amod<
+1	Element	nn<
+1	Element	prep>
+1	Emission	dobj>
+1	Driver	partmod<
+1	Driver	conj<	nsubj>
+1	Driver	rcmod<
+3	Driver	nsubj>
+1	Factory	conj<	nsubj>
+1	Factory	partmod<
+1	Factory	nsubj>
+1	Factory	xcomp<	partmod<
+1	Factory	xcomp<	nsubjpass>
+4	Factory	prep>
+1	Factory	dobj>	prep>	pobj>	prep>
+1	Forbidden	prep>
+1	Time	rcmod<	pobj<	prep<
+1	Time	pobj>	infmod>	prep>
+12	Time	num>
+2	Time	pobj<	prep<	advmod>
+6	Time	pobj<	prep<	prep>
+1	Time	pobj<	pcomp<	prep<	advmod>
+2	Time	pobj<	advmod>
+1	Time	amod<
+1	Time	amod<	poss>
+1	Time	amod<	num<	pobj<
+1	Time	amod<	dobj<	advmod>
+1	Time	amod<	dobj<	prep>
+2	Time	amod<	prep>
+1	Time	amod<	nn>
+5	Time	cop<	advmod>
+5	Time	cop<	prep>
+21	Time	amod>
+1	Time	pcomp<	prep<	tmod>
+1	Time	pcomp<	prep<	dobj<	prep>
+1	Time	pcomp<	prep<	advmod>
+1	Time	pcomp<	prep<	prep>
+1	Time	ccomp>	advcl>
+1	Time	ccomp>	prep>
+34	Time	advcl>
+1	Time	advcl>	prep>
+1	Time	ccomp<	prep>
+2	Time	neg>
+1	Time	advcl<	advcl>
+3	Time	poss>
+1	Time	poss>	amod>
+1	Time	dep>
+1	Time	nsubjpass<	prep>
+1	Time	nsubjpass<	prep>	pcomp>	prep>
+1	Time	mark<	advcl<	prep>
+1	Time	dep<	nsubj>
+1	Time	dep<	xcomp<	prep>
+1	Time	dep<	pobj<	prep<	prep>	pobj>
+4	Time	dep<	advmod>
+1	Time	nsubj<	nsubj>
+6	Time	nsubj<	prep>
+30	Time	tmod>
+1	Time	det>
+5	Time	nsubj>
+1	Time	nsubj>	amod>
+4	Time	nsubj>	prep>
+1	Time	expl<	nsubj>	advmod>
+1	Time	expl<	advcl>
+2	Time	expl<	prep>
+367	Time	prep>
+1	Time	prep>	pobj>	partmod>	prep>
+1	Time	prep>	pobj>	rcmod>
+1	Time	prep>	pobj>	advmod>
+6	Time	prep>	pobj>	prep>
+1	Time	prep>	pobj>	prep>	pobj>	rcmod>
+1	Time	prep>	pobj>	prep>	pobj>	prep>
+1	Time	prep>	pcomp>	prep>	pobj>	advmod>
+2	Time	auxpass<	advmod>
+1	Time	auxpass<	prep>
+2	Time	prep<	tmod>
+1	Time	prep<	pobj<	prep<	xcomp<	prep>
+6	Time	prep<	prep>
+1	Time	prep<	dobj>
+1	Time	partmod>
+2	Time	conj>	prep>
+1	Time	conj<	dep<	conj<	advcl>
+1	Time	conj<	punct>
+1	Time	conj<	pcomp<	prep<	dobj<	prep>
+1	Time	conj<	advcl>
+4	Time	conj<	advmod>
+1	Time	conj<	ccomp<	prep>
+9	Time	conj<	prep>
+1	Time	partmod<	dep<	prep>
+1	Time	partmod<	advmod>
+1	Time	partmod<	dobj<	pcomp<	prep<	dobj<	prep>
+1	Time	partmod<	prep>
+1	Time	parataxis<	advmod>
+1	Time	xcomp<	conj<	punct>
+1	Time	xcomp<	tmod>
+2	Time	xcomp<	nsubj>
+1	Time	xcomp<	nsubj>	prep>
+2	Time	xcomp<	advmod>
+1	Time	xcomp<	ccomp<	prep>
+1	Time	xcomp<	advcl>
+7	Time	xcomp<	prep>
+1	Time	xcomp>	tmod>
+1	Time	xcomp>	ccomp>	prep>
+1	Time	xcomp>	advcl>
+2	Time	xcomp>	advmod>
+4	Time	xcomp>	prep>
+1	Time	xcomp>	dobj>	prep>
+1	Time	xcomp>	dobj>	prep>	pobj>	prep>
+107	Time	advmod>
+1	Time	advmod>	prep>
+1	Time	dobj<	tmod>
+1	Time	dobj<	advmod>
+3	Time	dobj<	advcl>
+9	Time	dobj<	prep>
+1	Time	mark>
+1	Time	nn<
+1	Time	nn<	dep>
+1	Time	nn<	conj<	dobj<	prep>
+1	Time	nn<	nsubj<	advmod>
+2	Time	nn<	amod>
+1	Time	nn<	advmod>
+1	Time	nn<	nn>
+1	Time	appos>
+3	Time	dobj>
+1	Time	dobj>	dep>	conj>	prep>
+1	Time	dobj>	rcmod>
+1	Time	dobj>	rcmod>	prep>
+1	Time	dobj>	infmod>	prep>
+7	Time	dobj>	prep>
+1	Time	dobj>	prep>	pobj>	prep>	pobj>	advmod>
+1	Time	advmod<	nsubj>	advmod>
+1	Time	advmod<	advcl>
+1	Time	advmod<	advmod>
+1	Time	advmod<	prep>
+8	Time	nn>
+1	Iteration	amod>
+1	Sound_maker	nsubjpass>
+1	Sound_maker	xcomp<	nsubj>
+2	Sound_maker	dobj>
+1	Sound_maker	nn>
+16	Situation
+1	Situation	dep>
+1	Situation	poss>
+1	Situation	acomp<	prep>
+1	Situation	dep<	amod<
+5	Situation	nsubj>
+2	Situation	csubj>
+10	Situation	prep>
+5	Situation	amod<
+1	Situation	amod<	pobj<	prep<	pobj<	prep<	pobj<	prep<	xcomp>
+2	Situation	amod<	nn>
+1	Situation	conj<	amod<
+3	Situation	amod>
+1	Situation	pcomp>
+1	Situation	xcomp>
+3	Situation	advmod<
+1	Situation	advmod<	infmod<
+2	Situation	dobj>
+1	Magnitude	advmod>
+1	Supported	nn<
+3	Supported	dobj>
+1	Supported	nn>
+2	Manner	dep>
+1	Manner	nsubjpass<	prep>
+1	Manner	acomp>
+2	Manner	rcmod>
+1	Manner	nsubj<	prep>
+1	Manner	pobj<	prep<	advmod>
+32	Manner	prep>
+1	Manner	prep>	pobj>	amod>
+1	Manner	prep>	pobj>	advmod>
+1	Manner	prep>	pobj>	prep>
+2	Manner	predet>
+1	Manner	conj<	amod>
+5	Manner	conj<	advmod>
+1	Manner	cop<	advmod>
+68	Manner	amod>
+1	Manner	prt>
+1	Manner	xcomp>	advmod>
+3	Manner	xcomp>	prep>
+111	Manner	advmod>
+4	Manner	advcl>
+1	Manner	nn<	amod>
+1	Manner	nn<	prep>
+2	Manner	nn<	nn>
+3	Manner	dobj>
+1	Manner	dobj>	rcmod>	prep>
+1	Manner	dobj>	prep>
+1	Manner	dobj>	prep>	pobj>	prep>
+8	Manner	nn>
+1	System	dep>
+1	System	conj<	nsubjpass>
+1	System	nsubjpass>
+1	System	xcomp<	xcomp<	nsubjpass>
+5	System	dobj>
+1	System	prep>
+1	Superior	amod<
+1	Superior	amod<	nn<
+1	Superior	appos<
+1	Formational_cause	partmod>
+3	Formational_cause	amod>
+6	Formational_cause	prep>
+2	Formational_cause	nn>
+1	Event_description	prep<	partmod>
+1	Event_description	prep<	prep>
+5	Event_description	partmod>
+1	Event_description	nsubjpass<
+1	Event_description	conj<	xcomp<	rcmod<	dobj<	partmod>
+1	Event_description	amod>
+1	Event_description	xcomp>
+2	Event_description	xcomp>	partmod>
+1	Event_description	advcl>
+1	Event_description	advmod>
+1	Event_description	advmod<	partmod>
+1	Event_description	prep>
+28	Electricity
+17	Duty
+1	Duty	dep>
+2	Duty	nsubj<	xcomp>
+9	Duty	aux<
+1	Duty	amod>
+1	Duty	pobj<	prep<	nsubj<	xcomp>
+7	Duty	xcomp>
+2	Duty	dobj<
+1	Duty	dobj<	parataxis>
+2	Duty	prep>
+1	Duty	dobj>
+7	Ammunition
+1	Arguers	partmod>	prep>	pobj>	prep>
+3	Arguers	prep>
+1	Possibilities	advcl>
+1	Supporter	poss>
+1	Supporter	conj<	nsubj>
+1	Supporter	partmod<	nsubj>
+1	Supporter	nsubj>
+1	Supporter	nn<	poss>
+1	Represented	prep>
+3	Attraction
+1	Attraction	nsubj<	dobj>
+1	Attraction	dobj>
+2	Specified_entity	partmod<
+1	Specified_entity	parataxis<	advcl<	nsubj>
+1	Specified_entity	prep>
+7	Specified_entity	dobj>
+1	Title	dep>
+1	Title	appos<
+1	Title	appos>
+2	Title	nn>
+2	Item_Property	poss>
+1	Item_Property	appos<
+4	Item_Property	amod>
+1	Item_Property	pobj<	prep<	prep>
+1	Item_Property	nn>
+2	Patient	amod<
+1	Patient	amod<	pobj<	prep<	nsubj>
+1	Patient	nsubj>
+2	Patient	nsubjpass>
+1	Patient	ccomp>	nsubj>
+2	Patient	pobj<	prep<	nsubj>
+1	Patient	dobj<	nsubj>
+2	Patient	nn<	amod>
+6	Patient	dobj>
+2	Patient	prep>
+2	Patient	nn>
+1	Patient	nn>	conj>
+3	Purpose
+1	Purpose	dep>
+1	Purpose	dep<	dobj<	xcomp>
+1	Purpose	nsubj<	xcomp>	xcomp>
+1	Purpose	nsubj<	prep>
+1	Purpose	nsubj<	prep>	pobj>	prep>
+1	Purpose	pobj>	prep>
+1	Purpose	pobj<	prep<
+1	Purpose	pobj<	prep<	xcomp>
+1	Purpose	pobj<	prep<	pobj<	prep<	xcomp>
+1	Purpose	pobj<	prep<	pobj<	prep<	prep>
+1	Purpose	pobj<	prep<	prep>
+75	Purpose	prep>
+1	Purpose	prep>	pobj>	rcmod>
+1	Purpose	prep>	pobj>	rcmod>	xcomp>
+4	Purpose	prep>	pobj>	infmod>
+1	Purpose	prep>	pobj>	prep>
+1	Purpose	prep>	pcomp>	advcl>
+13	Purpose	infmod>
+9	Purpose	prep<
+1	Purpose	prep<	xcomp<
+1	Purpose	prep<	prep>	pobj>
+2	Purpose	partmod>
+1	Purpose	amod<
+4	Purpose	amod<	prep>
+1	Purpose	conj>	dobj>	infmod>
+1	Purpose	conj<	amod<	prep>
+1	Purpose	conj<	conj>	prep>
+1	Purpose	conj<	amod>
+1	Purpose	conj<	pobj<	prep<	xcomp>
+1	Purpose	conj<	ccomp<	xcomp>
+1	Purpose	conj<	advcl>
+1	Purpose	conj<	prep>
+1	Purpose	conj<	dobj>	prep>
+1	Purpose	partmod<	pobj<	prep<	prep>
+1	Purpose	aux<	conj<	advcl>
+2	Purpose	aux<	xcomp>
+1	Purpose	aux<	advcl>
+1	Purpose	aux<	prep>
+1	Purpose	aux<	prep>	pcomp>	advcl>
+1	Purpose	aux<	dobj>	infmod>
+15	Purpose	amod>
+1	Purpose	xcomp<	ccomp>	xcomp>
+94	Purpose	xcomp>
+3	Purpose	xcomp>	xcomp>
+5	Purpose	advcl>
+1	Purpose	dobj<	conj<	dobj>	cc>
+2	Purpose	dobj<	xcomp>
+1	Purpose	dobj<	prep>
+3	Purpose	advmod>
+1	Purpose	nn<	amod>
+6	Purpose	dobj>	infmod>
+4	Purpose	dobj>	prep>
+2	Purpose	advcl<	dobj>	prep>
+18	Purpose	nn>
+1	Purpose	nn>	conj>
+1	Subject	amod>
+3	Subject	prep>
+1	Subject	prep>	pobj>	nn>
+1	Subject	dobj>
+3	Subject	nn>
+5	Nodes	prep>
+1	Nodes	nn>
+3	Ratifier	conj<	nsubj>
+12	Ratifier	nsubj>
+1	Ratifier	prep>
+1	Ratifier	dobj>	appos>
+2	Skill
+1	Skill	amod<
+1	Skill	conj>	dobj>
+1	Skill	partmod>	prep>
+1	Skill	conj<
+1	Skill	conj<	prep>
+5	Skill	amod>
+1	Skill	ccomp>
+2	Skill	xcomp>
+2	Skill	prep>
+1	Skill	advmod<
+1	Skill	advmod<	conj<
+1	Skill	dobj>
+1	Skill	nn>
+1	Dependent_variable	amod>
+1	Dependent_variable	dobj>
+1	Dependent_variable	prep>
+1	Heating_instrument	prep>
+1	Obligator	nsubj>
+2	Degree_of_involvement	amod>
+1	Degree_of_involvement	advmod>
+1	Intended_purpose	nsubj>
+1	Intended_purpose	dobj>	prep>
+2	Intended_purpose	prep>
+1	Agriculturist	nsubj>
+5	Main_statement	mark<
+5	Main_statement	mark<	advcl<
+5	Main_statement	cc<
+3	Main_statement	cc<	conj>
+1	Main_statement	cc<	advmod>
+1	Main_statement	cc<	advcl>
+5	Main_statement	advmod<
+1	Main_statement	advmod<	rcmod<
+1	Meaning
+1	Meaning	amod<
+1	Meaning	dobj>
+1	Location	poss>
+1	Location	rcmod<
+2	Location	nsubj>
+1	Location	nsubj>	prep>	pobj>
+3	Location	nsubjpass>
+44	Location	prep>
+8	Location	amod<
+1	Location	amod<	poss>
+2	Location	amod<	prep>
+2	Location	conj<	amod<
+1	Location	conj<	parataxis<	nsubj>
+1	Location	partmod<
+1	Location	partmod<	conj>
+1	Location	amod>
+1	Location	prt>
+1	Location	xcomp<	xcomp>	dobj>
+1	Location	ccomp>	ccomp>	prep>
+1	Location	ccomp>	prep>
+11	Location	advmod>
+1	Location	advcl>
+1	Location	dobj>
+4	Location	nn>
+53	Roadway
+1	Connections	rcmod<	pobj<	prep<	dep<
+1	Connections	prep>
+1	Final_category	dep<
+1	Final_category	nsubj<
+1	Final_category	nsubj<	prep>
+23	Final_category	cop<
+2	Final_category	amod>
+12	Final_category	xcomp>
+7	Final_category	prep>
+1	Final_category	prep>	pobj>	prep>
+1	Final_category	advcl<	dobj>	appos>
+1	Final_category	dobj>
+1	Final_category	auxpass<
+13	Support
+1	Support	conj<	nsubj>
+31	Support	nsubj>
+1	Support	xcomp<	nsubj>
+1	Support	pobj<	prep<	dep>
+1	Support	pobj<	prep<	infmod<
+1	Support	dobj<	nsubj>
+1	Support	mark>
+1	Support	dobj>
+1	Support	prep>	pobj>
+1	Point_of_view	prep>	pobj>	prep>
+1	Fixed_location	dobj<	prep>
+1	Fixed_location	prep>
+2	Defendant	pobj<	prep<	nsubjpass>
+1	Defendant	xcomp>	nsubj>
+1	Defendant	prep>
+1	Defendant	nn>
+1	Phenomenon_2	amod<
+1	Phenomenon_2	nsubj>
+1	Phenomenon_2	dobj>
+1	Phenomenon_2	dobj>	prep>
+1	Phenomenon_2	prep>
+1	Count
+9	Count	det>
+21	Count	amod>
+1	Count	amod>	conj>
+145	Count	num>
+1	Count	pobj<
+2	Phenomenon_1	amod<
+1	Phenomenon_1	appos<	pobj<	prep<
+1	Phenomenon_1	nsubj>
+1	Phenomenon_1	xcomp<
+1	Phenomenon_1	dobj>
+2	Valued_entity	dobj>
+2	Service_action
+1	Service_action	nn>
+1	Party_2	xcomp>	ccomp>	nsubj>
+1	Party_2	dobj<	prep>
+17	Party_2	prep>
+1	Party_2	prep>	pobj>
+3	Party_2	dobj>
+1	Party_2	nn>
+1	Party_2	nn>	nn>
+2	Party_1	poss>
+1	Party_1	nsubjpass<	prep>
+1	Party_1	conj<	nsubj>
+15	Party_1	nsubj>
+5	Party_1	xcomp<	nsubj>
+1	Party_1	xcomp<	nsubjpass>
+4	Party_1	dobj<	nsubj>
+1	Party_1	dobj<	infmod<	dobj<	nsubj>
+1	Party_1	nn>
+1	Residents
+1	Components	nsubjpass>
+6	Components	prep>
+2	Shape_prop	amod>
+7	Item
+1	Item	dep<	amod<
+1	Item	dep<	nsubj>
+1	Item	nsubj<
+1	Item	nsubj<	parataxis>
+4	Item	rcmod<
+19	Item	nsubj>
+3	Item	nsubj>	prep>
+1	Item	nsubj>	prep>	pobj>	prep>	pobj>
+1	Item	nsubj>	nn>
+18	Item	nsubjpass>
+2	Item	pobj<	prep<
+1	Item	pobj<	prep<	poss>
+2	Item	pobj<	prep<	nsubj>
+20	Item	prep>
+1	Item	prep>	pobj>
+1	Item	prep<
+1	Item	prep<	partmod<
+129	Item	amod<
+1	Item	amod<	poss>
+1	Item	amod<	amod<
+1	Item	amod<	conj<	dobj<	xcomp>
+1	Item	amod<	nsubj<
+3	Item	amod<	det>
+1	Item	amod<	nsubj>
+1	Item	amod<	nn<
+1	Item	amod<	nn<	det>
+1	Item	amod<	appos>
+3	Item	amod<	prep>
+1	Item	conj>
+1	Item	conj>	dobj>
+1	Item	appos<
+4	Item	partmod<
+1	Item	partmod<	prep>	pobj>	prep>	pobj>
+1	Item	conj<	amod<
+1	Item	conj<	amod<	det>
+1	Item	conj<	dep<	dobj>
+1	Item	conj<	rcmod<	prep>	pobj>
+1	Item	conj<	dobj>
+1	Item	quantmod<
+2	Item	quantmod<	num<
+1	Item	xcomp<	conj<	nsubj>
+2	Item	xcomp<	nsubj>
+1	Item	xcomp>
+4	Item	xcomp>	nsubj>
+2	Item	advmod>
+1	Item	advcl>
+6	Item	nn<
+46	Item	dobj>
+1	Item	dobj>	prep>
+2	Item	dobj>	prep>	pobj>
+1	Item	dobj>	nn>
+3	Item	advmod<
+1	Item	advmod<	acomp<	nsubj>	prep>	pobj>
+3	Item	advmod<	amod<
+1	Item	advmod<	conj<	nsubjpass>
+1	Item	advmod<	conj<	pobj<	prep<
+2	Item	advmod<	nsubj>
+5	Item	nn>
+8	Goal
+2	Goal	rcmod<
+8	Goal	pobj>	infmod>
+1	Goal	pobj<	prep<	xcomp>
+1	Goal	pobj<	prep<	prep>
+1	Goal	amod<
+33	Goal	amod>
+24	Goal	ccomp>
+1	Goal	ccomp<
+1	Goal	advcl>
+1	Goal	dep>
+1	Goal	dep>	prep>
+1	Goal	poss>
+1	Goal	dep<	xcomp>
+1	Goal	nsubj<
+1	Goal	nsubj<	ccomp>
+4	Goal	nsubj<	xcomp>
+1	Goal	nsubjpass>
+1	Goal	infmod<
+141	Goal	prep>
+1	Goal	prep>	prep>	pobj>	prep>
+41	Goal	infmod>
+1	Goal	conj>	prt>
+1	Goal	partmod>
+2	Goal	conj<	conj>	prep>
+1	Goal	conj<	pobj<	prep<	pobj<	prep<	prep>
+1	Goal	conj<	pobj<	prep>
+3	Goal	conj<	prep>
+1	Goal	conj<	cc>
+2	Goal	partmod<
+1	Goal	partmod<	pobj<	prep<
+1	Goal	appos<	dep>
+1	Goal	appos<	pobj<	prep<	dobj<	pcomp<	prep<
+3	Goal	prt>
+50	Goal	xcomp>
+1	Goal	xcomp>	dep>
+1	Goal	dobj<	punct>
+1	Goal	dobj<	xcomp>
+1	Goal	dobj<	advmod>
+5	Goal	dobj<	prep>
+1	Goal	dobj<	prep>	pobj>	prep>	pobj>	nn>
+1	Goal	dobj<	cc>
+19	Goal	advmod>
+1	Goal	advmod>	prep>
+1	Goal	nn<
+1	Goal	nn<	amod>
+1	Goal	nn<	prep>
+1	Goal	nn<	nn>
+48	Goal	dobj>
+1	Goal	dobj>	advmod>
+3	Goal	dobj>	prep>
+23	Goal	nn>
+10	Network
+1	Network	xcomp<	nsubj>
+1	Medication
+1	Work
+1	Work	amod<
+1	Grounds	dobj>	prep>
+3	Believer	nsubj>
+1	Child	partmod<
+3	Child	nsubjpass>
+1	Child	nn<	dep>	nsubj>
+42	Time_period	amod<
+7	Time_period	nn<
+18	Time_period	prep>
+2	Time_period	prep>	pobj>
+1	Time_period	advmod<
+2	Target_group	nn>
+27	Degree
+1	Degree	rcmod>
+1	Degree	dep<
+1	Degree	dep<	advcl>
+3	Degree	det>
+3	Degree	pobj<	prep<
+1	Degree	pobj<	prep<	advmod>
+1	Degree	pobj<	advmod>
+1	Degree	num>
+20	Degree	prep>
+1	Degree	prep>	pobj>	rcmod>	dobj>	rcmod>
+1	Degree	predet>
+1	Degree	amod<	partmod>
+3	Degree	amod<	amod>
+3	Degree	amod<	num>
+1	Degree	amod<	pobj<	prep<
+1	Degree	amod<	advcl>
+2	Degree	amod<	prep>
+2	Degree	amod<	prep>	pobj>	prep>
+1	Degree	conj<	dep<	advcl>
+1	Degree	conj<	amod>
+1	Degree	conj<	advmod>
+56	Degree	amod>
+1	Degree	pcomp<
+1	Degree	xcomp<
+2	Degree	ccomp>
+114	Degree	advmod>
+1	Degree	advmod>	advmod>
+1	Degree	dobj<	prep>	pobj>	partmod>	advmod>
+1	Degree	advcl>
+1	Degree	mark>
+1	Degree	nn<	amod>
+1	Degree	advmod<	advmod>
+2	Degree	dobj>
+1	Coparticipant	prep<	dobj>
+3	Coparticipant	pobj>
+3	Coparticipant	pcomp>	pobj>
+1	Inference	dep>
+3	Inference	acomp>
+1	Inference	nsubj<
+1	Inference	rcmod<	dobj<	cc>
+4	Inference	ccomp>
+16	Inference	xcomp>
+1	Inference	prep>
+9	Goods
+1	Goods	dep>
+1	Goods	dep<
+2	Goods	rcmod<
+1	Goods	nsubj>
+3	Goods	nsubjpass>
+2	Goods	iobj>
+20	Goods	prep>
+1	Goods	prep>	pobj>	prep>
+9	Goods	amod<
+1	Goods	conj<	nsubj>
+1	Goods	conj<	nsubjpass>
+2	Goods	conj<	dobj>
+1	Goods	partmod<
+2	Goods	amod>
+1	Goods	xcomp<	nsubj>
+1	Goods	xcomp<	ccomp<	parataxis>	nsubj>	conj>	amod>
+1	Goods	parataxis>
+1	Goods	ccomp>	nsubj>
+2	Goods	nn<
+1	Goods	nn<	nn>
+64	Goods	dobj>
+2	Goods	dobj>	amod>
+1	Goods	dobj>	nn>
+16	Goods	nn>
+1	Desired_state	advcl>
+1	Desired_state	nn<	amod>
+1	Desired_state	nn>
+1	Behavior_product	infmod>
+1	External_cause	advcl>
+2	Mass
+2	Mass	amod<
+1	Mass	nsubj<
+1	Mass	nsubj<	nsubj>
+1	Mass	npadvmod<	amod<
+10	Mass	det<
+4	Mass	quantmod<
+1	Mass	quantmod<	num<
+1	Mass	predet<
+24	Mass	prep>
+1	Mass	advmod<
+1	Mass	advmod<	advmod<
+1	Practitioner	poss>
+1	Practitioner	amod>
+1	Practitioner	pobj<	prep<	nsubjpass>
+1	Practitioner	pobj<	prep<	pobj<	prep<
+1	Practitioner	dobj<	nsubj>
+1	Practitioner	nn>	amod>
+1	Idea
+2	Idea	amod<
+3	Idea	partmod<
+1	Idea	partmod<	nsubj>
+1	Idea	rcmod<
+4	Idea	nsubjpass>
+1	Idea	nn<	nn>
+2	Idea	dobj>
+4	Idea	prep>
+5	Idea	nn>
+1	Alterant	amod<	prep>
+1	Alterant	nn<	nn>
+6	Alterant	nn>
+1	Containing_event	advcl>
+17	Containing_event	prep>
+2	Crime
+1	Crime	partmod<
+1	Crime	dobj>
+1	Finding
+1	Finding	xcomp>
+2	Interlocutor_2	nsubj<	prep>
+1	Interlocutor_2	rcmod<
+1	Interlocutor_2	dobj<	prep>
+16	Interlocutor_2	prep>
+1	Interlocutor_2	prep>	pobj>	partmod>	prep>
+1	Interlocutor_2	prep>	pobj>	prep>
+1	Depictive	dep<
+1	Depictive	dep<	dep<	conj<	appos<	nsubj<	acomp>
+1	Depictive	dep<	nsubj>	partmod>
+1	Depictive	acomp>
+1	Depictive	det>
+1	Depictive	nsubj>	partmod>
+1	Depictive	nsubj>	appos>
+18	Depictive	prep>
+1	Depictive	prep>	pobj>	rcmod>
+2	Depictive	partmod>
+1	Depictive	conj<	prep>
+29	Depictive	amod>
+1	Depictive	xcomp<
+1	Depictive	xcomp<	advcl>
+1	Depictive	parataxis>
+1	Depictive	xcomp>
+1	Depictive	xcomp>	advcl>
+2	Depictive	advmod>
+1	Depictive	dobj<	prep>
+1	Depictive	nn<	amod>
+1	Depictive	dobj>
+1	Depictive	dobj>	partmod>
+1	Depictive	dobj>	dep>
+1	Depictive	dobj>	rcmod>	dobj>	partmod>
+7	Depictive	nn>
+4	Influencing_entity	poss>
+1	Influencing_entity	partmod<
+4	Influencing_entity	amod>
+1	Influencing_entity	pobj<	prep<	prep>	pobj>	rcmod>
+2	Influencing_entity	dobj<	nsubj>
+3	Influencing_entity	prep>
+2	Interlocutor_1	poss>
+6	Interlocutor_1	nsubj>
+1	Interlocutor_1	amod>	nsubj>
+1	Interlocutor_1	xcomp<	nsubj>
+1	Interlocutor_1	xcomp<	nsubjpass>
+2	Interlocutor_1	xcomp<	xcomp<	nsubj>
+1	Interlocutor_1	pobj<	prep<	nsubjpass>
+1	Interlocutor_1	dobj<	xcomp<	nsubj>
+1	Interlocutor_1	prep>
+1	Interlocutor_1	advcl<	nsubj>
+68	Object	amod<
+1	Object	amod<	amod>
+1	Object	amod<	nn>
+1	Object	conj<	amod<
+1	Object	conj<	nsubjpass>
+1	Object	nsubj>
+1	Object	pobj<	prep<	conj<	nsubj>
+1	Object	nn<
+1	Object	dobj>
+1	Object	advmod<	dobj>
+1	Level	amod>
+1	Level	dobj>
+1	Level	prep>
+1	Level	nn>
+1	Society	amod>
+1	Rule	dobj>
+3	Performance
+1	Performance	prep>	pobj>	prep>
+1	Performance	dobj>	prep>
+1	Members
+1	Members	nsubj>
+5	Members	amod>
+4	Members	nn>
+32	Gizmo
+1	Gizmo	amod<
+6	Shape
+3	Opinion
+1	Opinion	nsubj<	ccomp>
+15	Opinion	ccomp>
+1	Opinion	advcl<	dep>
+25	Ailment
+1	Avenger	poss>
+3	Avenger	nsubj>
+1	Avenger	amod>
+1	Avenger	dobj<	conj<	nsubj>
+1	Avenger	dobj<	conj<	prep>	pobj>	rcmod>	nsubj>
+1	Avenger	dobj<	nsubj>
+1	Avenger	dobj<	xcomp<	dobj>
+7	Avenger	nn>
+2	Perceiver	poss>
+2	Perceiver	conj<	nsubj>
+1	Perceiver	conj<	pcomp<	prep<	dobj<	nsubj>
+1	Perceiver	conj<	xcomp<	nsubj>
+1	Perceiver	det>
+9	Perceiver	nsubj>
+1	Perceiver	xcomp<	nsubj>
+1	Perceiver	pobj<	prep<	nsubj>
+1	Perceiver	dobj<	rcmod<
+1	Perceiver	dobj<	nsubj>
+1	Perceiver	dobj<	xcomp<	dobj>
+1	Perceiver	dobj>
+1	Criteria	advcl>
+3	Criteria	prep>
+26	Complex
+2	Case
+4	Helper	poss>
+1	Helper	nsubj<	ccomp<	xcomp<	nsubj>
+1	Helper	rcmod<
+1	Helper	rcmod<	conj<
+27	Helper	nsubj>
+1	Helper	infmod<
+1	Helper	infmod<	pobj<	prep<	rcmod<
+1	Helper	infmod<	dobj<	nsubj>
+2	Helper	pobj<	prep<	nsubj>
+5	Helper	prep>
+1	Helper	prep>	pobj>	prep>
+2	Helper	conj<	nsubj>
+2	Helper	conj<	amod>
+1	Helper	conj<	nn>
+13	Helper	amod>
+1	Helper	pcomp<	prep<	nsubj>
+1	Helper	pcomp<	prep<	dobj<	nsubj>
+1	Helper	pcomp<	prep<	dobj>	prep>	pobj>
+5	Helper	xcomp<	nsubj>
+2	Helper	xcomp<	nsubjpass>
+2	Helper	xcomp<	dobj>
+1	Helper	xcomp<	dobj>	prep>	pobj>
+3	Helper	dobj<	nsubj>
+3	Helper	dobj<	prep>
+1	Helper	nn<
+4	Helper	nn>
+1	Affected_party	prep>
+22	Economy
+21	Cognizer
+14	Cognizer	poss>
+5	Cognizer	rcmod<
+1	Cognizer	det>
+204	Cognizer	nsubj>
+1	Cognizer	nsubj>	poss>
+1	Cognizer	nsubj>	prep>	pobj>	conj>	prep>	pobj>
+7	Cognizer	nsubjpass>
+1	Cognizer	infmod<	poss>
+1	Cognizer	infmod<	xcomp<	nsubj>
+1	Cognizer	infmod<	pobj<	prep<	nsubj>
+1	Cognizer	infmod<	dobj<	nsubj>
+1	Cognizer	pobj<	prep<	partmod<
+4	Cognizer	pobj<	prep<	nsubj>
+24	Cognizer	prep>
+2	Cognizer	prep<
+1	Cognizer	prep<	rcmod<
+2	Cognizer	prep<	nsubj>
+1	Cognizer	amod<	dobj<	prep>
+1	Cognizer	conj<	prep<	nsubj>
+6	Cognizer	conj<	nsubj>
+1	Cognizer	conj<	pcomp<	prep<	nsubj>
+1	Cognizer	conj<	dobj<	xcomp<	nsubj>
+2	Cognizer	conj<	prep>
+1	Cognizer	partmod<
+1	Cognizer	partmod<	pobj<	prep<	acomp<	nsubj>
+5	Cognizer	amod>
+1	Cognizer	pcomp<	prep<	nsubj>
+1	Cognizer	pcomp<	prep<	dobj>
+1	Cognizer	xcomp<	conj<	rcmod<
+1	Cognizer	xcomp<	conj<	nsubj>
+1	Cognizer	xcomp<	rcmod<
+1	Cognizer	xcomp<	rcmod<	pobj<	prep<	advcl<
+12	Cognizer	xcomp<	nsubj>
+1	Cognizer	xcomp<	nsubj>	poss>
+1	Cognizer	xcomp<	nsubjpass>	rcmod>	dobj>
+1	Cognizer	xcomp<	xcomp<	nsubj>
+2	Cognizer	xcomp<	dobj>
+7	Cognizer	dobj<	nsubj>
+1	Cognizer	nn<
+3	Cognizer	dobj>
+1	Cognizer	advcl<	nsubj>
+1	Cognizer	advmod<	nsubj>
+9	Cognizer	nn>
+1	Starting_point	amod<
+1	Starting_point	amod<	infmod>	prep>
+1	Starting_point	prep>	pobj>	prep>
+1	Complaint	dep>
+1	Charges	ccomp>
+1	Charges	xcomp>	prep>
+1	Charges	prep>
+1	Charges	nn>
+1	Examination
+1	Examination	nn<	nn<	nn>
+1	Purpose_of_goods	prep>	pobj>	infmod>
+2	Pattern
+1	Pattern	dobj>
+1	Correlate	pobj<	prep<	prep>
+2	Correlate	advcl>
+2	Correlate	prep>
+1	Desirable	prep>
+1	Road	nsubj>
+1	Sent_item
+1	Sent_item	prep>
+2	Invader	nsubj>
+1	Invader	infmod<	dobj<	nsubj>
+1	Event_dscription	rcmod<	conj>
+64	Dimension
+3	Dimension	prep<
+1	Dimension	amod<
+1	Dimension	amod<	advmod>
+1	Dimension	dep<	prep>
+1	Dimension	nsubj>
+1	Dimension	pobj<	prep<	prep>
+1	Dimension	advmod>
+4	Dimension	prep>
+1	Dimension	nn>
+2	Plan	poss>
+3	Plan	prep>
+2	Plan	dobj>
+1	Lessee	dep>
+1	Reference_quantity	amod<
+9	Reference_quantity	quantmod<
+1	Reference_quantity	quantmod<	num<
+2	Reference_quantity	pobj>
+1	Reference_quantity	advmod<
+98	Artifact
+3	Artifact	amod<
+3	Artifact	nsubj>
+1	Artifact	dobj<	nsubj>
+1	Artifact	nn<
+1	Artifact	nn>
+1	Prize	dobj>
+2	Prize	nn>
+1	Wrongdoer	prep>
+3	Projectile	amod<
+3	Projectile	partmod<
+3	Projectile	nsubjpass>
+1	Projectile	nn<	nn>
+13	Projectile	dobj>
+3	Projectile	nn>
+10	Type
+1	Type	poss>
+2	Type	rcmod>
+1	Type	dep<	conj>
+1	Type	nsubj<
+1	Type	nsubj<	dep<
+1	Type	nsubj<	xcomp>
+3	Type	num>
+11	Type	prep>
+91	Type	amod<
+1	Type	amod<	conj<	dobj<	xcomp>
+1	Type	amod<	amod>
+2	Type	amod<	nn>
+1	Type	conj>
+2	Type	appos<
+4	Type	conj<
+2	Type	conj<	amod<
+1	Type	conj<	nsubj<
+6	Type	conj<	amod>
+1	Type	conj<	dobj<	prep>
+1	Type	conj<	prep>
+1	Type	conj<	nn>
+151	Type	amod>
+1	Type	amod>	conj>
+2	Type	quantmod<	num<
+1	Type	quantmod<	prep>
+4	Type	dobj<
+1	Type	dobj<	xcomp>	dobj>	prep>	dep>	num>
+1	Type	dobj<	cc>
+3	Type	nn<
+1	Type	nn<	conj<	amod>
+10	Type	nn<	amod>
+1	Type	nn<	nn<	nn>
+2	Type	nn<	nn>
+1	Type	advmod<
+1	Type	advmod<	nsubjpass<
+125	Type	nn>
+4	Type	nn>	conj>
+2	Type	nn>	nn>
+1	Base_position	pobj>
+1	Base_position	prep>
+1	Angle	prep>
+1	Informer	pcomp<	prep<	nsubj>
+1	Constituent_parts
+5	Constituent_parts	amod<
+1	Constituent_parts	poss>
+3	Constituent_parts	amod>
+1	Constituent_parts	nn<
+1	Constituent_parts	prep>
+1	Constituent_parts	prep>	pobj>
+4	Constituent_parts	nn>
+3	Basis_of_order	amod<	infmod>
+4	Basis_of_order	amod<	prep>
+1	Basis_of_order	prep>
+1	Basis_of_order	infmod>
+1	Basis_of_order	advmod<
+1	Tested_property	nn<	nn>	conj>
+1	Tested_property	nn>
+2	Earnings
+6	Earnings	dobj>
+1	Earnings	dobj>	det>
+1	Cognizer_1	nsubj>
+1	Beneficiary	prep>
+2	Competition
+1	Competition	amod<
+1	Competition	nsubj<
+2	Competition	dobj>
+4	Competition	prep>
+1	Competition	nn>
+7	Trajector	prep<
+1	Trajector	prep<	dep<
+1	Trajector	prep<	partmod<
+1	Trajector	prep<	rcmod<
+3	Trajector	prep<	nsubj>
+1	Trajector	prep<	xcomp<	partmod<
+5	Trajector	prep<	dobj>
+1	Trajector	prep<	dobj>	prep>	pobj>
+1	Trajector	prep<	prep>	pobj>
+1	Proprietor	poss>
+3	Proprietor	amod>
+1	Proprietor	amod>	amod>
+1	Proprietor	dobj<	nsubj>
+1	Proprietor	nn>
+1	Recipients	prep>
+2	Initial_value	nsubj>
+1	Initial_value	xcomp<	nsubj>
+1	Builder	amod>
+1	Builder	nn>
+65	Trajector_event	prep<
+1	Trajector_event	prep<	partmod<
+1	Trajector_event	prep<	conj<
+1	Trajector_event	prep<	rcmod<
+1	Trajector_event	prep<	nsubj>
+1	Trajector_event	prep<	pcomp<	prep<
+2	Trajector_event	prep<	xcomp<
+1	Trajector_event	prep<	xcomp<	xcomp<
+4	Trajector_event	prep<	pobj<	prep<
+1	Trajector_event	prep<	dobj<
+1	Trajector_event	prep<	ccomp<
+3	Trajector_event	prep<	prep>
+1	Trajector_event	dep<	nsubj<
+1	Trajector_event	dep<	prep>
+1	Trajector_event	nsubj<
+1	Trajector_event	nsubj<	dobj>
+1	Trajector_event	quantmod<	num<	dobj<
+1	Trajector_event	pobj>	rcmod>
+3	Trajector_event	tmod<
+1	Trajector_event	tmod<	xcomp<
+2	Trajector_event	tmod<	prep>
+2	Trajector_event	pobj<	prep<
+29	Trajector_event	advmod<
+2	Trajector_event	advmod<	conj>
+1	Trajector_event	advmod<	dep<
+1	Trajector_event	advmod<	partmod<
+1	Trajector_event	advmod<	nsubj<
+1	Trajector_event	advmod<	rcmod<
+1	Trajector_event	advmod<	rcmod<	conj<	conj<
+5	Trajector_event	advmod<	nsubj>
+1	Trajector_event	advmod<	pobj<	prep<	pcomp<	prep<
+17	Trajector_event	advmod<	advcl<
+1	Trajector_event	advmod<	advcl<	conj<	nsubj>
+1	Trajector_event	advmod<	advcl<	rcmod<
+1	Trajector_event	advmod<	prep>
+1	Dependent	amod<	conj>	infmod>
+3	Dependent	amod<	infmod>
+1	Dependent	poss>
+1	Dependent	partmod<	dobj<	infmod<	dobj<	punct>
+9	Dependent	nsubj>
+1	Dependent	csubj>
+14	Dependent	xcomp>
+9	Dependent	prep>
+1	Dependent	dobj>
+1	Knowledge
+1	Knowledge	conj>	prep>
+1	Knowledge	conj<	nn>
+8	Knowledge	amod>
+1	Knowledge	ccomp>
+2	Knowledge	prep>
+12	Knowledge	nn>
+1	Investigator	xcomp<	pcomp<	prep<	dobj>
+1	Investigator	dobj<	nsubj>
+2	Post_state	prep>
+1	Post_state	prep>	pobj>	rcmod>
+1	Targeted	nsubj>
+1	Targeted	prep>
+1	Part_prop	amod>
+1	Cause	dep>
+20	Cause	mark<
+2	Cause	mark<	advcl<
+1	Cause	mark<	advcl<	dep>
+1	Cause	dep<
+3	Cause	rcmod<
+76	Cause	nsubj>
+2	Cause	nsubj>	prep>	pobj>
+2	Cause	infmod<
+4	Cause	pobj>
+3	Cause	csubj>
+1	Cause	pobj<	prep<	nsubj<
+1	Cause	pobj<	prep<	pobj<	prep<
+1	Cause	pobj<	prep<	prep>
+11	Cause	prep>
+9	Cause	amod<
+2	Cause	amod<	nn>
+1	Cause	conj<	amod<
+1	Cause	conj<	conj>	nsubj>
+1	Cause	conj<	dep<
+2	Cause	conj<	nsubj>
+1	Cause	conj<	xcomp<	partmod<	conj<
+1	Cause	conj<	xcomp<	partmod<	conj<	cc>
+1	Cause	partmod<
+2	Cause	aux<	advcl>
+1	Cause	aux<	advmod>
+1	Cause	cop<	prep>
+2	Cause	amod>
+1	Cause	pcomp<	prep<
+3	Cause	xcomp<
+2	Cause	xcomp<	partmod<
+1	Cause	xcomp<	partmod<	conj<
+2	Cause	xcomp<	nsubj>
+1	Cause	xcomp<	nsubjpass>
+1	Cause	xcomp<	dobj>
+2	Cause	xcomp>
+1	Cause	xcomp>	advcl>
+1	Cause	mark>
+1	Cause	advcl>
+1	Cause	advcl<	rcmod<
+1	Cause	advcl<	nsubj>
+3	Cause	nn>
+1	Production	dep>	nsubj>
+2	Participant_2	prep>	pobj>	prep>
+2	Manufacturer
+1	Manufacturer	dep>
+1	Manufacturer	poss>
+5	Manufacturer	conj<	nsubj>
+1	Manufacturer	conj<	infmod<	poss>
+1	Manufacturer	conj<	xcomp<	partmod<	dobj<	nsubj>
+1	Manufacturer	conj<	xcomp<	nsubj>
+1	Manufacturer	conj<	pobj<	prep<	partmod<
+2	Manufacturer	conj<	dobj<	nsubj>
+4	Manufacturer	conj<	ccomp<	nsubj>
+1	Manufacturer	rcmod<	appos<
+26	Manufacturer	nsubj>
+1	Manufacturer	pcomp<	prep<	rcmod<
+1	Manufacturer	pcomp<	prep<	nsubj>
+1	Manufacturer	pcomp<	prep<	dobj<	nsubj>
+1	Manufacturer	pcomp<	prep<	advmod<	nsubj>
+1	Manufacturer	infmod<	poss>
+2	Manufacturer	infmod<	dobj<	nsubj>
+1	Manufacturer	infmod<	dobj<	pcomp<	prep<	nsubjpass>
+1	Manufacturer	infmod<	dobj<	xcomp<	nsubj>
+1	Manufacturer	infmod<	dobj<	iobj>
+1	Manufacturer	xcomp<	conj<	nsubj>
+8	Manufacturer	xcomp<	nsubj>
+1	Manufacturer	ccomp<	nsubj>
+1	Manufacturer	dobj<	xcomp<	dobj>
+1	Manufacturer	dobj<	advcl<	nsubj>
+1	Manufacturer	advmod>
+1	Manufacturer	nn<	poss>
+1	Manufacturer	nn<	pobj<	prep<	nsubj>
+1	Items	amod<
+1	Items	dobj>	nn>
+1	Importing_area	conj<	prep>
+1	Importing_area	nsubj>
+1	Importing_area	amod>
+1	Importing_area	pcomp<	prep<	xcomp<	dobj>
+1	Importing_area	xcomp<	nsubj>
+11	Importing_area	prep>
+1	Duration_of_final_state	dobj>	num>
+1	Participant_1
+2	Participant_1	poss>
+1	Participant_1	amod<	poss>
+2	Participant_1	partmod<
+1	Participant_1	rcmod<
+5	Participant_1	nsubj>
+5	Participant_1	nsubjpass>
+1	Participant_1	infmod<	conj<	poss>
+1	Participant_1	xcomp<	dobj>
+1	Participant_1	prep>
+1	Participant_1	nn>
+5	Behavior
+18	Behavior	amod<
+1	Behavior	amod<	pobj<	prep<	rcmod>
+2	Behavior	nsubj>
+1	Behavior	xcomp<	xcomp>
+1	Behavior	pobj<	pcomp<	prep<	nsubj>
+1	Behavior	xcomp>
+1	Behavior	prep>
+1	Behavior	prep>	pobj>	partmod>
+2	Behavior	dobj>
+28	Member
+1	Member	conj<	dep<	conj<	nsubj>
+1	Member	conj<	nsubj>
+2	Member	partmod<
+9	Member	nsubj>
+1	Member	nsubj>	det>
+1	Member	pobj<	prep<
+1	Member	pobj<	prep<	poss>
+1	Member	pobj<	prep<	nsubj>
+1	Member	nn<
+1	Member	nn<	nn<
+3	Member	prep>
+1	Member	dobj>
+1	Holding_location	amod<
+1	Culture	nn>
+1	Payer	prep>
+7	Part_Prop	amod>
+1	Part_Prop	prep>
+2	Part_Prop	nn>
+4	Hearer	nsubj>
+2	Purpose_of_recipient	xcomp>
+1	Purpose_of_recipient	dobj>	partmod>	prep>
+3	Purpose_of_recipient	dobj>	prep>
+1	Purpose_of_recipient	dobj>	infmod>
+4	Purpose_of_recipient	prep>
+2	Purpose_of_recipient	prep>	pobj>	conj>	infmod>
+1	Purpose_of_recipient	prep>	pobj>	infmod>
+2	Sub_event	prep>
+1	Device	nsubj>
+1	Device	advmod<	nsubj>
+5	Salient_entity
+5	Salient_entity	amod<
+2	Salient_entity	conj<
+1	Salient_entity	dep<
+1	Salient_entity	rcmod<	pobj<	prep<
+2	Salient_entity	nsubj>
+42	Salient_entity	amod>
+1	Salient_entity	num>
+1	Salient_entity	nn<	nn>
+9	Salient_entity	prep>
+1	Salient_entity	dobj>
+99	Salient_entity	nn>
+1	Initial_category	nsubj<	prep>
+1	Initial_category	nsubjpass>	appos>
+1	Initial_category	dobj>
+1	Initial_category	prep>	pobj>
+3	Characteristic	amod>
+1	Resource
+10	Resource	amod<
+2	Resource	conj<
+1	Resource	nsubjpass>
+3	Resource	amod>
+1	Resource	pobj>
+1	Resource	pobj<	prep<	pobj<	prep<	partmod<	appos<	conj<
+17	Resource	prep>
+15	Resource	nn>
+1	Amount_of_work	nsubj>	conj>	prep>	pobj>	prep>	pobj>
+1	Period
+2	Period	amod<
+1	Period	amod>
+1	Source_of_information	dobj>
+2	Perpetrator
+6	Perpetrator	nsubj>
+4	Perpetrator	prep>
+1	Number_of_possibilities	amod>
+1	Performer	poss>
+4	Performer	nsubj>
+1	Performer	dobj<	nsubj>
+2	Idiosyncrasy
+5	Idiosyncrasy	amod<
+1	Idiosyncrasy	nsubj>
+6	Professional
+1	Professional	nsubj>
+1	Copy
+5	Content
+1	Content	nsubjpass<	ccomp>
+1	Content	dep<
+1	Content	dep<	dep>
+1	Content	nsubj<
+1	Content	nsubj<	ccomp>
+3	Content	rcmod<
+1	Content	rcmod<	nsubj<
+1	Content	nsubj>
+3	Content	nsubjpass>
+1	Content	infmod<	nsubj<
+1	Content	pobj<	prep<	xcomp>
+19	Content	prep>
+4	Content	amod<
+1	Content	amod<	nn<
+1	Content	conj>	dobj>
+1	Content	conj<	xcomp>
+1	Content	conj<	dobj<	xcomp<	advcl<
+1	Content	amod>
+1	Content	xcomp<	advcl>
+88	Content	ccomp>
+20	Content	xcomp>
+1	Content	advmod>
+1	Content	ccomp<
+1	Content	ccomp<	dobj>
+1	Content	advcl>
+19	Content	dobj>
+1	Content	advcl<
+1	Content	advcl<	partmod<
+1	Content	advmod<	ccomp>
+1	Unwanted_entity	dobj>	prep>	pobj>	rcmod>	ccomp>	nsubj>
+2	Unwanted_entity	nn>
+1	Hidden_object	dobj>
+1	Proposal
+1	Proposal	nsubjpass>
+22	Proposal	dobj>
+1	Proposal	prep>
+1	Loser	nsubj>
+2	Loser	nsubjpass>
+1	Loser	ccomp<	nsubj>
+4	Loser	prep>
+1	Component_entities	prep>
+5	Component_entities	nn>
+1	Temperature
+1	Temperature	amod>
+1	Category	nsubjpass<	dep>
+3	Category	poss>
+1	Category	dep>
+3	Category	acomp>
+1	Category	conj<	rcmod<	pobj<	prep<	conj<	dep>
+2	Category	pobj<	prep<
+9	Category	xcomp>
+1	Category	advcl>
+1	Category	nn<	nn<
+60	Category	prep>
+2	Category	dobj>
+2	Category	dobj>	dep>
+3	Category	nn>
+5	Variable	amod<
+1	Variable	dep>
+3	Variable	nsubj>
+2	Variable	prep>
+2	User	poss>
+2	User	amod>
+1	User	prep>
+1	User	prep>	pobj>	amod>
+17	Message
+2	Message	rcmod>
+1	Message	rcmod>	prep>
+2	Message	rcmod<
+1	Message	rcmod<	conj<	dobj<
+1	Message	rcmod<	dep<
+1	Message	rcmod<	dobj<	infmod<
+1	Message	pobj<	prep<
+1	Message	pobj<	prep<	xcomp>
+1	Message	pobj<	prep<	dobj>
+3	Message	amod<
+1	Message	pcomp<	prep<	ccomp>
+263	Message	ccomp>
+1	Message	ccomp>	nsubj>
+1	Message	ccomp>	mark>
+3	Message	advcl>
+2	Message	advcl<
+1	Message	advcl<	rcmod<	appos<	pobj<	prep<	pobj<	prep<
+1	Message	cc>
+8	Message	dep>
+1	Message	nsubjpass<	rcmod<
+1	Message	dep<	dep>
+3	Message	nsubj<
+1	Message	nsubj<	ccomp>
+1	Message	nsubj<	prep>
+3	Message	nsubj>
+5	Message	nsubjpass>
+35	Message	prep>
+1	Message	prep>	pobj>	prep>	pobj>	rcmod>
+6	Message	infmod>
+2	Message	conj>
+1	Message	conj<	rcmod>
+1	Message	conj<	infmod>
+2	Message	partmod<
+6	Message	parataxis<
+1	Message	parataxis<	nsubjpass>
+1	Message	parataxis<	parataxis>
+1	Message	parataxis<	advcl>
+1	Message	xcomp<	ccomp>
+2	Message	parataxis>
+51	Message	xcomp>
+1	Message	dobj<
+1	Message	dobj<	partmod>
+1	Message	dobj<	xcomp>
+1	Message	mark>
+56	Message	dobj>
+1	Message	dobj>	dep>	dep>	dep>
+5	Message	nn>
+5	Garment
+8	Focal_feature
+25	Source
+1	Source	dep>
+1	Source	dep<	nsubj<
+5	Source	nsubj>
+2	Source	nsubjpass>
+2	Source	pobj<	prep<	prep>
+47	Source	prep>
+2	Source	prep>	pobj>
+4	Source	prep>	pobj>	prep>
+2	Source	prep>	pcomp>
+1	Source	partmod>
+1	Source	amod<	prep>
+1	Source	conj<	conj>	prep>
+1	Source	csubj<	prep>
+15	Source	amod>
+4	Source	prt>
+1	Source	xcomp<	nsubj>	prep>	pobj>
+1	Source	xcomp<	prep>
+3	Source	advmod>
+1	Source	advmod>	prep>
+2	Source	dobj<	prep>
+7	Source	nn<	amod>
+1	Source	nn<	nn>
+13	Source	dobj>
+7	Source	dobj>	prep>
+1	Source	dobj>	prep>	pobj>	dep>	prep>
+1	Source	advmod<	dobj>	prep>
+1	Source	nn>
+1	Reason
+1	Reason	tmod>
+2	Reason	nsubj>
+1	Reason	pobj<	prep<	advcl>
+24	Reason	prep>
+2	Reason	prep>	pobj>	prep>
+1	Reason	conj<
+1	Reason	conj<	advmod>
+1	Reason	aux<	advmod>
+1	Reason	aux<	advcl>
+1	Reason	aux<	prep>
+1	Reason	xcomp<	advcl>
+5	Reason	advcl>
+1	Reason	advmod>
+1	Reason	advmod>	advmod>
+1	Reason	nn<	prep>
+1	Reason	advmod<	conj<	pobj<	prep<	advcl>	mark>
+1	Reason	advmod<	nsubj>	advmod>	dep>
+2	Reason	dobj>
+1	Reason	dobj>	rcmod>	dobj>	prep>
+1	Reason	nn>
+1	Chosen	amod<
+1	Chosen	nsubjpass>
+2	Chosen	xcomp>
+1	Chosen	iobj>
+5	Chosen	dobj>
+1	Chosen	prep>
+2	Rest
+2	Rest	prep>
+1	Rest	dobj>
+2	Required	prep>
+1	Required	nn>
+5	Danger	prep>
+13	Multiplier	number>
+1	Multiplier	quantmod>
+1	Perceptual_source	amod<	prep>
+4	Alliance
+1	Alliance	dep>
+2	Destroyer	poss>
+1	Destroyer	conj<
+5	Destroyer	conj<	nsubj>
+1	Destroyer	conj<	infmod<	dobj<	nsubj>
+1	Destroyer	conj<	xcomp<	partmod<
+1	Destroyer	conj<	ccomp<	nsubj>
+5	Destroyer	nsubj>
+1	Destroyer	amod>
+1	Destroyer	infmod<	dobj<	nsubj>
+1	Destroyer	xcomp<	nsubjpass>
+1	Destroyer	xcomp<	pcomp<	prep<	nsubj>
+1	Destroyer	dobj<	nsubj>
+6	Possible_event	aux<
+1	Possible_event	nsubj>
+2	Standard_item	dobj>
+3	Standard_item	prep>
+1	Standard_item	prep>	pobj>	poss>
+4	Stimulus
+1	Stimulus	dep>
+1	Stimulus	acomp<	nsubj>
+2	Stimulus	poss>
+1	Stimulus	dep<	advcl<	dep<
+1	Stimulus	rcmod<
+7	Stimulus	nsubj>
+10	Stimulus	prep>
+18	Stimulus	amod<
+1	Stimulus	amod<	conj<	dobj<	nsubj>
+1	Stimulus	amod<	nsubj>	prep>	pobj>
+1	Stimulus	amod<	pobj<	prep<	nsubj>
+1	Stimulus	conj<	dep<
+1	Stimulus	conj<	dep<	advcl<	dep<
+1	Stimulus	conj<	nsubj>
+1	Stimulus	conj<	infmod<
+1	Stimulus	conj<	pobj<	prep<
+1	Stimulus	conj<	pobj<	prep<	xcomp>
+1	Stimulus	partmod<	pobj<	prep<	dobj<	nsubj>
+1	Stimulus	amod>
+1	Stimulus	xcomp<	nsubj>
+1	Stimulus	xcomp<	nsubjpass>
+12	Stimulus	ccomp>
+1	Stimulus	xcomp>
+2	Stimulus	advcl>
+1	Stimulus	dobj<	nsubj>
+1	Stimulus	dobj<	dobj>	cc>
+1	Stimulus	advmod>	advmod>
+1	Stimulus	nn>
+2	Inherent_purpose	expl<	nsubj>	infmod>
+1	Inherent_purpose	prep>
+1	Context_of_acquaintance	poss>
+1	Context_of_acquaintance	rcmod>
+1	Context_of_acquaintance	prep>
+217	Quantity
+1	Quantity	amod<	det>
+4	Quantity	amod>
+1	Quantity	quantmod<
+4	Ego
+16	Ego	poss>
+1	Ego	amod<
+1	Ego	nsubjpass<	rcmod<
+1	Ego	det>
+4	Ego	prep>
+1	Ego	nn>
+1	Response
+1	Response	partmod>
+1	Response	xcomp<	nsubj>
+3	Response	pobj<	prep<
+1	Response	pobj<	prep<	nsubj>
+5	Response	prep>
+1	Ethnicity	conj<	amod>
+8	Ethnicity	amod>
+1	Ethnicity	nn>
+2	Treatment
+1	Treatment	xcomp<	nsubj>
+1	Treatment	csubj>
+1	Total
+28	Total	prep<
+1	Total	prep<	conj>
+1	Total	prep<	nsubj>
+1	Total	prep<	xcomp<	nsubj>
+1	Total	prep<	ccomp>
+4	Total	prep<	pobj<	prep<
+2	Total	prep<	pobj<	prep<	rcmod<
+1	Total	prep<	pobj<	prep<	dobj>
+4	Total	prep<	prep>	pobj>
+1	Total	prep<	prep>	pcomp>
+2	Total	prep<	dobj>
+2	Total	prep<	nn>
+1	Total	prep<	cc>
+1	Total	conj<	nsubjpass>
+3	Total	rcmod<
+1	Total	rcmod<	appos<	dobj<
+1	Total	rcmod<	pobj<	prep<
+32	Total	nsubj>
+1	Total	nsubj>	appos>
+1	Total	xcomp<	nsubj>
+2	Total	xcomp<	dobj>
+5	Total	pobj>
+12	Focal_occasion	prep<
+1	Focal_occasion	prep<	rcmod<	conj<	dobj<
+1	Focal_occasion	prep<	infmod<	dobj<
+1	Focal_occasion	prep<	xcomp<
+1	Focal_occasion	prep<	advcl<	conj<	nsubj>
+1	Focal_occasion	prep<	prep>
+1	Focal_occasion	prep<	prep>	pobj>
+29	Focal_occasion	amod<
+1	Focal_occasion	amod<	poss<
+1	Focal_occasion	amod<	pobj<	prep<
+14	Focal_occasion	mark<	advcl<
+1	Focal_occasion	mark<	advcl<	conj<
+1	Focal_occasion	mark<	advcl<	xcomp<
+1	Focal_occasion	conj<	prep<
+1	Focal_occasion	partmod<
+1	Focal_occasion	dep<	dep<
+1	Focal_occasion	rcmod<
+2	Focal_occasion	nsubj>
+4	Focal_occasion	advmod<
+1	Focal_occasion	advmod<	nsubjpass>
+1	Focal_occasion	advmod<	xcomp<
+1	Focal_occasion	advmod<	pobj<	prep<	prep>
+1	Focal_occasion	prep>
+1	Norm	amod<
+1	Norm	conj<	conj>	prep>	pobj>
+1	Norm	dep<	nsubjpass>
+1	Norm	nsubjpass>
+3	Norm	ccomp>
+1	Norm	ccomp<	pobj<	prep<	dobj>	nn>
+17	Norm	prep>
+8	Norm	dobj>
+1	Preparatory_act	amod<
+1	Original	nsubjpass>
+1	Original	prep>
