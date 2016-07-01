@@ -673,7 +673,9 @@ public class OldFeaturesWrapper {
     State st = u.getState();
     List<Pair<Integer, edu.jhu.hlt.concrete.Constituent>> cons = new ArrayList<>();
     Map<Integer, edu.jhu.hlt.concrete.Constituent> id2con = new HashMap<>();
+    int foundCons = 0;
     for (LL<HypEdge> cur = st.match2(consRel); cur != null; cur = cur.next) {
+      foundCons++;
       HypEdge e = cur.item;
       assert e.getNumTails() == (NEW_CSYN_MODE ? 5 : 6);
       int cid = Integer.parseInt((String) e.getTail(0).getValue());
@@ -703,6 +705,11 @@ public class OldFeaturesWrapper {
         Log.info(cid + " -> " + c);
       id2con.put(cid, c);
       cons.add(new Pair<>(parent, c));
+    }
+
+    if (foundCons == 0) {
+      Log.info("WARNING: " + sentenceId + " has no " + consRel.getName() + " facts?");
+      return null;
     }
 
     // Add children

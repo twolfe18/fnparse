@@ -150,6 +150,9 @@ srl.train.shuf%.facts.gz: srl.train.facts.gz
 			input srl.train.facts.gz \
 			output $@
 
+coe:
+	rsync -aLvz --delete ./ test3b:/export/projects/twolfe/fnparse-output/experiments/priority-experiments/$(DATASET)/rel-data
+
 all: grammar.trans frameTriage4.rel.gz coarsenFrame2.rel.gz role2.rel.gz spans.schema.facts.gz null-span1.facts coarsenPos2.rel
 	make srl.train.shuf0.facts.gz
 	make srl.train.shuf1.facts.gz

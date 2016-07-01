@@ -132,6 +132,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private BufferedWriter predictionsWriter;
   private boolean includeNegativePredictions = false;
 
+  // See DAGGER1
+  private boolean newMarginUpdate = false;
+
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -232,6 +235,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
+
+    pipe.newMarginUpdate = config.getBoolean("newMarginUpdate", pipe.newMarginUpdate);
+    Log.info("[main] newMarginUpdate=" + pipe.newMarginUpdate);
 
     pipe.predictionsDir = config.getFile("predictions.outputDir", null);
     if (pipe.predictionsDir != null) {
@@ -600,8 +606,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
       assert target.getEdge().getNumTails() == 1;
       Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
-      assert t.width() == 1;
-      List<Pair<Span, String>> rss = tackstromArgs.getArgCandidates2(t.start, sent);
+      int thead = hf.headSafe(t, sent);
+      List<Pair<Span, String>> rss = tackstromArgs.getArgCandidates2(thead, sent);
       for (Pair<Span, String> rs : rss) {
         String role = rs.get2();
         int shead = hf.head(rs.get1(), sent);
@@ -696,9 +702,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           for (Step s : p.get2()) {
             if (!includeNegativePredictions && !s.pred && !s.gold)
               continue;
+            Adjoints a = newMarginUpdate ? s.getReason() : s.score;
             predictionsWriter.write(
                 String.format("%s # gold=%s pred=%s score=%.4f",
-                s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, s.getReason().forwards()));
+                s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, a.forwards()));
             predictionsWriter.newLine();
           }
         } catch (IOException e) {
@@ -874,8 +881,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           // to move scores about 0, not the threshold.
 //          boolean pred = s.score.forwards() > 0;
           boolean pred = s.pred;
-//          Adjoints reason = s.score;
-          Adjoints reason = s.getReason();
+          Adjoints reason = newMarginUpdate ? s.getReason() : s.score;
 
           boolean a4 = s.edge.getRelation().getName().equals("argument4");
 
