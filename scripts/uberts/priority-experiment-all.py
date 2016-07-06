@@ -29,16 +29,18 @@ def wformat(d):
 
 if __name__ == '__main__':
   import os, sys, subprocess, shutil
-  if len(sys.argv) != 4:
+  if len(sys.argv) != 5:
     print 'please provide:'
-    print '1) a working directory'
-    print '2) a feature set directory with <relationName>.fs files'
-    print '3) a JAR file (to be copied)'
+    print '1) an unique experiment name'
+    print '2) a working directory'
+    print '3) a feature set directory with <relationName>.fs files'
+    print '4) a JAR file (to be copied)'
     sys.exit(1)
 
-  wd = sys.argv[1]
-  fs = sys.argv[2]
-  jar = sys.argv[3]
+  name, wd, fs, jar = sys.argv[1:]
+  #wd = sys.argv[1]
+  #fs = sys.argv[2]
+  #jar = sys.argv[3]
 
   qsub = True
 
@@ -49,7 +51,7 @@ if __name__ == '__main__':
     print 'JAR is not file:', jar
     sys.exit(1)
   
-  p = os.path.join(wd, 'priority-experiments')
+  p = os.path.join(wd, 'priority-experiments-' + name)
   print 'copying jar to safe place:', p
   if not os.path.exists(p):
     os.makedirs(p)
@@ -72,6 +74,10 @@ if __name__ == '__main__':
   for gf in global_feats():
     for w in weights():
       c = 'qsub' if qsub else 'sbatch'
+
+      job_name = gf
+      for k,v in w.iteritems():
+        job_name += '_' + str(k) + '=' + str(v)
 
       pd = os.path.join(predictions_dir, job_name)
       if not os.path.exists(pd):
