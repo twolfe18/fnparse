@@ -271,7 +271,7 @@ public class OldFeaturesWrapper {
       File ff = new File(dir, r.getName() + ".fs");
       if (!ff.isFile())
         throw new RuntimeException("not a file: " + ff.getPath());
-      int dim = 1 << config.getInt(r.getName() + ".hashBits", 22);
+      int dim = 1 << config.getInt(r.getName() + ".hashBits", 24);
       Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
       return new Ints3(bft, r, ff, dim);
     }

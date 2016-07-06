@@ -14,6 +14,7 @@ import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Rule;
+import edu.jhu.hlt.uberts.factor.HypEdgeAdjoints;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.prim.tuple.Pair;
 
@@ -59,6 +60,10 @@ public interface TransGen {
           }
         }
       }
+
+      // For debugging, keep around the edge within the score
+      if (Uberts.LEARN_DEBUG)
+        s = new HypEdgeAdjoints(new HashableHypEdge(e), s, u);
 
       return Arrays.asList(new Pair<>(e, s));
     }

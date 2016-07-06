@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
@@ -413,11 +414,12 @@ public interface DecisionFunction {
 //        return newEdge ? true : null;
         throw new RuntimeException("implement me!");
       case AT_MOST_ONE:
-        if (true) {
-          throw new RuntimeException("this implementation is broken in cases "
-              + "where there is no gold edge, because the first will get through "
-              + "and receive a score-- update on a FP");
-        }
+//        if (true) {
+//          throw new RuntimeException("this implementation is broken in cases "
+//              + "where there is no gold edge, because the first will get through "
+//              + "and receive a score-- update on a FP");
+//        }
+        // NOTE: The solution to this is to use MAX_VIOLATION rather than DAGGER1
 
         boolean newEdge = !observedKeys.contains(key);
         if (newEdge) {
@@ -429,34 +431,37 @@ public interface DecisionFunction {
 
           // Return lazy Adjoints so that all edges can be added to make appropriate
           // updates to firstPredInBucket and firstGoldInBucket
-          return new Pair<>(false, new Adjoints() {
-            @Override
-            public double forwards() {
-              return s.forwards();
-            }
-            @Override
-            public void backwards(double dErr_dForwards) {
-              assert dErr_dForwards < 0 : "should be FN, right?";
-              // Only update if this was the first (presumably MV) or gold
-              Pair<HypEdge, Adjoints> p = firstPredInBucket.get(key);
-              Pair<HypEdge, Adjoints> g = firstGoldInBucket.get(key);
-
-              if (g == null) {
-                // If there is no gold, then pushing down the score of some
-                // mistake can't possibly lead to a correct decision.
-                // This can happen e.g. if a path to a gold label was pruned
-                // by some other fact. In this case that pruning step should
-                // receive an update, not this step which can do nothing to recover.
-                return;
-              }
-
-              assert p != g : "this implies no mistake, yet dErr_dForwards=" + dErr_dForwards;
-              if (p != null || g != null) {
-                assert (e == p.get1()) ^ (e == g.get1()) : "this edge should be pred or gold";
-                s.backwards(+dErr_dForwards);
-              }
-            }
-          });
+          if (Uberts.LEARN_DEBUG)
+            Log.info(mode + " edge=" + e);
+          return new Pair<>(false, new IncludeLossAdjoints(Adjoints.Constant.ZERO, false));
+//          return new Pair<>(false, new Adjoints() {
+//            @Override
+//            public double forwards() {
+//              return s.forwards();
+//            }
+//            @Override
+//            public void backwards(double dErr_dForwards) {
+//              assert dErr_dForwards < 0 : "should be FN, right?";
+//              // Only update if this was the first (presumably MV) or gold
+//              Pair<HypEdge, Adjoints> p = firstPredInBucket.get(key);
+//              Pair<HypEdge, Adjoints> g = firstGoldInBucket.get(key);
+//
+//              if (g == null) {
+//                // If there is no gold, then pushing down the score of some
+//                // mistake can't possibly lead to a correct decision.
+//                // This can happen e.g. if a path to a gold label was pruned
+//                // by some other fact. In this case that pruning step should
+//                // receive an update, not this step which can do nothing to recover.
+//                return;
+//              }
+//
+//              assert p != g : "this implies no mistake, yet dErr_dForwards=" + dErr_dForwards;
+//              if (p != null || g != null) {
+//                assert (e == p.get1()) ^ (e == g.get1()) : "this edge should be pred or gold";
+//                s.backwards(+dErr_dForwards);
+//              }
+//            }
+//          });
 
 //          return new Pair<>(false, new Adjoints() {
 //            private Adjoints gold = null;
@@ -511,7 +516,9 @@ public interface DecisionFunction {
         key.add(e.getTail(keyArgs[i]));
       Pair<HypEdge, Adjoints> x = new Pair<>(he.getEdge(), score);
 
-      observedKeys.add(key);
+      boolean added = observedKeys.add(key);
+      if (Uberts.LEARN_DEBUG)
+        Log.info("key=" + key + " added=" + added + " edge=" + he.getEdge());
 
       if (firstPredInBucket.get(key) == null)
         firstPredInBucket.put(key, x);
@@ -520,6 +527,48 @@ public interface DecisionFunction {
         firstGoldInBucket.put(key, x);
     }
   }
+
+
+  /**
+   * This is a hack so that {@link ByGroup} can tell
+   * {@link Uberts#maxViolationPerceptron(Map)} whether a particular
+   * actions's loss should be included when computing the violation.
+   *
+   * NOTE: The proper way to fix this is to:
+   * 1) store actions on the agenda rather than facts (need this so that costFP vs costFN can be applied appropriately)
+   * 2) have a LocalFactor which adds in the loss to the score of actions for loss augmented inference
+   * 3) in contrast with 2, probably keep Agenda.Mode.ORACLE so that you don't have to worry about global features making a lossy action score too high
+   */
+  public static class IncludeLossAdjoints implements Adjoints {
+    private Adjoints wrapped;
+    private boolean includeLoss;
+
+    public IncludeLossAdjoints(Adjoints wrapped, boolean includeLoss) {
+      this.wrapped = wrapped;
+      this.includeLoss = includeLoss;
+    }
+
+    @Override
+    public String toString() {
+      return "(IncludeLoss " + includeLoss + " " + wrapped + ")";
+    }
+
+    public boolean includeLoss() {
+      return includeLoss;
+    }
+
+    @Override
+    public double forwards() {
+      return wrapped.forwards();
+    }
+
+    @Override
+    public void backwards(double dErr_dForwards) {
+      wrapped.backwards(dErr_dForwards);
+    }
+  }
+
+
 
   /**
    * Checks whether score(edge) > constant, optionally only applying to one Relation.

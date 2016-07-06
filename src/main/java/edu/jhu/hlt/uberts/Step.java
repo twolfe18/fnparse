@@ -30,7 +30,7 @@ public class Step {
   }
   public void setDecision(Adjoints dec) {
     assert decisionAdj == null;
-    System.out.println("this: " + this + " dec: " + dec);
+//    System.out.println("[setDecision] this: " + this + " dec: " + dec);
     this.decisionAdj = dec;
   }
 
@@ -48,6 +48,12 @@ public class Step {
     this.gold = gold;
     this.pred = pred;
     this.priority = priority;
+  }
+
+  public void flipSignOfScore() {
+    if (decisionAdj != null)
+      decisionAdj = new Adjoints.Scale(-1, decisionAdj);
+    score = new Adjoints.Scale(-1, score);
   }
 
   public boolean isCommit() {
@@ -69,8 +75,11 @@ public class Step {
   @Override
   public String toString() {
     double f = score == null ? Double.NaN : score.forwards();
-    if (decisionAdj != null)
-      return "(Step " + edge + " gold=" + gold + " pred=" + pred + " dec=" + decisionAdj + " priority=" + priority + " score=" + f + " " + score + ")";
+    if (decisionAdj != null) {
+      return String.format("(Step %s gold=%s pred=%s dec=%s priority=%+.2f score=%+.3g)",
+          edge, gold, pred, decisionAdj, priority, f);
+//      return "(Step " + edge + " gold=" + gold + " pred=" + pred + " dec=" + decisionAdj + " priority=" + priority + " score=" + f + ")";
+    }
     return "(Step " + edge + " gold=" + gold + " pred=" + pred + " priority=" + priority + " score=" + f + " " + score + ")";
   }
 }

@@ -89,6 +89,12 @@ public class Agenda {
     }
   }
 
+  enum RescoreMode {
+    NONE,             // f(y,s=wx) = (y, s)
+    LOSS_AUGMENTED,   // f(y,s=wx) = (y, s - sign(y) * loss(y, sign(s)))
+    ORACLE,           // f(y,s=wx) = (y, argmin_{s' : sign(s') = y} (s-s')^2)
+  }
+
   // ei == "edge index" in the heap
   // e == "edge"
   private AgendaItem[] heap;            // ei2e
@@ -103,6 +109,18 @@ public class Agenda {
 
   // Priority function
   private BiFunction<HypEdge, Adjoints, Double> priority;
+
+  // This operation applies every time you push an edge.
+  // If you push when rescoreMode != NONE, and exception is thrown.
+  private RescoreMode rescoreMode = RescoreMode.NONE;
+  private Labels labels;  // needed for rescoreMode != NONE
+
+  public void setRescoreMode(RescoreMode m, Labels y) {
+    if (m != RescoreMode.NONE && y == null)
+      throw new IllegalArgumentException();
+    this.rescoreMode = m;
+    this.labels = y;
+  }
 
   public Agenda(BiFunction<HypEdge, Adjoints, Double> priority) {
     this.top = 0;
@@ -124,6 +142,7 @@ public class Agenda {
     c.uniq.addAll(uniq);
     for (Entry<ArgVal, LinkedHashSet<HypEdge>> x : fineView.entrySet())
       c.fineView.put(x.getKey(), new LinkedHashSet<>(x.getValue()));
+    c.rescoreMode = rescoreMode;
     return c;
   }
 
@@ -310,6 +329,33 @@ public class Agenda {
       throw new IllegalArgumentException();
     if (score == null)
       throw new IllegalArgumentException();
+
+    if (rescoreMode == RescoreMode.LOSS_AUGMENTED) {
+      boolean y = labels.getLabel(edge);
+      Adjoints d = y ? Adjoints.Constant.NEGATIVE_ONE : Adjoints.Constant.ONE;
+      score = Adjoints.sum(score, d);
+      if (DEBUG) {
+        Log.info(String.format("LOSS_AUGMENTED: y=%s score %+.2f => %+.2f %s",
+            y, score.forwards()-d.forwards(), score.forwards(), edge.getEdge()));
+      }
+    } else if (rescoreMode == RescoreMode.ORACLE) {
+      boolean y = labels.getLabel(edge);
+      double s = score.forwards();
+      if (y && s <= 0) {
+        score = Adjoints.sum(score, new Adjoints.Constant(1e-8 - s));
+        if (DEBUG) {
+          Log.info(String.format("ORACLE: y=%s score %+.2f => %+.2f %s",
+              y, s, score.forwards(), edge.getEdge()));
+        }
+      } else if (!y && s > 0) {
+        score = Adjoints.sum(score, new Adjoints.Constant(-(1e-8 + s)));
+        if (DEBUG) {
+          Log.info(String.format("ORACLE: y=%s score %+.2f => %+.2f %s",
+              y, s, score.forwards(), edge.getEdge()));
+        }
+      }
+    }
+
     int t = top++;
     if (t == heap.length)
       grow();
@@ -317,18 +363,11 @@ public class Agenda {
     assert a : "duplicate?: " + edge;
     HypEdge e = edge.getEdge();
     addEdgeToFineView(e);
-    heap[t] = new AgendaItem(edge, score, priority.apply(e, score));
+    double p = priority.apply(e, score);
+    heap[t] = new AgendaItem(edge, score, p);
     e2i.put(e, t);
     n2eiSet(t, e, true);
     siftUp(t);
-//    if (DEBUG) {
-//      Log.info("just added " + edge + " with score " + score);
-//      for (int i = 0; i < edge.getNumTails(); i++) {
-//        HypNode n = edge.getTail(i);
-//        System.out.println("Adjacent" + n + "\t" + adjacent(n));
-//      }
-//      System.out.println();
-//    }
   }
 
   public int size() {

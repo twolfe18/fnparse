@@ -318,6 +318,9 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     // For showing feature names if you know them
     public Alphabet<?> dbgAlphabet;
 
+    int limit = 40;
+    int maxCharsPerElem = 2;
+
     private String show(int[] features) {
       if (dbgAlphabet != null) {
         StringBuilder sb = new StringBuilder();
@@ -330,20 +333,14 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
         sb.append(']');
         return sb.toString();
       }
-      int limit = 80;
-      int maxCharsPerElem = 2;
       return StringUtils.trunc(hexToString(features, maxCharsPerElem), limit);
     }
     public String show(List<ProductIndex> features) {
       // TODO
-      int limit = 80;
-      int maxCharsPerElem = 2;
       return StringUtils.trunc(hexToString(features, maxCharsPerElem), limit);
     }
     public String show(LL<ProductIndex> features) {
       // TODO
-      int limit = 80;
-      int maxCharsPerElem = 2;
       return StringUtils.trunc(hexToString(features, maxCharsPerElem), limit);
     }
 

@@ -24,6 +24,7 @@ import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.Agenda.LabledAgendaItem;
+import edu.jhu.hlt.uberts.Agenda.RescoreMode;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.Term;
@@ -53,6 +54,8 @@ import edu.jhu.util.Alphabet;
  */
 public class Uberts {
   public static int DEBUG = 1;
+
+  public static boolean LEARN_DEBUG = false;
 
   public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
 
@@ -115,6 +118,8 @@ public class Uberts {
   // which only knows how to read Sentences, then set this.
   public Sentence dbgSentenceCache;
   public Alphabet<String> dbgSentenceCacheDepsAlph = new Alphabet<>();
+
+  public Map<HashableHypEdge, Double> dbgUpdate = new HashMap<>();
 
   // TODO Remove
   // Ancillary data for features which don't look at the State graph.
@@ -319,6 +324,11 @@ public class Uberts {
     private Traj prev;
     public final int length;
 
+    @Override
+    public String toString() {
+      return "(Traj step=" + prevToCur + " totalScore=" + totalScore + " actionLoss=" + actionLoss + ")";
+    }
+
     /**
      * @param prevToCur
      * @param prev
@@ -362,6 +372,13 @@ public class Uberts {
     public double getScorePlusLoss(Map<Relation, Double> costFP) {
       double s = totalScore;
       for (FPR fpr : totalLoss.values())
+        s += fpr.getFP() + fpr.getFN();
+      return s;
+    }
+
+    public double getActionLoss() {
+      double s = 0;
+      for (FPR fpr : actionLoss.values())
         s += fpr.getFP() + fpr.getFN();
       return s;
     }
@@ -415,17 +432,26 @@ public class Uberts {
     // Oracle
     Traj t1 = null;
     {
+      agenda.setRescoreMode(RescoreMode.ORACLE, goldEdges);
       while (agenda.size() > 0) {
         AgendaItem ai = agenda.popBoth2();
         boolean y = getLabel(ai);
-        boolean yhat = ai.score.forwards() > 0;
+        Pair<Boolean, Adjoints> p = thresh.decide2(ai);
+        boolean yhat = p.get1();
+        if (!(y == yhat || ai.getHashableEdge().getEdge().getRelation().getName().equals("event1"))) {
+          // This can happen when a constraint cannot be satisfied by the oracle
+//          thresh.decide2(ai);
+          assert y : "y=" + y + " yhat=" + yhat + " ai=" + ai;
+        }
         if (DEBUG > 1)
           System.out.println("[maxViolationPerceptron] popped=" + ai);
 
         // Always record the action
         Step s = new Step(ai, y, yhat);
+        s.setDecision(p.get2());
+        if (!y)
+          s.flipSignOfScore();
         t1 = new Traj(s, t1);
-//        System.out.println("MV oracle, y=" + s.gold + " yhat=" + s.pred + " " + s.edge);
 
         // But maybe don't add apply it (add it to state)
         if (y)
@@ -434,11 +460,17 @@ public class Uberts {
     }
     assert t1 != null : "oracle took no steps?";
 
-    // Predictions
+    // Loss Augmented Inference
     state = s0;
     agenda = a0;
+    thresh.clear();
     Traj t2 = null;
     {
+      // NOTE: Since the event1 facts are already on the agenda,
+      // RescoreMode.LOSS_AUGMENTED doesn't apply to those edges.
+      // This is not a problem since we are not learning event1 parameters.
+      agenda.setRescoreMode(RescoreMode.LOSS_AUGMENTED, goldEdges);
+
       // We can stop the trajectory earlier if it goes longer than the oracle,
       // which is likely to happen.
       statsAgendaSizePerStep.clear();
@@ -446,14 +478,17 @@ public class Uberts {
         statsAgendaSizePerStep.add(agenda.size());
         AgendaItem ai = agenda.popBoth2();
         boolean y = getLabel(ai);
-        boolean yhat = ai.score.forwards() > 0;
+        Pair<Boolean, Adjoints> p = thresh.decide2(ai);
+        boolean yhat = p.get1();
         if (DEBUG > 1)
           System.out.println("[maxViolationPerceptron] popped=" + ai);
 
         // Always record the action
         Step s = new Step(ai, y, yhat);
+        s.setDecision(p.get2());
+        if (!yhat)
+          s.flipSignOfScore();
         t2 = new Traj(s, t2);
-//        System.out.println("MV pred, y=" + s.gold + " yhat=" + s.pred + " " + s.edge);
 
         // But maybe don't add apply it (add it to state)
         if (yhat)
@@ -461,26 +496,107 @@ public class Uberts {
       }
     }
 
+    agenda.setRescoreMode(RescoreMode.NONE, null);
+
     // Compute the max-violator
-    Pair<Traj, Traj> best = null;
-    double bestViolation = 0;
     Deque<Traj> t1r = t1.reverse();
     Deque<Traj> t2r = t2.reverse();
-    while (!t1r.isEmpty() && !t2r.isEmpty()) {
-      Traj t1cur = t1r.pop();
-      Traj t2cur = t2r.pop();
-      double violation =  t2cur.getScorePlusLoss(costFP) - t1cur.totalScore;
-      if (violation > bestViolation) {
-        bestViolation = violation;
-        best = new Pair<>(t1cur, t2cur);
+//    double bestViolation = t2r.getLast().getScorePlusLoss(costFP) - t1r.getLast().totalScore;
+    double bestViolation = 0;
+    for (Traj cur : t2r) {
+      bestViolation += cur.getStep().getReason().forwards();
+    }
+    for (Traj cur : t1r) {
+      Step s = cur.getStep();
+      if (s.getReason() instanceof DecisionFunction.IncludeLossAdjoints) {
+        DecisionFunction.IncludeLossAdjoints a = (DecisionFunction.IncludeLossAdjoints) s.getReason();
+        if (!a.includeLoss())
+          continue;
+      }
+      bestViolation -= s.getReason().forwards() + cur.getActionLoss();
+    }
+    Pair<Traj, Traj> best = null;
+    if (bestViolation > 0)
+      best = new Pair<>(t1r.getLast(), t2r.getLast());
+
+    if (LEARN_DEBUG) {
+      int i = 0;
+      for (Traj t : t1r) {
+        System.out.println(" oracle[" + i + "]: " + dbgShrtStr(t.prevToCur.toString()));
+        i++;
+      }
+      i = 0;
+      for (Traj t : t2r) {
+        System.out.println("lossAug[" + i + "]: " + dbgShrtStr(t.prevToCur.toString()));
+        i++;
       }
     }
 
-    System.out.println("bestViolation=" + bestViolation);
+
+//    int i = 0;
+//    while (!t1r.isEmpty() && !t2r.isEmpty()) {
+//      Traj t1cur = t1r.pop();
+//      Traj t2cur = t2r.pop();
+//      double violation =  t2cur.getScorePlusLoss(costFP) - t1cur.totalScore;
+//
+////      Adjoints oracleReason = t1cur.prevToCur.getReason();
+//      // this compares pred to gold, when pred is not relevant.
+////      assert t1cur.getActionLoss() == 0 : "oracle shouldn't have loss: " + t1cur.prevToCur;
+//
+//      Adjoints mvReason = t2cur.prevToCur.getReason();
+//      // mvReason may be determined by DEFAULT in Cascade(Unanimous(...), DEFAULT)
+//      // In which case it is the first in the group and should have its loss counted in the violation.
+//      if (mvReason instanceof DecisionFunction.IncludeLossAdjoints) {
+//        DecisionFunction.IncludeLossAdjoints mvr = (DecisionFunction.IncludeLossAdjoints) mvReason;
+//        if (!mvr.includeLoss()) {
+//          double al = t2cur.getActionLoss();
+//          violation -= al;
+//          assert violation >= 0 : t2cur;
+//        }
+//      }
+//
+//      /*
+//       * Starting from theta=0, the first step selected is going to be
+//       * oracle=Commit(event1(...)) lossAug=Prune(event1(...))
+//       *
+//       * You can't quite do score(oracle)++; score(mv)--; because those would cancel
+//       * (due to the implicit Commit vs Prune).
+//       * Let me see how this is handled in UbertsLearningPipeline.
+//       * It uses score(oracle)++; score(mv)--;
+//       *
+//       * Can I set the score:Adjoints in Step to reflect Commit vs Prune?
+//       * It really is just a sign flip for Prune...
+//       * => Yes, this is done above
+//       */
+//      /*
+//       * Another possible issue:
+//       * (Starting from theta=0 => prune everything) The violation only goes up
+//       * when oracle gets a TP. There are many steps which are oracle=TN lossAug=TN.
+//       */
+//      System.out.println();
+//      System.out.println(" oracle[" + i + "]: " + t1cur.prevToCur);
+//      System.out.println("lossAug[" + i + "]: " + t2cur.prevToCur);
+//      System.out.println("violation=" + violation + " s=" + t1cur.totalScore + " s'=" + t2cur.totalScore + " loss(s,s')=" + (t2cur.getScorePlusLoss(costFP)-t2cur.totalScore) + "\t" + t2cur.totalLoss);
+//      i++;
+//
+//      if (violation > bestViolation) {
+//        bestViolation = violation;
+//        best = new Pair<>(t1cur, t2cur);
+//      }
+//    }
+
+    if (LEARN_DEBUG)
+      System.out.println("[maxViolationPerceptron] bestViolation=" + bestViolation);
 
     return best;
   }
 
+  public static String dbgShrtStr(String x) {
+    return x.replaceAll("propbank", "pb")
+        .replaceAll("argument4", "arg4")
+        .replaceAll("=false ", "=F ")
+        .replace("=true ", "=T ");
+  }
 
   /**
    * Roll in using oracle or model.

@@ -5,7 +5,7 @@ import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.Uberts;
 
 public interface LocalFactor {
-  public static boolean DEBUG = true;
+  public static boolean DEBUG = false;
 
   public Adjoints score(HypEdge y, Uberts x);
 

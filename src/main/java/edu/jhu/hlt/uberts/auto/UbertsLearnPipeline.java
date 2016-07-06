@@ -88,7 +88,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static boolean graphFeats = false;
   static boolean templateFeats = true;
   static boolean pipeline = false;
-  static TrainMethod trainMethod = TrainMethod.DAGGER1;
+  static TrainMethod trainMethod = TrainMethod.MAX_VIOLATION;
 
   // Global features which aggregate based on s instead of t in argument2(t,f,s,k)
   static boolean srl2ByArg = true;
@@ -136,6 +136,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   // See DAGGER1
   private boolean newMarginUpdate = true;
+
 
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
@@ -479,7 +480,18 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     if (Arrays.asList(oracleFeats).contains(r.rhs.relName)) {
       Log.info("using oracle feats for " + r);
-      return new FeatureExtractionFactor.Oracle(r.rhs.relName);
+//      return new FeatureExtractionFactor.Oracle(r.rhs.relName);
+      return new LocalFactor() {
+        @Override
+        public Adjoints score(HypEdge yhat, Uberts x) {
+          boolean y = x.getLabel(yhat);
+          // This needs to be >1 so that it over-rides Agenda.RescoreMode.LOSS_AUGMENTED
+          if (y)
+            return new Adjoints.Constant(+2);
+          else
+            return new Adjoints.Constant(-2);
+        }
+      };
     }
 
     if (parameterIO == null) {
@@ -818,7 +830,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 1)
       Log.info("starting on " + doc.getId());
 
-    int verbose = 1;
+    int verbose = 0;
     switch (trainMethod) {
     case EARLY_UPDATE:
       timer.start("train/earlyUpdate");
@@ -843,15 +855,35 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         if (maxViolation != null) {
           for (Traj cur = maxViolation.get1(); cur != null; cur = cur.getPrev()) {
             Step s = cur.getStep();
-            if (s.gold)
-              s.score.backwards(lr * -1);
+            s.getReason().backwards(lr * -1);
+
+//            if (Uberts.LEARN_DEBUG) {
+//              HashableHypEdge he = new HashableHypEdge(s.edge);
+//              double d = u.dbgUpdate.getOrDefault(he, 0d);
+//              u.dbgUpdate.put(he, d-1);
+//            }
           }
           for (Traj cur = maxViolation.get2(); cur != null; cur = cur.getPrev()) {
             Step s = cur.getStep();
-            if (!s.gold)
-              s.score.backwards(lr * +1);
+            s.getReason().backwards(lr * +1);
+
+//            if (Uberts.LEARN_DEBUG) {
+//              HashableHypEdge he = new HashableHypEdge(s.edge);
+//              double d = u.dbgUpdate.getOrDefault(he, 0d);
+//              u.dbgUpdate.put(he, d+1);
+//            }
           }
         }
+
+        if (Uberts.LEARN_DEBUG) {
+          List<HashableHypEdge> l = new ArrayList<>(u.dbgUpdate.keySet());
+          Collections.sort(l, HashableHypEdge.BY_RELATION_THEN_TAIL);
+          for (HashableHypEdge e : l) {
+            System.out.println("aggUpdate:  gold=" + u.getLabel(e) + "\t" + e.getEdge() + "\t" + u.dbgUpdate.get(e));
+          }
+          u.dbgUpdate.clear();
+        }
+
       });
       timer.stop("train/maxViolation");
       break;
