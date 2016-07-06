@@ -1,0 +1,12 @@
+
+# Keep pos2(i,t) in this rule because span-w1 is a schema relation with i in [1..300] or so.
+# First arg of pos2 is limited to the tokens in the current document/sentence.
+doneAnno(docid) & pos2(i,pos) & span-w1(t,i,j) => event1(t)
+event1(t) & span-w1(t,i,j) & pos2(i,posFine) & lemma2(i,lemma) & coarsenPos2(posFine,posCoarse) & frameTriage4(lemma,posCoarse,synset,frame) => predicate2(t,frame)
+
+#predicate2(t,f) & dep-decomp-args4(t,s,sHead,k) => argument4(t,f,s,k)
+#predicate2(t,f) & dep-decomp-args4(t,s,sHead,kUnused) & coarsenFrame2(f,fc) & role2(fc,k) => argument4(t,f,s,k)
+#predicate2(t,f) & tackstrom-args4(t,s,sHead,kUnused) & coarsenFrame2(f,fc) & role2(fc,k) => argument4(t,f,s,k)
+#predicate2(t,f) & xue-palmer-args2(t,s) & coarsenFrame2(f,fc) & role2(fc,k) => argument4(t,fc,s,k)
+predicate2(t,f) & xue-palmer-otf-args2(t,s) & coarsenFrame2(f,fc) & role2(fc,k) => argument4(t,fc,s,k)
+

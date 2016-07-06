@@ -23,4 +23,5 @@ def xue-palmer-args2 <span> <span>
 def xue-palmer-deps-args2 <span> <span>
 def xue-palmer-otf-args2 <span> <span>    # otf == "on the fly", for debugging
 def tackstrom-args4 <span> <span> <tokenIndex> <role>
+def dep-decomp-args4 <span> <span> <tokenIndex> <role>
 
