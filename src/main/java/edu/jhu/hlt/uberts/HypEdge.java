@@ -264,6 +264,19 @@ public class HypEdge {
     public String toString() {
       return "(Hashable " + edge + " hash=" + Long.toHexString(hc).toUpperCase() + ")";
     }
+
+    public static Comparator<HashableHypEdge> BY_RELATION = new Comparator<HashableHypEdge>() {
+      @Override
+      public int compare(HashableHypEdge o1, HashableHypEdge o2) {
+        return HypEdge.BY_RELATION.compare(o1.getEdge(), o2.getEdge());
+      }
+    };
+    public static Comparator<HashableHypEdge> BY_RELATION_THEN_TAIL = new Comparator<HashableHypEdge>() {
+      @Override
+      public int compare(HashableHypEdge o1, HashableHypEdge o2) {
+        return HypEdge.BY_RELATION_THEN_TAIL.compare(o1.getEdge(), o2.getEdge());
+      }
+    };
   }
 
   public static Comparator<HypEdge> BY_RELATION = new Comparator<HypEdge>() {
