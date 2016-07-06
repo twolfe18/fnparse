@@ -105,11 +105,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private Mode mode;
 
   private BasicFeatureTemplates bft;
-  private OldFeaturesWrapper ofw;
-  private OldFeaturesWrapper.Ints2 feFast2;
   private List<OldFeaturesWrapper.Ints3> feFast3;
-  /** @deprecated */
-  private OldFeaturesWrapper.Ints feFast;
 
   private ParameterIO parameterIO;
 
@@ -346,9 +342,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         ((NumArgsRoleCoocArgLoc) gf).useAverageWeights(useAvg);
       }
     }
-    assert ofw == null;
-    assert feFast2 == null;
-    assert feFast == null;
   }
 
   public void completedObservation() {
@@ -364,9 +357,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         ((NumArgsRoleCoocArgLoc) gf).completedObservation();
       }
     }
-    assert ofw == null;
-    assert feFast2 == null;
-    assert feFast == null;
   }
 
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
@@ -468,6 +458,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       globalFactors.add(numArgsArg4);
       u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
     }
+
+    getParameterIO();
+  }
+
+  private ParameterIO getParameterIO() {
+    if (parameterIO == null) {
+      parameterIO = new ParameterIO();
+      parameterIO.configure(ExperimentProperties.getInstance());
+    }
+    return parameterIO;
   }
 
   @Override
@@ -494,11 +494,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       };
     }
 
-    if (parameterIO == null) {
-      parameterIO = new ParameterIO();
-      parameterIO.configure(ExperimentProperties.getInstance());
-    }
-    LocalFactor f2 = parameterIO.get(r);
+    LocalFactor f2 = getParameterIO().get(r);
     if (f2 != null)
       return f2;
 
@@ -512,6 +508,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(bft, r.rhs.rel, config);
       feFast3.add(fe3);
       f = new LocalFactor.Sum(fe3, f);
+
+      // Setup write-features-to-disk
+      String key = r.rhs.relName + ".outputFeatures";
+      if (config.containsKey(key)) {
+        File outputFeatures = config.getFile(key);
+        fe3.writeFeaturesToDisk(outputFeatures, u);
+      }
     }
 
     if (graphFeats) {
@@ -524,7 +527,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 0)
       Log.info("scoreFor(" + r + "): " + f);
     assert f != LocalFactor.Constant.ZERO;
-    parameterIO.put(r, f);
+    getParameterIO().put(r, f);
     return f;
   }
 
@@ -561,7 +564,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("mode=" + mode + " dataName=" + dataName + "\t" + eventCounts.toString());
 
     if (mode == Mode.TRAIN)
-      parameterIO.saveAll();
+      getParameterIO().saveAll();
 
     // Close predictions writer
     if (predictionsWriter != null) {
@@ -629,6 +632,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       }
     }
 
+    // Find args
     DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
     Relation ev1 = u.getEdgeType("event1");
     for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
@@ -641,6 +645,43 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         int shead = hf.head(rs.get1(), sent);
         assert shead >= 0;
         u.readRelData("x tackstrom-args4 " + t.shortString() + " " + rs.get1().shortString() + " " + shead + " " + role);
+      }
+    }
+  }
+
+  private Pred2ArgPaths.DepDecompArgCandidiates depDecompArgs;
+  private void buildDepDecompArgs() {
+    Sentence sent = u.dbgSentenceCache;
+    if (sent == null)
+      throw new IllegalStateException("call buildSentenceCacheInUberts first");
+
+    // Setup
+    if (depDecompArgs == null) {
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      File p2h = new File("data/pred2arg-paths/framenet.byRole.txt");
+      File h2s = new File("/tmp/a2s.txt");
+      File h2e = new File("/tmp/a2e.txt");
+      depDecompArgs = new Pred2ArgPaths.DepDecompArgCandidiates(p2h, h2s, h2e);
+      depDecompArgs.k1 = config.getInt("depDecompArgs/k1", 10);
+      depDecompArgs.k2 = config.getInt("depDecompArgs/k2", 10);
+      depDecompArgs.k3 = config.getInt("depDecompArgs/k3", 10);
+      depDecompArgs.c = config.getInt("depDecompArgs/c", 1);
+    }
+
+    // Find args
+    DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
+    Relation ev1 = u.getEdgeType("event1");
+    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
+      assert target.getEdge().getNumTails() == 1;
+      Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
+      int thead = hf.headSafe(t, sent);
+      List<Pair<Span, String>> rss = depDecompArgs.getArgCandidates2(thead, sent);
+      for (Pair<Span, String> rs : rss) {
+        String role = rs.get2();
+        int shead = hf.headSafe(rs.get1(), sent);
+        String f = "x dep-decomp-args4 " + t.shortString() + " " + rs.get1().shortString() + " " + shead + " " + role;
+//        System.out.println(f);
+        u.readRelData(f);
       }
     }
   }
@@ -675,7 +716,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     // 2) Call the argument finding code
     DeterministicRolePruning drp = new DeterministicRolePruning(
-        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
+        DeterministicRolePruning.Mode.XUE_PALMER_HERMANN, null, null);
+//        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
     FNParseSpanPruning args = drp.setupInference(Arrays.asList(argsFor), null).decodeAll().get(0);
     for (SpanPair ts : args.getAllArgs()) {
       Span t = ts.get1();
@@ -695,6 +737,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     buildSentenceCacheInUberts();
     buildXuePalmerOTF();
     buildTackstromArgs();
+//    buildDepDecompArgs();
 
     eventCounts.increment("consume/" + mode.toString());
     if (eventCounts.getTotalCount() % 1000 == 0) {

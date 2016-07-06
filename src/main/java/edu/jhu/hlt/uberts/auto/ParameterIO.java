@@ -115,6 +115,7 @@ public class ParameterIO {
    */
   @SuppressWarnings("unchecked")
   public void configure(Instance i) {
+    Log.info("[main] " + i);
     Object old = rel2config.put(i.description, i);
     if (old != null)
       throw new RuntimeException("double definition: " + i + " and " + old);

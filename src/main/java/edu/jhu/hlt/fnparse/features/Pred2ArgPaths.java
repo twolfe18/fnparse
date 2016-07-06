@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -82,6 +83,42 @@ public class Pred2ArgPaths {
     public Trie(T cur) {
       this.cur = cur;
       this.children = new HashMap<>();
+    }
+
+    public void writeToDisk(File f) throws IOException {
+      try (BufferedWriter w = FileUtil.getWriter(f)) {
+        visit((count, edges) -> {
+          try {
+            w.write(count + "\t");
+            w.write(StringUtils.join("\t", edges));
+            w.newLine();
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+        });
+      }
+    }
+
+    public void readFromDisk(File countAndPathTsv, Function<String, T> deserialize) throws IOException {
+      Log.info("[main] reading trie counts from " + countAndPathTsv.getPath());
+      try (BufferedReader r = FileUtil.getReader(countAndPathTsv)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          String[] tok = line.split("\t");
+          int c = Integer.parseInt(tok[0]);
+          List<T> path = new ArrayList<>(tok.length-1);
+          for (int i = 1; i < tok.length; i++)
+            path.add(deserialize.apply(tok[i]));
+          add(path);
+          getNode(path).nObjs = c;
+        }
+      }
+    }
+
+    public int sumOfNObjOfChildren() {
+      int c = 0;
+      for (Trie<T> t : children.values())
+        c += t.nObjs;
+      return c;
     }
 
     public void add(List<T> path) {
@@ -166,11 +203,16 @@ public class Pred2ArgPaths {
   // First item is the role, e.g. ARG0, followed by the pred -> arg head path, similar to above
   private Trie<String> role2pred2argHead;
 
+  Trie<String> argHead2argStart2Role;
+  Trie<String> argHead2argEnd2Role;
+
   private DependencyHeadFinder hf;
 
   public Pred2ArgPaths() {
     pred2argHead = new Trie<>(null);
     role2pred2argHead = new Trie<String>(null);
+    argHead2argStart2Role = new Trie<String>(null);
+    argHead2argEnd2Role = new Trie<String>(null);
     hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
   }
 
@@ -202,6 +244,13 @@ public class Pred2ArgPaths {
     pred2argHead.add(edges);
     edges.add(0, k);
     role2pred2argHead.add(edges);
+
+    List<String> as = getPath(a, s.start, deps, sent);
+    as.add(k);
+    argHead2argStart2Role.add(as);
+    List<String> ae = getPath(a, s.end-1, deps, sent);
+    ae.add(k);
+    argHead2argEnd2Role.add(ae);
   }
 
   public static List<String> getPath(int predHead, int argHead, DependencyParse deps, Sentence sent) {
@@ -235,12 +284,18 @@ public class Pred2ArgPaths {
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
+
+    // PREDICATE TO ARGUMENT HEAD PATHS
     File out = config.getFile("output");
     Log.info("writing pred->arg counts to " + out.getPath());
 
     File outByRole = config.getFile("output.byRole", null);
     if (outByRole != null)
       Log.info("writing pred->arg counts by role to " + outByRole.getPath());
+
+    // ARGUMENT HEAD TO START/END PATHS
+    File a2sFile = config.getFile("output.a2s", new File("/tmp/a2s.txt"));
+    File a2eFile = config.getFile("output.a2e", new File("/tmp/a2e.txt"));
 
     Pred2ArgPaths paths = new Pred2ArgPaths();
     int n = 0;
@@ -279,6 +334,9 @@ public class Pred2ArgPaths {
             paths.writePathsWithCounts(out, false);
             if (outByRole != null)
               paths.writePathsWithCounts(outByRole, true);
+
+            paths.argHead2argStart2Role.writeToDisk(a2sFile);
+            paths.argHead2argEnd2Role.writeToDisk(a2eFile);
           }
         }
       }
@@ -298,6 +356,9 @@ public class Pred2ArgPaths {
           paths.writePathsWithCounts(out, false);
           if (outByRole != null)
             paths.writePathsWithCounts(outByRole, true);
+
+          paths.argHead2argStart2Role.writeToDisk(a2sFile);
+          paths.argHead2argEnd2Role.writeToDisk(a2eFile);
         }
       }
     }
@@ -306,10 +367,13 @@ public class Pred2ArgPaths {
     paths.writePathsWithCounts(out, false);
     if (outByRole != null)
       paths.writePathsWithCounts(outByRole, true);
+    paths.argHead2argStart2Role.writeToDisk(a2sFile);
+    paths.argHead2argEnd2Role.writeToDisk(a2eFile);
 
     Log.info("done");
   }
 
+  // In the future, use the Trie methods for IO
   public static Trie<String> getPathTrie(File countAndPathTsv, boolean byRole) throws IOException {
     Trie<String> paths = new Trie<>(null);
     try (BufferedReader r = FileUtil.getReader(countAndPathTsv)) {
@@ -333,6 +397,82 @@ public class Pred2ArgPaths {
       throw new RuntimeException(e);
     }
     return paths;
+  }
+
+  /**
+   * Given a predicate head token p, return all role, spans pairs (k,a = (s,e,h))
+   * s.t.
+   *     count(k, path(p,h)) >= k1
+   * and count(k, path(h,s)) >= k2
+   * and count(k, path(h,e)) >= k3
+   */
+  public static class DepDecompArgCandidiates {
+    private Trie<String> pred2head;
+    private Trie<String> head2start;
+    private Trie<String> head2end;
+    public int k1 = 1;
+    public int k2 = 1;
+    public int k3 = 1;
+    public int c = 1;
+
+    public DepDecompArgCandidiates(File p2h, File h2s, File h2e) {
+      pred2head = new Trie<String>(null);
+      head2start = new Trie<String>(null);
+      head2end = new Trie<String>(null);
+      try {
+        pred2head.readFromDisk(p2h, x -> x);
+        head2start.readFromDisk(h2s, x -> x);
+        head2end.readFromDisk(h2e, x -> x);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    public List<Pair<Span, String>> getArgCandidates2(int predicate, Sentence sent) {
+      DependencyParse deps = sent.getParseyDeps();
+      int n = sent.size();
+      List<Pair<Span, String>> args = new ArrayList<>();
+      assert k1 > 0;
+      assert k2 > 0;
+      assert k3 > 0;
+
+      for (int aHead = 0; aHead < n; aHead++) {
+        List<String> ph = getPath(predicate, aHead, deps, sent);
+        Trie<String> x1 = pred2head.getNode(ph);
+        int c1 = x1 == null ? 0 : x1.sumOfNObjOfChildren();
+        if (c1 < k1)
+          continue;
+
+        for (int start = 0; start <= aHead; start++) {
+          List<String> hs = getPath(aHead, start, deps, sent);
+          Trie<String> x2 = head2start.getNode(hs);
+          int c2 = x2 == null ? 0 : x2.sumOfNObjOfChildren();
+          if (c2 < k2)
+            continue;
+          for (int end = aHead; end < n; end++) {
+            List<String> he = getPath(aHead, end, deps, sent);
+            Trie<String> x3 = head2end.getNode(he);
+            int c3 = x3 == null ? 0 : x3.sumOfNObjOfChildren();
+            if (c3 < k3)
+              continue;
+
+            // A role may have appeared with any 2/3 of the three paths
+            Counts<String> roles = new Counts<>();
+            for (Trie<String> xx : Arrays.asList(x1, x2, x3))  {
+              for (Trie<String> t : xx.children.values()) {
+                if (t.nObjs > 0)
+                  roles.increment(t.cur);
+              }
+            }
+            Span s = Span.getSpan(start, end+1);
+            for (String k : roles.countIsAtLeast(c))
+              args.add(new Pair<>(s, k));
+          }
+        }
+      }
+      return args;
+    }
+
   }
 
   /**
@@ -559,7 +699,7 @@ public class Pred2ArgPaths {
    * parse. For each path, the word at the end of the path is conjoined with the
    * path as a binary feature.
    */
-  static class Feature implements Template {
+  static class PredDisambFeature implements Template {
 
     private Trie<Path2.Edge> paths;
     private boolean includeCountsRefinements = false;
@@ -582,11 +722,11 @@ public class Pred2ArgPaths {
 
     private boolean quadratic = false;
 
-    public Feature(ExperimentProperties config, boolean includeCountRefinements, boolean nullClassFeatures) {
+    public PredDisambFeature(ExperimentProperties config, boolean includeCountRefinements, boolean nullClassFeatures) {
       this(config.getExistingFile("pred2arg.feat.paths"), includeCountRefinements, nullClassFeatures);
     }
 
-    public Feature(File countAndPathTsv, boolean includeCountRefinements, boolean nullClassFeatures) {
+    public PredDisambFeature(File countAndPathTsv, boolean includeCountRefinements, boolean nullClassFeatures) {
       Log.info("countAndPathTsv=" + countAndPathTsv.getPath()
           + " includeCountRefinements=" + includeCountRefinements
           + " nullClassFeatures=" + nullClassFeatures

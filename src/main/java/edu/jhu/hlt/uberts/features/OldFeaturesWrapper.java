@@ -33,9 +33,9 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.Timer;
@@ -43,6 +43,7 @@ import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
+import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Relation.EqualityArray;
@@ -288,6 +289,30 @@ public class OldFeaturesWrapper {
     private LongIntHashMap alph2;   // don't use, probably too much memory
 
     private BufferedWriter featStrDebug;
+    private Uberts u;
+
+    public void writeFeaturesToDisk(File writeFeatsTo, Uberts u) {
+//      String key = r.getName() + ".saveFeatures";
+//      if (config.containsKey(key)) {
+//      File writeFeatsTo = config.getFile(key);
+      Log.info("[main] writing features to " + writeFeatsTo.getPath());
+      this.u = u;
+      try {
+        featStrDebug = FileUtil.getWriter(writeFeatsTo);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+//      }
+    }
+    public void closeWriter() {
+      if (featStrDebug != null) {
+        try {
+          featStrDebug.close();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    }
 
     public Ints3(BasicFeatureTemplates bft, Relation r, File featureSet, int dimension) {
       this.inner = new OldFeaturesWrapper(bft, featureSet);
@@ -305,12 +330,6 @@ public class OldFeaturesWrapper {
 
 //      this.alph = new Alphabet<>();
 //      this.alph2 = new LongIntHashMap();
-
-//      try {
-//        featStrDebug = FileUtil.getWriter(new File("/tmp/features.txt"));
-//      } catch (Exception e) {
-//        throw new RuntimeException(e);
-//      }
     }
 
     private int index(String s) {
@@ -381,16 +400,18 @@ public class OldFeaturesWrapper {
 //          int f = Hash.hash(fyxi.get2());
 //          features[i] = f * T + t;
 //        }
+      }
 
-        if (featStrDebug != null) {
-          try {
-            featStrDebug.write(fyxi.get1().name + "/" + fyxi.get2());
-//            featStrDebug.write(t + "/" + fyxi.get2());
-//            featStrDebug.write(s);
-            featStrDebug.newLine();
-          } catch (Exception e) {
-            throw new RuntimeException(e);
+      if (featStrDebug != null) {
+        assert u != null;
+        try {
+          featStrDebug.write(y + "\t" + u.getLabel(y));
+          for (int i = 0; i < features.length; i++) {
+            featStrDebug.write("\t" + features[i]);
           }
+          featStrDebug.newLine();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
         }
       }
 

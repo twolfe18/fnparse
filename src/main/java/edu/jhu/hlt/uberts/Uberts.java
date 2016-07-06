@@ -3,6 +3,7 @@ package edu.jhu.hlt.uberts;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.Writer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -32,8 +33,8 @@ import edu.jhu.hlt.uberts.auto.Trigger;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
-import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
+import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.rules.Env.Trie3;
 import edu.jhu.hlt.uberts.transition.TransGen;
@@ -119,7 +120,9 @@ public class Uberts {
   public Sentence dbgSentenceCache;
   public Alphabet<String> dbgSentenceCacheDepsAlph = new Alphabet<>();
 
+  // Counts up dErr_dForwards for each edge
   public Map<HashableHypEdge, Double> dbgUpdate = new HashMap<>();
+
 
   // TODO Remove
   // Ancillary data for features which don't look at the State graph.
@@ -1134,6 +1137,7 @@ public class Uberts {
     addEdgeToAgenda(p.get1(), p.get2());
   }
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
+    HashableHypEdge hhe = new HashableHypEdge(e);
     if (DEBUG > 2) {
       if (DEBUG > 3)
         System.out.println("Uberts addEdgeToAgenda: " + e.toString() + " " + score);
@@ -1145,7 +1149,6 @@ public class Uberts {
       stats.increment("agenda/" + e.getRelation().getName());
     }
     assert nodesContains(e);
-    HashableHypEdge hhe = new HashableHypEdge(e);
     if (agenda.contains(hhe)) {
       stats.increment("agenda/dup/agenda");
       stats.increment("agenda/dup/agenda/" + e.getRelation().getName());

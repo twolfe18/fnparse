@@ -1531,10 +1531,10 @@ public class BasicFeatureTemplates {
 
     // Frame id features (paths from pred->arg heads * arg head word)
     ExperimentProperties config = ExperimentProperties.getInstance();
-    addTemplate("semafor/predId/plain/noNullClass", new Pred2ArgPaths.Feature(config, false, false));
-    addTemplate("semafor/predId/plain/nullClass", new Pred2ArgPaths.Feature(config, false, true));
-    addTemplate("semafor/predId/counts/noNullClass", new Pred2ArgPaths.Feature(config, true, false));
-    addTemplate("semafor/predId/counts/nullClass", new Pred2ArgPaths.Feature(config, true, true));
+    addTemplate("semafor/predId/plain/noNullClass", new Pred2ArgPaths.PredDisambFeature(config, false, false));
+    addTemplate("semafor/predId/plain/nullClass", new Pred2ArgPaths.PredDisambFeature(config, false, true));
+    addTemplate("semafor/predId/counts/noNullClass", new Pred2ArgPaths.PredDisambFeature(config, true, false));
+    addTemplate("semafor/predId/counts/nullClass", new Pred2ArgPaths.PredDisambFeature(config, true, true));
 
     // Role id
     // http://www.dipanjandas.com/files/acl2014frames.pdf (table 1)
