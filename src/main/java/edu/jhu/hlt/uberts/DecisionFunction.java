@@ -17,6 +17,8 @@ import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.Uberts.NewStateEdgeListener;
 import edu.jhu.hlt.uberts.auto.Term;
+import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
+import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline.TrainMethod;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -431,61 +433,46 @@ public interface DecisionFunction {
 
           // Return lazy Adjoints so that all edges can be added to make appropriate
           // updates to firstPredInBucket and firstGoldInBucket
-          if (Uberts.LEARN_DEBUG)
-            Log.info(mode + " edge=" + e);
-          return new Pair<>(false, new IncludeLossAdjoints(Adjoints.Constant.ZERO, false));
-//          return new Pair<>(false, new Adjoints() {
-//            @Override
-//            public double forwards() {
-//              return s.forwards();
-//            }
-//            @Override
-//            public void backwards(double dErr_dForwards) {
-//              assert dErr_dForwards < 0 : "should be FN, right?";
-//              // Only update if this was the first (presumably MV) or gold
-//              Pair<HypEdge, Adjoints> p = firstPredInBucket.get(key);
-//              Pair<HypEdge, Adjoints> g = firstGoldInBucket.get(key);
-//
-//              if (g == null) {
-//                // If there is no gold, then pushing down the score of some
-//                // mistake can't possibly lead to a correct decision.
-//                // This can happen e.g. if a path to a gold label was pruned
-//                // by some other fact. In this case that pruning step should
-//                // receive an update, not this step which can do nothing to recover.
-//                return;
-//              }
-//
-//              assert p != g : "this implies no mistake, yet dErr_dForwards=" + dErr_dForwards;
-//              if (p != null || g != null) {
-//                assert (e == p.get1()) ^ (e == g.get1()) : "this edge should be pred or gold";
-//                s.backwards(+dErr_dForwards);
-//              }
-//            }
-//          });
+          if (UbertsLearnPipeline.trainMethod == TrainMethod.MAX_VIOLATION) {
+            if (Uberts.LEARN_DEBUG)
+              Log.info(mode + " edge=" + e);
+            return new Pair<>(false, new IncludeLossAdjoints(Adjoints.Constant.ZERO, false));
+          } else if (UbertsLearnPipeline.trainMethod == TrainMethod.DAGGER1) {
+            return new Pair<>(false, new Adjoints() {
+              @Override
+              public double forwards() {
+                return s.forwards();
+              }
+              @Override
+              public void backwards(double dErr_dForwards) {
+                assert dErr_dForwards < 0 : "should be FN, right?";
+                // Only update if this was the first (presumably MV) or gold
+                Pair<HypEdge, Adjoints> p = firstPredInBucket.get(key);
+                Pair<HypEdge, Adjoints> g = firstGoldInBucket.get(key);
 
-//          return new Pair<>(false, new Adjoints() {
-//            private Adjoints gold = null;
-//            @Override
-//            public double forwards() {
-//              if (gold == null) {
-//                Pair<HypEdge, Adjoints> p = firstGoldInBucket.get(key);
-//                if (p != null)
-//                  gold = p.get2();
-//              }
-//              if (gold != null)
-//                return s.forwards() - gold.forwards();
-//              return s.forwards();
-//            }
-//            @Override
-//            public void backwards(double dErr_dForwards) {
-//              assert dErr_dForwards < 0 : "should be FN, right?";
-//              s.backwards(+dErr_dForwards);
-//              if (gold != null)
-//                gold.backwards(-dErr_dForwards);
-//            }
-//          });
+                if (g == null) {
+                  // If there is no gold, then pushing down the score of some
+                  // mistake can't possibly lead to a correct decision.
+                  // This can happen e.g. if a path to a gold label was pruned
+                  // by some other fact. In this case that pruning step should
+                  // receive an update, not this step which can do nothing to recover.
+                  return;
+                }
+
+                assert p != g : "this implies no mistake, yet dErr_dForwards=" + dErr_dForwards;
+                if (p != null || g != null) {
+                  assert (e == p.get1()) ^ (e == g.get1()) : "this edge should be pred or gold";
+                  s.backwards(+dErr_dForwards);
+                }
+              }
+            });
+          } else {
+            throw new RuntimeException("implement me: " + UbertsLearnPipeline.trainMethod);
+          }
         }
       case EXACTLY_ONE:
+        assert UbertsLearnPipeline.trainMethod == TrainMethod.DAGGER1
+          : "not up to date for: " + UbertsLearnPipeline.trainMethod;
         Pair<HypEdge, Adjoints> p = firstPredInBucket.get(key);
         Pair<HypEdge, Adjoints> g = firstGoldInBucket.get(key);
 

@@ -88,7 +88,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static boolean graphFeats = false;
   static boolean templateFeats = true;
   static boolean pipeline = false;
-  static TrainMethod trainMethod = TrainMethod.MAX_VIOLATION;
+  public static TrainMethod trainMethod = TrainMethod.DAGGER1;
 
   // Global features which aggregate based on s instead of t in argument2(t,f,s,k)
   static boolean srl2ByArg = true;
