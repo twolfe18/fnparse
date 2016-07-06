@@ -68,9 +68,9 @@ if [[ ! -d $RD ]]; then
   exit 1
 fi
 
-TF="$RD/srl.train.shuf0.fixed.facts.gz"
+TF="$RD/srl.train.shuf0.facts.gz"
 for i in `seq 9`; do
-  F=$RD/srl.train.shuf${i}.fixed.facts.gz
+  F=$RD/srl.train.shuf${i}.facts.gz
   if [[ -f $F ]]; then
   TF="$TF,$F"
   else
@@ -83,10 +83,13 @@ echo "TF=$TF"
 #FNPARSE_DATA=~/code/fnparse/toydata
 FNPARSE_DATA=/export/projects/twolfe/fnparse-data
 
+ORACLE_FEATS="event1,predicate2"  # TODO Take this as a command line option
 THRESHOLDS="srl2=-3 srl3=-3"
-BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t AT_MOST_ONE:argument4(t,f,s,k):t:s AT_MOST_ONE:argument4(t,f,s,k):t:k"
+#BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t AT_MOST_ONE:argument4(t,f,s,k):t:s AT_MOST_ONE:argument4(t,f,s,k):t:k"
+BY_GROUP_DECODER="AT_MOST_ONE:argument4(t,f,s,k):t:s AT_MOST_ONE:argument4(t,f,s,k):t:k"
 
-# TODO Make trainSegSize bigger when you launch for real
+#SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/null-span1.facts,$RD/coarsenPos2.rel"
+SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/coarsenPos2.rel"
 
 java -cp $JAR_STABLE -ea -server -Xmx7G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
@@ -94,8 +97,10 @@ java -cp $JAR_STABLE -ea -server -Xmx7G \
     data.wordnet $FNPARSE_DATA/wordnet/dict \
     data.propbank.frames $FNPARSE_DATA/ontonotes-release-5.0-fixed-frames/frames \
     pred2arg.feat.paths $FNPARSE_DATA/pred2arg-paths/propbank.txt \
+    rolePathCounts $FNPARSE_DATA/pred2arg-paths/propbank.byRole.txt \
     miniDevSize 300 \
     trainSegSize 6000 \
+    passes 3 \
     predicate2.hashBits 25 \
     argument4.hashBits 26 \
     srl2.hashBits 25 \
@@ -106,15 +111,16 @@ java -cp $JAR_STABLE -ea -server -Xmx7G \
     passiveAggressive true \
     addLhsScoreToRhsScore false \
     train.facts $TF \
-    dev.facts $RD/srl.dev.shuf.fixed.facts.gz \
+    dev.facts $RD/srl.dev.shuf.facts.gz \
     test.facts $RD/srl.test.facts.gz \
     grammar $RD/grammar.trans \
     relations $RD/relations.def \
-    schema $RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/null-span1.facts,$RD/coarsenPos2.rel \
+    schema "$SCHEMA" \
     thresholdNOPE "$THRESHOLDS" \
     byGroupDecoder "$BY_GROUP_DECODER" \
-    oracleFeats event1,predicate2 \
+    oracleFeats "$ORACLE_FEATS" \
     agendaPriority "$PRIORITY" \
+    frameCooc false \
     globalFeatMode $GLOBAL_FEAT_MODE \
     featureSetDir $FEATURE_SET_DIR \
     predictions.outputDir $PREDICTIONS_DIR
