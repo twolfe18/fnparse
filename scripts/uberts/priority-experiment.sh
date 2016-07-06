@@ -81,15 +81,26 @@ echo "TF=$TF"
 
 #FNPARSE_DATA=~/scratch/fnparse-data
 #FNPARSE_DATA=~/code/fnparse/toydata
-FNPARSE_DATA=/export/projects/twolfe/fnparse-data
 
-ORACLE_FEATS="event1,predicate2"  # TODO Take this as a command line option
+# Lets you define this in your own environment
+if [[ -z ${FNPARSE_DATA+x} ]]; then
+  FNPARSE_DATA=/export/projects/twolfe/fnparse-data
+  echo "setting FNPARSE_DATA=$FNPARSE_DATA"
+fi
+
+
+ORACLE_FEATS="event1,predicate2,argument4"  # TODO Take this as a command line option
 THRESHOLDS="srl2=-3 srl3=-3"
 #BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t AT_MOST_ONE:argument4(t,f,s,k):t:s AT_MOST_ONE:argument4(t,f,s,k):t:k"
 BY_GROUP_DECODER="AT_MOST_ONE:argument4(t,f,s,k):t:s AT_MOST_ONE:argument4(t,f,s,k):t:k"
 
 #SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/null-span1.facts,$RD/coarsenPos2.rel"
 SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/coarsenPos2.rel"
+
+MINI_DEV_SIZE=200
+MINI_TRAIN_SIZE=1000
+#MINI_DEV_SIZE=300
+#MINI_TRAIN_SIZE=6000
 
 java -cp $JAR_STABLE -ea -server -Xmx7G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
@@ -98,8 +109,8 @@ java -cp $JAR_STABLE -ea -server -Xmx7G \
     data.propbank.frames $FNPARSE_DATA/ontonotes-release-5.0-fixed-frames/frames \
     pred2arg.feat.paths $FNPARSE_DATA/pred2arg-paths/propbank.txt \
     rolePathCounts $FNPARSE_DATA/pred2arg-paths/propbank.byRole.txt \
-    miniDevSize 300 \
-    trainSegSize 6000 \
+    miniDevSize $MINI_DEV_SIZE \
+    trainSegSize $MINI_TRAIN_SIZE \
     passes 3 \
     predicate2.hashBits 25 \
     argument4.hashBits 26 \
@@ -117,7 +128,7 @@ java -cp $JAR_STABLE -ea -server -Xmx7G \
     relations $RD/relations.def \
     schema "$SCHEMA" \
     thresholdNOPE "$THRESHOLDS" \
-    byGroupDecoder "$BY_GROUP_DECODER" \
+    byGroupDecoderNOPE "$BY_GROUP_DECODER" \
     oracleFeats "$ORACLE_FEATS" \
     agendaPriority "$PRIORITY" \
     frameCooc false \
