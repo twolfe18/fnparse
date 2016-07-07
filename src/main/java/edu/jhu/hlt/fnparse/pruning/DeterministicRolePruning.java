@@ -190,10 +190,10 @@ public class DeterministicRolePruning implements Serializable {
       if (p != null)
         return p;
       if (cParser == null) {
-        throw new RuntimeException("Sentence did not contain a parse, "
+        Log.warn("Sentence did not contain a parse, "
             + "and you didn't provide a cParser. Sentence.id=" + s.getId());
+        return null;
       }
-      //return parser.getCParse(s);
       return cParser.apply(s);
     }
 
@@ -234,61 +234,63 @@ public class DeterministicRolePruning implements Serializable {
         } else if (mode == Mode.XUE_PALMER
             || mode == Mode.XUE_PALMER_HERMANN) {
           ConstituencyParse parse = getConstituencyParse();
-          //parse.checkSpans(sent.size());
-          for (FrameInstance fi : input.getFrameInstances()) {
-            ConstituencyParse.Node pred =
-                parse.getConstituent(fi.getTarget());
-            Set<Span> spanSet = new HashSet<>();
-            if (pred == null) {
-              // Single-token targets are guaranteed to be nodes in the
-              // tree, but multi-word targets often won't be.
-              HeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
-              int h = hf.head(fi.getTarget(), input.getSentence());
-              pred = parse.getConstituent(Span.widthOne(h));
-            }
-            if (pred == null) {
-              Log.warn("[" + mode + " decode] target is not a span! "
-                  + Describe.span(fi.getTarget(), fi.getSentence()));
-            } else {
-              xuePalmerHelper(pred, spanSet);
-            }
-            if (mode == Mode.XUE_PALMER_HERMANN && pred != null) {
-              Span parent;
-              if (pred.getParent() == null) {
-                parent = Span.getSpan(0, fi.getSentence().size());
-                Log.warn("pred has no parent " + pred + " in "
-                    + fi.getSentence().getId());
+          if (parse != null) {
+            //parse.checkSpans(sent.size());
+            for (FrameInstance fi : input.getFrameInstances()) {
+              ConstituencyParse.Node pred =
+                  parse.getConstituent(fi.getTarget());
+              Set<Span> spanSet = new HashSet<>();
+              if (pred == null) {
+                // Single-token targets are guaranteed to be nodes in the
+                // tree, but multi-word targets often won't be.
+                HeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
+                int h = hf.head(fi.getTarget(), input.getSentence());
+                pred = parse.getConstituent(Span.widthOne(h));
+              }
+              if (pred == null) {
+                Log.warn("[" + mode + " decode] target is not a span! "
+                    + Describe.span(fi.getTarget(), fi.getSentence()));
               } else {
-                parent = pred.getParent().getSpan();
+                xuePalmerHelper(pred, spanSet);
               }
-              int s, e;
-              // 1)
-              spanSet.add(fi.getTarget());
-              // 2)
-              s = fi.getTarget().end;
-              e = parent.end;
-              if (s < e)
-                spanSet.add(Span.getSpan(s, e));
-              // 3)
-              s = parent.start;
-              e = fi.getTarget().start;
-              if (s < e)
-                spanSet.add(Span.getSpan(s, e));
-            }
-            List<Span> spans = new ArrayList<>();
-            spans.add(Span.nullSpan);
-            //spans.addAll(spanSet);
-            for (Span s : spanSet) {
-              if (s.end > sent.size() || s.start < 0 || s.start >= s.end) {
-                Log.warn("bad span: " + s + " vs " + sent.size());
-                continue;
+              if (mode == Mode.XUE_PALMER_HERMANN && pred != null) {
+                Span parent;
+                if (pred.getParent() == null) {
+                  parent = Span.getSpan(0, fi.getSentence().size());
+                  Log.warn("pred has no parent " + pred + " in "
+                      + fi.getSentence().getId());
+                } else {
+                  parent = pred.getParent().getSpan();
+                }
+                int s, e;
+                // 1)
+                spanSet.add(fi.getTarget());
+                // 2)
+                s = fi.getTarget().end;
+                e = parent.end;
+                if (s < e)
+                  spanSet.add(Span.getSpan(s, e));
+                // 3)
+                s = parent.start;
+                e = fi.getTarget().start;
+                if (s < e)
+                  spanSet.add(Span.getSpan(s, e));
               }
-              assert s != Span.nullSpan;
-              spans.add(s);
+              List<Span> spans = new ArrayList<>();
+              spans.add(Span.nullSpan);
+              //spans.addAll(spanSet);
+              for (Span s : spanSet) {
+                if (s.end > sent.size() || s.start < 0 || s.start >= s.end) {
+                  Log.warn("bad span: " + s + " vs " + sent.size());
+                  continue;
+                }
+                assert s != Span.nullSpan;
+                spans.add(s);
+              }
+              FrameInstance key = FrameInstance.frameMention(
+                  fi.getFrame(), fi.getTarget(), fi.getSentence());
+              possibleSpans.put(key, spans);
             }
-            FrameInstance key = FrameInstance.frameMention(
-                fi.getFrame(), fi.getTarget(), fi.getSentence());
-            possibleSpans.put(key, spans);
           }
         } else if (mode == Mode.XUE_PALMER_DEP
             || mode == Mode.XUE_PALMER_DEP_HERMANN) {

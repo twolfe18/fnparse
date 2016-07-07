@@ -691,7 +691,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (sent == null)
       throw new IllegalStateException("call buildSentenceCacheInUberts first");
 
-    if (sent.getStanfordParse() == null) {
+    DeterministicRolePruning.Mode mode = DeterministicRolePruning.Mode.XUE_PALMER_HERMANN;
+//        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
+    if (mode == DeterministicRolePruning.Mode.XUE_PALMER_HERMANN && sent.getStanfordParse() == null) {
       Log.info("[main] WARNING: " + sent.getId() + " doesn't have a cparse, not building xue-palmer-otf-args2");
       return;
     }
@@ -720,9 +722,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //    }
 
     // 2) Call the argument finding code
-    DeterministicRolePruning drp = new DeterministicRolePruning(
-        DeterministicRolePruning.Mode.XUE_PALMER_HERMANN, null, null);
-//        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
+    DeterministicRolePruning drp = new DeterministicRolePruning(mode, null, null);
     FNParseSpanPruning args = drp.setupInference(Arrays.asList(argsFor), null).decodeAll().get(0);
     for (SpanPair ts : args.getAllArgs()) {
       Span t = ts.get1();
@@ -740,8 +740,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     // Add xue-palmer-args2
     buildSentenceCacheInUberts();
-    buildXuePalmerOTF();
-    buildTackstromArgs();
+    try { buildXuePalmerOTF(); }
+    catch (Exception e) {
+      e.printStackTrace();
+    }
+    try { buildTackstromArgs(); }
+    catch (Exception e) {
+      e.printStackTrace();
+    }
 //    buildDepDecompArgs();
 
     eventCounts.increment("consume/" + mode.toString());
