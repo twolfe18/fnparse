@@ -280,8 +280,9 @@ public class OldFeaturesWrapper {
         throw new RuntimeException("not a file: " + ff.getPath());
       int dim = 1 << config.getInt(r.getName() + ".hashBits", 25);
       Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
-      Ints3 i3 = new Ints3(bft, r, ff, dim);
-      if (r.getName().equals("argument4") && ff.getPath().contains("by-hand")) {
+      boolean cacheArg4 = r.getName().equals("argument4") && ff.getPath().contains("by-hand");
+      Ints3 i3 = new Ints3(bft, r, ff, dim, cacheArg4);
+      if (cacheArg4) {
         Log.info("[main] refining with (f,k) and (k,)");
         i3.refine(e -> {
           assert e.getRelation().getName().equals("argument4");
@@ -352,14 +353,14 @@ public class OldFeaturesWrapper {
       }
     }
 
-    public Ints3(BasicFeatureTemplates bft, Relation r, File featureSet, int dimension) {
+    public Ints3(BasicFeatureTemplates bft, Relation r, File featureSet, int dimension, boolean cacheArg4) {
       this.inner = new OldFeaturesWrapper(bft, featureSet);
       this.rel = r;
       int numIntercept = 0;
       this.dimension = dimension;
       this.theta = new AveragedPerceptronWeights(dimension, numIntercept);
 
-      if (r.getName().equals("argument4")) {
+      if (cacheArg4 && r.getName().equals("argument4")) {
         arg4FeatureCache = new HashMap<>();
       }
 
@@ -414,7 +415,7 @@ public class OldFeaturesWrapper {
         cacheCounts.increment("arg4CacheHit");
       } else {
         cacheCounts.increment("arg4CacheMiss");
-        if (arg4 && cacheCounts.getTotalCount() % 10000 == 0)
+        if (key != null && cacheCounts.getTotalCount() % 10000 == 0)
           Log.info(cacheCounts);
 
         // Call the wrapped features

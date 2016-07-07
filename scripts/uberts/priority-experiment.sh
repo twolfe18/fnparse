@@ -89,7 +89,7 @@ if [[ -z ${FNPARSE_DATA+x} ]]; then
 fi
 
 
-ORACLE_FEATS="event1,predicate2,argument4"  # TODO Take this as a command line option
+ORACLE_FEATS="event1,predicate2"  # TODO Take this as a command line option
 THRESHOLDS="srl2=-3 srl3=-3"
 #BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t AT_MOST_ONE:argument4(t,f,s,k):t:s AT_MOST_ONE:argument4(t,f,s,k):t:k"
 BY_GROUP_DECODER="AT_MOST_ONE:argument4(t,f,s,k):t:s AT_MOST_ONE:argument4(t,f,s,k):t:k"

@@ -691,6 +691,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (sent == null)
       throw new IllegalStateException("call buildSentenceCacheInUberts first");
 
+    if (sent.getStanfordParse() == null) {
+      Log.info("[main] WARNING: " + sent.getId() + " doesn't have a cparse, not building xue-palmer-otf-args2");
+      return;
+    }
+
     // Run arg triage
     // 1) Read predicates/targets out of the state (they should be added already)
     Relation ev1 = u.getEdgeType("event1");
