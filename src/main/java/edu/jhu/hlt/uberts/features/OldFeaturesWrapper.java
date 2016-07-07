@@ -2,13 +2,14 @@ package edu.jhu.hlt.uberts.features;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.ToIntFunction;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
@@ -24,10 +25,8 @@ import edu.jhu.hlt.fnparse.features.TemplateContext;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateJoin;
-import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
-import edu.jhu.hlt.fnparse.features.precompute.TemplateTransformerTemplate;
 import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
@@ -37,13 +36,13 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
-import edu.jhu.hlt.uberts.Labels;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Relation.EqualityArray;
@@ -255,6 +254,13 @@ public class OldFeaturesWrapper {
     }
   }
 
+  /**
+   * WARNING: Do not give this features which make use of anything other than
+   * (t,s) if you are using refinements (argument4). Features are cached on that
+   * key but computed without prohibiting reading (f,k). If features read (f,k)
+   * then the correctness depends on the order of argument4(t,f,s,k) seen at
+   * training and test time.
+   */
   public static class Ints3 implements LocalFactor {
 
     public static Ints3 build(BasicFeatureTemplates bft, Relation r, ExperimentProperties config) {
@@ -272,31 +278,63 @@ public class OldFeaturesWrapper {
       File ff = new File(dir, r.getName() + ".fs");
       if (!ff.isFile())
         throw new RuntimeException("not a file: " + ff.getPath());
-      int dim = 1 << config.getInt(r.getName() + ".hashBits", 24);
+      int dim = 1 << config.getInt(r.getName() + ".hashBits", 25);
       Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
-      return new Ints3(bft, r, ff, dim);
+      Ints3 i3 = new Ints3(bft, r, ff, dim);
+      if (r.getName().equals("argument4") && ff.getPath().contains("by-hand")) {
+        Log.info("[main] refining with (f,k) and (k,)");
+        i3.refine(e -> {
+          assert e.getRelation().getName().equals("argument4");
+          String frame = (String) e.getTail(1).getValue();
+          String role = (String) e.getTail(3).getValue();
+          return Hash.mix(Hash.hash(frame), Hash.hash(role));
+        });
+        i3.refine(e -> {
+          assert e.getRelation().getName().equals("argument4");
+          String role = (String) e.getTail(3).getValue();
+          return Hash.hash(role);
+        });
+//        i3.refine(e -> {
+//          assert e.getRelation().getName().equals("argument4");
+//          String frame = (String) e.getTail(1).getValue();
+//          return Hash.hash(frame);
+//        });
+      }
+      return i3;
     }
 
     private OldFeaturesWrapper inner;
     private Relation rel;
     private AveragedPerceptronWeights theta;
+    private int dimension;
     private Intercept intercept;
     private boolean useAvg = false;
     private Counts<String> cnt = new Counts<>();
 
-    private HashFunction hf = Hashing.murmur3_32(42); // slightly slower than Jenkins, maybe worth the peace of mind, empirically no better
-    private Alphabet<String> alph;  // don't use, too much memory
-    private LongIntHashMap alph2;   // don't use, probably too much memory
+    // For refinements
+    private List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>> theta2;
+    private Map<SpanPair, int[]> arg4FeatureCache;
+
+    // For caching refined features based on (t,s)
+    // Only for use with refinements.
+    private Counts<String> cacheCounts = new Counts<>();
+    private Sentence cacheTag = null;
+
+    public void refine(ToIntFunction<HypEdge> f) {
+      if (!rel.getName().equals("argument4"))
+        throw new IllegalStateException("refinements are only setup to work with argument4(t,f,s,k) edges");
+      if (theta2 == null)
+        theta2 = new ArrayList<>();
+      theta2.add(new Pair<>(f, new AveragedPerceptronWeights(dimension, 0)));
+    }
 
     private BufferedWriter featStrDebug;
-    private Uberts u;
 
-    public void writeFeaturesToDisk(File writeFeatsTo, Uberts u) {
+    public void writeFeaturesToDisk(File writeFeatsTo) {
 //      String key = r.getName() + ".saveFeatures";
 //      if (config.containsKey(key)) {
 //      File writeFeatsTo = config.getFile(key);
       Log.info("[main] writing features to " + writeFeatsTo.getPath());
-      this.u = u;
       try {
         featStrDebug = FileUtil.getWriter(writeFeatsTo);
       } catch (Exception e) {
@@ -318,7 +356,12 @@ public class OldFeaturesWrapper {
       this.inner = new OldFeaturesWrapper(bft, featureSet);
       this.rel = r;
       int numIntercept = 0;
+      this.dimension = dimension;
       this.theta = new AveragedPerceptronWeights(dimension, numIntercept);
+
+      if (r.getName().equals("argument4")) {
+        arg4FeatureCache = new HashMap<>();
+      }
 
       ExperimentProperties config = ExperimentProperties.getInstance();
       String k = r.getName() + ".intercept.mag";
@@ -327,19 +370,6 @@ public class OldFeaturesWrapper {
         Log.info("[main] using " + k + "=" + mag);
         this.intercept = new Intercept(mag);
       }
-
-//      this.alph = new Alphabet<>();
-//      this.alph2 = new LongIntHashMap();
-    }
-
-    private int index(String s) {
-      long h = Hash.hash(s);
-      int i = alph2.getWithDefault(h, -1);
-      if (i < 0) {
-        i = alph2.size();
-        alph2.put(h, i);
-      }
-      return i;
     }
 
     public void useAverageWeights(boolean useAvg) {
@@ -351,67 +381,80 @@ public class OldFeaturesWrapper {
       theta.completedObservation();
       if (intercept != null)
         intercept.completedObservation();
+      if (theta2 != null) {
+        for (Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights> x : theta2)
+          x.get2().completedObservation();
+      }
     }
 
     @Override
     public Adjoints score(HypEdge y, Uberts x) {
       assert y.getRelation() == rel;
       cnt.increment("score/" + y.getRelation().getName());
-      List<Pair<TemplateAlphabet, String>> fyx = inner.features(y, x);
-      if (fyx.isEmpty()) {
-        cnt.increment("score/noFeat/" + y.getRelation().getName());
-        if (intercept == null)
-          return Adjoints.Constant.ZERO;
-        return useAvg ? intercept.avgScore() : intercept.score();
+
+      // Check whether the cache is valid
+      assert x.dbgSentenceCache != null;
+      if (arg4FeatureCache != null && x.dbgSentenceCache != cacheTag) {
+        cacheTag = x.dbgSentenceCache;
+        arg4FeatureCache.clear();
+        cacheCounts.increment("arg4CacheInvalidation");
       }
-      if (cnt.getTotalCount() % 75000 == 0)
-        System.out.println("Int3 events: " + cnt.toString());
 
-      int[] features = new int[fyx.size()];
-      int T = inner.getNumTemplates();
-      for (int i = 0; i < features.length; i++) {
-        Pair<TemplateAlphabet, String> fyxi = fyx.get(i);
-        int t = fyxi.get1().index;
-        assert t >= 0 && t < T;
+      SpanPair key = null;
+      int[] features = null;
+      boolean arg4 = y.getRelation().getName().equals("argument4");
+      if (arg4FeatureCache != null && arg4) {
+        Span t = Span.inverseShortString((String) y.getTail(0).getValue());
+        Span s = Span.inverseShortString((String) y.getTail(2).getValue());
+        key = new SpanPair(t, s);
+        features = arg4FeatureCache.get(key);
+      }
 
-        if (alph2 != null) {
-          String s = t + "/" + fyxi.get2();
-          features[i] = index(s);
-        } else {
+      if (features != null) {
+        cacheCounts.increment("arg4CacheHit");
+      } else {
+        cacheCounts.increment("arg4CacheMiss");
+        if (arg4 && cacheCounts.getTotalCount() % 10000 == 0)
+          Log.info(cacheCounts);
 
-          // Slightly slower than Jenkinsa and worse performance.
-          // Performance may be caused by not doing f*T+t.
-          //        features[i] = hf.newHasher()
-          //            .putShort((short) i)
-          //            .putString(fyxi.get2(), Charsets.UTF_8)
-          //            .hash().asInt();
+        // Call the wrapped features
+        List<Pair<TemplateAlphabet, String>> fyx = inner.features(y, x);
+        if (fyx.isEmpty()) {
+          cnt.increment("score/noFeat/" + y.getRelation().getName());
+          if (intercept == null)
+            return Adjoints.Constant.ZERO;
+          return useAvg ? intercept.avgScore() : intercept.score();
+        }
+        if (cnt.getTotalCount() % 75000 == 0)
+          System.out.println("Int3 events: " + cnt.toString());
 
-//          int f = hf.newHasher()
-//              .putString(fyxi.get2(), Charsets.UTF_8)
-//              .hash().asInt();
+        // Convert to int[]
+        features = new int[fyx.size()];
+        int T = inner.getNumTemplates();
+        for (int i = 0; i < features.length; i++) {
+          Pair<TemplateAlphabet, String> fyxi = fyx.get(i);
+          int t = fyxi.get1().index;
+          assert t >= 0 && t < T;
           int f = Hash.hash(fyxi.get2());
-//          int f = (int) Hash.sha256(fyxi.get2());
           features[i] = f * T + t;
         }
 
-//        if (alph != null) {
-//          features[i] = alph.lookupIndex(t + "/" + fyxi.get2());
-//        } else {
-//          int f = Hash.hash(fyxi.get2());
-//          features[i] = f * T + t;
-//        }
-      }
+        // Save to cache
+        if (key != null) {
+          arg4FeatureCache.put(key, features);
+        }
 
-      if (featStrDebug != null) {
-        assert u != null;
-        try {
-          featStrDebug.write(y + "\t" + u.getLabel(y));
-          for (int i = 0; i < features.length; i++) {
-            featStrDebug.write("\t" + features[i]);
+        // Maybe output features to disk
+        if (featStrDebug != null) {
+          try {
+            featStrDebug.write(y + "\t" + x.getLabel(y));
+            for (int i = 0; i < features.length; i++) {
+              featStrDebug.write("\t" + features[i]);
+            }
+            featStrDebug.newLine();
+          } catch (Exception e) {
+            throw new RuntimeException(e);
           }
-          featStrDebug.newLine();
-        } catch (Exception e) {
-          throw new RuntimeException(e);
         }
       }
 
@@ -426,6 +469,24 @@ public class OldFeaturesWrapper {
         if (intercept != null)
           a = Adjoints.sum(a, intercept.score());
       }
+
+      // If there are refinements, take the product of those with appropriate weights
+      if (theta2 != null) {
+        for (Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights> ref : theta2) {
+          int r = ref.get1().applyAsInt(y);
+          int[] fr = new int[features.length];
+          for (int j = 0; j < fr.length; j++)
+            fr[j] = Hash.mix(r, features[j]);
+          Adjoints a2;
+          if (useAvg) {
+            a2 = ref.get2().averageView().score(fr, reindex);
+          } else {
+            a2 = ref.get2().score(fr, reindex);
+          }
+          a = Adjoints.sum(a, a2);
+        }
+      }
+
       return a;
     }
   }
@@ -512,71 +573,59 @@ public class OldFeaturesWrapper {
     return features.size();
   }
 
-  public OldFeaturesWrapper(BasicFeatureTemplates bft, BiAlph bialph, File featureSet) {
-    this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
-    for (String[] feat : FeatureSet.getFeatureSet3(featureSet)) {
-      Template prod = bft.getBasicTemplate(feat[0]);
-      for (int i = 1; i < feat.length; i++)
-        prod = new TemplatedFeatures.TemplateJoin(prod, bft.getBasicTemplate(feat[i]));
-      features.add(new TemplateAlphabet(prod, StringUtils.join("*", feat), features.size()));
-    }
-    ctx = new TemplateContext();
-    hf = new DependencyHeadFinder();
-    skipped = new Counts<>();
-  }
-
-
-  public OldFeaturesWrapper(
-      BasicFeatureTemplates bft,
-      String featureSetWithPluses,
-      File bialph, // e.g. data/mimic-coe/framenet/coherent-shards/alphabet.txt.gz
-      File fcounts // e.g. data/mimic-coe/framenet/feature-counts/all.txt.gz
-      ) throws IOException {
-
-    TemplateTransformerTemplate ttt = new TemplateTransformerTemplate(fcounts, bialph, featureSetWithPluses);
-    Map<String, Template> extra = ttt.getSpecialTemplates(bft);
-    ttt.free();
-
-    this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
-    try {
-      for (Template t : TemplatedFeatures.parseTemplates(featureSetWithPluses, bft, extra)) {
-        int i = features.size();
-        this.features.add(new TemplateAlphabet(t, "t" + i, i));
-      }
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-    if (DEBUG > 0)
-      Log.info("setup with " + features.size() + " features");
-
-    customRefinements = e -> {
-      assert e.getNumTails() == 6;
-      if (UbertsPipeline.isNullSpan(e))
-        return new int[] {0};
-//      String f = (String) e.getTail(2).getValue();
-//      String k = (String) e.getTail(5).getValue();
-      HypNode f = e.getTail(2);
-      HypNode k = e.getTail(5);
-      int mask = (1<<14)-1;
-      int ff = (f.hashCode() & mask) * 2 + 0;
-      int kk = (k.hashCode() & mask) * 2 + 1;
-//      return new int[] {1, 2 + ff, 2 + kk};
-      return new int[] {1, 2 + (k.hashCode() & mask)};
-    };
-
-    ctx = new TemplateContext();
-    hf = new DependencyHeadFinder();
-    skipped = new Counts<>();
-  }
+//  public OldFeaturesWrapper(
+//      BasicFeatureTemplates bft,
+//      String featureSetWithPluses,
+//      File bialph, // e.g. data/mimic-coe/framenet/coherent-shards/alphabet.txt.gz
+//      File fcounts // e.g. data/mimic-coe/framenet/feature-counts/all.txt.gz
+//      ) throws IOException {
+//
+//    TemplateTransformerTemplate ttt = new TemplateTransformerTemplate(fcounts, bialph, featureSetWithPluses);
+//    Map<String, Template> extra = ttt.getSpecialTemplates(bft);
+//    ttt.free();
+//
+//    this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
+//    try {
+//      for (Template t : TemplatedFeatures.parseTemplates(featureSetWithPluses, bft, extra)) {
+//        int i = features.size();
+//        this.features.add(new TemplateAlphabet(t, "t" + i, i));
+//      }
+//    } catch (Exception e) {
+//      throw new RuntimeException(e);
+//    }
+//    if (DEBUG > 0)
+//      Log.info("setup with " + features.size() + " features");
+//
+//    customRefinements = e -> {
+//      assert e.getNumTails() == 6;
+//      if (UbertsPipeline.isNullSpan(e))
+//        return new int[] {0};
+////      String f = (String) e.getTail(2).getValue();
+////      String k = (String) e.getTail(5).getValue();
+//      HypNode f = e.getTail(2);
+//      HypNode k = e.getTail(5);
+//      int mask = (1<<14)-1;
+//      int ff = (f.hashCode() & mask) * 2 + 0;
+//      int kk = (k.hashCode() & mask) * 2 + 1;
+////      return new int[] {1, 2 + ff, 2 + kk};
+//      return new int[] {1, 2 + (k.hashCode() & mask)};
+//    };
+//
+//    ctx = new TemplateContext();
+//    hf = new DependencyHeadFinder();
+//    skipped = new Counts<>();
+//  }
 
   public OldFeaturesWrapper(BasicFeatureTemplates bft, File featureSet) {
     if (!featureSet.isFile())
       throw new IllegalArgumentException("feature set file doesn't exist: " + featureSet);
+
+    Random rightRandomPrune = null; //new Random(9001);
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
     for (String[] feat : FeatureSet.getFeatureSet3(featureSet)) {
       String n = StringUtils.join("*", feat);
       Template[] fts = bft.getBasicTemplates(feat);
-      Template ft = TemplateJoin.prod(fts);
+      Template ft = TemplateJoin.prod(fts, rightRandomPrune);
       features.add(new TemplateAlphabet(ft, n, features.size()));
     }
 

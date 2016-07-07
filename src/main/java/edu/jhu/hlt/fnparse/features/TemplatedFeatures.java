@@ -6,9 +6,11 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
@@ -68,6 +70,55 @@ public abstract class TemplatedFeatures implements Serializable {
     }
   }
 
+  public static class TemplateJoinWithRandomSample implements Template {
+    private Template left, right;
+    private Random rand;
+    public TemplateJoinWithRandomSample(Template left, Template right, Random rand) {
+      if (left == null || right == null)
+        throw new IllegalArgumentException();
+      this.left = left;
+      this.right = right;
+      this.rand = rand;
+    }
+    @Override
+    public Iterable<String> extract(TemplateContext context) {
+      Iterable<String> l = left.extract(context);
+      if (l == null)
+        return null;
+      Iterable<String> r = right.extract(context);
+      if (r == null)
+        return null;
+
+      List<String> ll = iter2list(l);
+      List<String> rr = iter2list(r);
+      List<String> rrp = prune(rr);
+      List<String> lr = new ArrayList<>(ll.size() * rr.size());
+      for (String a : ll)
+        for (String b : rrp)
+          lr.add(a + "." + b);
+      return lr;
+    }
+    private List<String> prune(List<String> r) {
+      int n = r.size();
+      // 64 => 36
+      // 100 => 40
+      // 400 => 60
+      // 900 => 80
+      int lim = (int) (20 + 2 * Math.sqrt(n));
+      if (n < lim)
+        return r;
+      assert lim > 0;
+      return ReservoirSample.sample(r, lim, rand);
+    }
+    static List<String> iter2list(Iterable<String> l) {
+      if (l instanceof List)
+        return (List<String>) l;
+      List<String> ll = new ArrayList<>();
+      for (String s : l) ll.add(s);
+      return ll;
+    }
+  }
+
   /** Conjoins two basic templates */
   public static class TemplateJoin implements Template {
     private Template left, right;
@@ -96,6 +147,17 @@ public abstract class TemplatedFeatures implements Serializable {
     }
 
     public static Template prod(Template[] templates) {
+      return prod(templates, null);
+    }
+    public static Template prod(Template[] templates, Random rightRandomPrune) {
+      if (rightRandomPrune != null) {
+        Log.info("[main] WARNING: using random feature pruning with: " + Arrays.toString(templates));
+        int n = templates.length;
+        Template t = templates[n-1];
+        for (int i = n-2; i >= 0; i--)
+          t = new TemplateJoinWithRandomSample(templates[i], t, rightRandomPrune);
+        return t;
+      }
       Template t = templates[0];
       for (int i = 1; i < templates.length; i++)
         t = new TemplateJoin(t, templates[i]);

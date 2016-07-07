@@ -60,7 +60,13 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
       throw new IllegalArgumentException("this indexes on names, none provided");
     assert t.index == size();
     Integer old = templateName2index.put(t.name, t.index);
-    assert old == null;
+
+    // This happens currently because I'm stripping off the "-TopK" and "-CntC"
+    // suffixes as a hack.
+//    assert old == null : t.name + " maps to " + t.index + " and " + old;
+    if (old != null)
+      Log.warn(t.name + " maps to " + t.index + " and " + old);
+
     return super.add(t);
   }
 

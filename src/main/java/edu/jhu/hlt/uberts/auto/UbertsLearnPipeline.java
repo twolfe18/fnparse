@@ -513,7 +513,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       String key = r.rhs.relName + ".outputFeatures";
       if (config.containsKey(key)) {
         File outputFeatures = config.getFile(key);
-        fe3.writeFeaturesToDisk(outputFeatures, u);
+        fe3.writeFeaturesToDisk(outputFeatures);
       }
     }
 

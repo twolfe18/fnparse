@@ -2356,6 +2356,18 @@ public class BasicFeatureTemplates {
         return f.getName();
       }
     });
+    addLabel("frameRoleWithBackoffs", new Template() {
+      public Iterable<String> extract(TemplateContext context) {
+        List<String> l = new ArrayList<>();
+        l.add("fr=?");
+        if (context.getRoleS() != null) {
+          l.add("r=" + context.getRoleS());
+          if (context.getFrameStr() != null)
+            l.add("r=" + context.getRoleS() + "/f=" + context.getFrameStr());
+        }
+        return l;
+      }
+    });
     addLabel("frameMaybeWithIntercept", new Template() {
       public Iterable<String> extract(TemplateContext context) {
         Frame f = context.getFrame();
