@@ -20,6 +20,9 @@ coarsenPos2.rel:
 grammar.trans:
 	cp $(FNPARSE)/data/srl-reldata/grammar/srl-grammar-$(DATASET).trans grammar.trans
 
+grammar.predicate2.trans:
+	cp $(FNPARSE)/data/srl-reldata/grammar/predicate2.trans $@
+
 frameTriage4.rel.gz: ../unified/frameTriage4.rel.gz
 	zcat ../unified/frameTriage4.rel.gz | head -n 1 >frameTriage4.rel
 	zgrep $(DATASET) ../unified/frameTriage4.rel.gz >>frameTriage4.rel
@@ -154,7 +157,7 @@ srl.train.shuf%.facts.gz: srl.train.facts.gz
 coe:
 	rsync -aLvz --delete ./ test3b:/export/projects/twolfe/fnparse-output/experiments/priority-experiments/$(DATASET)/rel-data
 
-all: relations.def grammar.trans frameTriage4.rel.gz coarsenFrame2.rel.gz role2.rel.gz spans.schema.facts.gz null-span1.facts coarsenPos2.rel
+all: relations.def grammar.trans grammar.predicate2.trans frameTriage4.rel.gz coarsenFrame2.rel.gz role2.rel.gz spans.schema.facts.gz null-span1.facts coarsenPos2.rel
 	make srl.train.shuf0.facts.gz
 	make srl.train.shuf1.facts.gz
 	make srl.train.shuf2.facts.gz

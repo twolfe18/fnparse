@@ -179,7 +179,7 @@ public interface DecisionFunction {
         Relation rel = bg.relation;
         if (rel.getName().equals("argument4") && bg.mode == ByGroupMode.AT_MOST_ONE) {
           df.addAndCombine(rel, bg, (a1, a2) -> {
-            return new MultiAtLeast1((ByGroup) a1, (ByGroup) a2);
+            return new MultiAtMost1((ByGroup) a1, (ByGroup) a2);
           });
         } else {
           df.add(rel, bg);
@@ -312,11 +312,11 @@ public interface DecisionFunction {
     }
   }
 
-  public static class MultiAtLeast1 implements DecisionFunction {
+  public static class MultiAtMost1 implements DecisionFunction {
     private ByGroup left, right;
     private Uberts u;
 
-    public MultiAtLeast1(ByGroup atLeastOneLeft, ByGroup atLeastOneRight) {
+    public MultiAtMost1(ByGroup atLeastOneLeft, ByGroup atLeastOneRight) {
       Log.info("[main] combining " + atLeastOneLeft + " and " + atLeastOneRight);
       if (atLeastOneLeft.mode != ByGroupMode.AT_MOST_ONE || atLeastOneRight.mode != ByGroupMode.AT_MOST_ONE)
         throw new IllegalArgumentException();
