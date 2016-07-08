@@ -852,19 +852,19 @@ public class Pred2ArgPaths {
       }
 
       // Frame refinements
-      Frame f = context.getFrame();
+      String f = context.getFrameStr();
       if (f != null) {
         int nn = feats.size();
         if (includeNullClassFeatures) {
           List<String> f2 = new ArrayList<>(nn*2);
           for (int i = 0; i < nn; i++) {
             f2.add(feats.get(i));
-            f2.add(feats.get(i) + "/" + f.getName());
+            f2.add(feats.get(i) + "/" + f);
           }
           feats = f2;
         } else {
           for (int i = 0; i < nn; i++)
-            feats.set(i, feats.get(i) + "/" + f.getName());
+            feats.set(i, feats.get(i) + "/" + f);
         }
       }
 
