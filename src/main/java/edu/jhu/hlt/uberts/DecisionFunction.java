@@ -8,14 +8,16 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
+import edu.jhu.hlt.uberts.DecisionFunction.ByGroup.ByGroupMode;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
-import edu.jhu.hlt.uberts.Uberts.NewStateEdgeListener;
 import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
 import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline.TrainMethod;
@@ -74,6 +76,19 @@ public interface DecisionFunction {
    * are free to track state related to how/when/with-what decide() is called.
    */
   public static class Unanimous implements DecisionFunction {
+
+    /**
+     * Accepts white-space-separated items which can be parsed by {@link
+     * ByGroup#parse(String)}. Returns a {@link Unanimous} {@link DecisionFunction}
+     */
+    public static DecisionFunction.Unanimous parseMany(String description, Uberts u) {
+      String[] rules = description.split("\\s+");
+      DecisionFunction.Unanimous df = new DecisionFunction.Unanimous();
+      for (int i = 0; i < rules.length; i++)
+        df.add(ByGroup.parse(rules[i], u));
+      return df;
+    }
+
     private List<DecisionFunction> committee;
     public Unanimous() {
       this(Collections.emptyList());
@@ -150,6 +165,88 @@ public interface DecisionFunction {
     }
   }
 
+  public static class DispatchByRelation implements DecisionFunction {
+
+    /**
+     * Accepts white-space-separated items which can be parsed by {@link
+     * ByGroup#parse(String)}. Returns a {@link Unanimous} {@link DecisionFunction}
+     */
+    public static DispatchByRelation parseMany(String description, Uberts u) {
+      String[] rules = description.split("\\s+");
+      DispatchByRelation df = new DispatchByRelation();
+      for (int i = 0; i < rules.length; i++) {
+        ByGroup bg = ByGroup.parse(rules[i], u);
+        Relation rel = bg.relation;
+        if (rel.getName().equals("argument4") && bg.mode == ByGroupMode.AT_MOST_ONE) {
+          df.addAndCombine(rel, bg, (a1, a2) -> {
+            return new MultiAtLeast1((ByGroup) a1, (ByGroup) a2);
+          });
+        } else {
+          df.add(rel, bg);
+        }
+      }
+      return df;
+    }
+
+    private Map<String, DecisionFunction> rel2df = new HashMap<>();
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append("(Dispatch");
+      for (Entry<String, DecisionFunction> x : rel2df.entrySet())
+        sb.append(" " + x.getKey() + "=" + x.getValue());
+      sb.append(')');
+      return sb.toString();
+    }
+
+    /**
+     * Assumes at most one DecisionFunction per Relation.
+     */
+    public void add(Relation rel, DecisionFunction df) {
+      Log.info("[main] rel=" + rel.getName() + " df=" + df);
+      Object old = rel2df.put(rel.getName(), df);
+      if (old != null) {
+        throw new IllegalStateException("rel=" + rel.getName()
+          + " has two decision functions, " + old + " and " + df);
+      }
+    }
+
+    /**
+     * If you will have more than one decision function per Relation, use this
+     * method and provide a function to combine an existing DecisionFunction
+     * (first argument to given function) and a new DecisionFunction (second arg).
+     */
+    public void addAndCombine(Relation rel, DecisionFunction df, BiFunction<DecisionFunction, DecisionFunction, DecisionFunction> combine) {
+      DecisionFunction old = rel2df.put(rel.getName(), df);
+      if (old != null) {
+        DecisionFunction comb = combine.apply(old, df);
+        Log.info("[main] rel=" + rel.getName() + " df=" + comb);
+        rel2df.put(rel.getName(), comb);
+      } else {
+        Log.info("[main] rel=" + rel.getName() + " df=" + df);
+      }
+    }
+
+    @Override
+    public void clear() {
+      for (DecisionFunction df : rel2df.values())
+        df.clear();
+    }
+
+    @Override
+    public Boolean decide(HypEdge e, Adjoints s) {
+      throw new RuntimeException("dont use this");
+    }
+
+    @Override
+    public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
+      String key = e.getRelation().getName();
+      DecisionFunction df = rel2df.getOrDefault(key, DEFAULT);
+      return df.decide2(e, s);
+    }
+  }
+
   /**
    * Takes the first DecisionFunction to fire.
    *
@@ -215,6 +312,60 @@ public interface DecisionFunction {
     }
   }
 
+  public static class MultiAtLeast1 implements DecisionFunction {
+    private ByGroup left, right;
+    private Uberts u;
+
+    public MultiAtLeast1(ByGroup atLeastOneLeft, ByGroup atLeastOneRight) {
+      Log.info("[main] combining " + atLeastOneLeft + " and " + atLeastOneRight);
+      if (atLeastOneLeft.mode != ByGroupMode.AT_MOST_ONE || atLeastOneRight.mode != ByGroupMode.AT_MOST_ONE)
+        throw new IllegalArgumentException();
+      this.left = atLeastOneLeft;
+      this.right = atLeastOneRight;
+      this.u = right.u;
+    }
+
+    @Override
+    public String toString() {
+      return "(MultiAtLeast1 " + left + " " + right + ")";
+    }
+
+    @Override
+    public void clear() {
+      left.clear();
+      right.clear();
+    }
+
+    @Override
+    public Boolean decide(HypEdge e, Adjoints s) {
+      throw new RuntimeException("dont use this, see decide2");
+    }
+
+    @Override
+    public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
+
+      boolean aFirst = !left.firstPredInBucket.containsKey(left.getKey(e));
+      boolean bFirst = !right.firstPredInBucket.containsKey(right.getKey(e));
+      boolean first = aFirst && bFirst;
+
+      Pair<Boolean, Adjoints> a = left.decide2(e, s);
+      Pair<Boolean, Adjoints> b = right.decide2(e, s);
+
+      // yhat = first & score > 0
+      boolean yhat = a.get1() && b.get1();
+      boolean y = u.getLabel(e);
+
+      Adjoints reason;
+      if (y || first) {
+        reason = s;
+      } else {
+        reason = new Adjoints.WithLearningRate(0, s);
+      }
+
+      return new Pair<>(yhat, reason);
+    }
+  }
+
   /**
    * Super class for AtLeastOne, AtMostOne, ExactlyOne.
    *
@@ -258,18 +409,6 @@ public interface DecisionFunction {
       return new ByGroup(m, items[1], u);
     }
 
-    /**
-     * Accepts white-space-separated items which can be parsed by {@link
-     * ByGroup#parse(String)}. Composes them into a {@link Cascade}.
-     */
-    public static DecisionFunction parseMany(String description, Uberts u) {
-      String[] rules = description.split("\\s+");
-      DecisionFunction.Unanimous df = new DecisionFunction.Unanimous();
-      for (int i = 0; i < rules.length; i++)
-        df.add(parse(rules[i], u));
-      return df;
-    }
-
     // RHS of rule which this applies to
     private Relation relation;
 
@@ -286,10 +425,13 @@ public interface DecisionFunction {
 
     private ByGroupMode mode;
 
+    private Uberts u;
+
     /**
      * @param description should look like: <term>(:<varName>)+, e.g. "predicate2(t,f):t"
      */
     public ByGroup(ByGroupMode mode, String description, Uberts u) {
+      this.u = u;
       this.mode = mode;
       this.observedKeys = new HashSet<>();
       this.firstPredInBucket = new HashMap<>();
@@ -380,9 +522,7 @@ public interface DecisionFunction {
     public Boolean decide(HypEdge e, Adjoints s) {
       if (e.getRelation() != relation)
         return null;  // Doesn't apply
-      List<Object> key = new ArrayList<>(keyArgs.length);
-      for (int i = 0; i < keyArgs.length; i++)
-        key.add(e.getTail(keyArgs[i]));
+      List<Object> key = getKey(e);
       boolean newEdge = !observedKeys.contains(key);
       switch (mode) {
       case AT_LEAST_ONE:
@@ -396,15 +536,22 @@ public interface DecisionFunction {
       }
     }
 
+    public List<Object> getKey(HypEdge e) {
+      List<Object> key = new ArrayList<>(keyArgs.length);
+      for (int i = 0; i < keyArgs.length; i++)
+        key.add(e.getTail(keyArgs[i]));
+      return key;
+    }
+
     @Override
     public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
       if (e.getRelation() != relation)
         return new Pair<>(null, null);  // Doesn't apply
 
-      List<Object> key = new ArrayList<>(keyArgs.length);
-      for (int i = 0; i < keyArgs.length; i++)
-        key.add(e.getTail(keyArgs[i]));
+      List<Object> key = getKey(e);
 
+      final boolean y, yhat;
+      final Pair<HypEdge, Adjoints> p = new Pair<>(e, s);
       switch (mode) {
       case AT_LEAST_ONE:
         // This can only force a FP
@@ -423,6 +570,51 @@ public interface DecisionFunction {
 //        }
         // NOTE: The solution to this is to use MAX_VIOLATION rather than DAGGER1
 
+        /*
+         * I don't think I can nicely compose AT_MOST_ONE(t,s) and AT_MOST_ONE(t,k)
+         * The am1(t,s) factor would need to know the prediction even in cases
+         * where it doesn't return pred=false, which it clearly can't know by
+         * construction if that decision could be handled arbitrarily by am1(t,k).
+         *
+         * am1(t,s,k) != am1(t,s) `Unanimous` am1(t,k)
+         *
+         * Multiple group definitions (aka key functions)?
+         * Idk, maybe.
+         * Lets try to write out the logic we're hoping for.
+         *
+         * if (score > 0 and firstPred(t,s) and firstPred(t,k)) {
+         *   update firstPred(t,s) and firstPred(t,k)
+         *   return (pred=true, s)
+         * } else {
+         *   if (gold) {
+         *     return (pred=false, s)
+         *   } else {
+         *     return (pred=false, Const)
+         *   }
+         * }
+         *
+         * Shouldn't we return s instead of Const when score<=0 and first?
+         * Yes.
+         */
+
+        boolean first = !firstPredInBucket.containsKey(key);
+        yhat = first && s.forwards() > 0;
+        y = u.getLabel(e);
+
+        if (y && !firstGoldInBucket.containsKey(key))
+          firstGoldInBucket.put(key, p);
+
+        if (first) {
+          firstPredInBucket.put(key, p);
+          return new Pair<>(yhat, s);
+        } else {
+          if (y)
+            return new Pair<>(yhat, s);
+          else
+            return new Pair<>(yhat, new Adjoints.WithLearningRate(0, s));
+        }
+
+        /*
         boolean newEdge = !observedKeys.contains(key);
         if (newEdge) {
           // No opinion: constraint not violated
@@ -470,91 +662,115 @@ public interface DecisionFunction {
             throw new RuntimeException("implement me: " + UbertsLearnPipeline.trainMethod);
           }
         }
+        */
+
       case EXACTLY_ONE:
         assert UbertsLearnPipeline.trainMethod == TrainMethod.DAGGER1
           : "not up to date for: " + UbertsLearnPipeline.trainMethod;
-        Pair<HypEdge, Adjoints> p = firstPredInBucket.get(key);
-        Pair<HypEdge, Adjoints> g = firstGoldInBucket.get(key);
 
-        if (p == null) {
-          assert g == null;
-          return new Pair<>(true, s);
-        } else if (g == null) {
-          return new Pair<>(false, s);
-        } else {
-          System.out.println("returnin no-backprop for " + e);
-          Adjoints a = new Adjoints.WithLearningRate(0, s);
-          a = new Adjoints.Named("BLOCKED: " + e, a);
-          return new Pair<>(false, a);
+        yhat = !firstPredInBucket.containsKey(key);
+        y = u.getLabel(e);
+
+        if (yhat) {
+          firstPredInBucket.put(key, p);
+
+          int n = firstPredInBucket.size() + firstGoldInBucket.size();
+          if (n % 20 == 0) {
+            Log.info("memLeak: forget to clear the DecisionFunction? " + n
+                + " nPred=" + firstPredInBucket.size() + " "
+                + " nGold=" + firstGoldInBucket.size());
+          }
         }
+        // Idea here is a MIRA-like update: if you rank more than one thing above
+        // the gold edge, they are violations, and their score should be lowered.
+        // HOWEVER, this currently has no effect because only the first is deemed
+        // pred=true, so the remaining do not receieve a dErr_dForward=1 update.
+//        boolean vio = !firstGoldInBucket.containsKey(key);
+//        Adjoints updateable = vio ? s : new Adjoints.WithLearningRate(0, s);
+        Adjoints updateable = (y || yhat) ? s : new Adjoints.WithLearningRate(0, s);
+        if (y) {
+          // Purely safety check until MIRA-style update is actually implemented.
+          Object old = firstGoldInBucket.put(key, p);
+          assert old == null : "two gold in one group with EXACTLY_ONE? " + p + "\t" + old;
+        }
+        return new Pair<>(yhat, updateable);
 
       default:
         throw new RuntimeException("unknown mode:" + mode);
       }
     }
 
+    /**
+     * The problem with this is that this may or may not be called depending on
+     * what {@link Uberts#dbgRunInference()} decides to do. If it is run with
+     * oracle, then FPs may not be added to the state, leading to funny and hard
+     * to reason about states of the data structures in this class.
+     *
+     * A simpler solution is to just take the label when decide2 is called.
+     * The assumption that decide2 is called on every relevant edge is reasonable,
+     * the assumption that addedToState is called forall edges is not.
+     */
     @Override
     public void addedToState(HashableHypEdge he, Adjoints score, Boolean y) {
-      HypEdge e = he.getEdge();
-      if (e.getRelation() != relation)
-        return;  // Doesn't apply
-      List<Object> key = new ArrayList<>(keyArgs.length);
-      for (int i = 0; i < keyArgs.length; i++)
-        key.add(e.getTail(keyArgs[i]));
-      Pair<HypEdge, Adjoints> x = new Pair<>(he.getEdge(), score);
-
-      boolean added = observedKeys.add(key);
-      if (Uberts.LEARN_DEBUG)
-        Log.info("key=" + key + " added=" + added + " edge=" + he.getEdge());
-
-      if (firstPredInBucket.get(key) == null)
-        firstPredInBucket.put(key, x);
-
-      if (y && firstGoldInBucket.get(key) == null)
-        firstGoldInBucket.put(key, x);
+//      HypEdge e = he.getEdge();
+//      if (e.getRelation() != relation)
+//        return;  // Doesn't apply
+//      List<Object> key = new ArrayList<>(keyArgs.length);
+//      for (int i = 0; i < keyArgs.length; i++)
+//        key.add(e.getTail(keyArgs[i]));
+//      Pair<HypEdge, Adjoints> x = new Pair<>(he.getEdge(), score);
+//
+//      boolean added = observedKeys.add(key);
+//      if (Uberts.LEARN_DEBUG)
+//        Log.info("key=" + key + " added=" + added + " edge=" + he.getEdge());
+//
+//      if (firstPredInBucket.get(key) == null)
+//        firstPredInBucket.put(key, x);
+//
+//      if (y && firstGoldInBucket.get(key) == null)
+//        firstGoldInBucket.put(key, x);
     }
   }
 
 
-  /**
-   * This is a hack so that {@link ByGroup} can tell
-   * {@link Uberts#maxViolationPerceptron(Map)} whether a particular
-   * actions's loss should be included when computing the violation.
-   *
-   * NOTE: The proper way to fix this is to:
-   * 1) store actions on the agenda rather than facts (need this so that costFP vs costFN can be applied appropriately)
-   * 2) have a LocalFactor which adds in the loss to the score of actions for loss augmented inference
-   * 3) in contrast with 2, probably keep Agenda.Mode.ORACLE so that you don't have to worry about global features making a lossy action score too high
-   */
-  public static class IncludeLossAdjoints implements Adjoints {
-    private Adjoints wrapped;
-    private boolean includeLoss;
-
-    public IncludeLossAdjoints(Adjoints wrapped, boolean includeLoss) {
-      this.wrapped = wrapped;
-      this.includeLoss = includeLoss;
-    }
-
-    @Override
-    public String toString() {
-      return "(IncludeLoss " + includeLoss + " " + wrapped + ")";
-    }
-
-    public boolean includeLoss() {
-      return includeLoss;
-    }
-
-    @Override
-    public double forwards() {
-      return wrapped.forwards();
-    }
-
-    @Override
-    public void backwards(double dErr_dForwards) {
-      wrapped.backwards(dErr_dForwards);
-    }
-  }
-
+//  /**
+//   * This is a hack so that {@link ByGroup} can tell
+//   * {@link Uberts#maxViolationPerceptron(Map)} whether a particular
+//   * actions's loss should be included when computing the violation.
+//   *
+//   * NOTE: The proper way to fix this is to:
+//   * 1) store actions on the agenda rather than facts (need this so that costFP vs costFN can be applied appropriately)
+//   * 2) have a LocalFactor which adds in the loss to the score of actions for loss augmented inference
+//   * 3) in contrast with 2, probably keep Agenda.Mode.ORACLE so that you don't have to worry about global features making a lossy action score too high
+//   */
+//  public static class IncludeLossAdjoints implements Adjoints {
+//    private Adjoints wrapped;
+//    private boolean includeLoss;
+//
+//    public IncludeLossAdjoints(Adjoints wrapped, boolean includeLoss) {
+//      this.wrapped = wrapped;
+//      this.includeLoss = includeLoss;
+//    }
+//
+//    @Override
+//    public String toString() {
+//      return "(IncludeLoss " + includeLoss + " " + wrapped + ")";
+//    }
+//
+//    public boolean includeLoss() {
+//      return includeLoss;
+//    }
+//
+//    @Override
+//    public double forwards() {
+//      return wrapped.forwards();
+//    }
+//
+//    @Override
+//    public void backwards(double dErr_dForwards) {
+//      wrapped.backwards(dErr_dForwards);
+//    }
+//  }
 
 
   /**

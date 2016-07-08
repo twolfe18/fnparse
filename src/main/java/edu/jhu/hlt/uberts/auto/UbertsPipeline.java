@@ -153,22 +153,28 @@ public abstract class UbertsPipeline {
 
     // E.g. "EXACTLY_ONE:argument4(t,f,s,k):t:k"
     String dfs = config.getString("byGroupDecoder", "");
-    if (!dfs.isEmpty()) {
-      DecisionFunction df = DecisionFunction.ByGroup.parseMany(dfs, u);
-      u.prependDecisionFunction(df);
+    if (dfs.isEmpty()) {
+      u.setThresh(new DecisionFunction.DispatchByRelation());
+    } else {
+      u.setThresh(DecisionFunction.DispatchByRelation.parseMany(dfs, u));
     }
+//    if (!dfs.isEmpty()) {
+//      DecisionFunction df = DecisionFunction.ByGroup.parseMany(dfs, u);
+//      u.prependDecisionFunction(df);
+//    }
 
     // Thresholds for each each relation
     // E.g. "srl2=-3 srl3=-3"
     String rts = config.getString("threshold", "");
     if (!rts.isEmpty()) {
-      for (String t : rts.split("\\s+")) {
-        String[] rt = t.split("=");
-        assert rt.length == 2;
-        Relation r = u.getEdgeType(rt[0]);
-        double thresh = Double.parseDouble(rt[1]);
-        u.prependDecisionFunction(new DecisionFunction.Constant(r, thresh));
-      }
+      throw new RuntimeException("should you really be using a threshold? need to re-implement");
+//      for (String t : rts.split("\\s+")) {
+//        String[] rt = t.split("=");
+//        assert rt.length == 2;
+//        Relation r = u.getEdgeType(rt[0]);
+//        double thresh = Double.parseDouble(rt[1]);
+//        u.prependDecisionFunction(new DecisionFunction.Constant(r, thresh));
+//      }
     }
 
     Log.info("done");

@@ -1,7 +1,14 @@
 package edu.jhu.hlt.uberts.features;
 
 import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -10,9 +17,6 @@ import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
-
-import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Parse;
@@ -51,7 +55,6 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.UbertsPipeline;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
-import edu.jhu.prim.map.LongIntHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 
@@ -302,6 +305,50 @@ public class OldFeaturesWrapper {
 //        });
       }
       return i3;
+    }
+
+    public void readWeightsFrom(File f) {
+      Log.info("rel=" + rel.getName() + " f=" + f.getPath());
+      try (InputStream is = FileUtil.getInputStream(f);
+          ObjectInputStream ois = new ObjectInputStream(is);
+          DataInputStream dis = new DataInputStream(ois)) {
+        String relName = dis.readUTF();
+        if (!relName.equals(rel.getName())) {
+          throw new RuntimeException("this.rel=" + rel.getName()
+              + " but serialized weights were for " + relName);
+        }
+//        System.out.println("before: dim=" + dimension + " useAvg=" + useAvg);
+        dimension = dis.readInt();
+        useAvg = dis.readBoolean();
+//        System.out.println("after:  dim=" + dimension + " useAvg=" + useAvg);
+        theta = (AveragedPerceptronWeights) ois.readObject();
+        theta2 = (List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>>) ois.readObject();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    public void writeWeightsTo(File f) {
+      Log.info("rel=" + rel.getName() + " f=" + f.getPath() + " dim=" + dimension + " useAvg=" + useAvg);
+      assert intercept == null : "implement this";
+      try (OutputStream os = FileUtil.getOutputStream(f);
+          ObjectOutputStream oos = new ObjectOutputStream(os);
+          DataOutputStream dos = new DataOutputStream(oos)) {
+        dos.writeUTF(rel.getName());
+        dos.writeInt(dimension);
+        dos.writeBoolean(useAvg);
+        oos.writeObject(theta);
+        oos.writeObject(theta2);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+
+      // Diagnostic, how many nonzero features are there?
+      int nnz = 0;
+      for (int i = 0; i < dimension; i++)
+        if (Math.abs(theta.getWeight(i)) > 1e-10)
+          nnz++;
+      Log.info("nnz=" + nnz + " dim=" + dimension + " percentNonzero=" + (100d*nnz)/dimension);
     }
 
     private OldFeaturesWrapper inner;

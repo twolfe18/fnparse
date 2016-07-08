@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -57,6 +58,7 @@ import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.Params;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
+import edu.jhu.hlt.uberts.features.OldFeaturesWrapper.Ints3;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.PerlRegexFileInputStream;
@@ -105,9 +107,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private Mode mode;
 
   private BasicFeatureTemplates bft;
-  private List<OldFeaturesWrapper.Ints3> feFast3;
+//  private List<OldFeaturesWrapper.Ints3> feFast3;
+  private Map<String, OldFeaturesWrapper.Ints3> rel2feFast3;
 
-  private ParameterIO parameterIO;
+//  private ParameterIO parameterIO;
+  private ParameterSimpleIO parameterIO2;
+
+  // Which relations (RHS of rules) should we NOT learn for?
+  // (related to parameterIO)
+  private Set<String> dontLearnRelations = new HashSet<>();
 
   private List<Consumer<Double>> batch = new ArrayList<>();
   private int batchSize = 1;
@@ -133,6 +141,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // See DAGGER1
   private boolean newMarginUpdate = true;
 
+  private double trainTimeLimitMinutes = 0;
 
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
@@ -140,7 +149,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     // I'm tired of this popping up in an un-expected place, do it AOT.
 //    FrameIndex.getFrameNet();
-    FrameIndex.getPropbank();
+//    FrameIndex.getPropbank();
 
     File grammarFile = config.getExistingFile("grammar");
     File relationDefs = config.getExistingFile("relations");
@@ -235,6 +244,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
+    pipe.trainTimeLimitMinutes = config.getDouble("trainTimeLimitMinutes", 0);
+    Log.info("[main] trainTimeLimitMinutes=" + pipe.trainTimeLimitMinutes + " (0 means no limit)");
+
     pipe.newMarginUpdate = config.getBoolean("newMarginUpdate", pipe.newMarginUpdate);
     Log.info("[main] newMarginUpdate=" + pipe.newMarginUpdate);
 
@@ -286,15 +298,17 @@ public class UbertsLearnPipeline extends UbertsPipeline {
      *    eval(dev)
      *    eval(test)
      */
-    for (int i = 0; i < passes; i++) {
-      for (int trainIdx = 0; trainIdx < train.size(); trainIdx++) {
+    long startTime = System.currentTimeMillis();
+    boolean overTimeLimit = false;
+    for (int i = 0; i < passes && !overTimeLimit; i++) {
+      for (int trainIdx = 0; trainIdx < train.size() && !overTimeLimit; trainIdx++) {
         Log.info("[main] pass=" + (i+1) + " of=" + passes + " trainFile=" + train.get(trainIdx).getPath());
         try (InputStream is = train2.get(trainIdx).get();
             RelationFileIterator rels = new RelationFileIterator(is);
             ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
           Iterator<List<RelDoc>> segItr = Iterators.partition(many, trainSegSize);
           int s = 0;
-          while (segItr.hasNext()) {
+          while (segItr.hasNext() && !overTimeLimit) {
             // Train on segment
             List<RelDoc> segment = segItr.next();
             pipe.runInference(segment.iterator(), "train-epoch" + i + "-segment" + s);
@@ -308,6 +322,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             }
 
             s++;
+
+            long sec = (System.currentTimeMillis() - startTime)/1000;
+            if (sec/60d > pipe.trainTimeLimitMinutes && pipe.trainTimeLimitMinutes > 0) {
+              Log.info("[main] ran for " + (sec/60d) + " mins, hit time limit of "
+                  + pipe.trainTimeLimitMinutes + " mins."
+                  + " Will perform dev and test before exiting.");
+              overTimeLimit = true;
+            }
           }
         }
         // Full evaluate on dev
@@ -334,7 +356,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   public void useAvgWeights(boolean useAvg) {
-    for (OldFeaturesWrapper.Ints3 w : feFast3) {
+//    for (OldFeaturesWrapper.Ints3 w : feFast3) {
+    for (OldFeaturesWrapper.Ints3 w : rel2feFast3.values()) {
       w.useAverageWeights(useAvg);
     }
     for (GlobalFactor gf : globalFactors) {
@@ -345,13 +368,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   public void completedObservation() {
-    if (feFast3 == null) {
-      if (DEBUG > 1)
-        Log.warn("no feFast3 features!");
-    } else {
-      for (OldFeaturesWrapper.Ints3 w : feFast3)
-        w.completedObservation();
-    }
+//    if (feFast3 == null) {
+//      if (DEBUG > 1)
+//        Log.warn("no feFast3 features!");
+//    } else {
+//      for (OldFeaturesWrapper.Ints3 w : feFast3)
+//        w.completedObservation();
+//    }
+    for (OldFeaturesWrapper.Ints3 w : rel2feFast3.values())
+      w.completedObservation();
     for (GlobalFactor gf : globalFactors) {
       if (gf instanceof NumArgsRoleCoocArgLoc) {
         ((NumArgsRoleCoocArgLoc) gf).completedObservation();
@@ -378,6 +403,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] updateAccordingToPriority=" + updateAccordingToPriority);
     Log.info("[main] pOracleRollIn=" + pOracleRollIn);
     Log.info("[main] batchSize=" + batchSize);
+
+    String[] dl = config.getStrings("dontLearnRelations", new String[0]);
+    for (String relation : dl) {
+      Log.info("[main] not learning: " + relation);
+      dontLearnRelations.add(relation);
+    }
 
     if (srl2ByArg && !skipSrlFilterStages) {
       // srl2(t,s) with mutexArg=s
@@ -459,15 +490,22 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
     }
 
-    getParameterIO();
+//    getParameterIO();
   }
 
-  private ParameterIO getParameterIO() {
-    if (parameterIO == null) {
-      parameterIO = new ParameterIO();
-      parameterIO.configure(ExperimentProperties.getInstance());
+//  private ParameterIO getParameterIO() {
+//    if (parameterIO == null) {
+//      parameterIO = new ParameterIO();
+//      parameterIO.configure(ExperimentProperties.getInstance());
+//    }
+//    return parameterIO;
+//  }
+  public ParameterSimpleIO getParameterIO() {
+    if (parameterIO2 == null) {
+      parameterIO2 = new ParameterSimpleIO();
+      parameterIO2.configure(ExperimentProperties.getInstance());
     }
-    return parameterIO;
+    return parameterIO2;
   }
 
   @Override
@@ -494,20 +532,34 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       };
     }
 
-    LocalFactor f2 = getParameterIO().get(r);
-    if (f2 != null)
-      return f2;
+//    LocalFactor f2 = getParameterIO().get(r);
+//    if (f2 != null)
+//      return f2;
 
     if (templateFeats) {
       ExperimentProperties config = ExperimentProperties.getInstance();
       Log.info("using template feats");
       if (bft == null)
         bft = new BasicFeatureTemplates();
-      if (feFast3 == null)
-        feFast3 = new ArrayList<>();
+//      if (feFast3 == null)
+//        feFast3 = new ArrayList<>();
       OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(bft, r.rhs.rel, config);
-      feFast3.add(fe3);
+//      feFast3.add(fe3);
+      if (rel2feFast3 == null)
+        rel2feFast3 = new HashMap<>();
+      rel2feFast3.put(r.rhs.relName, fe3);
       f = new LocalFactor.Sum(fe3, f);
+
+      // Maybe read in some features
+      File savedModel = getParameterIO().read(r.rhs.relName);
+      if (savedModel != null) {
+        if (savedModel.exists()) {
+          fe3.readWeightsFrom(savedModel);
+        } else {
+          Log.info("[main] WARNING: you asked to read " + r.rhs.relName
+              + " weights from " + savedModel.getPath() + " but it doesn't exist, NOT LOADING");
+        }
+      }
 
       // Setup write-features-to-disk
       String key = r.rhs.relName + ".outputFeatures";
@@ -527,7 +579,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 0)
       Log.info("scoreFor(" + r + "): " + f);
     assert f != LocalFactor.Constant.ZERO;
-    getParameterIO().put(r, f);
+//    getParameterIO().put(r, f);
     return f;
   }
 
@@ -563,9 +615,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     eventCounts.increment("pass/" + mode.toString());
     Log.info("mode=" + mode + " dataName=" + dataName + "\t" + eventCounts.toString());
 
-    if (mode == Mode.TRAIN)
-      getParameterIO().saveAll();
-
     // Close predictions writer
     if (predictionsWriter != null) {
       try {
@@ -574,6 +623,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         e.printStackTrace();
       }
       predictionsWriter = null;
+    }
+
+    if (mode == Mode.TRAIN) {
+      for (Entry<String, Ints3> x : rel2feFast3.entrySet()) {
+        File saveModel = getParameterIO().write(x.getKey());
+        if (saveModel != null) {
+          x.getValue().writeWeightsTo(saveModel);
+        }
+      }
     }
 
     // Compute performance over last segment
@@ -766,10 +824,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         System.out.println("mode=" + mode + " doc=" + doc.getId() + " [memLeak] perfByRel.size=" + perfByRel.size());
       }
       boolean oracle = false;
-      int actionLimit = 0;
-
       timer.start("inf/" + mode);
-      Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, actionLimit);
+      Pair<Perf, List<Step>> p = u.dbgRunInference(oracle);
       timer.stop("inf/" + mode);
       perfByRel.add(p.get1().perfByRel());
 
@@ -888,6 +944,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     switch (trainMethod) {
     case EARLY_UPDATE:
       timer.start("train/earlyUpdate");
+      assert dontLearnRelations.isEmpty() : "implement me";
       Step mistake = u.earlyUpdatePerceptron();
       batch.add(lr -> {
         if (mistake != null) {
@@ -904,6 +961,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case MAX_VIOLATION:
       timer.start("train/maxViolation");
+      assert dontLearnRelations.isEmpty() : "implement me";
       Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP());
       batch.add(lr -> {
         if (maxViolation != null) {
@@ -943,6 +1001,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case DAGGER:
       timer.start("train/dagger");
+      assert dontLearnRelations.isEmpty() : "implement me";
       List<AgendaSnapshot> states = u.daggerLike(pOracleRollIn);
       Map<Relation, Double> costFP = getCostFP();
       batch.add(lr -> {
@@ -959,14 +1018,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       timer.start("train/dagger1");
       boolean stdOld = u.showTrajDiagnostics;
       u.showTrajDiagnostics = verbose >= 2;
-      int actionLimit = 0;
       if (verbose >= 1) {
         System.out.println();
         for (HypEdge e : u.getLabels().getGoldEdges())
           System.out.println("gold: " + e);
       }
       boolean oracle = u.getRandom().nextDouble() < pOracleRollIn;
-      Pair<Perf, List<Step>> x = u.dbgRunInference(oracle, actionLimit);
+      Pair<Perf, List<Step>> x = u.dbgRunInference(oracle);
       Perf perf = x.get1();
       List<Step> traj = x.get2();
       batch.add(lr -> {
@@ -977,23 +1035,35 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         }
         for (Step s : traj) {
 
+          String r = s.edge.getRelation().getName();
+          if (dontLearnRelations.contains(r)) {
+            // No need to learn for this relation, no update.
+            eventCounts.increment("dontLearnRelation");
+            eventCounts.increment("dontLearnRelation/" + r);
+            continue;
+          } else {
+            eventCounts.increment("doLearnRelation");
+            eventCounts.increment("doLearnRelation/" + r);
+          }
+
           // NOTE: We are NOT using minScorePerRelation here since we only want
           // to move scores about 0, not the threshold.
 //          boolean pred = s.score.forwards() > 0;
           boolean pred = s.pred;
           Adjoints reason = newMarginUpdate ? s.getReason() : s.score;
 
-          boolean a4 = s.edge.getRelation().getName().equals("argument4");
+//          boolean relevantRel = s.edge.getRelation().getName().equals("argument4");
+          boolean relevantRel = s.edge.getRelation().getName().equals("predicate2");
 
           if (s.gold && !pred) {
-            if ((verbose >= 1 && a4) || verbose >= 2)
+            if ((verbose >= 1 && relevantRel) || verbose >= 2)
               System.out.println("FN: " + s);
             reason.backwards(-lr);
           } else if (!s.gold && pred) {
-            if ((verbose >= 1 && a4) || verbose >= 2)
+            if ((verbose >= 1 && relevantRel) || verbose >= 2)
               System.out.println("FP: " + s);
             reason.backwards(+lr * cfp.getOrDefault(s.edge.getRelation(), 1d));
-          } else if ((verbose >= 1 && a4) || verbose >= 2) {
+          } else if ((verbose >= 1 && relevantRel) || verbose >= 2) {
             if (s.gold)
               System.out.println("TP: " + s);
             else if (verbose >= 2)

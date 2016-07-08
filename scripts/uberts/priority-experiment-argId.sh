@@ -41,15 +41,21 @@ PREDICTIONS_DIR=$2
 # see AgendaPriority.java for a list of all legal values.
 PRIORITY=$3
 
+# Will look for a pre-trained predicate2 model in
+# $WD/models/predicate2/$PRED_MODEL_TAG/predicate2.jser.gz
+# If you pass in the string "oracle", we will just use oracle
+# predicate2 decisions rather than look for a model.
+PRED_MODEL_TAG=$4
+
 # A directory which contains a <relationName>.fs file for every Relation.
 # Each file is the 8-column TSV format.
-FEATURE_SET_DIR=$4
+FEATURE_SET_DIR=$5
 
 # Either "none", "argLoc", "roleCooc", "numArg", or "full"
-GLOBAL_FEAT_MODE=$5
+GLOBAL_FEAT_MODE=$6
 
 # A JAR file in a location which will not change/be removed.
-JAR_STABLE=$6
+JAR_STABLE=$7
 
 if [[ ! -d $PREDICTIONS_DIR ]]; then
   echo "PREDICTIONS_DIR=$PREDICTIONS_DIR is not a directory"
@@ -89,10 +95,10 @@ if [[ -z ${FNPARSE_DATA+x} ]]; then
 fi
 
 
-ORACLE_FEATS="event1,predicate2"  # TODO Take this as a command line option
 THRESHOLDS="srl2=-3 srl3=-3"
-#BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t AT_MOST_ONE:argument4(t,f,s,k):t:s AT_MOST_ONE:argument4(t,f,s,k):t:k"
-BY_GROUP_DECODER="AT_MOST_ONE:argument4(t,f,s,k):t:s AT_MOST_ONE:argument4(t,f,s,k):t:k"
+BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t"
+BY_GROUP_DECODER="$BY_GROUP_DECODER AT_MOST_ONE:argument4(t,f,s,k):t:k"
+#BY_GROUP_DECODER="$BY_GROUP_DECODER AT_MOST_ONE:argument4(t,f,s,k):t:s"
 
 #SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/null-span1.facts,$RD/coarsenPos2.rel"
 SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/coarsenPos2.rel"
@@ -101,6 +107,23 @@ MINI_DEV_SIZE=200
 MINI_TRAIN_SIZE=1000
 #MINI_DEV_SIZE=300
 #MINI_TRAIN_SIZE=6000
+
+
+if [[ $PRED_MODEL_TAG == "oracle" ]]; then
+  echo "using oracle predicate2"
+  ORACLE_FEATS="event1,predicate2"
+  PARAM_IO="ignore::/dev/null"
+else
+  ORACLE_FEATS="event1"
+  PRED_MODEL=$WD/models/predicate2/$PRED_MODEL_TAG/predicate2.jser.gz
+  if [[ ! -f $PRED_MODEL ]]; then
+    echo "can't find predicate2 model: $PRED_MODEL"
+    exit 2
+  fi
+  PARAM_IO="predicate2:r:$PRED_MODEL"
+  echo "using PARAM_IO=$PARAM_IO"
+fi
+
 
 java -cp $JAR_STABLE -ea -server -Xmx7G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
@@ -112,25 +135,20 @@ java -cp $JAR_STABLE -ea -server -Xmx7G \
     miniDevSize $MINI_DEV_SIZE \
     trainSegSize $MINI_TRAIN_SIZE \
     passes 3 \
-    predicate2.hashBits 25 \
-    argument4.hashBits 26 \
-    srl2.hashBits 25 \
-    srl3.hashBits 25 \
     srl2ByArg false \
     argument4ByArg false \
     skipSrlFilterStages true \
-    passiveAggressive true \
-    addLhsScoreToRhsScore false \
     train.facts $TF \
     dev.facts $RD/srl.dev.shuf.facts.gz \
     test.facts $RD/srl.test.facts.gz \
     grammar $RD/grammar.trans \
     relations $RD/relations.def \
     schema "$SCHEMA" \
-    thresholdNOPE "$THRESHOLDS" \
-    byGroupDecoderNOPE "$BY_GROUP_DECODER" \
+    dontLearnRelations "event1,predicate2" \
+    byGroupDecoder "$BY_GROUP_DECODER" \
     oracleFeats "$ORACLE_FEATS" \
     agendaPriority "$PRIORITY" \
+    parameterIO "$PARAM_IO" \
     frameCooc false \
     globalFeatMode $GLOBAL_FEAT_MODE \
     featureSetDir $FEATURE_SET_DIR \

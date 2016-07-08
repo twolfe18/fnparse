@@ -18,7 +18,7 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class ParameterIO {
 
-  static class Instance {
+  public static class Instance {
     String description;       // e.g. argument4
     File serializeLocation;
     boolean read, write;
@@ -39,11 +39,13 @@ public class ParameterIO {
 
     public String toString() {
       StringBuilder sb = new StringBuilder();
-      sb.append("(Params ");
+      sb.append("(Params");
       if (read)
         sb.append(" +read ");
       if (write)
         sb.append(" +write ");
+      if (!(read || write))
+        sb.append(' ');
       sb.append(description);
       sb.append(' ');
       sb.append(serializeLocation.getPath());
@@ -64,9 +66,9 @@ public class ParameterIO {
       i.serializeLocation = new File(toks[2]);
       assert i.read || i.write;
       assert toks[1].length() <= 2;
-      if (i.read && !i.serializeLocation.isFile()) {
-        throw new IllegalArgumentException("asked to read a file that doesn't exist: " + i);
-      }
+//      if (i.read && !i.serializeLocation.isFile()) {
+//        throw new IllegalArgumentException("asked to read a file that doesn't exist: " + i);
+//      }
       return i;
     }
   }

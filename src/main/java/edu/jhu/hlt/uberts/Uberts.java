@@ -59,9 +59,6 @@ public class Uberts {
 
   public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
 
-  interface NewStateEdgeListener {
-    void addedToState(HashableHypEdge e, Adjoints s, Boolean gold);
-  }
   private List<NewStateEdgeListener> newStateEdgeListeners = new ArrayList<>();
   public void addNewStateEdgeListener(NewStateEdgeListener l) {
     Log.info("[main] adding " + l);
@@ -86,9 +83,10 @@ public class Uberts {
   // When an edge is popped off the agenda, this is responsible for determining
   // if the edge should be added to the state. The default implementation checks
   // whether score(edge) > 0.
-  private DecisionFunction.Cascade thresh =
-      new DecisionFunction.Cascade(
-          new DecisionFunction.Unanimous(), DecisionFunction.DEFAULT);
+  private DecisionFunction.DispatchByRelation thresh;
+//  private DecisionFunction.Cascade thresh =
+//      new DecisionFunction.Cascade(
+//          new DecisionFunction.Unanimous(), DecisionFunction.DEFAULT);
 
   // So you can ask for Relations by name and keep them unique
   private Map<String, Relation> relations;
@@ -137,10 +135,16 @@ public class Uberts {
     this.doc = doc;
   }
 
-  public void prependDecisionFunction(DecisionFunction df) {
-    Log.info("[main] " + df);
-    DecisionFunction.Unanimous u = (DecisionFunction.Unanimous) thresh.getCur();
-    u.add(df);
+//  public void prependDecisionFunction(DecisionFunction df) {
+//    Log.info("[main] " + df);
+//    DecisionFunction.Unanimous u = (DecisionFunction.Unanimous) thresh.getCur();
+//    u.add(df);
+//  }
+  public DecisionFunction.DispatchByRelation getThresh() {
+    return thresh;
+  }
+  public void setThresh(DecisionFunction.DispatchByRelation thresh) {
+    this.thresh = thresh;
   }
 
   /**
@@ -234,11 +238,9 @@ public class Uberts {
    * @param oracle says whether only edges which are in the gold label set should
    * be added to state (others are just popped off the agenda and discarded).
    */
-  public Pair<Labels.Perf, List<Step>> dbgRunInference(
-      boolean oracle,
-      int actionLimit) {
+  public Pair<Labels.Perf, List<Step>> dbgRunInference(boolean oracle) {
     if (DEBUG > 1)
-      Log.info("starting, oracle=" + oracle + " actionLimit=" + actionLimit);
+      Log.info("starting, oracle=" + oracle);
     statsAgendaSizePerStep.clear();
 
     Labels.Perf perf = null;
@@ -246,19 +248,13 @@ public class Uberts {
       perf = goldEdges.new Perf();
 
     List<Step> steps = new ArrayList<>();
-    for (int i = 0; agenda.size() > 0; i++) {// && (actionLimit <= 0 || i < actionLimit); i++) {
+    while (agenda.size() > 0) {
       statsAgendaSizePerStep.add(agenda.size());
       AgendaItem ai = agenda.popBoth2();
       Boolean y = perf == null ? null : getLabel(ai);
       if (DEBUG > 1)
         System.out.println("[dbgRunInference] popped=" + ai);
 
-      // Always record the action
-      boolean hitLim = actionLimit > 0 && i >= actionLimit;
-
-//      if (ai.edge.getRelation().getName().equals("argument4"))
-//        System.currentTimeMillis();
-//      boolean pred = thresh.decide(ai);
       Pair<Boolean, Adjoints> dec = thresh.decide2(ai);
       boolean pred = dec.get1();
       Step s = new Step(ai, y, pred);
@@ -266,10 +262,7 @@ public class Uberts {
       steps.add(s);
 
       // But maybe don't add apply it (add it to state)
-      if (hitLim)
-        continue;
       if ((oracle && y) || (!oracle && pred)) {
-//      if ((oracle && y) || pred) {
         if (perf != null)
           perf.add(ai.edge);
         addEdgeToState(ai);
@@ -286,7 +279,7 @@ public class Uberts {
     return new Pair<>(perf, steps);
   }
   public Pair<Labels.Perf, List<Step>> dbgRunInference() {
-    return dbgRunInference(false, 0);
+    return dbgRunInference(false);
   }
 
   /**
@@ -510,11 +503,13 @@ public class Uberts {
     }
     for (Traj cur : t1r) {
       Step s = cur.getStep();
-      if (s.getReason() instanceof DecisionFunction.IncludeLossAdjoints) {
-        DecisionFunction.IncludeLossAdjoints a = (DecisionFunction.IncludeLossAdjoints) s.getReason();
-        if (!a.includeLoss())
-          continue;
-      }
+      if (true)
+        throw new RuntimeException("check that this still makes sense");
+//      if (s.getReason() instanceof DecisionFunction.IncludeLossAdjoints) {
+//        DecisionFunction.IncludeLossAdjoints a = (DecisionFunction.IncludeLossAdjoints) s.getReason();
+//        if (!a.includeLoss())
+//          continue;
+//      }
       bestViolation -= s.getReason().forwards() + cur.getActionLoss();
     }
     Pair<Traj, Traj> best = null;

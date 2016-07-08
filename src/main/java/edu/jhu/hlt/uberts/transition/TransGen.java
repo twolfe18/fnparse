@@ -33,7 +33,7 @@ public interface TransGen {
     private LocalFactor score;
 
     // Pull in score from previous edges
-    public boolean addLhsToRhsScore = true;
+    public boolean addLhsToRhsScore = false;
     public static final List<String> RELEVANT_RELATIONS =
         Arrays.asList("predicate2", "srl2", "srl3");
 
@@ -41,7 +41,7 @@ public interface TransGen {
       this.rule = rule;
       this.score = score;
       ExperimentProperties config = ExperimentProperties.getInstance();
-      addLhsToRhsScore = config.getBoolean("addLhsScoreToRhsScore");
+      addLhsToRhsScore = config.getBoolean("addLhsScoreToRhsScore", false);
       Log.info("[main] addLhsToRhs=" + addLhsToRhsScore + " " + rule + " " + score);
     }
 
