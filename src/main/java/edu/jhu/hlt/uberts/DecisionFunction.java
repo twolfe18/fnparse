@@ -409,6 +409,8 @@ public interface DecisionFunction {
       return new ByGroup(m, items[1], u);
     }
 
+    public static boolean DEBUG = false;
+
     // RHS of rule which this applies to
     private Relation relation;
 
@@ -453,7 +455,8 @@ public interface DecisionFunction {
 
       // Try to verify that there is an easyFirst term in the agendaPriority.
       ExperimentProperties config = ExperimentProperties.getInstance();
-      assert config.getString("agendaPriority").toLowerCase().contains("easyfirst")
+      assert (config.getString("agendaPriority").toLowerCase().contains("easyfirst")
+          || config.getString("agendaPriority").toLowerCase().contains("bestfirst"))
           && !config.getBoolean("ignoreByGroupErrMsg", false)
           : "You must include an easyFirst term in agendaPriority to at least break ties if you want to use this class";
 
@@ -674,11 +677,13 @@ public interface DecisionFunction {
         if (yhat) {
           firstPredInBucket.put(key, p);
 
-          int n = firstPredInBucket.size() + firstGoldInBucket.size();
-          if (n % 20 == 0) {
-            Log.info("memLeak: forget to clear the DecisionFunction? " + n
-                + " nPred=" + firstPredInBucket.size() + " "
-                + " nGold=" + firstGoldInBucket.size());
+          if (DEBUG) {
+            int n = firstPredInBucket.size() + firstGoldInBucket.size();
+            if (n % 20 == 0) {
+              Log.info("memLeak: forget to clear the DecisionFunction? " + n
+                  + " nPred=" + firstPredInBucket.size() + " "
+                  + " nGold=" + firstGoldInBucket.size());
+            }
           }
         }
         // Idea here is a MIRA-like update: if you rank more than one thing above

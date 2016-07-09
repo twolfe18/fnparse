@@ -490,7 +490,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
     }
 
-//    getParameterIO();
+    getParameterIO();
   }
 
 //  private ParameterIO getParameterIO() {

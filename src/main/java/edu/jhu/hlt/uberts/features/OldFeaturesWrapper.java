@@ -266,6 +266,8 @@ public class OldFeaturesWrapper {
    */
   public static class Ints3 implements LocalFactor {
 
+    public static final boolean USE_SHA256 = false; // ExperimentProperties.getInstance().getBoolean("Int3.SHA256", false);
+
     public static Ints3 build(BasicFeatureTemplates bft, Relation r, ExperimentProperties config) {
       // Old way: take a map of <relationName>:<featureFile>
 //      String key = "rel2feat";
@@ -291,16 +293,22 @@ public class OldFeaturesWrapper {
           assert e.getRelation().getName().equals("argument4");
           String frame = (String) e.getTail(1).getValue();
           String role = (String) e.getTail(3).getValue();
+          if (USE_SHA256)
+            return (int) Hash.sha256(frame + "/" + role);
           return Hash.mix(Hash.hash(frame), Hash.hash(role));
         });
         i3.refine(e -> {
           assert e.getRelation().getName().equals("argument4");
           String role = (String) e.getTail(3).getValue();
+          if (USE_SHA256)
+            return (int) Hash.sha256(role);
           return Hash.hash(role);
         });
 //        i3.refine(e -> {
 //          assert e.getRelation().getName().equals("argument4");
 //          String frame = (String) e.getTail(1).getValue();
+//          if (USE_SHA256)
+//            return (int) Hash.sha256(frame);
 //          return Hash.hash(frame);
 //        });
       }
@@ -483,8 +491,13 @@ public class OldFeaturesWrapper {
           Pair<TemplateAlphabet, String> fyxi = fyx.get(i);
           int t = fyxi.get1().index;
           assert t >= 0 && t < T;
-          int f = Hash.hash(fyxi.get2());
-          features[i] = f * T + t;
+          if (USE_SHA256) {
+            long f = Hash.sha256(fyxi.get2());
+            features[i] = (int) (f * T + t);
+          } else {
+            int f = Hash.hash(fyxi.get2());
+            features[i] = f * T + t;
+          }
         }
 
         // Save to cache
