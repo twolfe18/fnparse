@@ -136,7 +136,8 @@ public class Env {
    */
   public static class Trie3 {
     // FOR DEBUGGING, null means don't track counts
-    public static final Counts<String> EVENT_COUNTS = new Counts<>();
+    // NOTE: On a long run some counts in this class can produce an integer overflow
+    public static final Counts<String> EVENT_COUNTS = null; //new Counts<>();
     private static void cnt(String msg) {
       if (EVENT_COUNTS != null)
         EVENT_COUNTS.increment(msg);
