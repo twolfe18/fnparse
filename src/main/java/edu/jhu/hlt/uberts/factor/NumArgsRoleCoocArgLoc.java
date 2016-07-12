@@ -831,8 +831,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         if (featureNames != null) {
           int n = featureNames.size();
           feats = new int[] {
-              featureNames.lookupIndex(rel.getName() + ",numArgsF=" + cFine),
-              featureNames.lookupIndex(rel.getName() + ",numArgsC=" + cCoarse + ",refinement=" + frame),
+              featureNames.lookupIndex("numArgs1/" + rel.getName() + ",numArgsF=" + cFine),
+              featureNames.lookupIndex("numArgs2/" + rel.getName() + ",numArgsC=" + cCoarse + ",refinement=" + frame),
           };
           if (featureNames.size() > n && featureNames.size() % 1000 == 0) {
             Log.info("[memLeak] featureNames.size=" + featureNames.size());
