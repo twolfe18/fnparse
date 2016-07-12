@@ -1,4 +1,4 @@
-package edu.jhu.hlt.uberts.auto;
+package edu.jhu.hlt.uberts.experiment;
 
 import java.io.File;
 import java.io.IOException;
@@ -8,11 +8,17 @@ import java.util.Map;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.prim.tuple.Pair;
 
 /**
  * Stores parameters on disk (reading and writing).
+ *
+ * @deprecated for now, as Java serialization doesn't seem to work with the
+ * type of interning and shared (read-only) variables I currently use in my
+ * models. See {@link ParameterSimpleIO} for a lighter weight method which only
+ * tracks what file(s) to put things in.
  *
  * @author travis
  */

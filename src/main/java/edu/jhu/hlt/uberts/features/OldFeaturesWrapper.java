@@ -315,8 +315,8 @@ public class OldFeaturesWrapper {
       return i3;
     }
 
-    public void readWeightsFrom(File f) {
-      Log.info("rel=" + rel.getName() + " f=" + f.getPath());
+    public void readWeightsFrom(File f, boolean fixed) {
+      Log.info("rel=" + rel.getName() + " fixed=" + fixed + " f=" + f.getPath());
       try (InputStream is = FileUtil.getInputStream(f);
           ObjectInputStream ois = new ObjectInputStream(is);
           DataInputStream dis = new DataInputStream(ois)) {
@@ -331,13 +331,14 @@ public class OldFeaturesWrapper {
 //        System.out.println("after:  dim=" + dimension + " useAvg=" + useAvg);
         theta = (AveragedPerceptronWeights) ois.readObject();
         theta2 = (List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>>) ois.readObject();
+        this.fixed = fixed;
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
     }
 
     public void writeWeightsTo(File f) {
-      Log.info("rel=" + rel.getName() + " f=" + f.getPath() + " dim=" + dimension + " useAvg=" + useAvg);
+      Log.info("[main] rel=" + rel.getName() + " f=" + f.getPath() + " dim=" + dimension + " useAvg=" + useAvg);
       assert intercept == null : "implement this";
       try (OutputStream os = FileUtil.getOutputStream(f);
           ObjectOutputStream oos = new ObjectOutputStream(os);
@@ -367,6 +368,12 @@ public class OldFeaturesWrapper {
     private boolean useAvg = false;
     private Counts<String> cnt = new Counts<>();
 
+    // Set to true when you are using pre-trained weights. Does three things:
+    // 1) disables the effects of calling useAverageWeights
+    // 2) disables the effects of calling completedObservation
+    // 3) returns Adjoints which do not do anything when backwards is called.
+    private boolean fixed = false;
+
     // For refinements
     private List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>> theta2;
     private Map<SpanPair, int[]> arg4FeatureCache;
@@ -386,18 +393,20 @@ public class OldFeaturesWrapper {
 
     private BufferedWriter featStrDebug;
 
+    /**
+     * For _feature_ IO (e.g. computing mutual information), not _weight_ IO (e.g. saving model parameters).
+     */
     public void writeFeaturesToDisk(File writeFeatsTo) {
-//      String key = r.getName() + ".saveFeatures";
-//      if (config.containsKey(key)) {
-//      File writeFeatsTo = config.getFile(key);
       Log.info("[main] writing features to " + writeFeatsTo.getPath());
       try {
         featStrDebug = FileUtil.getWriter(writeFeatsTo);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
-//      }
     }
+    /**
+     * For _feature_ IO (e.g. computing mutual information), not _weight_ IO (e.g. saving model parameters).
+     */
     public void closeWriter() {
       if (featStrDebug != null) {
         try {
@@ -429,11 +438,17 @@ public class OldFeaturesWrapper {
     }
 
     public void useAverageWeights(boolean useAvg) {
-      Log.info("useAvg " + this.useAvg + " => " + useAvg);
-      this.useAvg = useAvg;
+      if (fixed) {
+        Log.info("this.useAvg=" + this.useAvg + ", ignoring useAvg=" + useAvg);
+      } else {
+        Log.info("useAvg " + this.useAvg + " => " + useAvg);
+        this.useAvg = useAvg;
+      }
     }
 
     public void completedObservation() {
+      if (fixed)
+        return;
       theta.completedObservation();
       if (intercept != null)
         intercept.completedObservation();
@@ -547,6 +562,10 @@ public class OldFeaturesWrapper {
           a = Adjoints.sum(a, a2);
         }
       }
+
+      // If fixed, make sure the parameters are not updated via backwards
+      if (fixed)
+        a = new Adjoints.WithLearningRate(0, a);
 
       return a;
     }

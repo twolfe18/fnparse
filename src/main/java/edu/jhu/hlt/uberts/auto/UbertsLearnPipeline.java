@@ -21,7 +21,6 @@ import java.util.function.Supplier;
 
 import com.google.common.collect.Iterators;
 
-import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -52,6 +51,8 @@ import edu.jhu.hlt.uberts.Step;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.Uberts.AgendaSnapshot;
 import edu.jhu.hlt.uberts.Uberts.Traj;
+import edu.jhu.hlt.uberts.experiment.ParameterSimpleIO;
+import edu.jhu.hlt.uberts.experiment.PerformanceTracker;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
@@ -107,15 +108,19 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private Mode mode;
 
   private BasicFeatureTemplates bft;
-//  private List<OldFeaturesWrapper.Ints3> feFast3;
   private Map<String, OldFeaturesWrapper.Ints3> rel2feFast3;
 
-//  private ParameterIO parameterIO;
-  private ParameterSimpleIO parameterIO2;
+  // Handles where to read/write model components from/to.
+  private ParameterSimpleIO parameterIO;
+
+  // Tracks the maximum performance over passes, lets us know when to save
+  // params (only when dev score goes up)
+  private PerformanceTracker perfTracker = new PerformanceTracker.Default();
 
   // Which relations (RHS of rules) should we NOT learn for?
-  // (related to parameterIO)
-  private Set<String> dontLearnRelations = new HashSet<>();
+  // (related to parameterIO).
+  // NOTE: Only access this variable through a call to dontLearn()
+  private Set<String> dontLearnRelations;
 
   private List<Consumer<Double>> batch = new ArrayList<>();
   private int batchSize = 1;
@@ -355,8 +360,21 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] done at " + new java.util.Date().toString());
   }
 
+  public boolean dontLearn(String relation) {
+    if (dontLearnRelations == null) {
+      dontLearnRelations = new HashSet<>();
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      String[] dl = config.getStrings("dontLearnRelations", new String[0]);
+      for (String rel : dl) {
+        Log.info("[main] not learning: " + rel);
+        dontLearnRelations.add(rel);
+      }
+    }
+    return dontLearnRelations.contains(relation);
+  }
+
+
   public void useAvgWeights(boolean useAvg) {
-//    for (OldFeaturesWrapper.Ints3 w : feFast3) {
     for (OldFeaturesWrapper.Ints3 w : rel2feFast3.values()) {
       w.useAverageWeights(useAvg);
     }
@@ -368,13 +386,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   public void completedObservation() {
-//    if (feFast3 == null) {
-//      if (DEBUG > 1)
-//        Log.warn("no feFast3 features!");
-//    } else {
-//      for (OldFeaturesWrapper.Ints3 w : feFast3)
-//        w.completedObservation();
-//    }
     for (OldFeaturesWrapper.Ints3 w : rel2feFast3.values())
       w.completedObservation();
     for (GlobalFactor gf : globalFactors) {
@@ -403,12 +414,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] updateAccordingToPriority=" + updateAccordingToPriority);
     Log.info("[main] pOracleRollIn=" + pOracleRollIn);
     Log.info("[main] batchSize=" + batchSize);
-
-    String[] dl = config.getStrings("dontLearnRelations", new String[0]);
-    for (String relation : dl) {
-      Log.info("[main] not learning: " + relation);
-      dontLearnRelations.add(relation);
-    }
 
     if (srl2ByArg && !skipSrlFilterStages) {
       // srl2(t,s) with mutexArg=s
@@ -493,19 +498,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     getParameterIO();
   }
 
-//  private ParameterIO getParameterIO() {
-//    if (parameterIO == null) {
-//      parameterIO = new ParameterIO();
-//      parameterIO.configure(ExperimentProperties.getInstance());
-//    }
-//    return parameterIO;
-//  }
   public ParameterSimpleIO getParameterIO() {
-    if (parameterIO2 == null) {
-      parameterIO2 = new ParameterSimpleIO();
-      parameterIO2.configure(ExperimentProperties.getInstance());
+    if (parameterIO == null) {
+      parameterIO = new ParameterSimpleIO();
+      parameterIO.configure(ExperimentProperties.getInstance());
     }
-    return parameterIO2;
+    return parameterIO;
   }
 
   @Override
@@ -532,19 +530,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       };
     }
 
-//    LocalFactor f2 = getParameterIO().get(r);
-//    if (f2 != null)
-//      return f2;
-
     if (templateFeats) {
       ExperimentProperties config = ExperimentProperties.getInstance();
       Log.info("using template feats");
       if (bft == null)
         bft = new BasicFeatureTemplates();
-//      if (feFast3 == null)
-//        feFast3 = new ArrayList<>();
       OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(bft, r.rhs.rel, config);
-//      feFast3.add(fe3);
       if (rel2feFast3 == null)
         rel2feFast3 = new HashMap<>();
       rel2feFast3.put(r.rhs.relName, fe3);
@@ -554,7 +545,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       File savedModel = getParameterIO().read(r.rhs.relName);
       if (savedModel != null) {
         if (savedModel.exists()) {
-          fe3.readWeightsFrom(savedModel);
+          boolean fixed = dontLearn(r.rhs.relName);
+          fe3.readWeightsFrom(savedModel, fixed);
         } else {
           Log.info("[main] WARNING: you asked to read " + r.rhs.relName
               + " weights from " + savedModel.getPath() + " but it doesn't exist, NOT LOADING");
@@ -579,21 +571,21 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 0)
       Log.info("scoreFor(" + r + "): " + f);
     assert f != LocalFactor.Constant.ZERO;
-//    getParameterIO().put(r, f);
     return f;
   }
 
   @Override
   public void start(String dataName) {
     super.start(dataName);
-    if (dataName.contains("test"))
+    if (dataName.contains("test")) {
       mode = Mode.TEST;
-    else if (dataName.contains("dev"))
+    } else if (dataName.contains("dev")) {
       mode = Mode.DEV;
-    else if (dataName.contains("train"))
+    } else if (dataName.contains("train")) {
       mode = Mode.TRAIN;
-    else
+    } else {
       throw new RuntimeException("don't know how to handle " + dataName);
+    }
 
     // Setup to write out predictions
     if (predictionsDir != null && mode != Mode.TRAIN) {
@@ -613,7 +605,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public void finish(String dataName) {
     super.finish(dataName);
     eventCounts.increment("pass/" + mode.toString());
-    Log.info("mode=" + mode + " dataName=" + dataName + "\t" + eventCounts.toString());
+    boolean mini = dataName.contains("-mini");
+    Log.info("mode=" + mode
+        + " mini=" + mini
+        + " dataName=" + dataName
+        + "\t" + eventCounts.toString());
 
     // Close predictions writer
     if (predictionsWriter != null) {
@@ -625,15 +621,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       predictionsWriter = null;
     }
 
-    if (mode == Mode.TRAIN) {
-      for (Entry<String, Ints3> x : rel2feFast3.entrySet()) {
-        File saveModel = getParameterIO().write(x.getKey());
-        if (saveModel != null) {
-          x.getValue().writeWeightsTo(saveModel);
-        }
-      }
-    }
-
     // Compute performance over last segment
     Map<String, FPR> perf = new HashMap<>();
     for (Map<String, FPR> p : perfByRel)
@@ -641,6 +628,20 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     perfByRel.clear();
     for (String line : Labels.showPerfByRel(perf))
       System.out.println("[main] " + dataName + ": " + line);
+
+    // Tell PerformanceTracker about the performance on this iteration
+    if (!mini)
+      perfTracker.observe(mode, perf);
+
+    // Maybe save a model.
+    if (!mini && mode == Mode.DEV) {
+      for (Entry<String, Ints3> x : rel2feFast3.entrySet()) {
+        File saveModel = getParameterIO().write(x.getKey());
+        if (saveModel != null && perfTracker.shouldSaveParameters(x.getKey())) {
+          x.getValue().writeWeightsTo(saveModel);
+        }
+      }
+    }
 
     // Timing information
     timer.printAll(System.out);
@@ -914,6 +915,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     u.clearAgenda();
     u.getState().clearNonSchema();
+    u.getThresh().clear();
   }
 
   public Map<Relation, Double> getCostFP() {
@@ -944,7 +946,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     switch (trainMethod) {
     case EARLY_UPDATE:
       timer.start("train/earlyUpdate");
-      assert dontLearnRelations.isEmpty() : "implement me";
       Step mistake = u.earlyUpdatePerceptron();
       batch.add(lr -> {
         if (mistake != null) {
@@ -961,7 +962,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case MAX_VIOLATION:
       timer.start("train/maxViolation");
-      assert dontLearnRelations.isEmpty() : "implement me";
       Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP());
       batch.add(lr -> {
         if (maxViolation != null) {
@@ -1001,7 +1001,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case DAGGER:
       timer.start("train/dagger");
-      assert dontLearnRelations.isEmpty() : "implement me";
       List<AgendaSnapshot> states = u.daggerLike(pOracleRollIn);
       Map<Relation, Double> costFP = getCostFP();
       batch.add(lr -> {
@@ -1036,7 +1035,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         for (Step s : traj) {
 
           String r = s.edge.getRelation().getName();
-          if (dontLearnRelations.contains(r)) {
+          if (dontLearn(r)) {
             // No need to learn for this relation, no update.
             eventCounts.increment("dontLearnRelation");
             eventCounts.increment("dontLearnRelation/" + r);

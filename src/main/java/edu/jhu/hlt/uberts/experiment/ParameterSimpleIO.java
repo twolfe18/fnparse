@@ -1,4 +1,4 @@
-package edu.jhu.hlt.uberts.auto;
+package edu.jhu.hlt.uberts.experiment;
 
 import java.io.File;
 import java.util.HashMap;
@@ -6,7 +6,7 @@ import java.util.Map;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.uberts.auto.ParameterIO.Instance;
+import edu.jhu.hlt.uberts.experiment.ParameterIO.Instance;
 
 public class ParameterSimpleIO {
 
