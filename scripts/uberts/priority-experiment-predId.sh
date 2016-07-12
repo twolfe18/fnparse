@@ -3,13 +3,13 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
-#$ -l mem_free=8G
+#$ -l mem_free=10G
 #$ -l num_proc=1
 #$ -S /bin/bash
 
 #SBATCH --nodes 1
 #SBATCH --time 72:00:00
-#SBATCH --mem 8G
+#SBATCH --mem 10G
 
 # Train a predicate id model
 
@@ -45,27 +45,24 @@ L2R=$4
 # Each file is the 8-column TSV format.
 FEATURE_SET_DIR=$5
 
-# A unique name used in where to the saved model
-# $WD/models/predicate2/$TAG/predicate2.jser.gz
-TAG=$6
+# Where to write the predicate2.jser.gz model file
+PRED_MODEL_OUT=$6
 
 # A JAR file in a location which will not change/be removed.
 JAR_STABLE=$7
 
 
 
-PRED_OUT_DIR=$WD/models/predicate2/$TAG
-if [[ ! -d $PRED_OUT_DIR ]]; then
-  mkdir -p $PRED_OUT_DIR
+#PRED_OUT_DIR=$WD/models/predicate2/$TAG
+#if [[ ! -d $PRED_OUT_DIR ]]; then
+#  mkdir -p $PRED_OUT_DIR
+#fi
+#PARAM_IO="predicate2:w:$PRED_OUT_DIR/predicate2.jser.gz"
+if [[ -f $PRED_MODEL_OUT ]]; then
+  echo "output file already exists: $PRED_MODEL_OUT"
+  exit 1
 fi
-PARAM_IO="predicate2:w:$PRED_OUT_DIR/predicate2.jser.gz"
-
-
-if [[ $L2R == "true" ]]; then
-PRIORITY="1 * leftright + 0.0001 * bestfirst"
-else
-PRIORITY="1 * bestfirst"
-fi
+PARAM_IO="predicate2:w:$PRED_MODEL_OUT"
 
 
 RD=$WD/rel-data
@@ -75,11 +72,24 @@ if [[ ! -d $RD ]]; then
   exit 1
 fi
 
+
 GRAMMAR=$RD/grammar.predicate2.trans
 if [[ ! -f $GRAMMAR ]]; then
   echo "grammar doesn't exist: $GRAMMAR"
   exit 1
 fi
+
+if [[ ! -d $PREDICTIONS_DIR ]]; then
+  mkdir -p $PREDICTIONS_DIR
+fi
+
+
+if [[ $L2R == "true" ]]; then
+PRIORITY="1 * leftright + 0.001 * easyfirst"
+else
+PRIORITY="1 * easyfirst"
+fi
+
 
 TF="$RD/srl.train.shuf0.facts.gz"
 for i in `seq 9`; do
@@ -112,7 +122,7 @@ MINI_TRAIN_SIZE=1000
 #MINI_DEV_SIZE=300
 #MINI_TRAIN_SIZE=6000
 
-java -cp $JAR_STABLE -ea -server -Xmx7G \
+java -cp $JAR_STABLE -ea -server -Xmx9G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
     data.embeddings $FNPARSE_DATA/embeddings \
     data.wordnet $FNPARSE_DATA/wordnet/dict \

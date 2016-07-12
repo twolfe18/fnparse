@@ -41,11 +41,10 @@ PREDICTIONS_DIR=$2
 # see AgendaPriority.java for a list of all legal values.
 PRIORITY=$3
 
-# Will look for a pre-trained predicate2 model in
-# $WD/models/predicate2/$PRED_MODEL_TAG/predicate2.jser.gz
+# Where to get a pre-trained predicate2 model.
 # If you pass in the string "oracle", we will just use oracle
 # predicate2 decisions rather than look for a model.
-PRED_MODEL_TAG=$4
+PRED_MODEL_IN=$4
 
 # A directory which contains a <relationName>.fs file for every Relation.
 # Each file is the 8-column TSV format.
@@ -54,8 +53,11 @@ FEATURE_SET_DIR=$5
 # Either "none", "argLoc", "roleCooc", "numArg", or "full"
 GLOBAL_FEAT_MODE=$6
 
+# Where to save the arg id model produced.
+ARG_MODEL_OUT=$7
+
 # A JAR file in a location which will not change/be removed.
-JAR_STABLE=$7
+JAR_STABLE=$8
 
 if [[ ! -d $PREDICTIONS_DIR ]]; then
   echo "PREDICTIONS_DIR=$PREDICTIONS_DIR is not a directory"
@@ -67,8 +69,12 @@ if [[ ! -d $FEATURE_SET_DIR ]]; then
   exit 2
 fi
 
+if [[ -f $ARG_MODEL_OUT ]]; then
+  echo "ARG_MODEL_OUT=$ARG_MODEL_OUT already exists!"
+  exit 3
+fi
+
 RD=$WD/rel-data
-#RD=$WD/rel-data/old
 if [[ ! -d $RD ]]; then
   echo "not a directory: $RD"
   exit 1
@@ -85,17 +91,16 @@ for i in `seq 9`; do
 done
 echo "TF=$TF"
 
-#FNPARSE_DATA=~/scratch/fnparse-data
-#FNPARSE_DATA=~/code/fnparse/toydata
 
 # Lets you define this in your own environment
 if [[ -z ${FNPARSE_DATA+x} ]]; then
+  #FNPARSE_DATA=~/scratch/fnparse-data
+  #FNPARSE_DATA=~/code/fnparse/toydata
   FNPARSE_DATA=/export/projects/twolfe/fnparse-data
   echo "setting FNPARSE_DATA=$FNPARSE_DATA"
 fi
 
 
-THRESHOLDS="srl2=-3 srl3=-3"
 BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t"
 BY_GROUP_DECODER="$BY_GROUP_DECODER AT_MOST_ONE:argument4(t,f,s,k):t:k"
 #BY_GROUP_DECODER="$BY_GROUP_DECODER AT_MOST_ONE:argument4(t,f,s,k):t:s"
@@ -103,26 +108,25 @@ BY_GROUP_DECODER="$BY_GROUP_DECODER AT_MOST_ONE:argument4(t,f,s,k):t:k"
 #SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/null-span1.facts,$RD/coarsenPos2.rel"
 SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/coarsenPos2.rel"
 
-MINI_DEV_SIZE=200
-MINI_TRAIN_SIZE=1000
-#MINI_DEV_SIZE=300
-#MINI_TRAIN_SIZE=6000
+#MINI_DEV_SIZE=200
+#MINI_TRAIN_SIZE=1000
+MINI_DEV_SIZE=300
+MINI_TRAIN_SIZE=6000
 
 
-if [[ $PRED_MODEL_TAG == "oracle" ]]; then
+PARAM_IO="argument4:w:$ARG_MODEL_OUT"
+if [[ $PRED_MODEL_IN == "oracle" ]]; then
   echo "using oracle predicate2"
   ORACLE_FEATS="event1,predicate2"
-  PARAM_IO="ignore::/dev/null"
 else
   ORACLE_FEATS="event1"
-  PRED_MODEL=$WD/models/predicate2/$PRED_MODEL_TAG/predicate2.jser.gz
-  if [[ ! -f $PRED_MODEL ]]; then
-    echo "can't find predicate2 model: $PRED_MODEL"
+  if [[ ! -f $PRED_MODEL_IN ]]; then
+    echo "can't find predicate2 model: $PRED_MODEL_IN"
     exit 2
   fi
-  PARAM_IO="predicate2:r:$PRED_MODEL"
-  echo "using PARAM_IO=$PARAM_IO"
+  PARAM_IO="$PARAM_IO,predicate2:r:$PRED_MODEL_IN"
 fi
+echo "using PARAM_IO=$PARAM_IO"
 
 
 java -cp $JAR_STABLE -ea -server -Xmx7G \
