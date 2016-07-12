@@ -604,8 +604,9 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       System.out.println("showing stats for: " + this.toString());
       int k = 30;
       System.out.println(k + " biggest weights: " + getBiggestWeights(k));
+      System.out.println("feature counts: " + featureStats());
       System.out.println("event counts: " + toString());
-      events.clear();
+//      events.clear();
     }
 
     if (DEBUG > 0) {
@@ -623,6 +624,31 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public void storeExactFeatureIndices() {
     if (featureNames == null)
       featureNames = new Alphabet<>();
+  }
+
+  private Counts<String> featureStats() {
+    Counts<String> c = new Counts<>();
+    int n = featureNames.size();
+    for (int i = 0; i < n; i++) {
+      double w = theta.getWeight(i);
+      String f = featureNames.lookupObject(i);
+      int s = f.indexOf('/');
+      if (s >= 0) {
+        String coarse = f.substring(0, s);
+        if (Math.abs(w) > 1e-8) {
+          c.increment("nnz");
+          c.increment("nnz/gf/" + coarse);
+          if (w > 0) {
+            c.increment("nnz/pos");
+            c.increment("nnz/pos/" + coarse);
+          } else {
+            c.increment("nnz/neg");
+            c.increment("nnz/neg/" + coarse);
+          }
+        }
+      }
+    }
+    return c;
   }
 
   public List<Pair<String, Double>> getBiggestWeights(int k) {
