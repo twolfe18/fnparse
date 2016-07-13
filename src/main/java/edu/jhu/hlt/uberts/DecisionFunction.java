@@ -312,6 +312,16 @@ public interface DecisionFunction {
     }
   }
 
+  /**
+   * NOTE: This doesn't really implement what I had in mind in terms of
+   * writing out multiple constraints and adding their violation.
+   *
+   * First major change would be to split DecisionFunction into a decider
+   * component (a la decide rather than decide2) and a loss/violation component.
+   *
+   * The loss/violation component would only return error Adjoints of the
+   * form max(0, loss(goldFact,autoFact) + score(goldFact) - score(autoFact))
+   */
   public static class MultiAtMost1 implements DecisionFunction {
     private ByGroup left, right;
     private Uberts u;
@@ -343,25 +353,13 @@ public interface DecisionFunction {
 
     @Override
     public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
-
-      boolean aFirst = !left.firstPredInBucket.containsKey(left.getKey(e));
-      boolean bFirst = !right.firstPredInBucket.containsKey(right.getKey(e));
-      boolean first = aFirst && bFirst;
-
       Pair<Boolean, Adjoints> a = left.decide2(e, s);
       Pair<Boolean, Adjoints> b = right.decide2(e, s);
 
-      // yhat = first & score > 0
       boolean yhat = a.get1() && b.get1();
       boolean y = u.getLabel(e);
 
-      Adjoints reason;
-      if (y || first) {
-        reason = s;
-      } else {
-        reason = new Adjoints.WithLearningRate(0, s);
-      }
-
+      Adjoints reason = (y || yhat) ? s : new Adjoints.WithLearningRate(0, s);
       return new Pair<>(yhat, reason);
     }
   }
@@ -408,8 +406,6 @@ public interface DecisionFunction {
       ByGroupMode m = ByGroupMode.valueOf(items[0]);
       return new ByGroup(m, items[1], u);
     }
-
-    public static boolean DEBUG = false;
 
     // RHS of rule which this applies to
     private Relation relation;
@@ -550,159 +546,32 @@ public interface DecisionFunction {
     public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
       if (e.getRelation() != relation)
         return new Pair<>(null, null);  // Doesn't apply
-
+      assert UbertsLearnPipeline.trainMethod == TrainMethod.DAGGER1
+          : "not up to date for: " + UbertsLearnPipeline.trainMethod;
       List<Object> key = getKey(e);
-
-      final boolean y, yhat;
       final Pair<HypEdge, Adjoints> p = new Pair<>(e, s);
+      boolean first = !firstPredInBucket.containsKey(key);
+      boolean y = u.getLabel(e);
+      boolean yhat;
       switch (mode) {
       case AT_LEAST_ONE:
-        // This can only force a FP
-        // At the time of returning true here, we will not know what the next
-        // edge which will fall into this bucket which is gold==true whose
-        // score we could shift to make this constraint satisfied.
-        // ALSO, if that other edges score>0, then AT_LEAST_ONE is not relevant,
-        // maybe only wait of another edge whose score<=0.
-//        return newEdge ? true : null;
-        throw new RuntimeException("implement me!");
+        yhat = first || s.forwards() > 0;
+        break;
       case AT_MOST_ONE:
-//        if (true) {
-//          throw new RuntimeException("this implementation is broken in cases "
-//              + "where there is no gold edge, because the first will get through "
-//              + "and receive a score-- update on a FP");
-//        }
-        // NOTE: The solution to this is to use MAX_VIOLATION rather than DAGGER1
-
-        /*
-         * I don't think I can nicely compose AT_MOST_ONE(t,s) and AT_MOST_ONE(t,k)
-         * The am1(t,s) factor would need to know the prediction even in cases
-         * where it doesn't return pred=false, which it clearly can't know by
-         * construction if that decision could be handled arbitrarily by am1(t,k).
-         *
-         * am1(t,s,k) != am1(t,s) `Unanimous` am1(t,k)
-         *
-         * Multiple group definitions (aka key functions)?
-         * Idk, maybe.
-         * Lets try to write out the logic we're hoping for.
-         *
-         * if (score > 0 and firstPred(t,s) and firstPred(t,k)) {
-         *   update firstPred(t,s) and firstPred(t,k)
-         *   return (pred=true, s)
-         * } else {
-         *   if (gold) {
-         *     return (pred=false, s)
-         *   } else {
-         *     return (pred=false, Const)
-         *   }
-         * }
-         *
-         * Shouldn't we return s instead of Const when score<=0 and first?
-         * Yes.
-         */
-
-        boolean first = !firstPredInBucket.containsKey(key);
         yhat = first && s.forwards() > 0;
-        y = u.getLabel(e);
-
-        if (y && !firstGoldInBucket.containsKey(key))
-          firstGoldInBucket.put(key, p);
-
-        if (first) {
-          firstPredInBucket.put(key, p);
-          return new Pair<>(yhat, s);
-        } else {
-          if (y)
-            return new Pair<>(yhat, s);
-          else
-            return new Pair<>(yhat, new Adjoints.WithLearningRate(0, s));
-        }
-
-        /*
-        boolean newEdge = !observedKeys.contains(key);
-        if (newEdge) {
-          // No opinion: constraint not violated
-          return new Pair<>(null, null);
-        } else {
-
-          // See my notes in ~/research/2016-spring/daily-notes/2016-07-01.txt
-
-          // Return lazy Adjoints so that all edges can be added to make appropriate
-          // updates to firstPredInBucket and firstGoldInBucket
-          if (UbertsLearnPipeline.trainMethod == TrainMethod.MAX_VIOLATION) {
-            if (Uberts.LEARN_DEBUG)
-              Log.info(mode + " edge=" + e);
-            return new Pair<>(false, new IncludeLossAdjoints(Adjoints.Constant.ZERO, false));
-          } else if (UbertsLearnPipeline.trainMethod == TrainMethod.DAGGER1) {
-            return new Pair<>(false, new Adjoints() {
-              @Override
-              public double forwards() {
-                return s.forwards();
-              }
-              @Override
-              public void backwards(double dErr_dForwards) {
-                assert dErr_dForwards < 0 : "should be FN, right?";
-                // Only update if this was the first (presumably MV) or gold
-                Pair<HypEdge, Adjoints> p = firstPredInBucket.get(key);
-                Pair<HypEdge, Adjoints> g = firstGoldInBucket.get(key);
-
-                if (g == null) {
-                  // If there is no gold, then pushing down the score of some
-                  // mistake can't possibly lead to a correct decision.
-                  // This can happen e.g. if a path to a gold label was pruned
-                  // by some other fact. In this case that pruning step should
-                  // receive an update, not this step which can do nothing to recover.
-                  return;
-                }
-
-                assert p != g : "this implies no mistake, yet dErr_dForwards=" + dErr_dForwards;
-                if (p != null || g != null) {
-                  assert (e == p.get1()) ^ (e == g.get1()) : "this edge should be pred or gold";
-                  s.backwards(+dErr_dForwards);
-                }
-              }
-            });
-          } else {
-            throw new RuntimeException("implement me: " + UbertsLearnPipeline.trainMethod);
-          }
-        }
-        */
-
+        break;
       case EXACTLY_ONE:
-        assert UbertsLearnPipeline.trainMethod == TrainMethod.DAGGER1
-          : "not up to date for: " + UbertsLearnPipeline.trainMethod;
-
-        yhat = !firstPredInBucket.containsKey(key);
-        y = u.getLabel(e);
-
-        if (yhat) {
-          firstPredInBucket.put(key, p);
-
-          if (DEBUG) {
-            int n = firstPredInBucket.size() + firstGoldInBucket.size();
-            if (n % 20 == 0) {
-              Log.info("memLeak: forget to clear the DecisionFunction? " + n
-                  + " nPred=" + firstPredInBucket.size() + " "
-                  + " nGold=" + firstGoldInBucket.size());
-            }
-          }
-        }
-        // Idea here is a MIRA-like update: if you rank more than one thing above
-        // the gold edge, they are violations, and their score should be lowered.
-        // HOWEVER, this currently has no effect because only the first is deemed
-        // pred=true, so the remaining do not receieve a dErr_dForward=1 update.
-//        boolean vio = !firstGoldInBucket.containsKey(key);
-//        Adjoints updateable = vio ? s : new Adjoints.WithLearningRate(0, s);
-        Adjoints updateable = (y || yhat) ? s : new Adjoints.WithLearningRate(0, s);
-        if (y) {
-          // Purely safety check until MIRA-style update is actually implemented.
-          Object old = firstGoldInBucket.put(key, p);
-          assert old == null : "two gold in one group with EXACTLY_ONE? " + p + "\t" + old;
-        }
-        return new Pair<>(yhat, updateable);
-
+        yhat = first;
+        break;
       default:
         throw new RuntimeException("unknown mode:" + mode);
       }
+      if (yhat && first)
+        firstPredInBucket.put(key, p);
+      if (y && !firstGoldInBucket.containsKey(key))
+        firstGoldInBucket.put(key, p);
+      Adjoints updateable = (y || yhat) ? s : new Adjoints.WithLearningRate(0, s);
+      return new Pair<>(yhat, updateable);
     }
 
     /**
@@ -717,65 +586,8 @@ public interface DecisionFunction {
      */
     @Override
     public void addedToState(HashableHypEdge he, Adjoints score, Boolean y) {
-//      HypEdge e = he.getEdge();
-//      if (e.getRelation() != relation)
-//        return;  // Doesn't apply
-//      List<Object> key = new ArrayList<>(keyArgs.length);
-//      for (int i = 0; i < keyArgs.length; i++)
-//        key.add(e.getTail(keyArgs[i]));
-//      Pair<HypEdge, Adjoints> x = new Pair<>(he.getEdge(), score);
-//
-//      boolean added = observedKeys.add(key);
-//      if (Uberts.LEARN_DEBUG)
-//        Log.info("key=" + key + " added=" + added + " edge=" + he.getEdge());
-//
-//      if (firstPredInBucket.get(key) == null)
-//        firstPredInBucket.put(key, x);
-//
-//      if (y && firstGoldInBucket.get(key) == null)
-//        firstGoldInBucket.put(key, x);
     }
   }
-
-
-//  /**
-//   * This is a hack so that {@link ByGroup} can tell
-//   * {@link Uberts#maxViolationPerceptron(Map)} whether a particular
-//   * actions's loss should be included when computing the violation.
-//   *
-//   * NOTE: The proper way to fix this is to:
-//   * 1) store actions on the agenda rather than facts (need this so that costFP vs costFN can be applied appropriately)
-//   * 2) have a LocalFactor which adds in the loss to the score of actions for loss augmented inference
-//   * 3) in contrast with 2, probably keep Agenda.Mode.ORACLE so that you don't have to worry about global features making a lossy action score too high
-//   */
-//  public static class IncludeLossAdjoints implements Adjoints {
-//    private Adjoints wrapped;
-//    private boolean includeLoss;
-//
-//    public IncludeLossAdjoints(Adjoints wrapped, boolean includeLoss) {
-//      this.wrapped = wrapped;
-//      this.includeLoss = includeLoss;
-//    }
-//
-//    @Override
-//    public String toString() {
-//      return "(IncludeLoss " + includeLoss + " " + wrapped + ")";
-//    }
-//
-//    public boolean includeLoss() {
-//      return includeLoss;
-//    }
-//
-//    @Override
-//    public double forwards() {
-//      return wrapped.forwards();
-//    }
-//
-//    @Override
-//    public void backwards(double dErr_dForwards) {
-//      wrapped.backwards(dErr_dForwards);
-//    }
-//  }
 
 
   /**
