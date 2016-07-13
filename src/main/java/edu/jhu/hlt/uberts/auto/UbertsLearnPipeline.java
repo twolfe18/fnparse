@@ -35,6 +35,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
+import edu.jhu.hlt.tutils.LabeledSpanPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.Span;
@@ -94,8 +95,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static TrainMethod trainMethod = TrainMethod.DAGGER1;
 
   // Global features which aggregate based on s instead of t in argument2(t,f,s,k)
-  static boolean srl2ByArg = true;
-  static boolean argument4ByArg = true;
+  static boolean srl2ByArg = false;
+  static boolean argument4ByArg = false;
 
   static NumArgsRoleCoocArgLoc.Params allowableGlobals;
 
@@ -147,6 +148,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private boolean newMarginUpdate = true;
 
   private double trainTimeLimitMinutes = 0;
+
+  // Relations like tackstrom-args4 and xue-palmer-otf-args2 are used to filter
+  // the set of (k,s) possible for a given predicate2(t,s). If this is set to
+  // true and there is a (k,s) in a gold label which is not covered by one of
+  // these relations, include it anyway (only at TRAIN time).
+  private boolean includeGoldArgsAtTrain = true;
 
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
@@ -234,6 +241,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
 
     Log.info("[main] allowableGlobals=" + allowableGlobals);
+    Log.info("frameCooc=" + allowableGlobals.frameCooc);
 
     // This is how many passes over ALL training files are given. If there are
     // 10 train files, each of which is all the data shuffled in a particular
@@ -251,6 +259,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     pipe.trainTimeLimitMinutes = config.getDouble("trainTimeLimitMinutes", 0);
     Log.info("[main] trainTimeLimitMinutes=" + pipe.trainTimeLimitMinutes + " (0 means no limit)");
+
+    pipe.includeGoldArgsAtTrain = config.getBoolean("", pipe.includeGoldArgsAtTrain);
+    Log.info("[main] includeGoldArgsAtTrain=" + pipe.includeGoldArgsAtTrain);
 
     pipe.newMarginUpdate = config.getBoolean("newMarginUpdate", pipe.newMarginUpdate);
     Log.info("[main] newMarginUpdate=" + pipe.newMarginUpdate);
@@ -433,21 +444,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       }
     }
 
-    if (argument4ByArg) {
-      // argument4(t,f,s,k) with mutexArg=s
-      Params p = new Params();
-      p.argLocGlobal = true;
-      p.argLocPairwise = true;
-      p.argLocRoleCooc = true;
-      p.numArgs = true;
-      p.roleCooc = true;
-      p.and(allowableGlobals);
-      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 2, 1, p, u);
-      a.storeExactFeatureIndices();
-      globalFactors.add(a);
-      u.addGlobalFactor(a.getTrigger2(), a);
-    }
-
     if (!skipSrlFilterStages) {
       Relation srl2 = u.getEdgeType("srl2", true);
       if (srl2 == null) {
@@ -493,6 +489,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       numArgsArg4.storeExactFeatureIndices();
       globalFactors.add(numArgsArg4);
       u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
+
+      if (argument4ByArg) {
+        // argument4(t,f,s,k) with mutexArg=s
+        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 2, 1, p, u);
+        a.storeExactFeatureIndices();
+        globalFactors.add(a);
+        u.addGlobalFactor(a.getTrigger2(), a);
+      }
     }
 
     getParameterIO();
@@ -694,16 +698,36 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Find args
     DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
     Relation ev1 = u.getEdgeType("event1");
+    Set<LabeledSpanPair> added = null;
+    if (this.mode == Mode.TRAIN && includeGoldArgsAtTrain)
+      added = new HashSet<>();
     for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
       assert target.getEdge().getNumTails() == 1;
       Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
       int thead = hf.headSafe(t, sent);
       List<Pair<Span, String>> rss = tackstromArgs.getArgCandidates2(thead, sent);
       for (Pair<Span, String> rs : rss) {
+        Span s = rs.get1();
         String role = rs.get2();
         int shead = hf.head(rs.get1(), sent);
         assert shead >= 0;
-        u.readRelData("x tackstrom-args4 " + t.shortString() + " " + rs.get1().shortString() + " " + shead + " " + role);
+        eventCounts.increment("tackstromArgs/ts");
+        u.readRelData("x tackstrom-args4 " + t.shortString() + " " + s.shortString() + " " + shead + " " + role);
+        if (added != null)
+          added.add(new LabeledSpanPair(t, s, role));
+      }
+    }
+    if (this.mode == Mode.TRAIN && includeGoldArgsAtTrain) {
+      Relation a4 = u.getEdgeType("argument4");
+      for (HashableHypEdge e : u.getLabels().getGoldEdges(a4)) {
+        Span t = Span.inverseShortString((String) e.getEdge().getTail(0).getValue());
+        Span s = Span.inverseShortString((String) e.getEdge().getTail(2).getValue());
+        String k = (String) e.getEdge().getTail(3).getValue();
+        if (added.add(new LabeledSpanPair(t, s, k))) {
+          int shead = hf.headSafe(s, sent);
+          eventCounts.increment("tackstromArgs/ts/gold");
+          u.readRelData("x tackstrom-args4 " + t.shortString() + " " + s.shortString() + " " + shead + " " + k);
+        }
       }
     }
   }
@@ -783,6 +807,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // 2) Call the argument finding code
     DeterministicRolePruning drp = new DeterministicRolePruning(mode, null, null);
     FNParseSpanPruning args = drp.setupInference(Arrays.asList(argsFor), null).decodeAll().get(0);
+    Set<SpanPair> added = null;
+    if (this.mode == Mode.TRAIN && includeGoldArgsAtTrain)
+      added = new HashSet<>();
     for (SpanPair ts : args.getAllArgs()) {
       Span t = ts.get1();
       Span s = ts.get2();
@@ -790,6 +817,20 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         continue;
       // OTF == "on the fly"
       u.readRelData("x xue-palmer-otf-args2 " + t.shortString() + " " + s.shortString());
+      eventCounts.increment("xuePalmerOTF/ts");
+      if (added != null)
+        added.add(new SpanPair(t, s));
+    }
+    if (this.mode == Mode.TRAIN && includeGoldArgsAtTrain) {
+      Relation a4 = u.getEdgeType("argument4");
+      for (HashableHypEdge e : u.getLabels().getGoldEdges(a4)) {
+        Span t = Span.inverseShortString((String) e.getEdge().getTail(0).getValue());
+        Span s = Span.inverseShortString((String) e.getEdge().getTail(2).getValue());
+        if (added.add(new SpanPair(t, s))) {
+          eventCounts.increment("xuePalmerOTF/ts/gold");
+          u.readRelData("x xue-palmer-otf-args2 " + t.shortString() + " " + s.shortString());
+        }
+      }
     }
   }
 
