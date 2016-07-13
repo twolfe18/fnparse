@@ -127,6 +127,33 @@ public class SrlSchemaToRelations {
           w.write(l);
           w.newLine();
         }
+        String l2 = "schema frameTriage4-full " + lemma + " " + pos + " " + wnss + " " + frame;
+        if (seen.add(l2)) {
+          w.write(l2);
+          w.newLine();
+        }
+      }
+    }
+    // The "full lexicon" is the lexicon over the train and test split.
+    // Just the training data is called the "Semafor lexicon" in
+    // http://www.aclweb.org/anthology/P14-1136
+    itr = FileFrameInstanceProvider.fn15testFIP.getParsedOrTaggedSentences();
+    while (itr.hasNext()) {
+      FNTagging t = itr.next();
+      Sentence s = t.getSentence();
+      s.lemmatize();
+      for (FrameInstance fin : t.getFrameInstances()) {
+        Span target = fin.getTarget();
+        int ti = target.end - 1;
+        String lemma = norm(s.getLemma(ti).toLowerCase());
+        String pos = norm(s.getPos(ti).substring(0, 1).toUpperCase());
+        String wnss = s.getWnWord(ti) == null ? "nil" : norm(s.getWnWord(ti).getSynset().getID().toString());
+        String frame = norm(fin.getFrame().getName());
+        String l = "schema frameTriage4-full " + lemma + " " + pos + " " + wnss + " " + frame;
+        if (seen.add(l)) {
+          w.write(l);
+          w.newLine();
+        }
       }
     }
   }
@@ -178,6 +205,8 @@ public class SrlSchemaToRelations {
       Set<String> seen = new HashSet<>();
       // Relation definition
       w.write("def frameTriage4 <lemma> <pos> <synset> <frame>");
+      w.newLine();
+      w.write("def frameTriage4-full <lemma> <pos> <synset> <frame> # includes LU->frame mappings from the test set");
       w.newLine();
       buildFrameTriageRelationPB(FrameIndex.getPropbank(), w, seen);
       buildFrameTriageRelationFN(FrameIndex.getFrameNet(), w, seen);
