@@ -3,13 +3,13 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
-#$ -l mem_free=8G
+#$ -l mem_free=11G
 #$ -l num_proc=1
 #$ -S /bin/bash
 
 #SBATCH --nodes 1
 #SBATCH --time 72:00:00
-#SBATCH --mem 8G
+#SBATCH --mem 11G
 
 # Train a model by specifying an agenda priority function
 # and as little else as possible.
@@ -31,10 +31,10 @@ echo "args: $@"
 #     grammar.trans
 #     frameTriage4.rel.gz
 #     role2.rel.gz
-WD=$1
+WD=`readlink -f $1`
 
 # Directory into which we can write dev/test predictions
-PREDICTIONS_DIR=$2
+PREDICTIONS_DIR=`readlink -f $2`
 
 # This should be a string of the form "weight * priorityFuncName + ..."
 # e.g. "1 * easyFirst + 1 + dfs"
@@ -48,27 +48,31 @@ PRED_MODEL_IN=$4
 
 # A directory which contains a <relationName>.fs file for every Relation.
 # Each file is the 8-column TSV format.
-FEATURE_SET_DIR=$5
+FEATURE_SET_DIR=`readlink -f $5`
 
 # Either "none", "argLoc", "roleCooc", "numArg", or "full"
 GLOBAL_FEAT_MODE=$6
 
 # Where to save the arg id model produced.
-ARG_MODEL_OUT=$7
+ARG_MODEL_OUT=`readlink -f $7`
 
 # A JAR file in a location which will not change/be removed.
-JAR_STABLE=$8
+JAR_STABLE=`readlink -f $8`
 
+
+echo "checkpoint A"
 if [[ ! -d $PREDICTIONS_DIR ]]; then
-  echo "PREDICTIONS_DIR=$PREDICTIONS_DIR is not a directory"
-  exit 1
+  echo "making $PREDICTIONS_DIR"
+  mkdir -p $PREDICTIONS_DIR
 fi
 
+echo "checkpoint B"
 if [[ ! -d $FEATURE_SET_DIR ]]; then
   echo "FEATURE_SET_DIR=$FEATURE_SET_DIR is not a directory"
   exit 2
 fi
 
+echo "checkpoint C"
 if [[ -f $ARG_MODEL_OUT ]]; then
   echo "ARG_MODEL_OUT=$ARG_MODEL_OUT already exists!"
   exit 3
@@ -119,6 +123,7 @@ if [[ $PRED_MODEL_IN == "oracle" ]]; then
   echo "using oracle predicate2"
   ORACLE_FEATS="event1,predicate2"
 else
+  PRED_MODEL_IN=`readlink -f $PRED_MODEL_IN`
   ORACLE_FEATS="event1"
   if [[ ! -f $PRED_MODEL_IN ]]; then
     echo "can't find predicate2 model: $PRED_MODEL_IN"
@@ -129,7 +134,7 @@ fi
 echo "using PARAM_IO=$PARAM_IO"
 
 
-java -cp $JAR_STABLE -ea -server -Xmx7G \
+java -cp $JAR_STABLE -ea -server -Xmx10G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
     data.embeddings $FNPARSE_DATA/embeddings \
     data.wordnet $FNPARSE_DATA/wordnet/dict \

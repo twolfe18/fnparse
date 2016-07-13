@@ -6,18 +6,20 @@ def global_feats():
 
 small = 0.001
 def weights():
-  #w = [0, 2, 3, 4, 6, 8, 9, 12]  # 55 options which sum to 12
-  w = [0, 3, 4, 6, 8, 12]  # 27 options which sum to 12
-  #w = [0, 3, 4, 6, 9, 12]  # 27 options which sum to 12
-  #w = [0, 3, 4, 6, 12]  # 17 options which sum to 12
-  for bfs in w:
-    for dfs in w:
-      if bfs * dfs > 0:
-        continue
-      for easyfirst in w:
-        for leftright in w:
-          if bfs + dfs + easyfirst + leftright == 12:
-            yield {'bfs':bfs, 'dfs':dfs, 'easyfirst':max(small, easyfirst), 'leftright':leftright}
+  # #w = [0, 2, 3, 4, 6, 8, 9, 12]  # 55 options which sum to 12
+  # #w = [0, 3, 4, 6, 8, 12]  # 27 options which sum to 12
+  # #w = [0, 3, 4, 6, 9, 12]  # 27 options which sum to 12
+  # w = [0, 3, 4, 6, 12]  # 17 options which sum to 12
+  # for bfs in w:
+  #   for dfs in w:
+  #     if bfs * dfs > 0:
+  #       continue
+  #     for easyfirst in w:
+  #       for leftright in w:
+  #         if bfs + dfs + easyfirst + leftright == 12:
+  #           yield {'bfs':bfs, 'dfs':dfs, 'easyfirst':max(small, easyfirst), 'leftright':leftright}
+  for leftright in [0, 1, 2, 4, 8]:
+    yield {'easyfirst':1, 'leftright':leftright}
 
 def wpretty(d):
   terms = [k for k,v in d.iteritems() if v > small]
@@ -139,6 +141,8 @@ if __name__ == '__main__':
     os.makedirs(model_dir)
 
   predictions_dir = os.path.join(p, 'predictions')
+  if not os.path.exists(predictions_dir):
+    os.makedirs(predictions_dir)
 
   jar_stable = os.path.join(p, 'uberts.jar')
   print 'copying jar to safe place:'
@@ -166,7 +170,7 @@ if __name__ == '__main__':
       name += '.l2r' if l2r else '.bf'
       name += '.global' if gl_frames else '.local'
 
-      args = [engine, sh_pred, \
+      args = [engine, '-cwd', '-o', logs, sh_pred, \
         wd, \
         os.path.join(predictions_dir, name), \
         bool2str(gl_frames), \
@@ -175,6 +179,7 @@ if __name__ == '__main__':
         os.path.join(model_dir, name + '.jser.gz'), \
         jar_stable]
       print args
+      subprocess.check_call(args)
 
   # argId model (gold predicate2) with agendaPriority x globalFeats
   # TODO argId model (auto predicate2) with agendaPriority x globalFeats
@@ -189,7 +194,7 @@ if __name__ == '__main__':
 
       model_in_pred = 'oracle'
 
-      args = [engine, sh_arg, \
+      args = [engine, '-cwd', '-o', logs, sh_arg, \
         wd, \
         os.path.join(predictions_dir, name), \
         wformat(agenda_priority), \
@@ -199,4 +204,5 @@ if __name__ == '__main__':
         os.path.join(model_dir, name + '.jser.gz'), \
         jar_stable]
       print args
+      subprocess.check_call(args)
 

@@ -30,10 +30,10 @@ echo "args: $@"
 #     grammar.predicate2.trans
 #     frameTriage4.rel.gz
 #     role2.rel.gz
-WD=$1
+WD=`readlink -f $1`
 
 # Directory into which we can write dev/test predictions
-PREDICTIONS_DIR=$2
+PREDICTIONS_DIR=`readlink -f $2`
 
 # true or false, include frameCooc feature?
 GLOBAL=$3
@@ -43,28 +43,26 @@ L2R=$4
 
 # A directory which contains a <relationName>.fs file for every Relation.
 # Each file is the 8-column TSV format.
-FEATURE_SET_DIR=$5
+FEATURE_SET_DIR=`readlink -f $5`
 
 # Where to write the predicate2.jser.gz model file
-PRED_MODEL_OUT=$6
+PRED_MODEL_OUT=`readlink -f $6`
 
 # A JAR file in a location which will not change/be removed.
-JAR_STABLE=$7
+JAR_STABLE=`readlink -f $7`
 
 
 
-#PRED_OUT_DIR=$WD/models/predicate2/$TAG
-#if [[ ! -d $PRED_OUT_DIR ]]; then
-#  mkdir -p $PRED_OUT_DIR
-#fi
-#PARAM_IO="predicate2:w:$PRED_OUT_DIR/predicate2.jser.gz"
+echo "checkpoint A"
 if [[ -f $PRED_MODEL_OUT ]]; then
   echo "output file already exists: $PRED_MODEL_OUT"
   exit 1
 fi
 PARAM_IO="predicate2:w:$PRED_MODEL_OUT"
+echo "PARAM_IO=$PARAM_IO"
 
 
+echo "checkpoint B"
 RD=$WD/rel-data
 #RD=$WD/rel-data/old
 if [[ ! -d $RD ]]; then
@@ -74,21 +72,31 @@ fi
 
 
 GRAMMAR=$RD/grammar.predicate2.trans
+echo "GRAMMAR=$GRAMMAR"
 if [[ ! -f $GRAMMAR ]]; then
   echo "grammar doesn't exist: $GRAMMAR"
   exit 1
 fi
 
+echo "checkpoint C"
+if [[ ! -d $FEATURE_SET_DIR ]]; then
+  echo "FEATURE_SET_DIR=$FEATURE_SET_DIR is not a directory"
+  exit 2
+fi
+
+echo "checkpoint=D"
 if [[ ! -d $PREDICTIONS_DIR ]]; then
+  echo "making $PREDICTIONS_DIR"
   mkdir -p $PREDICTIONS_DIR
 fi
 
-
+echo "checkpoint E"
 if [[ $L2R == "true" ]]; then
 PRIORITY="1 * leftright + 0.001 * easyfirst"
 else
 PRIORITY="1 * easyfirst"
 fi
+echo "PRIORITY=$PRIORITY"
 
 
 TF="$RD/srl.train.shuf0.facts.gz"
@@ -112,15 +120,16 @@ if [[ -z ${FNPARSE_DATA+x} ]]; then
 fi
 
 
+echo "checkpoint F"
 #SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/null-span1.facts,$RD/coarsenPos2.rel"
 SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/coarsenPos2.rel"
 
 BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t"
 
-MINI_DEV_SIZE=200
-MINI_TRAIN_SIZE=1000
-#MINI_DEV_SIZE=300
-#MINI_TRAIN_SIZE=6000
+#MINI_DEV_SIZE=200
+#MINI_TRAIN_SIZE=1000
+MINI_DEV_SIZE=300
+MINI_TRAIN_SIZE=6000
 
 java -cp $JAR_STABLE -ea -server -Xmx9G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
@@ -132,7 +141,7 @@ java -cp $JAR_STABLE -ea -server -Xmx9G \
     miniDevSize $MINI_DEV_SIZE \
     trainSegSize $MINI_TRAIN_SIZE \
     passes 3 \
-    trainTimeLimitMinutes 1 \
+    trainTimeLimitMinutes 0 \
     passiveAggressive true \
     train.facts $TF \
     dev.facts $RD/srl.dev.shuf.facts.gz \
