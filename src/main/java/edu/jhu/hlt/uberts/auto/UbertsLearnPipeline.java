@@ -144,9 +144,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private BufferedWriter predictionsWriter;
   private boolean includeNegativePredictions = false;
 
-  // See DAGGER1
-  private boolean newMarginUpdate = true;
-
   private double trainTimeLimitMinutes = 0;
 
   // Relations like tackstrom-args4 and xue-palmer-otf-args2 are used to filter
@@ -154,6 +151,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // true and there is a (k,s) in a gold label which is not covered by one of
   // these relations, include it anyway (only at TRAIN time).
   private boolean includeGoldArgsAtTrain = true;
+
+  // If true, use score>0 decision function at train time.
+  private boolean ignoreDecoderAtTrainTime = true;
 
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
@@ -257,14 +257,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
+    pipe.ignoreDecoderAtTrainTime = config.getBoolean("ignoreDecoderAtTrainTime", pipe.ignoreDecoderAtTrainTime);
+    Log.info("[main] ignoreDecoderAtTrainTime=" + pipe.ignoreDecoderAtTrainTime);
+
     pipe.trainTimeLimitMinutes = config.getDouble("trainTimeLimitMinutes", 0);
     Log.info("[main] trainTimeLimitMinutes=" + pipe.trainTimeLimitMinutes + " (0 means no limit)");
 
     pipe.includeGoldArgsAtTrain = config.getBoolean("", pipe.includeGoldArgsAtTrain);
     Log.info("[main] includeGoldArgsAtTrain=" + pipe.includeGoldArgsAtTrain);
-
-    pipe.newMarginUpdate = config.getBoolean("newMarginUpdate", pipe.newMarginUpdate);
-    Log.info("[main] newMarginUpdate=" + pipe.newMarginUpdate);
 
     pipe.predictionsDir = config.getFile("predictions.outputDir", null);
     if (pipe.predictionsDir != null) {
@@ -866,8 +866,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         System.out.println("mode=" + mode + " doc=" + doc.getId() + " [memLeak] perfByRel.size=" + perfByRel.size());
       }
       boolean oracle = false;
+      boolean ignoreDecoder = false;
       timer.start("inf/" + mode);
-      Pair<Perf, List<Step>> p = u.dbgRunInference(oracle);
+      Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, ignoreDecoder);
       timer.stop("inf/" + mode);
       perfByRel.add(p.get1().perfByRel());
 
@@ -880,7 +881,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           for (Step s : p.get2()) {
             if (!includeNegativePredictions && !s.pred && !s.gold)
               continue;
-            Adjoints a = newMarginUpdate ? s.getReason() : s.score;
+            Adjoints a = s.getReason();
             predictionsWriter.write(
                 String.format("%s # gold=%s pred=%s score=%.4f",
                 s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, a.forwards()));
@@ -917,7 +918,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
         // Show some stats about this example
         System.out.println("trajLength=" + p.get2().size());
-        System.out.println("perDocStats: " + u.stats.toString());
+//        System.out.println("perDocStats: " + u.stats.toString());
 
         // Agenda size
         OrderStatistics<Integer> os = new OrderStatistics<>();
@@ -1064,7 +1065,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           System.out.println("gold: " + e);
       }
       boolean oracle = u.getRandom().nextDouble() < pOracleRollIn;
-      Pair<Perf, List<Step>> x = u.dbgRunInference(oracle);
+      Pair<Perf, List<Step>> x = u.dbgRunInference(oracle, ignoreDecoderAtTrainTime);
       Perf perf = x.get1();
       List<Step> traj = x.get2();
       batch.add(lr -> {
@@ -1088,9 +1089,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
           // NOTE: We are NOT using minScorePerRelation here since we only want
           // to move scores about 0, not the threshold.
-//          boolean pred = s.score.forwards() > 0;
           boolean pred = s.pred;
-          Adjoints reason = newMarginUpdate ? s.getReason() : s.score;
+          Adjoints reason = s.getReason();
 
 //          boolean relevantRel = s.edge.getRelation().getName().equals("argument4");
           boolean relevantRel = s.edge.getRelation().getName().equals("predicate2");

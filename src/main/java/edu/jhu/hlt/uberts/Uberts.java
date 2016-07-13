@@ -238,7 +238,7 @@ public class Uberts {
    * @param oracle says whether only edges which are in the gold label set should
    * be added to state (others are just popped off the agenda and discarded).
    */
-  public Pair<Labels.Perf, List<Step>> dbgRunInference(boolean oracle) {
+  public Pair<Labels.Perf, List<Step>> dbgRunInference(boolean oracle, boolean ignoreDecoder) {
     if (DEBUG > 1)
       Log.info("starting, oracle=" + oracle);
     statsAgendaSizePerStep.clear();
@@ -255,10 +255,17 @@ public class Uberts {
       if (DEBUG > 1)
         System.out.println("[dbgRunInference] popped=" + ai);
 
-      Pair<Boolean, Adjoints> dec = thresh.decide2(ai);
-      boolean pred = dec.get1();
-      Step s = new Step(ai, y, pred);
-      s.setDecision(dec.get2());
+      Step s;
+      boolean pred;
+      if (ignoreDecoder) {
+        pred = ai.score.forwards() > 0;
+        s = new Step(ai, y, pred);
+      } else {
+        Pair<Boolean, Adjoints> dec = thresh.decide2(ai);
+        pred = dec.get1();
+        s = new Step(ai, y, pred);
+        s.setDecision(dec.get2());
+      }
       steps.add(s);
 
       // But maybe don't add apply it (add it to state)
@@ -279,7 +286,7 @@ public class Uberts {
     return new Pair<>(perf, steps);
   }
   public Pair<Labels.Perf, List<Step>> dbgRunInference() {
-    return dbgRunInference(false);
+    return dbgRunInference(false, false);
   }
 
   /**
