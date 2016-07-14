@@ -615,7 +615,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
     }
 
-    if (tm.enoughTimePassed(15)) {
+    if (tm.enoughTimePassed(60)) {
       System.out.println("showing stats for: " + this.toString());
       int k = 30;
       System.out.println(k + " biggest weights: " + getBiggestWeights(k));
