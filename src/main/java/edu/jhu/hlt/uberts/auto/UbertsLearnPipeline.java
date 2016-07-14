@@ -31,6 +31,7 @@ import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -155,6 +156,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // If true, use score>0 decision function at train time.
   private boolean ignoreDecoderAtTrainTime = true;
 
+  // If true, then scale the FP and FN updates so that they're proportional to
+  // the number of each mistake. For example, if there was one FN and 10 FPs,
+  // this would update each FN with dErr_dForwards=-1/1 and each FP with dErr_dForwards=+1/10.
+  // This count is relation specific.
+  // This only works for DAGGER1
+  private boolean normalizeUpdatesOnCount = false;
+
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -256,6 +264,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
+
+    pipe.normalizeUpdatesOnCount = config.getBoolean("normalizeUpdatesOnCount", pipe.normalizeUpdatesOnCount);
+    Log.info("[main] normalizeUpdatesOnCount=" + pipe.normalizeUpdatesOnCount);
 
     pipe.ignoreDecoderAtTrainTime = config.getBoolean("ignoreDecoderAtTrainTime", pipe.ignoreDecoderAtTrainTime);
     Log.info("[main] ignoreDecoderAtTrainTime=" + pipe.ignoreDecoderAtTrainTime);
@@ -1074,6 +1085,19 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           System.out.println("about to update against length=" + traj.size()
                 + " trajectory, costFP=" + cfp + " oracleRollIn=" + oracle);
         }
+
+        Counts<String> nFP = null, nFN = null;
+        if (normalizeUpdatesOnCount) {
+          nFP = new Counts<>();
+          nFN = new Counts<>();
+          for (Step s : traj) {
+            if (s.gold && !s.pred)
+              nFN.increment(s.edge.getRelation().getName());
+            if (!s.gold && s.pred)
+              nFP.increment(s.edge.getRelation().getName());
+          }
+        }
+
         for (Step s : traj) {
 
           String r = s.edge.getRelation().getName();
@@ -1092,17 +1116,28 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           boolean pred = s.pred;
           Adjoints reason = s.getReason();
 
+          double norm = 1;
+          if (normalizeUpdatesOnCount) {
+            int fp = nFP.getCount(s.edge.getRelation().getName());
+            int fn = nFN.getCount(s.edge.getRelation().getName());
+            if (s.gold && !pred)
+              norm = fn / (fp + fn);
+            if (!s.gold && pred)
+              norm = fp / (fp + fn);
+          }
+          assert Double.isFinite(norm) && !Double.isNaN(norm);
+
 //          boolean relevantRel = s.edge.getRelation().getName().equals("argument4");
           boolean relevantRel = s.edge.getRelation().getName().equals("predicate2");
 
           if (s.gold && !pred) {
             if ((verbose >= 1 && relevantRel) || verbose >= 2)
               System.out.println("FN: " + s);
-            reason.backwards(-lr);
+            reason.backwards(-lr * norm);
           } else if (!s.gold && pred) {
             if ((verbose >= 1 && relevantRel) || verbose >= 2)
               System.out.println("FP: " + s);
-            reason.backwards(+lr * cfp.getOrDefault(s.edge.getRelation(), 1d));
+            reason.backwards(+lr * norm * cfp.getOrDefault(s.edge.getRelation(), 1d));
           } else if ((verbose >= 1 && relevantRel) || verbose >= 2) {
             if (s.gold)
               System.out.println("TP: " + s);
