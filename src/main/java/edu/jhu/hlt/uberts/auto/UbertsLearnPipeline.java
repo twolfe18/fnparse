@@ -163,6 +163,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // This only works for DAGGER1
   private boolean normalizeUpdatesOnCount = false;
 
+  private boolean skipDocsWithoutPredicate2 = true;
+
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -264,6 +266,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
+
+    pipe.skipDocsWithoutPredicate2 = config.getBoolean("skipDocsWithoutPredicate2", pipe.skipDocsWithoutPredicate2);
+    Log.info("[main] skipDocsWithoutPredicate2=" + pipe.skipDocsWithoutPredicate2);
 
     pipe.normalizeUpdatesOnCount = config.getBoolean("normalizeUpdatesOnCount", pipe.normalizeUpdatesOnCount);
     Log.info("[main] normalizeUpdatesOnCount=" + pipe.normalizeUpdatesOnCount);
@@ -848,6 +853,21 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   @Override
   public void consume(RelDoc doc) {
 //    System.out.println("[consume] " + doc.getId());
+
+    if (skipDocsWithoutPredicate2) {
+      assert doc.items.isEmpty();
+      boolean foundPred2 = false;
+      for (HypEdge e : doc.facts) {
+        if (e.getRelation().getName().equals("predicate2")) {
+          foundPred2 = true;
+          break;
+        }
+      }
+      if (!foundPred2) {
+        eventCounts.increment("docsSkippedBcNoPredicate2");
+        return;
+      }
+    }
 
     // Add xue-palmer-args2
     buildSentenceCacheInUberts();
