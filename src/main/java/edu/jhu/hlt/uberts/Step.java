@@ -23,16 +23,6 @@ public class Step {
   public final double priority;
 
   private Adjoints decisionAdj;
-  public Adjoints getReason() {
-    if (decisionAdj != null)
-      return decisionAdj;
-    return score;
-  }
-  public void setDecision(Adjoints dec) {
-    assert decisionAdj == null;
-//    System.out.println("[setDecision] this: " + this + " dec: " + dec);
-    this.decisionAdj = dec;
-  }
 
   public Step(AgendaItem ai, Boolean gold, boolean pred) {
     this(ai.edge, ai.score, gold, pred, ai.priority);
@@ -54,6 +44,18 @@ public class Step {
     if (decisionAdj != null)
       decisionAdj = new Adjoints.Scale(-1, decisionAdj);
     score = new Adjoints.Scale(-1, score);
+  }
+
+  public Adjoints getReason() {
+    if (decisionAdj != null)
+      return decisionAdj;
+    return score;
+  }
+
+  public void setDecision(Adjoints dec) {
+    assert decisionAdj == null;
+//    System.out.println("[setDecision] this: " + this + " dec: " + dec);
+    this.decisionAdj = dec;
   }
 
   public boolean isCommit() {

@@ -1020,23 +1020,27 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         if (maxViolation != null) {
           for (Traj cur = maxViolation.get1(); cur != null; cur = cur.getPrev()) {
             Step s = cur.getStep();
+            if (dontLearn(s.edge.getRelation().getName()))
+              continue;
             s.getReason().backwards(lr * -1);
 
-//            if (Uberts.LEARN_DEBUG) {
-//              HashableHypEdge he = new HashableHypEdge(s.edge);
-//              double d = u.dbgUpdate.getOrDefault(he, 0d);
-//              u.dbgUpdate.put(he, d-1);
-//            }
+            if (Uberts.LEARN_DEBUG) {
+              HashableHypEdge he = new HashableHypEdge(s.edge);
+              double d = u.dbgUpdate.getOrDefault(he, 0d);
+              u.dbgUpdate.put(he, d-1);
+            }
           }
           for (Traj cur = maxViolation.get2(); cur != null; cur = cur.getPrev()) {
             Step s = cur.getStep();
+            if (dontLearn(s.edge.getRelation().getName()))
+              continue;
             s.getReason().backwards(lr * +1);
 
-//            if (Uberts.LEARN_DEBUG) {
-//              HashableHypEdge he = new HashableHypEdge(s.edge);
-//              double d = u.dbgUpdate.getOrDefault(he, 0d);
-//              u.dbgUpdate.put(he, d+1);
-//            }
+            if (Uberts.LEARN_DEBUG) {
+              HashableHypEdge he = new HashableHypEdge(s.edge);
+              double d = u.dbgUpdate.getOrDefault(he, 0d);
+              u.dbgUpdate.put(he, d+1);
+            }
           }
         }
 

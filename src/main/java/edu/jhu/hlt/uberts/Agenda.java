@@ -323,8 +323,6 @@ public class Agenda {
   }
 
   public void add(HashableHypEdge edge, Adjoints score) {
-    if (DEBUG)
-      Log.info("adding " + edge + " with score " + score);
     if (edge == null)
       throw new IllegalArgumentException();
     if (score == null)
@@ -364,6 +362,10 @@ public class Agenda {
     HypEdge e = edge.getEdge();
     addEdgeToFineView(e);
     double p = priority.apply(e, score);
+
+    if (DEBUG)
+      Log.info("adding " + edge.getEdge() + " priority=" + p + " score=" + score);
+
     heap[t] = new AgendaItem(edge, score, p);
     e2i.put(e, t);
     n2eiSet(t, e, true);

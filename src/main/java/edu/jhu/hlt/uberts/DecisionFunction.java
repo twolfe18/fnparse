@@ -19,8 +19,6 @@ import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.DecisionFunction.ByGroup.ByGroupMode;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.auto.Term;
-import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
-import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline.TrainMethod;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -421,6 +419,8 @@ public interface DecisionFunction {
     private Map<List<Object>, Pair<HypEdge, Adjoints>> firstGoldInBucket;
     private Map<List<Object>, Pair<HypEdge, Adjoints>> firstPredInBucket;
 
+    private Map<List<Object>, List<Adjoints>> dbgScoresInBucket;
+
     private ByGroupMode mode;
 
     private Uberts u;
@@ -434,6 +434,7 @@ public interface DecisionFunction {
       this.observedKeys = new HashSet<>();
       this.firstPredInBucket = new HashMap<>();
       this.firstGoldInBucket = new HashMap<>();
+      this.dbgScoresInBucket = new HashMap<>();
       String[] parts = description.split(":");
       assert parts.length >= 2;
       keyArgs = new int[parts.length - 1];
@@ -451,9 +452,9 @@ public interface DecisionFunction {
 
       // Try to verify that there is an easyFirst term in the agendaPriority.
       ExperimentProperties config = ExperimentProperties.getInstance();
-      assert (config.getString("agendaPriority").toLowerCase().contains("easyfirst")
-          || config.getString("agendaPriority").toLowerCase().contains("bestfirst"))
-          && !config.getBoolean("ignoreByGroupErrMsg", false)
+      assert config.getString("agendaPriority").toLowerCase().contains("easyfirst")
+          || config.getString("agendaPriority").toLowerCase().contains("bestfirst")
+          || config.getBoolean("ignoreByGroupErrMsg", false)
           : "You must include an easyFirst term in agendaPriority to at least break ties if you want to use this class";
 
       u.addNewStateEdgeListener(this);
@@ -481,6 +482,7 @@ public interface DecisionFunction {
       this.observedKeys = new HashSet<>();
       this.firstPredInBucket = new HashMap<>();
       this.firstGoldInBucket = new HashMap<>();
+      this.dbgScoresInBucket = new HashMap<>();
     }
 
     @Override
@@ -515,6 +517,7 @@ public interface DecisionFunction {
       observedKeys.clear();
       firstPredInBucket.clear();
       firstGoldInBucket.clear();
+      dbgScoresInBucket.clear();
     }
 
     @Override
@@ -546,9 +549,22 @@ public interface DecisionFunction {
     public Pair<Boolean, Adjoints> decide2(HypEdge e, Adjoints s) {
       if (e.getRelation() != relation)
         return new Pair<>(null, null);  // Doesn't apply
-      assert UbertsLearnPipeline.trainMethod == TrainMethod.DAGGER1
-          : "not up to date for: " + UbertsLearnPipeline.trainMethod;
       List<Object> key = getKey(e);
+
+//      // This should be true if we are sorting by easyfirst
+//      List<Adjoints> l = dbgScoresInBucket.get(key);
+//      if (l == null) {
+//        l = new ArrayList<>();
+//        dbgScoresInBucket.put(key, l);
+//      }
+//      l.add(s);
+//      int n = l.size();
+//      if (n >= 2) {
+//        assert l.get(n-2).forwards() >= l.get(n-1).forwards()
+//            : "penultimate=" + l.get(n-2) + " last=" + l.get(n-1);
+//      }
+
+
       final Pair<HypEdge, Adjoints> p = new Pair<>(e, s);
       boolean first = !firstPredInBucket.containsKey(key);
       boolean y = u.getLabel(e);
