@@ -1038,10 +1038,24 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP());
       batch.add(lr -> {
         if (maxViolation != null) {
-          for (Traj cur = maxViolation.get1(); cur != null; cur = cur.getPrev()) {
+          Traj oracleTraj = maxViolation.get1();
+          Traj mvTraj = maxViolation.get2();
+
+          if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
+            Log.info("[MAX_VIOLATION backwards] starting ORACLE backwards pass...");
+          for (Traj cur = oracleTraj; cur != null; cur = cur.getPrev()) {
             Step s = cur.getStep();
             if (dontLearn(s.edge.getRelation().getName()))
               continue;
+
+            // The score of any Prune action is 0, cannot be changed, derivative of score w.r.t. weights is 0
+            // In earlier DAGGER1 methods, since we only had one trajectory, and
+            // only saw a fact once, we needed to update on every fact.
+            // Now, the oracle will call backwards(-1) on anything which could
+            // be a FN, and some will cancel in loss augmented.
+            if (!s.gold)
+              continue;
+
             s.getReason().backwards(lr * -1);
 
             if (Uberts.LEARN_DEBUG) {
@@ -1050,9 +1064,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
               u.dbgUpdate.put(he, d-1);
             }
           }
-          for (Traj cur = maxViolation.get2(); cur != null; cur = cur.getPrev()) {
+
+          if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
+            Log.info("[MAX_VIOLATION backwards] starting LOSS_AUGMENTED backwards pass...");
+          for (Traj cur = mvTraj; cur != null; cur = cur.getPrev()) {
             Step s = cur.getStep();
             if (dontLearn(s.edge.getRelation().getName()))
+              continue;
+            if (!s.pred)
               continue;
             s.getReason().backwards(lr * +1);
 
@@ -1062,6 +1081,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
               u.dbgUpdate.put(he, d+1);
             }
           }
+
+          if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
+            Log.info("[MAX_VIOLATION backwards] done with trajectory");
         }
 
         if (Uberts.LEARN_DEBUG) {
@@ -1071,6 +1093,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             System.out.println("aggUpdate:  gold=" + u.getLabel(e) + "\t" + e.getEdge() + "\t" + u.dbgUpdate.get(e));
           }
           u.dbgUpdate.clear();
+
+          if (numArgsArg4 != null) {
+            for (Pair<String, Double> w : numArgsArg4.getBiggestWeights(100)) {
+              System.out.println("aggWeights:  " + w.get2() + "\t" + w.get1());
+            }
+          }
         }
 
       });

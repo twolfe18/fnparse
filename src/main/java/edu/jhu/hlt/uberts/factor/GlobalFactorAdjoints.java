@@ -19,7 +19,7 @@ public class GlobalFactorAdjoints implements Adjoints {
   public final HypEdge edge;
   private Adjoints localScore;
   private LinkedHashMap<String, Adjoints> globalScores;
-  private double globalToLocalScale = 0.25;
+  private final double globalToLocalScale;
 
   public GlobalFactorAdjoints(HypEdge e, Adjoints localScore, double globalToLocalScale) {
     this.edge = e;

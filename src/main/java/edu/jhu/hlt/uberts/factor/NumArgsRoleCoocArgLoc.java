@@ -32,8 +32,8 @@ import edu.jhu.util.Alphabet;
 
 public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public static int DEBUG = 0;
-
   public static boolean GF_DEBUG = false;
+  public static boolean NA_DEBUG = false;
 
   /*
    * If true, then the Adjoints for edges on the agenda are immutable.
@@ -61,10 +61,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
   private Counts<String> events = new Counts<>();
 
-  private double globalToLocalScale = 0.25;
-
   // Each is called on f(newEdge,fOldEdge) where each argument is a firesFor Relation
   private List<PairFeat> pairwiseFeaturesFunctions;
+
+  private double globalToLocalScale = 1;  //0.25
 
   // Stats
   private int nRescore = 0;
@@ -482,7 +482,16 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     return gs;
   }
 
-  private Adjoints rescoreImmutable(HypEdge e, Adjoints oldScore, Agenda a, HypEdge srl4Fact, HypNode t, Iterable<HypEdge> affected, LL<HypEdge> existing) {
+  /**
+   * @param affected is an edge on the agenda which needs to be rescored
+   * @param oldScore
+   * @param a
+   * @param srl4Fact
+   * @param t
+   * @param existing
+   * @return
+   */
+  private Adjoints rescoreImmutable(HypEdge affected, Adjoints oldScore, Agenda a, HypEdge srl4Fact, HypNode t, LL<HypEdge> existing) {
 
     // Create new adjoints with local score
     GlobalFactorAdjoints gs;
@@ -491,22 +500,27 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     if (oldScore instanceof GlobalFactorAdjoints) {
       events.increment("rescoreImmutable/oldIsGlobal");
       gsOld = (GlobalFactorAdjoints) oldScore;
-      gs = new GlobalFactorAdjoints(e, gsOld.getLocalScore(), globalToLocalScale);
+      gs = new GlobalFactorAdjoints(affected, gsOld.getLocalScore(), globalToLocalScale);
     } else {
       events.increment("rescoreImmutable/oldIsLocal");
       gsOld = null;
-      gs = new GlobalFactorAdjoints(e, oldScore, globalToLocalScale);
+      gs = new GlobalFactorAdjoints(affected, oldScore, globalToLocalScale);
     }
 
     if (params.numArgs) {
       events.increment("numArgs");
       String key = "numArgs";
-      String refinement = refineArgPos < 0 ? "na" : (String) e.getTail(refineArgPos).getValue();
+      String refinement = refineArgPos < 0 ? "na" : (String) affected.getTail(refineArgPos).getValue();
       NumArgAdj adj = this.new NumArgAdj(firesFor, refinement);
+      adj.dbgEdge = affected;
       if (gsOld != null) {
         NumArgAdj na = (NumArgAdj) gsOld.getGlobalScore(key);
+//        if (NA_DEBUG)
+//          Log.info("[numArgs] affected=" + affected + " n=" + (na.numCommitted+1));
         adj.setNumCommitted(na.numCommitted + 1);
       } else {
+//        if (NA_DEBUG)
+//          Log.info("[numArgs] affected=" + affected + " n=1");
         adj.setNumCommitted(1);
       }
       gs.addToGlobalScore(key, adj);
@@ -519,7 +533,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       PairwiseAdj pa = this.new PairwiseAdj();
       for (PairFeat f : pairwiseFeaturesFunctions) {
 //        List<Integer> fxs = f.describe(srl4Fact, e);
-        List<String> fxs = f.describe(f.getName(), srl4Fact, e);
+        List<String> fxs = f.describe(f.getName(), srl4Fact, affected);
 
         events.increment(f.getName());
         if (fxs.isEmpty())
@@ -530,7 +544,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
           int idx = featureNames.lookupIndex(fx);
           pa.add(fx, idx);
           if (refineArgPos >= 0) {
-            String ref = e.getTail(refineArgPos).getValue().toString();
+            String ref = affected.getTail(refineArgPos).getValue().toString();
             String fx2 = fx + "/" + ref;
             fx2 = shorten(fx2);
             int idx2 = featureNames.lookupIndex(fx2);
@@ -553,7 +567,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       // Nothing old to copy, just generate new adjoints
       String key = "argLocGlobal";
 //      List<Integer> argLocGF = argLocGlobal(t, existing, e);
-      List<String> argLocGF = argLocGlobal(t, existing, e);
+      List<String> argLocGF = argLocGlobal(t, existing, affected);
       if (!argLocGF.isEmpty()) {
         boolean reindex = true;
         int[] feats = new int[argLocGF.size()];
@@ -603,7 +617,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       a.remove(e);
       Adjoints newScore;
       if (IMMUTABLE_FACTORS)
-        newScore = rescoreImmutable(e, oldScore, a, srl4Fact, t, affected, existing);
+        newScore = rescoreImmutable(e, oldScore, a, srl4Fact, t, existing);
       else
         newScore = rescoreMutable(e, oldScore, a, srl4Fact, t, affected, existing);
       if (DEBUG > 1) {
@@ -814,6 +828,9 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     int numCommitted;
     Adjoints aFromTheta;
 
+    private int[] feats;
+    HypEdge dbgEdge;
+
     public NumArgAdj(Relation rel, String frame) {
       this.rel = rel;
       this.frame = frame;
@@ -821,11 +838,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
 
     public void incrementNumCommitted() {
+      assert false : "this should only be used for mutable updates, which should be disabled";
       numCommitted++;
       aFromTheta = null;
     }
 
     public void setNumCommitted(int c) {
+//      if (NA_DEBUG && c == 5 && frame.equals("propbank/go-v-8"))
+//        Log.info("check this");
       if (numCommitted != c) {
         numCommitted = c;
         aFromTheta = null;
@@ -842,7 +862,6 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       if (aFromTheta == null) {
         int cCoarse = Math.min(8, numCommitted);
         int cFine = Math.min(24, numCommitted);
-        int[] feats;
         if (featureNames != null) {
           int n = featureNames.size();
           feats = new int[] {
@@ -872,6 +891,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     @Override
     public void backwards(double dErr_dForwards) {
       assert !useAvg;
+      if (NA_DEBUG) {
+        for (int i = 0; i < feats.length; i++) {
+          int f = feats[i];
+          String fs = featureNames.lookupObject(f);
+          double w = theta.getWeight(f);
+          System.out.println(fs + " [" + f + "]: w=" + w + " dErr_dForwards=" + dErr_dForwards + "\t" + dbgEdge);
+        }
+      }
       aFromTheta.backwards(dErr_dForwards);
     }
   }

@@ -54,7 +54,6 @@ import edu.jhu.util.Alphabet;
  */
 public class Uberts {
   public static int DEBUG = 1;
-
   public static boolean LEARN_DEBUG = false;
 
   public static final String REC_ORACLE_TRAJ = "recordOracleTrajectory";
@@ -434,7 +433,7 @@ public class Uberts {
     // Oracle
     Traj t1 = null;
     {
-      if (Agenda.DEBUG)
+      if (Agenda.DEBUG || DEBUG > 1)
         Log.info("starting ORACLE inference");
 //      agenda.setRescoreMode(RescoreMode.ORACLE, goldEdges);
       while (agenda.size() > 0) {
@@ -481,7 +480,7 @@ public class Uberts {
     thresh.clear();
     Traj t2 = null;
     {
-      if (Agenda.DEBUG)
+      if (Agenda.DEBUG || DEBUG > 1)
         Log.info("starting LOSS_AUGMENTED inference");
 
       // NOTE: Since the event1 facts are already on the agenda,
@@ -520,6 +519,9 @@ public class Uberts {
     Deque<Traj> t1r = t1.reverse();
     Deque<Traj> t2r = t2.reverse();
 
+    boolean noArg4Oracle = true;
+    boolean noArg4MV = true;
+
     double violation = 0;
     for (Traj cur : t1r) {
 
@@ -530,6 +532,7 @@ public class Uberts {
       Step s = cur.getStep();
       if (!s.edge.getRelation().getName().equals("argument4"))
         continue;
+      noArg4Oracle = false;
       // With Agenda.RescoreMode.ORACLE, this score will come out to +/-1e-8
       // What we really want is the true model score.
       // The score is changed to ensure that the oracle actually does the right thing.
@@ -542,6 +545,7 @@ public class Uberts {
       Step s = cur.getStep();
       if (!s.edge.getRelation().getName().equals("argument4"))
         continue;
+      noArg4MV = false;
 
       // Aha!   (NOTE, I'm using the slightly simpler case of EXACTLY_ONE instead of AT_MOST_ONE to simplify some explanations here)
       // I do not need to pull this trickery with include loss. The basic
@@ -571,6 +575,8 @@ public class Uberts {
 
     if (LEARN_DEBUG) {
       System.out.println("[maxViolationPerceptron] violation=" + violation);
+      System.out.println("[maxViolationPerceptron] doc=" + dbgSentenceCache);
+      System.out.println("[maxViolationPerceptron] noArg4Oracle=" + noArg4Oracle + " noArg4MV=" + noArg4MV);
       int i = 0;
       for (Traj t : t1r) {
         System.out.println(" oracle[" + i + "]: " + dbgShrtStr(t.prevToCur.toString()));
