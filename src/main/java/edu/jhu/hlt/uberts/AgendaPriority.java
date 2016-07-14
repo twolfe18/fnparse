@@ -6,11 +6,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
 
+import edu.jhu.hlt.fnparse.util.LearningRateSchedule.Exp;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
@@ -152,35 +155,53 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
   public static class Arg4ByRoleFrequency implements AgendaPriority {
     private Counts<String> roleCounts;
     private File providence;
+
+    private static File cacheFor(File containsArgument4Facts) {
+      String f = Hash.sha256(containsArgument4Facts.getPath()) + ".jser.gz";
+      return new File("/tmp/Arg4ByRoleFrequency-cache-" + f);
+    }
+
     public Arg4ByRoleFrequency(File containsArgument4Facts) {
-      Log.info("reading role counts from " + containsArgument4Facts.getPath());
-      roleCounts = new Counts<>();
-      providence = containsArgument4Facts;
-      TimeMarker tm = new TimeMarker();
-      try (RelationFileIterator rels = new RelationFileIterator(containsArgument4Facts, false);
-          ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-        int docs = 0;
-        while (many.hasNext()) {
-          docs++;
-          RelDoc d = many.next();
-          assert d.facts.isEmpty();
-          for (RelLine l : d.items) {
-            if (l.tokens[1].equals("argument4")) {
-              String k = l.tokens[2+3];
-              roleCounts.increment(k);
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      boolean c = config.getBoolean("cacheArg4RoleFreqCounts", false);
+      File cache = cacheFor(containsArgument4Facts);
+      if (c && cache.isFile()) {
+        providence = cache;
+        roleCounts = (Counts) FileUtil.deserialize(cache);
+      } else {
+        Log.info("reading role counts from " + containsArgument4Facts.getPath());
+        roleCounts = new Counts<>();
+        providence = containsArgument4Facts;
+        TimeMarker tm = new TimeMarker();
+        try (RelationFileIterator rels = new RelationFileIterator(containsArgument4Facts, false);
+            ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
+          int docs = 0;
+          while (many.hasNext()) {
+            docs++;
+            RelDoc d = many.next();
+            assert d.facts.isEmpty();
+            for (RelLine l : d.items) {
+              if (l.tokens[1].equals("argument4")) {
+                String k = l.tokens[2+3];
+                roleCounts.increment(k);
+              }
+            }
+
+            if (tm.enoughTimePassed(15)) {
+              Log.info("totalCount=" + roleCounts.getTotalCount()
+              + " docs=" + docs
+              + " after " + tm.secondsSinceFirstMark() + " seconds");
             }
           }
-
-          if (tm.enoughTimePassed(15)) {
-            Log.info("totalCount=" + roleCounts.getTotalCount()
-                + " docs=" + docs
-                + " after " + tm.secondsSinceFirstMark() + " seconds");
-          }
+        } catch (IOException e) {
+          throw new RuntimeException(e);
         }
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+        Log.info("done, counts: " + roleCounts);
+        if (c) {
+          Log.info("saving cache to " + cache.getPath());
+          FileUtil.serialize(roleCounts, cache);
+        }
       }
-      Log.info("done, counts: " + roleCounts);
     }
     public File getProvidence() {
       return providence;
