@@ -75,6 +75,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     public void configure(ExperimentProperties config) {
       String key = "globalFeats";
+      if (!config.containsKey(key)) {
+        Log.info("[main] no globalFeats value provided!");
+        return;
+      }
       String[] vals = config.getStrings(key);
       for (String i : vals) {
         GlobalParams gp = new GlobalParams(i);
@@ -103,8 +107,9 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public boolean roleCooc = false;
 
     public GlobalParams(String desc) {
-      Log.info("[main] " + desc);
       String[] toks = desc.split("\\+");
+      if (toks.length > 1)
+        Log.info("[main] " + desc);
       name = toks[0];
       for (int i = 1; i < toks.length; i++) {
         switch (toks[i]) {
