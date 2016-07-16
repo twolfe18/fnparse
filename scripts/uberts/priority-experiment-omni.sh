@@ -31,43 +31,54 @@ echo "args: $@"
 #     grammar.trans
 #     frameTriage4.rel.gz
 #     role2.rel.gz
-WD=`readlink -f $1`
+#WD=`readlink -f $1`
+WD=$1
+
+# A transition grammar file
+# e.g. data/srl-reldata/grammar/srl-grammar-propbank.trans
+GRAMMAR=`readlink -f $2`
 
 # Directory into which we can write dev/test predictions
-PREDICTIONS_DIR=`readlink -f $2`
+#PREDICTIONS_DIR=`readlink -f $2`
+PREDICTIONS_DIR=$3
+if [[ "$PREDICTIONS_DIR" != "none" ]]; then
+  echo "trying to resolve PREDICTIONS_DIR=$PREDICTIONS_DIR"
+  PREDICTIONS_DIR=`readlink -f $PREDICTIONS_DIR`
+fi
 
 # This should be a string of the form "weight * priorityFuncName + ..."
 # e.g. "1 * easyFirst + 1 + dfs"
 # see AgendaPriority.java for a list of all legal values.
-PRIORITY=$3
+PRIORITY=$4
 
-# Where to get a pre-trained predicate2 model.
-# If you pass in the string "oracle", we will just use oracle
-# predicate2 decisions rather than look for a model.
-PRED_MODEL_IN=$4
+# Comma-separated list of relations which should be predicted correctly
+# by the oracle, at train and test time.
+ORACLE_RELATIONS=$5
+
+# See ParameterSimpleIO.Instance2
+# e.g. "predicate2=+frozen+read:path,argument4=+learn+write:path"
+# i.e. "<key>=<value>(,<key>=<value>)*"
+# keys (e.g. "predicate2" and "argument4") refer to local/global factors,
+# and may contain misc characters, e.g. the global factor "argument4/t/+roleCooc".
+PARAM_IO=$6
+echo "using PARAM_IO=$PARAM_IO"
 
 # A directory which contains a <relationName>.fs file for every Relation.
 # Each file is the 8-column TSV format.
-FEATURE_SET_DIR=`readlink -f $5`
+FEATURE_SET_DIR=`readlink -f $7`
 
-# Either "none", "argLoc", "roleCooc", "numArg", or "full"
-GLOBAL_FEAT_MODE=$6
-
-# Where to save the arg id model produced.
-ARG_MODEL_OUT=`readlink -f $7`
+# Some combination of
+# +frames, +none, argLoc, roleCooc, numArg, or full
+GLOBAL_FEATS=$8
 
 # A JAR file in a location which will not change/be removed.
-JAR_STABLE=`readlink -f $8`
+JAR_STABLE=`readlink -f $9`
+#JAR_STABLE=$9
 
 
 if [[ ! -d $FEATURE_SET_DIR ]]; then
   echo "FEATURE_SET_DIR=$FEATURE_SET_DIR is not a directory"
   exit 2
-fi
-
-if [[ -f $ARG_MODEL_OUT ]]; then
-  echo "ARG_MODEL_OUT=$ARG_MODEL_OUT already exists!"
-  exit 3
 fi
 
 RD=$WD/rel-data
@@ -110,22 +121,6 @@ MINI_DEV_SIZE=300
 MINI_TRAIN_SIZE=6000
 
 
-PARAM_IO="argument4:w:$ARG_MODEL_OUT"
-if [[ $PRED_MODEL_IN == "oracle" ]]; then
-  echo "using oracle predicate2"
-  ORACLE_FEATS="event1,predicate2"
-else
-  PRED_MODEL_IN=`readlink -f $PRED_MODEL_IN`
-  ORACLE_FEATS="event1"
-  if [[ ! -f $PRED_MODEL_IN ]]; then
-    echo "can't find predicate2 model: $PRED_MODEL_IN"
-    exit 2
-  fi
-  PARAM_IO="$PARAM_IO,predicate2:r:$PRED_MODEL_IN"
-fi
-echo "using PARAM_IO=$PARAM_IO"
-
-
 java -cp $JAR_STABLE -ea -server -Xmx10G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
     data.embeddings $FNPARSE_DATA/embeddings \
@@ -136,24 +131,22 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     miniDevSize $MINI_DEV_SIZE \
     trainSegSize $MINI_TRAIN_SIZE \
     passes 3 \
-    srl2ByArg false \
-    argument4ByArg false \
+    trainTimeLimitMinutes 0 \
     skipSrlFilterStages true \
     train.facts $TF \
     dev.facts $RD/srl.dev.shuf.facts.gz \
     test.facts $RD/srl.test.facts.gz \
-    grammar $RD/grammar.trans \
+    grammar $GRAMMAR \
     relations $RD/relations.def \
     schema "$SCHEMA" \
-    dontLearnRelations "event1,predicate2" \
-    oracleFeats "$ORACLE_FEATS" \
+    oracleFeats "$ORACLE_RELATIONS" \
     byGroupDecoder "$BY_GROUP_DECODER" \
     agendaPriority "$PRIORITY" \
+    globalFeats "$GLOBAL_FEATS" \
     parameterIO "$PARAM_IO" \
-    frameCooc false \
-    globalFeatMode $GLOBAL_FEAT_MODE \
     featureSetDir $FEATURE_SET_DIR \
     predictions.outputDir $PREDICTIONS_DIR
 
 echo "done at `date`, ret code $?"
+
 
