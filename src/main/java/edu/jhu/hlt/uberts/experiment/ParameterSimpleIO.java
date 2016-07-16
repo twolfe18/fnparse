@@ -38,10 +38,12 @@ public class ParameterSimpleIO {
       String[] toks = description.split("\\+");
       desc = description;
       name = toks[0];
+      assert !name.endsWith(":") : "this is going to mess you up";
       for (int i = 1; i < toks.length; i++) {
         if (toks[i].equalsIgnoreCase("learn")) {
           learn = true;
-        } else if (toks[i].equalsIgnoreCase("frozen")) {
+        } else if (toks[i].equalsIgnoreCase("frozen")
+            || toks[i].equalsIgnoreCase("fixed")) {
           learn = false;
         } else if (StringUtils.startsWithIgnoreCase(toks[i], "read:")) {
           assert read == null : "reading from more than one location? " + description;
@@ -50,10 +52,10 @@ public class ParameterSimpleIO {
             throw new RuntimeException("+read:path fails if file doesn't already exists: " + read.getPath());
         } else if (StringUtils.startsWithIgnoreCase(toks[i], "write:")) {
           assert write == null : "writing to more than one location? " + description;
-          write = new File(toks[i].substring(5));
+          write = new File(toks[i].substring(6));
         } else if (StringUtils.startsWithIgnoreCase(toks[i], "writeSafe:")) {
           assert write == null : "writing to more than one location? " + description;
-          write = new File(toks[i].substring(9));
+          write = new File(toks[i].substring(10));
           if (write.isFile())
             throw new RuntimeException("+writeSafe:path fails if file already exists: " + write.getPath());
         } else {
