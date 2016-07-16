@@ -14,12 +14,15 @@ import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
+import edu.jhu.hlt.uberts.rules.Env.Trie3;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 import edu.stanford.nlp.util.StringUtils;
 
 /**
  * A trie which stores graph fragments.
+ *
+ * @deprecated See {@link Trie3}
  *
  * @author travis
  */
@@ -460,7 +463,8 @@ public class TNode {
     }
     // Good to put this second so that any new actions generated above get rescored immediately
     if (tval.gf != null) {
-      tval.gf.rescore(u.getAgenda(), traversal);
+      throw new RuntimeException("we dropped support for GraphTraversalTrace");
+//      tval.gf.rescore4(u, traversal);
     }
   }
 }

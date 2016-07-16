@@ -268,7 +268,7 @@ public class OldFeaturesWrapper {
 
     public static final boolean USE_SHA256 = false; // ExperimentProperties.getInstance().getBoolean("Int3.SHA256", false);
 
-    public static Ints3 build(BasicFeatureTemplates bft, Relation r, ExperimentProperties config) {
+    public static Ints3 build(BasicFeatureTemplates bft, Relation r, boolean fixed, ExperimentProperties config) {
       // Old way: take a map of <relationName>:<featureFile>
 //      String key = "rel2feat";
 //      Map<String, String> rel2featFile = config.getMapping(key);
@@ -286,7 +286,7 @@ public class OldFeaturesWrapper {
       int dim = 1 << config.getInt(r.getName() + ".hashBits", 25);
       Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
       boolean cacheArg4 = r.getName().equals("argument4") && ff.getPath().contains("by-hand");
-      Ints3 i3 = new Ints3(bft, r, ff, dim, cacheArg4);
+      Ints3 i3 = new Ints3(bft, r, ff, dim, fixed, cacheArg4);
       if (cacheArg4) {
         Log.info("[main] refining with (f,k) and (k,)");
         i3.refine(e -> {
@@ -372,7 +372,7 @@ public class OldFeaturesWrapper {
     // 1) disables the effects of calling useAverageWeights
     // 2) disables the effects of calling completedObservation
     // 3) returns Adjoints which do not do anything when backwards is called.
-    private boolean fixed = false;
+    private boolean fixed;
 
     // For refinements
     private List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>> theta2;
@@ -382,6 +382,11 @@ public class OldFeaturesWrapper {
     // Only for use with refinements.
     private Counts<String> cacheCounts = new Counts<>();
     private Sentence cacheTag = null;
+
+    @Override
+    public String toString() {
+      return "(Int3 " + rel.getName() + " dim=" + dimension + " intercept=" + intercept + " fixed=" + fixed + ")";
+    }
 
     public void refine(ToIntFunction<HypEdge> f) {
       if (!rel.getName().equals("argument4"))
@@ -417,12 +422,13 @@ public class OldFeaturesWrapper {
       }
     }
 
-    public Ints3(BasicFeatureTemplates bft, Relation r, File featureSet, int dimension, boolean cacheArg4) {
+    public Ints3(BasicFeatureTemplates bft, Relation r, File featureSet, int dimension, boolean fixed, boolean cacheArg4) {
       this.inner = new OldFeaturesWrapper(bft, featureSet);
       this.rel = r;
       int numIntercept = 0;
       this.dimension = dimension;
       this.theta = new AveragedPerceptronWeights(dimension, numIntercept);
+      this.fixed = fixed;
 
       if (cacheArg4 && r.getName().equals("argument4")) {
         arg4FeatureCache = new HashMap<>();

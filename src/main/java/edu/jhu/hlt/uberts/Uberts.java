@@ -1109,7 +1109,7 @@ public class Uberts {
       int ti = t.getIndex();
       HypEdge[] values = m.getValues();
       if (globalFactors[ti] != null)
-        globalFactors[ti].rescore3(agenda, state, values);
+        globalFactors[ti].rescore(this, values);
       if (transitionGenrators[ti] != null) {
         List<Pair<HypEdge, Adjoints>> edges = transitionGenrators[ti].match(values, this);
         for (Pair<HypEdge, Adjoints> se : edges)

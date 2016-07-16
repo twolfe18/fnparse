@@ -34,3 +34,8 @@ scripts/having-a-laugh/*.txt
 .idea
 lib
 slurm-*
+octave-workspace
+logs-remote
+models
+log4j.properties
+scripts/tge_example.py

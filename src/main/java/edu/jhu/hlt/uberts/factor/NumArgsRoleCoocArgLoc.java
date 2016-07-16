@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
@@ -23,8 +25,6 @@ import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.State;
-import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
-import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.prim.tuple.Pair;
@@ -50,8 +50,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
    */
   public static boolean IMMUTABLE_FACTORS = true;
 
-  private Uberts u;
-  private Relation firesFor;    // e.g. argument4
+  private String firesFor;      // e.g. argument4
+  private long firesForHash;
   private int aggregateArgPos;  // e.g. 0 for t in argument4(t,f,s,k)
   private int refineArgPos;     // e.g. 1 for f in argument4(t,f,s,k), meaning create extra conjunction feature with frame value
   private int dimension;
@@ -70,7 +70,31 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private int nRescore = 0;
   private int nEdgeRescore = 0;
 
-  public static class Params {
+  public static class MultiGlobalParams {
+    Map<String, GlobalParams> name2params = new HashMap<>();
+
+    public void configure(ExperimentProperties config) {
+      String key = "globalFeats";
+      String[] vals = config.getStrings(key);
+      for (String i : vals) {
+        GlobalParams gp = new GlobalParams(i);
+        Object old = name2params.put(gp.name, gp);
+        assert old == null;
+      }
+    }
+
+    public GlobalParams getOrAddDefault(String name) {
+      GlobalParams gp = name2params.get(name);
+      if (gp == null) {
+        gp = new GlobalParams(name);  // everything is false
+        name2params.put(name, gp);
+      }
+      return gp;
+    }
+  }
+
+  public static class GlobalParams {
+    public String name;
     public boolean frameCooc = false;
     public boolean numArgs = false;
     public boolean argLocPairwise = false;
@@ -78,7 +102,48 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public boolean argLocRoleCooc = false;
     public boolean roleCooc = false;
 
-    public Params() {
+    public GlobalParams(String desc) {
+      Log.info("[main] " + desc);
+      String[] toks = desc.split("\\+");
+      name = toks[0];
+      for (int i = 1; i < toks.length; i++) {
+        switch (toks[i]) {
+        case "none":
+          break;
+        case "full":
+          numArgs = true;
+          argLocPairwise = true;
+          argLocGlobal = true;
+          argLocRoleCooc = true;
+          roleCooc = true;
+          break;
+        case "frameCooc":
+          frameCooc = true;
+          break;
+        case "numArgs":
+          numArgs = true;
+          break;
+        case "argLoc":
+          argLocPairwise = true;
+          argLocGlobal = true;
+          break;
+        case "argLocPairwise":
+          argLocPairwise = true;
+          break;
+        case "argLocGlobal":
+          argLocGlobal = true;
+          break;
+        case "argLocRoleCooc":
+          argLocRoleCooc = true;
+          break;
+        case "roleCooc":
+          roleCooc = true;
+          break;
+        }
+      }
+    }
+
+    public GlobalParams() {
       // everything is false
     }
 
@@ -86,7 +151,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       return frameCooc || numArgs || argLocPairwise || argLocGlobal || argLocRoleCooc || roleCooc;
     }
 
-    public Params(Params copy) {
+    public GlobalParams(GlobalParams copy) {
       frameCooc = copy.frameCooc;
       roleCooc = copy.roleCooc;
       argLocGlobal = copy.argLocGlobal;
@@ -96,7 +161,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
 
     /** does &= */
-    public void and(Params other) {
+    public void and(GlobalParams other) {
       frameCooc &= other.frameCooc;
       roleCooc &= other.roleCooc;
       argLocGlobal &= other.argLocGlobal;
@@ -107,17 +172,38 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     @Override
     public String toString() {
+      return toString(true);
+    }
+    public String toString(boolean includeSpaces) {
       StringBuilder sb = new StringBuilder();
-      if (numArgs) sb.append(" +numArgs");
-      if (argLocPairwise) sb.append(" +argLocPairwise");
-      if (argLocGlobal) sb.append(" +argLocGlobal");
-      if (roleCooc) sb.append(" +roleCooc");
-      if (frameCooc) sb.append(" +frameCooc");
-      if (argLocRoleCooc) sb.append(" +argLocRoleCooc");
+      if (numArgs) {
+        if (includeSpaces) sb.append(' ');
+        sb.append("+numArgs");
+      }
+      if (argLocPairwise) {
+        if (includeSpaces) sb.append(' ');
+        sb.append("+argLocPairwise");
+      }
+      if (argLocGlobal) {
+        if (includeSpaces) sb.append(' ');
+        sb.append("+argLocGlobal");
+      }
+      if (roleCooc) {
+        if (includeSpaces) sb.append(' ');
+        sb.append("+roleCooc");
+      }
+      if (frameCooc) {
+        if (includeSpaces) sb.append(' ');
+        sb.append("+frameCooc");
+      }
+      if (argLocRoleCooc) {
+        if (includeSpaces) sb.append(' ');
+        sb.append("+argLocRoleCooc");
+      }
       return sb.toString().trim();
     }
   }
-  private Params params;
+  private GlobalParams params;
 
   interface PairFeat {
     String getName();
@@ -269,11 +355,11 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   /**
    * @param refinementArgPos can be <0 if you don't want a refinement
    */
-  public NumArgsRoleCoocArgLoc(Relation firesFor, int aggregateArgPos, int refinementArgPos, Params p, Uberts u) {
-    Log.info("[main] firesFor=" + firesFor.getName() + " agg=" + aggregateArgPos + " ref=" + refinementArgPos);
-    this.u = u;
+  public NumArgsRoleCoocArgLoc(String firesFor, int aggregateArgPos, int refinementArgPos, GlobalParams p, Uberts u) {
+    Log.info("[main] firesFor=" + firesFor + " agg=" + aggregateArgPos + " ref=" + refinementArgPos);
     this.params = p;
     this.firesFor = firesFor;
+    this.firesForHash = Hash.sha256(firesFor);
     this.aggregateArgPos = aggregateArgPos;
     this.refineArgPos = refinementArgPos;
 
@@ -432,7 +518,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       NumArgAdj adj = (NumArgAdj) gs.getGlobalScore(key);
       if (adj == null) {
         String refinement = refineArgPos < 0 ? "na" : (String) e.getTail(refineArgPos).getValue();
-        adj = this.new NumArgAdj(firesFor, refinement);
+        long refinementHash = Hash.hash(refinement);
+        adj = this.new NumArgAdj(firesFor, firesForHash, refinement, refinementHash);
         gs.addToGlobalScore(key, adj);
       }
       adj.incrementNumCommitted();
@@ -511,7 +598,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       events.increment("numArgs");
       String key = "numArgs";
       String refinement = refineArgPos < 0 ? "na" : (String) affected.getTail(refineArgPos).getValue();
-      NumArgAdj adj = this.new NumArgAdj(firesFor, refinement);
+      long refinementHash = Hash.hash(refinement);
+      NumArgAdj adj = this.new NumArgAdj(firesFor, firesForHash, refinement, refinementHash);
       adj.dbgEdge = affected;
       if (gsOld != null) {
         NumArgAdj na = (NumArgAdj) gsOld.getGlobalScore(key);
@@ -587,27 +675,25 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   }
 
   @Override
-  public void rescore(Agenda a, GraphTraversalTrace match) {
-    HypEdge srl4Fact = match.getBoundEdge(0);
-    metaRescore(a, srl4Fact);
-  }
-
-  @Override
-  public void rescore3(Agenda a, State s, HypEdge[] trigger) {
+  public void rescore(Uberts u, HypEdge[] trigger) {
     assert trigger.length == 1;
     HypEdge srl4Fact = trigger[0];
-    metaRescore(a, srl4Fact);
+    metaRescore(u, srl4Fact);
   }
 
   private TimeMarker tm = new TimeMarker();
-  private void metaRescore(Agenda a, HypEdge srl4Fact) {
+  private void metaRescore(Uberts u, HypEdge srl4Fact) {
     nRescore++;
+    Agenda a = u.getAgenda();
+    Relation firesForR = u.getEdgeType(firesFor);
     HypNode t = srl4Fact.getTail(aggregateArgPos);
-    Iterable<HypEdge> affected = a.match(aggregateArgPos, firesFor, t);
+    Iterable<HypEdge> affected = a.match(aggregateArgPos, firesForR, t);
 
     LL<HypEdge> existing = null;
-    if (params.argLocGlobal)
-      existing = u.getState().match(aggregateArgPos, firesFor, t);  // for ArgLoc global
+    if (params.argLocGlobal) {
+      State s = u.getState();
+      existing = s.match(aggregateArgPos, firesForR, t);  // for ArgLoc global
+    }
 
     int n = 0;
     for (HypEdge e : affected) {
@@ -639,7 +725,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
 
     if (DEBUG > 0) {
-      Log.info("rescored " + n + " " + firesFor.getName() + " relations connected to " + t);
+      Log.info("rescored " + n + " " + firesFor + " relations connected to " + t);
       if (DEBUG > 1)
         for (HypEdge e : affected)
           System.out.println("\t" + e);
@@ -705,14 +791,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     return l;
   }
 
-  public Term[] getTrigger2() {
-    return new Term[] { Term.uniqArguments(firesFor) };
-  }
-
-  public TKey[] getTrigger(Uberts u) {
-    return new TKey[] {
-        new TKey(State.HEAD_ARG_POS, firesFor),
-    };
+  public Term[] getTrigger2(Uberts u) {
+    return new Term[] { Term.uniqArguments(u.getEdgeType(firesFor)) };
   }
 
   public void useAverageWeights(boolean useAvg) {
@@ -739,14 +819,15 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     String[] c = getClass().getName().split("\\.");
     sb.append(c[c.length - 1]);
     sb.append(' ');
-    sb.append(firesFor.getName());
+//    sb.append(firesFor.getName());
+    sb.append(firesFor);
     sb.append(" agg=" + aggregateArgPos);
-    sb.append(':');
-    sb.append(firesFor.getTypeForArg(aggregateArgPos).getName());
+//    sb.append(':');
+//    sb.append(firesFor.getTypeForArg(aggregateArgPos).getName());
     if (refineArgPos >= 0) {
       sb.append(" ref=" + refineArgPos);
-      sb.append(':');
-      sb.append(firesFor.getTypeForArg(refineArgPos).getName());
+//      sb.append(':');
+//      sb.append(firesFor.getTypeForArg(refineArgPos).getName());
     }
     sb.append(" " + params);
     sb.append(" " + events);
@@ -764,16 +845,9 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     List<ProductIndex> features = new ArrayList<>();
     List<String> feats = new ArrayList<>();
     Adjoints aFromTheta;
-    String prefix;
-
-//    public PairwiseAdj(String prefix) {
-//      this.prefix = prefix;
-//    }
 
     public void add(String feat, int index) {
-//      feat = prefix + "/" + feat;
       this.feats.add(feat);
-//      add(Hash.hash(feat));
       add(index);
     }
 
@@ -823,17 +897,20 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
    * frame and relation (type of action).
    */
   public class NumArgAdj implements Adjoints {
-    Relation rel;
+    String rel;
     String frame;
+    long relHash, frameHash;
     int numCommitted;
     Adjoints aFromTheta;
 
     private int[] feats;
     HypEdge dbgEdge;
 
-    public NumArgAdj(Relation rel, String frame) {
+    public NumArgAdj(String rel, long relHash, String frame, long frameHash) {
       this.rel = rel;
       this.frame = frame;
+      this.relHash = relHash;
+      this.frameHash = frameHash;
       this.numCommitted = 0;
     }
 
@@ -854,7 +931,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     @Override
     public String toString() {
-      return "(NArgs " + numCommitted + " r=" + rel.getName() + " f=" + frame + ")";
+      return "(NArgs " + numCommitted + " r=" + rel + " f=" + frame + ")";
     }
 
     @Override
@@ -865,18 +942,16 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         if (featureNames != null) {
           int n = featureNames.size();
           feats = new int[] {
-              featureNames.lookupIndex(shorten("na1/" + rel.getName() + ",F=" + cFine)),
-              featureNames.lookupIndex(shorten("na2/" + rel.getName() + ",C=" + cCoarse + ",r=" + frame)),
+              featureNames.lookupIndex(shorten("na1/" + rel + ",F=" + cFine)),
+              featureNames.lookupIndex(shorten("na2/" + rel + ",C=" + cCoarse + ",r=" + frame)),
           };
           if (featureNames.size() > n && featureNames.size() % 1000 == 0) {
             Log.info("[memLeak] featureNames.size=" + featureNames.size());
           }
         } else {
-          int r = rel.hashCode();
-          int f = frame.hashCode();
           feats = new int[] {
-              Hash.mix(42, r, cFine),
-              Hash.mix(9001, r, cCoarse, f),
+              (int) Hash.mix64(42, relHash, cFine),
+              (int) Hash.mix64(9001, relHash, cCoarse, frameHash),
           };
         }
         boolean reindex = true;
