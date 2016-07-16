@@ -605,7 +605,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (!mini)
       perfTracker.observe(mode, perf);
 
-    // Maybe save a model.
+    // Maybe save some local factors.
     if (!mini && mode == Mode.DEV) {
       for (Entry<String, Ints3> x : rel2localFactor.entrySet()) {
         File saveModel = getParameterIO().write(x.getKey());
