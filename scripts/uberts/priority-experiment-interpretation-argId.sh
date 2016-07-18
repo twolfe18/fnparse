@@ -12,7 +12,8 @@ T=`echo $LOG | awk -F"." '{print $NF}'`
 #FS=`grep getFeatureSetString $LOG | awk '{print $NF}'`
 FS="ukn"
 
-GF=`grep -m 1 globalFeatMode $LOG | key-values globalFeatMode`
+#GF=`grep -m 1 globalFeatMode $LOG | key-values globalFeatMode`
+GF=`grep 'GlobalParams::<init>' $LOG | awk '{print $NF}' | tr '\n' '_' | sed 's/_$//'`
 
 AP=`grep -m 1 -oP '(?<=parsing agenda priority ).*' $LOG`
 

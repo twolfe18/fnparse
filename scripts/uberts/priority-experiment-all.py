@@ -36,7 +36,7 @@ def weights_new():
   #           yield {'bfs':bfs, 'dfs':dfs, 'easyfirst':max(small, easyfirst), 'leftright':leftright}
   for arg4target in [0, 1000]:
     for frequency in [0, 1]:
-      for leftright in [0, 1, 2, 4, 8]:
+      for leftright in [0, 1, 3, 9]:
         yield {'easyfirst':1, 'leftright':leftright, 'arg4target':arg4target, 'frequency':frequency}
 
 def wpretty(d):
@@ -55,70 +55,6 @@ def wformat(d):
     s += "%f * %s" % (weight, priority)
   return s
 
-def old_main():
-  if len(sys.argv) != 5:
-    print 'please provide:'
-    print '1) an unique experiment name'
-    print '2) a working directory'
-    print '3) a feature set directory with <relationName>.fs files'
-    print '4) a JAR file (to be copied)'
-    sys.exit(1)
-
-  name, wd, fs, jar = sys.argv[1:]
-  #wd = sys.argv[1]
-  #fs = sys.argv[2]
-  #jar = sys.argv[3]
-
-  qsub = True
-
-  if not os.path.isdir(wd):
-    print 'working directory doesn\'t exist:', wd
-    sys.exit(1)
-  if not os.path.isfile(jar):
-    print 'JAR is not file:', jar
-    sys.exit(1)
-  
-  p = os.path.join(wd, 'priority-experiments-' + name)
-  print 'copying jar to safe place:', p
-  if not os.path.exists(p):
-    os.makedirs(p)
-  logs = os.path.join(p, 'logs')
-  if not os.path.exists(logs):
-    os.makedirs(logs)
-  predictions_dir = os.path.join(p, 'predictions')
-
-  jar_stable = os.path.join(p, 'uberts.jar')
-  shutil.copy(jar, jar_stable)
-
-  fs_stable = os.path.join(p, 'priority-feature-sets')
-  if not os.path.isdir(fs_stable):
-    print 'copying features to', fs_stable
-    shutil.copytree(fs, fs_stable)
-
-  d = os.path.dirname(os.path.abspath(__file__))
-  sc = os.path.join(d, 'priority-experiment.sh')
-  i = 0
-  for gf in global_feats():
-    for w in weights():
-      c = 'qsub' if qsub else 'sbatch'
-
-      job_name = gf
-      for k,v in w.iteritems():
-        job_name += '_' + str(k) + '=' + str(v)
-
-      pd = os.path.join(predictions_dir, job_name)
-      if not os.path.exists(pd):
-        print 'writing predictions to', pd
-        os.makedirs(pd)
-
-      cmd = [c, '-o', logs, sc, \
-        wd, pd, wformat(w), fs_stable, gf, jar_stable]
-
-      print i, cmd
-      i += 1
-      subprocess.check_call(cmd)
-  print 'submitted', i, 'jobs'
-
 def bool2str(b):
   assert type(b) == type(True)
   return 'true' if b else 'false'
@@ -133,11 +69,8 @@ if __name__ == '__main__':
     sys.exit(1)
 
   tag, wd, fs, jar = sys.argv[1:]
-  #wd = sys.argv[1]
-  #fs = sys.argv[2]
-  #jar = sys.argv[3]
 
-  mock = True
+  mock = False
 
   engine = 'qsub'
 
@@ -180,13 +113,14 @@ if __name__ == '__main__':
 
   d = os.path.dirname(os.path.abspath(__file__))
 
-  sh_arg = os.path.join(d, 'priority-experiment-argId.sh')
-  sh_pred = os.path.join(d, 'priority-experiment-predId.sh')
   sh_omni = os.path.join(d, 'priority-experiment-omni.sh')
 
   train_method = 'MAX_VIOLATION'
 
   # predId model with L2R and global in [true, false]
+  grammar = os.path.join(wd, 'rel-data/grammar.predicate2.trans')
+  if not os.path.isfile(grammar):
+    raise Exception('couldn\'t find grammar file: ' + grammar)
   for l2r in [True, False]:
     for gl_frames in [True, False]:
       if gl_frames and l2r:
@@ -197,8 +131,6 @@ if __name__ == '__main__':
       name += '.global' if gl_frames else '.local'
 
       gf_str = 'preicate2/t+frameCooc' if gl_frames else ''
-
-      grammar = os.path.join(wd, 'grammar.predicate2.trans')
 
       param_io = 'predicate2+learn+write:' \
         + os.path.join(model_dir, name + '.jser.gz')
@@ -225,6 +157,9 @@ if __name__ == '__main__':
 
   # argId model (gold predicate2) with agendaPriority x globalFeats
   # TODO argId model (auto predicate2) with agendaPriority x globalFeats
+  grammar = os.path.join(wd, 'rel-data/grammar.argument4.trans')
+  if not os.path.isfile(grammar):
+    raise Exception('couldn\'t find grammar file: ' + grammar)
   for gf in global_feats():
     for agenda_priority in weights_new():
 
@@ -233,8 +168,6 @@ if __name__ == '__main__':
       name += '.goldPred'
       name += '.' + gf
       name += '.' + wpretty(agenda_priority)
-
-      grammar = os.path.join(wd, 'grammar.argument4.trans')
 
       param_io = 'argument4+learn+write:' \
         + os.path.join(model_dir, name + '.jser.gz')

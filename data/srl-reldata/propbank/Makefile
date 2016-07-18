@@ -17,8 +17,8 @@ null-span1.facts:
 coarsenPos2.rel:
 	cp $(FNPARSE)/data/srl-reldata/coarsenPos2.rel $@
 
-grammar.trans:
-	cp $(FNPARSE)/data/srl-reldata/grammar/srl-grammar-$(DATASET).trans grammar.trans
+grammar.argument4.trans:
+	cp $(FNPARSE)/data/srl-reldata/grammar/srl-grammar-$(DATASET).trans $@
 
 grammar.predicate2.trans:
 	cp $(FNPARSE)/data/srl-reldata/grammar/predicate2.trans $@
