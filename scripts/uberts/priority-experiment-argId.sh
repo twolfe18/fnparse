@@ -144,6 +144,7 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     miniDevSize $MINI_DEV_SIZE \
     trainSegSize $MINI_TRAIN_SIZE \
     passes 3 \
+    trainMethod MAX_VIOLATION \
     srl2ByArg false \
     argument4ByArg false \
     skipSrlFilterStages true \

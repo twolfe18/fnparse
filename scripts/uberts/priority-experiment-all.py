@@ -21,6 +21,24 @@ def weights():
   for leftright in [0, 1, 2, 4, 8]:
     yield {'easyfirst':1, 'leftright':leftright}
 
+def weights_new():
+  # #w = [0, 2, 3, 4, 6, 8, 9, 12]  # 55 options which sum to 12
+  # #w = [0, 3, 4, 6, 8, 12]  # 27 options which sum to 12
+  # #w = [0, 3, 4, 6, 9, 12]  # 27 options which sum to 12
+  # w = [0, 3, 4, 6, 12]  # 17 options which sum to 12
+  # for bfs in w:
+  #   for dfs in w:
+  #     if bfs * dfs > 0:
+  #       continue
+  #     for easyfirst in w:
+  #       for leftright in w:
+  #         if bfs + dfs + easyfirst + leftright == 12:
+  #           yield {'bfs':bfs, 'dfs':dfs, 'easyfirst':max(small, easyfirst), 'leftright':leftright}
+  for arg4target in [0, 1000]:
+    for frequency in [0, 1]:
+      for leftright in [0, 1, 2, 4, 8]:
+        yield {'easyfirst':1, 'leftright':leftright, 'arg4target':arg4target, 'frequency':frequency}
+
 def wpretty(d):
   terms = [k for k,v in d.iteritems() if v > small]
   terms = sorted(terms, key=lambda k: d[k], reverse=True)
@@ -114,7 +132,7 @@ if __name__ == '__main__':
     print '4) a JAR file (to be copied)'
     sys.exit(1)
 
-  name, wd, fs, jar = sys.argv[1:]
+  tag, wd, fs, jar = sys.argv[1:]
   #wd = sys.argv[1]
   #fs = sys.argv[2]
   #jar = sys.argv[3]
@@ -128,7 +146,7 @@ if __name__ == '__main__':
     print 'JAR is not file:', jar
     sys.exit(1)
   
-  p = os.path.join(wd, 'priority-experiments-' + name)
+  p = os.path.join(wd, 'priority-experiments-' + tag)
   if not os.path.exists(p):
     os.makedirs(p)
 
@@ -170,7 +188,8 @@ if __name__ == '__main__':
       name += '.l2r' if l2r else '.bf'
       name += '.global' if gl_frames else '.local'
 
-      args = [engine, '-cwd', '-o', logs, sh_pred, \
+      job_name = tag + '-' + name
+      args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_pred, \
         wd, \
         os.path.join(predictions_dir, name), \
         bool2str(gl_frames), \
@@ -184,7 +203,7 @@ if __name__ == '__main__':
   # argId model (gold predicate2) with agendaPriority x globalFeats
   # TODO argId model (auto predicate2) with agendaPriority x globalFeats
   for gf in global_feats():
-    for agenda_priority in weights():
+    for agenda_priority in weights_new():
 
       name = 'argment4'
       #name += '.autoPred' if auto_pred else '.goldPred'
@@ -194,7 +213,8 @@ if __name__ == '__main__':
 
       model_in_pred = 'oracle'
 
-      args = [engine, '-cwd', '-o', logs, sh_arg, \
+      job_name = tag + '-' + name
+      args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_arg, \
         wd, \
         os.path.join(predictions_dir, name), \
         wformat(agenda_priority), \
