@@ -621,17 +621,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Memory usage
     Log.info(Describe.memoryUsage());
 
-    boolean verbose = true;
-    if (verbose || DEBUG > 1) {
-      int k = 20;
-      for (GlobalFactor gf : name2globalFactor.values()) {
-        if (gf instanceof NumArgsRoleCoocArgLoc) {
-          List<Pair<String, Double>> x = ((NumArgsRoleCoocArgLoc) gf).getBiggestWeights(k);
-          Log.info(gf + " biggest weights: " + x);
-        }
-      }
-    }
-
     mode = null;
   }
 

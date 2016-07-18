@@ -1,5 +1,7 @@
 package edu.jhu.hlt.uberts.factor;
 
+import java.io.BufferedWriter;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -7,11 +9,13 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
@@ -34,6 +38,24 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public static int DEBUG = 0;
   public static boolean GF_DEBUG = false;
   public static boolean NA_DEBUG = false;
+
+  public static final boolean SIMPLE_SPAN_POS_REL = true;
+
+  public static final boolean USING_PROPBANK;
+  public static final boolean ALLOW_ROLE_COOC_FRAME_REFINEMENT;
+  public static final int MIN_BETWEEN_BIGGEST_WEIGHTS;
+
+  static {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    String t = config.getString("train.facts"); // see UbertsLearnPipeline
+    boolean pb = t.contains("propbank");
+    boolean fn = t.contains("framenet");
+    assert pb != fn;
+    USING_PROPBANK = pb;
+    ALLOW_ROLE_COOC_FRAME_REFINEMENT = USING_PROPBANK;
+    Log.info("[main] USING_PROPBANK=" + USING_PROPBANK + " ALLOW_ROLE_COOC_FRAME_REFINEMENT=" + ALLOW_ROLE_COOC_FRAME_REFINEMENT);
+    MIN_BETWEEN_BIGGEST_WEIGHTS = config.getInt("minBetweenBiggestWeights", 10);
+  }
 
   /*
    * If true, then the Adjoints for edges on the agenda are immutable.
@@ -81,6 +103,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
       String[] vals = config.getStrings(key);
       for (String i : vals) {
+        assert i.indexOf(' ') < 0 && i.indexOf('\t') < 0
+            : "did you proivde a whitespace separated list when you wanted comma-separated? " + Arrays.toString(vals);
         GlobalParams gp = new GlobalParams(i);
         Object old = name2params.put(gp.name, gp);
         assert old == null;
@@ -90,6 +114,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public GlobalParams getOrAddDefault(String name) {
       GlobalParams gp = name2params.get(name);
       if (gp == null) {
+        Log.info("[main] " + name);
         gp = new GlobalParams(name);  // everything is false
         name2params.put(name, gp);
       }
@@ -213,6 +238,42 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   interface PairFeat {
     String getName();
     List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge);
+
+    default public boolean allowRefinement() {
+      return true;
+    }
+
+    default public boolean isFeatureOfMine(String name) {
+      return name.startsWith(getName());
+    }
+
+    default public void refineByEdgeTypes(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats) {
+      if (agendaEdge.getRelation() != stateEdge.getRelation()) {
+        String m = "eRel=" + agendaEdge.getRelation().getName()
+            + "_" + stateEdge.getRelation().getName();
+        m = shorten(m);
+        int n = feats.size();
+        for (int i = 0; i < n; i++)
+          feats.add(feats.get(i) + "/" + m);
+      }
+    }
+
+    default public void refineByTargets(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats) {
+      Span ts = target(stateEdge);
+      Span ta = target(agendaEdge);
+      String m = null;
+      if (ts != null && ta != null)
+        m = "tRel=" + BasicFeatureTemplates.spanPosRel(ts, ta, SIMPLE_SPAN_POS_REL);
+      else if (ts != null)
+        m = "tRel=s";
+      else if (ta != null)
+        m = "tRel=a";
+      if (m != null) {
+        int n = feats.size();
+        for (int i = 0; i < n; i++)
+          feats.add(feats.get(i) + "/" + m);
+      }
+    }
   }
 
   static final PairFeat FRAME_COOC_FEAT = new PairFeat() {
@@ -228,9 +289,11 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         return Collections.emptyList();
       String s = prefix + "/" + agendaEdge.getRelation().getName() + "/" + f1 + "/" + f2;
       s = shorten(s);
-      if (agendaEdge.getRelation() == stateEdge.getRelation())
-        return Arrays.asList(s);
-      return Arrays.asList(s, s + "/" + shorten(stateEdge.getRelation().getName()));
+      List<String> feats = new ArrayList<>();
+      feats.add(s);
+      refineByTargets(stateEdge, agendaEdge, feats);
+      refineByEdgeTypes(stateEdge, agendaEdge, feats);
+      return feats;
     }
   };
   static final PairFeat ROLE_COOC_FEAT = new PairFeat() {
@@ -239,16 +302,20 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     @Override
     public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
       String r1 = role(stateEdge);
-      if (r1 == null)
-        return Collections.emptyList();
+      if (r1 == null) return Collections.emptyList();
       String r2 = role(agendaEdge);
-      if (r2 == null)
-        return Collections.emptyList();
-      String s = prefix + "/" + agendaEdge.getRelation().getName() + "/" + r1 + "/" + r2;
+      if (r2 == null) return Collections.emptyList();
+      String s = prefix + "/" + agendaEdge.getRelation().getName() + "/A=" + r1 + "/a=" + r2;
       s = shorten(s);
-      if (agendaEdge.getRelation() == stateEdge.getRelation())
-        return Arrays.asList(s);
-      return Arrays.asList(s, s + "/" + shorten(stateEdge.getRelation().getName()));
+      List<String> feats = new ArrayList<>();
+      feats.add(s);
+      refineByTargets(stateEdge, agendaEdge, feats);
+      refineByEdgeTypes(stateEdge, agendaEdge, feats);
+      return feats;
+    }
+    @Override
+    public boolean allowRefinement() {
+      return ALLOW_ROLE_COOC_FRAME_REFINEMENT;
     }
   };
   static final PairFeat ARG_LOC_PAIRWISE_FEAT = new PairFeat() {
@@ -256,27 +323,27 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public String getName() { return "alPW"; }
     @Override
     public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
-      Span s1, s2;
-      int mode = 0;
-      s1 = arg(stateEdge);
-      s2 = arg(agendaEdge);
-      if (s1 == null) {
-        mode |= (1<<0);
-        s1 = target(stateEdge.getTail(0));
-      }
-      if (s2 == null) {
-        mode |= (1<<1);
-        s2 = target(agendaEdge.getTail(0));
-      }
-      if (s1 == null || s2 == null)
-        return Collections.emptyList();
-      String f1 = BasicFeatureTemplates.spanPosRel(s1, s2);
+      Span s1 = arg(stateEdge);
+      if (s1 == null) return Collections.emptyList();
+      Span s2 = arg(agendaEdge);
+      if (s2 == null) return Collections.emptyList();
+      String f1 = "Aa=" + BasicFeatureTemplates.spanPosRel(s1, s2, SIMPLE_SPAN_POS_REL);
       String t1 = agendaEdge.getRelation().getName();
-      String s = prefix + "/" + mode + "/" + t1 + "/" + f1;
+      String s = prefix + "/" + t1 + "/" + f1;
       s = shorten(s);
-      if (agendaEdge.getRelation() == stateEdge.getRelation())
-        return Arrays.asList(s);
-      return Arrays.asList(s, s + "/" + shorten(stateEdge.getRelation().getName()));
+
+      List<String> feats = new ArrayList<>();
+      feats.add(s);
+
+      Span ts = target(stateEdge);
+      if (ts != null) {
+        // loc(A,a) * loc(T,a)
+        feats.add(s + "/Ta=" + BasicFeatureTemplates.spanPosRel(ts, s2, SIMPLE_SPAN_POS_REL));
+      }
+
+      refineByTargets(stateEdge, agendaEdge, feats);
+      refineByEdgeTypes(stateEdge, agendaEdge, feats);
+      return feats;
     }
   };
   static final PairFeat ARG_LOC_AND_ROLE_COOC = new PairFeat() {
@@ -300,7 +367,22 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
           c.add(a.get(i) + "*" + b.get(j));
       return c;
     }
+    @Override
+    public boolean allowRefinement() {
+      return false;
+    }
   };
+
+  static Span target(HypEdge e) {
+    switch (e.getRelation().getName()) {
+    case "predicate2":
+      return Span.inverseShortString((String) e.getTail(0).getValue());
+    case "argument4":
+      return Span.inverseShortString((String) e.getTail(0).getValue());
+    default:
+      throw new RuntimeException("implement me");
+    }
+  }
 
   static String frame(HypEdge e) {
     switch (e.getRelation().getName()) {
@@ -477,13 +559,13 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
       Spany a = allArgs.get(i);
       if (aPrev != null) {
-        String x = BasicFeatureTemplates.spanPosRel(aPrev.getSpan(), a.getSpan());
+        String x = BasicFeatureTemplates.spanPosRel(aPrev.getSpan(), a.getSpan(), SIMPLE_SPAN_POS_REL);
 //        long x = BasicFeatureTemplates.spanPosRel2(aPrev.getSpan(), a.getSpan()).getProdFeature();
 //        globalFeatWithT = Hash.mix64(globalFeatWithT, x);
         globalFeatSWithT.append(x);
         globalFeatSWithT.append('-');
       }
-      String x = BasicFeatureTemplates.spanPosRel(target.target, a.getSpan());
+      String x = BasicFeatureTemplates.spanPosRel(target.target, a.getSpan(), SIMPLE_SPAN_POS_REL);
 //      long x = BasicFeatureTemplates.spanPosRel2(target.target, a.getSpan()).getProdFeature();
 //      globalFeatWithT = Hash.mix64(globalFeatWithT, x);
 //      globalFeatNoT = Hash.mix64(globalFeatNoT, x);
@@ -608,12 +690,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       adj.dbgEdge = affected;
       if (gsOld != null) {
         NumArgAdj na = (NumArgAdj) gsOld.getGlobalScore(key);
-//        if (NA_DEBUG)
-//          Log.info("[numArgs] affected=" + affected + " n=" + (na.numCommitted+1));
         adj.setNumCommitted(na.numCommitted + 1);
       } else {
-//        if (NA_DEBUG)
-//          Log.info("[numArgs] affected=" + affected + " n=1");
         adj.setNumCommitted(1);
       }
       gs.addToGlobalScore(key, adj);
@@ -636,10 +714,11 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
           fx = shorten(fx);
           int idx = featureNames.lookupIndex(fx);
           pa.add(fx, idx);
-          if (refineArgPos >= 0) {
+
+          if (refineArgPos >= 0 && f.allowRefinement()) {
             String ref = affected.getTail(refineArgPos).getValue().toString();
+            ref = shorten(ref);
             String fx2 = fx + "/" + ref;
-            fx2 = shorten(fx2);
             int idx2 = featureNames.lookupIndex(fx2);
             pa.add(fx2, idx2);
           }
@@ -720,12 +799,20 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
     }
 
-    if (tm.enoughTimePassed(60)) {
+    if (tm.enoughTimePassed(MIN_BETWEEN_BIGGEST_WEIGHTS * 60)) {
       System.out.println("showing stats for: " + this.toString());
       int k = 30;
-      System.out.println(k + " biggest weights: " + getBiggestWeights(k));
+      for (boolean byAvg : Arrays.asList(true, false)) {
+        System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=frameCoocPW: " + getBiggestWeights(k, byAvg, FRAME_COOC_FEAT::isFeatureOfMine));
+        System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=numArgs: " + getBiggestWeights(k, byAvg, NumArgsRoleCoocArgLoc::isNumArgsFeat));
+        System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=argLocG: " + getBiggestWeights(k, byAvg, NumArgsRoleCoocArgLoc::isArgLocGlobalFeature));
+        System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=argLocPW: " + getBiggestWeights(k, byAvg, ARG_LOC_PAIRWISE_FEAT::isFeatureOfMine));
+        System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=argLocRoleCoocPW: " + getBiggestWeights(k, byAvg, ARG_LOC_AND_ROLE_COOC::isFeatureOfMine));
+        System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=roleCoocPW: " + getBiggestWeights(k, byAvg, ROLE_COOC_FEAT::isFeatureOfMine));
+      }
       System.out.println("feature counts: " + featureStats());
       System.out.println("event counts: " + toString());
+      maybeDumpDictionary(ExperimentProperties.getInstance());
 //      events.clear();
     }
 
@@ -734,6 +821,31 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       if (DEBUG > 1)
         for (HypEdge e : affected)
           System.out.println("\t" + e);
+    }
+  }
+
+  /** Returns a string like "argument4_0_1+numArgs" */
+  public String name() {
+    return firesFor + "_" + aggregateArgPos + "_" + refineArgPos + params.toString(false);
+  }
+
+  public void maybeDumpDictionary(ExperimentProperties config) {
+    String where = config.getString("globalFeatDumpDictionaryDir", "");
+    if (!where.isEmpty()) {
+      String name = firesFor + "_" + aggregateArgPos + "_" + refineArgPos;
+      name += params.toString(false);
+      File f = new File(where, name + ".alphabet.txt.gz");
+      Log.info("writing to " + f.getPath());
+      try (BufferedWriter w = FileUtil.getWriter(f)) {
+        int n = featureNames.size();
+        for (int i = 0; i < n; i++) {
+          w.write(featureNames.lookupObject(i));
+          w.newLine();
+        }
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+      Log.info("done");
     }
   }
 
@@ -771,15 +883,17 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     return c;
   }
 
-  public List<Pair<String, Double>> getBiggestWeights(int k) {
+  public List<Pair<String, Double>> getBiggestWeights(int k, boolean byAvg, Predicate<String> keep) {
     if (featureNames == null)
       throw new IllegalStateException("must call storeExactFeatureIndices to use this!");
     List<Pair<String, Double>> l = new ArrayList<>();
     int n = featureNames.size();
     for (int i = 0; i < n; i++) {
-      double w = theta.getWeight(i);
       String f = featureNames.lookupObject(i);
-      l.add(new Pair<>(f, w));
+      if (keep.test(f)) {
+        double w = byAvg ? theta.getAveragedWeight(i) : theta.getWeight(i);
+        l.add(new Pair<>(f, w));
+      }
     }
     Collections.sort(l, new Comparator<Pair<String, Double>>() {
       @Override
@@ -981,6 +1095,18 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
       aFromTheta.backwards(dErr_dForwards);
     }
+  }
+
+  public static boolean isNumArgsFeat(String name) {
+    return name.startsWith("na1/") || name.startsWith("na2/");
+  }
+
+  public static boolean isArgLocGlobalFeature(String name) {
+    if (name.startsWith("alG1/"))
+      return true;
+    if (name.startsWith("alG2/"))
+      return true;
+    return false;
   }
 
 }
