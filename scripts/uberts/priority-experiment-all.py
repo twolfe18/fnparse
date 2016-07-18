@@ -166,6 +166,8 @@ if __name__ == '__main__':
   sh_pred = os.path.join(d, 'priority-experiment-predId.sh')
   sh_omni = os.path.join(d, 'priority-experiment-omni.sh')
 
+  train_method = 'MAX_VIOLATION'
+
   # predId model with L2R and global in [true, false]
   for l2r in [True, False]:
     for gl_frames in [True, False]:
@@ -190,11 +192,12 @@ if __name__ == '__main__':
          wd, \
          grammar, \
          os.path.join(predictions_dir, name), \
-         agenda_priority,
-         oracle_relations,
-         param_io,
-         fs_stable,
-         gf_str,
+         agenda_priority, \
+         oracle_relations, \
+         param_io, \
+         fs_stable, \
+         gf_str, \
+         train_method, \
          jar_stable]
 
       print args
@@ -225,11 +228,12 @@ if __name__ == '__main__':
          wd, \
          grammar, \
          os.path.join(predictions_dir, name), \
-         wformat(agenda_priority),
-         oracle_relations,
-         param_io,
-         fs_stable,
-         gf_str,
+         wformat(agenda_priority), \
+         oracle_relations, \
+         param_io, \
+         fs_stable, \
+         gf_str, \
+         train_method, \
          jar_stable]
 
       print args

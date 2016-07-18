@@ -71,8 +71,11 @@ FEATURE_SET_DIR=`readlink -f $7`
 # +frames, +none, argLoc, roleCooc, numArg, or full
 GLOBAL_FEATS=$8
 
+# Probably "MAX_VIOLATION", maybe "DAGGER1"
+TRAIN_METHOD=$9
+
 # A JAR file in a location which will not change/be removed.
-JAR_STABLE=`readlink -f $9`
+JAR_STABLE=`readlink -f ${10}`
 #JAR_STABLE=$9
 
 
@@ -137,6 +140,7 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     dev.facts $RD/srl.dev.shuf.facts.gz \
     test.facts $RD/srl.test.facts.gz \
     grammar $GRAMMAR \
+    trainMethod $TRAIN_METHOD \
     relations $RD/relations.def \
     schema "$SCHEMA" \
     oracleFeats "$ORACLE_RELATIONS" \
