@@ -1,9 +1,6 @@
 
 import os, sys, subprocess, shutil
 
-def global_feats():
-  return ['none', 'numArgs', 'argLoc', 'roleCooc', 'full']
-
 small = 0.001
 def weights():
   # #w = [0, 2, 3, 4, 6, 8, 9, 12]  # 55 options which sum to 12
@@ -21,7 +18,7 @@ def weights():
   for leftright in [0, 1, 2, 4, 8]:
     yield {'easyfirst':1, 'leftright':leftright}
 
-def weights_new():
+def weights_new(extra_combinations=False):
   # #w = [0, 2, 3, 4, 6, 8, 9, 12]  # 55 options which sum to 12
   # #w = [0, 3, 4, 6, 8, 12]  # 27 options which sum to 12
   # #w = [0, 3, 4, 6, 9, 12]  # 27 options which sum to 12
@@ -34,9 +31,15 @@ def weights_new():
   #       for leftright in w:
   #         if bfs + dfs + easyfirst + leftright == 12:
   #           yield {'bfs':bfs, 'dfs':dfs, 'easyfirst':max(small, easyfirst), 'leftright':leftright}
-  for arg4target in [0, 1000]:
-    for frequency in [0, 1]:
-      for leftright in [0, 1, 3, 9]:
+  lrs = [0, 1]
+  a4ts = [0, 1000]
+  fs = [1]
+  if extra_combinations:
+    lrs = [0, 1, 2, 4, 8]
+    fs = [0, 1]
+  for arg4target in a4ts:
+    for frequency in fs:
+      for leftright in lrs:
         yield {'easyfirst':1, 'leftright':leftright, 'arg4target':arg4target, 'frequency':frequency}
 
 def wpretty(d):
@@ -120,7 +123,9 @@ if __name__ == '__main__':
   # predId model with L2R and global in [true, false]
   grammar = os.path.join(wd, 'rel-data/grammar.predicate2.trans')
   if not os.path.isfile(grammar):
-    raise Exception('couldn\'t find grammar file: ' + grammar)
+    print 'couldn\'t find grammar file: ' + grammar
+    if not mock:
+      sys.exit(10)
   for l2r in [True, False]:
     for gl_frames in [True, False]:
       if gl_frames and l2r:
@@ -159,37 +164,40 @@ if __name__ == '__main__':
   # TODO argId model (auto predicate2) with agendaPriority x globalFeats
   grammar = os.path.join(wd, 'rel-data/grammar.argument4.trans')
   if not os.path.isfile(grammar):
-    raise Exception('couldn\'t find grammar file: ' + grammar)
-  for gf in global_feats():
-    for agenda_priority in weights_new():
+    print 'couldn\'t find grammar file: ' + grammar
+    if not mock:
+      sys.exit(11)
+  for gf in ['none', 'numArgs', 'argLoc', 'roleCooc', 'full']:
+    a4_refs = ['argument4/t', 'argument4/s'] if gf != 'none' else ['argument4/t']
+    for a4_ref in a4_refs:
+      gf_str = a4_ref + '+' + gf
+      for agenda_priority in weights_new():
 
-      name = 'argment4'
-      #name += '.autoPred' if auto_pred else '.goldPred'
-      name += '.goldPred'
-      name += '.' + gf
-      name += '.' + wpretty(agenda_priority)
+        name = 'argment4'
+        #name += '.autoPred' if auto_pred else '.goldPred'
+        name += '.goldPred'
+        name += '.' + gf_str.replace('/', '_')
+        name += '.' + wpretty(agenda_priority)
 
-      param_io = 'argument4+learn+write:' \
-        + os.path.join(model_dir, name + '.jser.gz')
+        param_io = 'argument4+learn+write:' \
+          + os.path.join(model_dir, name + '.jser.gz')
 
-      oracle_relations = 'event1,predicate2'
+        oracle_relations = 'event1,predicate2'
 
-      gf_str = 'argument4/t+' + gf
+        job_name = tag + '-' + name
+        args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_omni, \
+           wd, \
+           grammar, \
+           os.path.join(predictions_dir, name), \
+           wformat(agenda_priority), \
+           oracle_relations, \
+           param_io, \
+           fs_stable, \
+           gf_str, \
+           train_method, \
+           jar_stable]
 
-      job_name = tag + '-' + name
-      args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_omni, \
-         wd, \
-         grammar, \
-         os.path.join(predictions_dir, name), \
-         wformat(agenda_priority), \
-         oracle_relations, \
-         param_io, \
-         fs_stable, \
-         gf_str, \
-         train_method, \
-         jar_stable]
-
-      print args
-      if not mock:
-        subprocess.check_call(args)
+        print args
+        if not mock:
+          subprocess.check_call(args)
 
