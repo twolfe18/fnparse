@@ -396,6 +396,7 @@ public class Uberts {
     }
   }
 
+  public static final boolean MAX_VIOLATION_BUGFIX = true;
   /**
    * Returns (gold trajectory, predicted trajectory).
    *
@@ -441,28 +442,28 @@ public class Uberts {
         boolean y = getLabel(ai);
         Pair<Boolean, Adjoints> p = thresh.decide2(ai);
         boolean yhat = p.get1();
-
-//        if (!(y == yhat || ai.getHashableEdge().getEdge().getRelation().getName().equals("event1"))) {
-//          // This can happen when a constraint cannot be satisfied by the oracle
-////          thresh.decide2(ai);
-//          assert y : "y=" + y + " yhat=" + yhat + " ai=" + ai;
-//        }
         if (DEBUG > 1)
           System.out.println("[maxViolationPerceptron] popped=" + ai);
 
         // Always record the action
         Step s = new Step(ai, y, yhat);
 //        s.setDecision(p.get2());
-        if (!y) {
-          // We want to "reinforce" the actions of the oracle. This doesn't
-          // mean making their scores higher necessarily. If the score of some
-          // fact evaluates to -0.5 it will be Pruned. This does not mean that
-          // because the oracle did it we want to push the score up (closer to
-          // Commit), but rather "reinforce" this score by lower it.
-          // If this same fact was also Pruned in the MV trajectory, then it
-          // will also flip, but receive the opposite dErr_dForwards in the
-          // update, which would make their score changes cancel.
-          s.flipSignOfScore();
+        if (MAX_VIOLATION_BUGFIX) {
+//          assert ai.score == p.get2() : "ai=" + ai.score + " p2=" + p.get2();
+//          s.setDecision(y ? p.get2() : Adjoints.Constant.ZERO);
+          s.setDecision(y ? ai.score : Adjoints.Constant.ZERO);
+        } else {
+          if (!y) {
+            // We want to "reinforce" the actions of the oracle. This doesn't
+            // mean making their scores higher necessarily. If the score of some
+            // fact evaluates to -0.5 it will be Pruned. This does not mean that
+            // because the oracle did it we want to push the score up (closer to
+            // Commit), but rather "reinforce" this score by lower it.
+            // If this same fact was also Pruned in the MV trajectory, then it
+            // will also flip, but receive the opposite dErr_dForwards in the
+            // update, which would make their score changes cancel.
+            s.flipSignOfScore();
+          }
         }
         t1 = new Traj(s, t1);
 
@@ -503,8 +504,14 @@ public class Uberts {
         // Always record the action
         Step s = new Step(ai, y, yhat);
 //        s.setDecision(p.get2());
-        if (!yhat)
-          s.flipSignOfScore();
+        if (MAX_VIOLATION_BUGFIX) {
+//          assert ai.score == p.get2() : "ai=" + ai.score + " p2=" + p.get2();
+//          s.setDecision(yhat ? p.get2() : Adjoints.Constant.ZERO);
+          s.setDecision(yhat ? ai.score : Adjoints.Constant.ZERO);
+        } else {
+          if (!yhat)
+            s.flipSignOfScore();
+        }
         t2 = new Traj(s, t2);
 
         // But maybe don't add apply it (add it to state)
@@ -515,20 +522,13 @@ public class Uberts {
 
     agenda.setRescoreMode(RescoreMode.NONE, null);
 
-    // Compute the max-violator
+    // Compute the violation
     Deque<Traj> t1r = t1.reverse();
     Deque<Traj> t2r = t2.reverse();
-
     boolean noArg4Oracle = true;
     boolean noArg4MV = true;
-
     double violation = 0;
     for (Traj cur : t1r) {
-
-//      // Prunes should have score 0
-//      double modelScore = Math.max(0, cur.getStep().getReason().forwards());
-//      bestViolation -= modelScore;
-
       Step s = cur.getStep();
       if (!s.edge.getRelation().getName().equals("argument4"))
         continue;
@@ -567,6 +567,7 @@ public class Uberts {
 
       double sPred = s.getReason().forwards();
       double loss = 0; //cur.getActionLoss();
+      assert !MAX_VIOLATION_BUGFIX || (s.getReason() == Adjoints.Constant.ZERO || sPred > 0) : s.toString();
       violation += sPred + loss;
     }
     Pair<Traj, Traj> best = null;

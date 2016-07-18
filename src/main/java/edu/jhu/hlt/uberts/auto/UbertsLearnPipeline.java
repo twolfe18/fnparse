@@ -1002,13 +1002,18 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             if (dontLearn(s.edge.getRelation().getName()))
               continue;
 
-            // The score of any Prune action is 0, cannot be changed, derivative of score w.r.t. weights is 0
-            // In earlier DAGGER1 methods, since we only had one trajectory, and
-            // only saw a fact once, we needed to update on every fact.
-            // Now, the oracle will call backwards(-1) on anything which could
-            // be a FN, and some will cancel in loss augmented.
-            if (!s.gold)
-              continue;
+            if (Uberts.MAX_VIOLATION_BUGFIX) {
+              // Uberts already sets reason(Prune(*)) = Const(0), so its fine
+              // to call backwards on it
+            } else {
+              // The score of any Prune action is 0, cannot be changed, derivative of score w.r.t. weights is 0
+              // In earlier DAGGER1 methods, since we only had one trajectory, and
+              // only saw a fact once, we needed to update on every fact.
+              // Now, the oracle will call backwards(-1) on anything which could
+              // be a FN, and some will cancel in loss augmented.
+              if (!s.gold)
+                continue;
+            }
 
             s.getReason().backwards(lr * -1);
 
@@ -1025,8 +1030,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             Step s = cur.getStep();
             if (dontLearn(s.edge.getRelation().getName()))
               continue;
-            if (!s.pred)
-              continue;
+
+            if (Uberts.MAX_VIOLATION_BUGFIX) {
+              // no-op, see above
+            } else {
+              if (!s.pred)
+                continue;
+            }
+
             s.getReason().backwards(lr * +1);
 
             if (Uberts.LEARN_DEBUG) {

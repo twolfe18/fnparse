@@ -502,7 +502,7 @@ public class OldFeaturesWrapper {
             return Adjoints.Constant.ZERO;
           return useAvg ? intercept.avgScore() : intercept.score();
         }
-        if (cnt.getTotalCount() % 75000 == 0)
+        if (cnt.getTotalCount() % 750000 == 0)
           System.out.println("Int3 events: " + cnt.toString());
 
         // Convert to int[]
