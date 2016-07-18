@@ -95,6 +95,10 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
    * Only allows calls to getWeight, which is overridden to actually call
    * getAverageWeight. Allocates no space other than a pointer to the
    * {@link AveragedPerceptronWeights} which it is a view of.
+   *
+   * NOTE: If you are getting NPE with an average view and notice that the weight
+   * vectors are null, this is intentional! Average views are never supposed to
+   * be updated (have backwards called on them)!
    */
   public class AverageView extends AveragedPerceptronWeights {
     private static final long serialVersionUID = 5844615895964184994L;
@@ -267,6 +271,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
 
   // bwh = "backwards helper"
   private void bwh(int i, double dErr_dForwards) {
+    assert !(this instanceof AverageView) : "don't call backwards on average views!";
     w.add(i, -dErr_dForwards);
     u.add(i, c * -dErr_dForwards);
   }

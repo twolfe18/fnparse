@@ -1,17 +1,16 @@
 package edu.jhu.hlt.uberts.factor;
 
-import java.util.List;
 import java.util.function.Function;
 
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
+import edu.jhu.hlt.uberts.DecisionFunction;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Relation;
-import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Term;
@@ -31,6 +30,8 @@ import edu.jhu.hlt.uberts.auto.Term;
  * If I match on tail=[ner:relation], that is strong enough:
  * from the presence of a relation, i can easily pull out (i,j),
  * and then I can go look for ner edges in inersect(adjacent(tokenIndex i),adjacent(tokenIndex j))
+ *
+ * @deprecated See {@link DecisionFunction.ByGroup}
  */
 public class AtMost1 {
   public static int DEBUG = 1;
@@ -120,13 +121,7 @@ public class AtMost1 {
     }
 
     @Override
-    public void rescore(Agenda a, GraphTraversalTrace match) {
-      HypNode observedValue = getBoundNode.apply(match);
-      metaRescore(a, observedValue);
-    }
-
-    @Override
-    public void rescore3(Agenda a, State s, HypEdge[] trigger) {
+    public void rescore(Uberts u, HypEdge[] trigger) {
 //      assert trigger.length == 1;
 //      HypEdge e = trigger[0];
 //      HypNode observedValue = e.getTail(i)
@@ -228,7 +223,7 @@ public class AtMost1 {
     }
 
     @Override
-    public void rescore3(Agenda a, State s, HypEdge[] trigger) {
+    public void rescore(Uberts u, HypEdge[] trigger) {
 //      assert trigger.length == 1;
 //      HypEdge e = trigger[0];
 //      HypNode observedValue = e.getTail(i)
@@ -236,28 +231,28 @@ public class AtMost1 {
       throw new RuntimeException("update this, remove getBoundNode:GraphTraversalTrace->HypNode");
     }
 
-    @Override
-    public void rescore(Agenda a, GraphTraversalTrace match) {
-      nRescore++;
-      HypNode bound1 = getBoundNode1.apply(match);
-      HypNode bound2 = getBoundNode2.apply(match);
-      List<HypEdge> intersect = a.adjacent(bound1, bound2);
-      int c = 0, r = 0;
-      for (HypEdge e : intersect) {
-        c++;
-        if (e.getRelation() == relationMatch) {
-          r++;
-          if (DEBUG > 2)
-            Log.info("actually removing: " + e);
-          nEdgeRescore++;
-          a.remove(e);
-        }
-      }
-      if (DEBUG > 1) {
-        Log.info("removed " + r + " of " + c + " " + relationMatch.getName()
-          + " edges adjacent to " + bound1 + " and " + bound2);
-      }
-    }
+//    @Override
+//    public void rescore(Agenda a, GraphTraversalTrace match) {
+//      nRescore++;
+//      HypNode bound1 = getBoundNode1.apply(match);
+//      HypNode bound2 = getBoundNode2.apply(match);
+//      List<HypEdge> intersect = a.adjacent(bound1, bound2);
+//      int c = 0, r = 0;
+//      for (HypEdge e : intersect) {
+//        c++;
+//        if (e.getRelation() == relationMatch) {
+//          r++;
+//          if (DEBUG > 2)
+//            Log.info("actually removing: " + e);
+//          nEdgeRescore++;
+//          a.remove(e);
+//        }
+//      }
+//      if (DEBUG > 1) {
+//        Log.info("removed " + r + " of " + c + " " + relationMatch.getName()
+//          + " edges adjacent to " + bound1 + " and " + bound2);
+//      }
+//    }
   }
 
 }

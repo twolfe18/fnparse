@@ -1,17 +1,12 @@
 package edu.jhu.hlt.uberts.factor;
 
-import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.HypEdge;
-import edu.jhu.hlt.uberts.State;
-import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
+import edu.jhu.hlt.uberts.Uberts;
 
 public interface GlobalFactor {
 
   /** Do whatever you want to the edges in the agenda */
-  public void rescore(Agenda a, GraphTraversalTrace match);
-
-
-  public void rescore3(Agenda a, State s, HypEdge[] trigger);
+  public void rescore(Uberts u, HypEdge[] trigger);
 
 
   public String getName();
@@ -40,14 +35,9 @@ public interface GlobalFactor {
       return "(Comp " + left.getName() + " " + right.getName() + ")";
     }
     @Override
-    public void rescore(Agenda a, GraphTraversalTrace match) {
-      left.rescore(a, match);
-      right.rescore(a, match);
-    }
-    @Override
-    public void rescore3(Agenda a, State s, HypEdge[] trigger) {
-      left.rescore3(a, s, trigger);
-      right.rescore3(a, s, trigger);
+    public void rescore(Uberts u, HypEdge[] trigger) {
+      left.rescore(u, trigger);
+      right.rescore(u, trigger);
     }
   }
 }

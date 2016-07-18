@@ -137,39 +137,44 @@ if __name__ == '__main__':
   #fs = sys.argv[2]
   #jar = sys.argv[3]
 
+  mock = True
+
   engine = 'qsub'
 
   if not os.path.isdir(wd):
     print 'working directory doesn\'t exist:', wd
-    sys.exit(1)
+    if not mock:
+      sys.exit(1)
   if not os.path.isfile(jar):
     print 'JAR is not file:', jar
-    sys.exit(1)
+    if not mock:
+      sys.exit(1)
   
   p = os.path.join(wd, 'priority-experiments-' + tag)
-  if not os.path.exists(p):
+  if not os.path.exists(p) and not mock:
     os.makedirs(p)
 
   logs = os.path.join(p, 'logs')
-  if not os.path.exists(logs):
+  if not os.path.exists(logs) and not mock:
     os.makedirs(logs)
 
   model_dir = os.path.join(p, 'models')
-  if not os.path.exists(model_dir):
+  if not os.path.exists(model_dir) and not mock:
     os.makedirs(model_dir)
 
   predictions_dir = os.path.join(p, 'predictions')
-  if not os.path.exists(predictions_dir):
+  if not os.path.exists(predictions_dir) and not mock:
     os.makedirs(predictions_dir)
 
   jar_stable = os.path.join(p, 'uberts.jar')
   print 'copying jar to safe place:'
   print '    ', jar
   print '===>', jar_stable
-  shutil.copy(jar, jar_stable)
+  if not mock:
+    shutil.copy(jar, jar_stable)
 
   fs_stable = os.path.join(p, 'priority-feature-sets')
-  if not os.path.isdir(fs_stable):
+  if not os.path.isdir(fs_stable) and not mock:
     print 'copying features to', fs_stable
     shutil.copytree(fs, fs_stable)
 
@@ -177,6 +182,9 @@ if __name__ == '__main__':
 
   sh_arg = os.path.join(d, 'priority-experiment-argId.sh')
   sh_pred = os.path.join(d, 'priority-experiment-predId.sh')
+  sh_omni = os.path.join(d, 'priority-experiment-omni.sh')
+
+  train_method = 'MAX_VIOLATION'
 
   # predId model with L2R and global in [true, false]
   for l2r in [True, False]:
@@ -188,17 +196,32 @@ if __name__ == '__main__':
       name += '.l2r' if l2r else '.bf'
       name += '.global' if gl_frames else '.local'
 
+      gf_str = 'preicate2/t+frameCooc' if gl_frames else ''
+
+      grammar = os.path.join(wd, 'grammar.predicate2.trans')
+
+      param_io = 'predicate2+learn+write:' \
+        + os.path.join(model_dir, name + '.jser.gz')
+
+      agenda_priority = '1*easyfirst + 1000*leftright' if l2r else 'easyfirst'
+      oracle_relations = 'event1'
+
       job_name = tag + '-' + name
-      args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_pred, \
-        wd, \
-        os.path.join(predictions_dir, name), \
-        bool2str(gl_frames), \
-        bool2str(l2r), \
-        fs_stable, \
-        os.path.join(model_dir, name + '.jser.gz'), \
-        jar_stable]
+      args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_omni, \
+         wd, \
+         grammar, \
+         os.path.join(predictions_dir, name), \
+         agenda_priority, \
+         oracle_relations, \
+         param_io, \
+         fs_stable, \
+         gf_str, \
+         train_method, \
+         jar_stable]
+
       print args
-      subprocess.check_call(args)
+      if not mock:
+        subprocess.check_call(args)
 
   # argId model (gold predicate2) with agendaPriority x globalFeats
   # TODO argId model (auto predicate2) with agendaPriority x globalFeats
@@ -211,18 +234,29 @@ if __name__ == '__main__':
       name += '.' + gf
       name += '.' + wpretty(agenda_priority)
 
-      model_in_pred = 'oracle'
+      grammar = os.path.join(wd, 'grammar.argument4.trans')
+
+      param_io = 'argument4+learn+write:' \
+        + os.path.join(model_dir, name + '.jser.gz')
+
+      oracle_relations = 'event1,predicate2'
+
+      gf_str = 'argument4/t+' + gf
 
       job_name = tag + '-' + name
-      args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_arg, \
-        wd, \
-        os.path.join(predictions_dir, name), \
-        wformat(agenda_priority), \
-        model_in_pred, \
-        fs_stable, \
-        gf, \
-        os.path.join(model_dir, name + '.jser.gz'), \
-        jar_stable]
+      args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_omni, \
+         wd, \
+         grammar, \
+         os.path.join(predictions_dir, name), \
+         wformat(agenda_priority), \
+         oracle_relations, \
+         param_io, \
+         fs_stable, \
+         gf_str, \
+         train_method, \
+         jar_stable]
+
       print args
-      subprocess.check_call(args)
+      if not mock:
+        subprocess.check_call(args)
 

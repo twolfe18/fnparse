@@ -91,7 +91,7 @@ public class PropbankReader {
       throw new IllegalArgumentException("not a valid conll directory: " + on5.getPath());
     trainSkels = new File(conllParent, "train");
     devSkels = new File(conllParent, "development");
-    testSkels = new File(conllParent, "test");
+    testSkels = new File(conllParent, "test");  // TODO Switch this to conll-2012-test
 
     this.autoParses = autoParses;
   }

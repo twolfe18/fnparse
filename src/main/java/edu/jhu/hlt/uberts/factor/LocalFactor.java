@@ -40,6 +40,22 @@ public interface LocalFactor {
     }
   }
 
+  public static class Oracle implements LocalFactor {
+    @Override
+    public Adjoints score(HypEdge yhat, Uberts x) {
+      boolean y = x.getLabel(yhat);
+      // This needs to be >1 so that it over-rides Agenda.RescoreMode.LOSS_AUGMENTED
+      if (y)
+        return new Adjoints.Constant(+2);
+      else
+        return new Adjoints.Constant(-2);
+    }
+    @Override
+    public String toString() {
+      return "(OracleLocalFactor)";
+    }
+  }
+
   public static class Constant implements LocalFactor {
     private Adjoints constant;
     public Constant(double v) {

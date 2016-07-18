@@ -54,11 +54,13 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.Uberts.AgendaSnapshot;
 import edu.jhu.hlt.uberts.Uberts.Traj;
 import edu.jhu.hlt.uberts.experiment.ParameterSimpleIO;
+import edu.jhu.hlt.uberts.experiment.ParameterSimpleIO.Instance2;
 import edu.jhu.hlt.uberts.experiment.PerformanceTracker;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
-import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.Params;
+import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.GlobalParams;
+import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.MultiGlobalParams;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper.Ints3;
@@ -99,8 +101,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static boolean srl2ByArg = false;
   static boolean argument4ByArg = false;
 
-  static NumArgsRoleCoocArgLoc.Params allowableGlobals;
-
   // small costFP for srl2/srl3 so far have no paid off, HOWEVER, I think this
   // may have been due to having a small intercept feature.
   static double costFP_srl3 = 0.1;
@@ -109,10 +109,27 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   private Mode mode;
 
-  private BasicFeatureTemplates bft;
-  private Map<String, OldFeaturesWrapper.Ints3> rel2feFast3;
+  // LOCAL FACTORS
+  // These are saved with e.g. "predicate2:rw:/foo/bar.jser.gz"
+  private Map<String, OldFeaturesWrapper.Ints3> rel2localFactor;
+  private BasicFeatureTemplates localFactorHelper;
+
+  // GLOBAL FACTORS
+  // These are saved with e.g. "<globalFactorName>=+learn+write:/foo/bar.jser.gz"
+  // The global factor names are described below.
+  private Map<String, GlobalFactor> name2globalFactor = new HashMap<>();
+
+  // Specifies which global features to enable
+  // keys are thing like "argument4/t"
+  // has 0 or more global factor flags, like +roleCooc+numArgs
+  // The name of a global factor is both of these concatenated
+  // e.g. "argument4/t+roleCooc+numArgs+argLoc"
+  private MultiGlobalParams globalParamConfig = null;
 
   // Handles where to read/write model components from/to.
+  // Keys are:
+  // 1) relation names for local factors
+  // 2) global factor names like "argument4/t+numArgs"
   private ParameterSimpleIO parameterIO;
 
   // Tracks the maximum performance over passes, lets us know when to save
@@ -130,12 +147,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private double pOracleRollIn = 1;
 
   private static boolean skipSrlFilterStages = false;
-
-  private NumArgsRoleCoocArgLoc numArgsArg4;
-  private NumArgsRoleCoocArgLoc numArgsArg3;
-  private NumArgsRoleCoocArgLoc numArgsArg2;
-  // These fields are not mutually exclusive, above are in below
-  private List<GlobalFactor> globalFactors = new ArrayList<>();
 
   // For now these store all performances for the last data segment
   private List<Map<String, FPR>> perfByRel = new ArrayList<>();
@@ -168,10 +179,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
-
-    // I'm tired of this popping up in an un-expected place, do it AOT.
-//    FrameIndex.getFrameNet();
-//    FrameIndex.getPropbank();
 
     File grammarFile = config.getExistingFile("grammar");
     File relationDefs = config.getExistingFile("relations");
@@ -206,53 +213,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     trainMethod = TrainMethod.valueOf(config.getString("trainMethod", trainMethod.toString()));
     Log.info("[main] trainMethod=" + trainMethod);
 
-    allowableGlobals = new Params();
-    allowableGlobals.frameCooc = config.getBoolean("frameCooc");
-
-    String gfm = config.getString("globalFeatMode");
-    Log.info("[main] globalFeatMode=" + gfm);
-    switch (gfm.toLowerCase()) {
-    case "debug":
-      allowableGlobals.frameCooc = false;
-      allowableGlobals.numArgs = true;
-      allowableGlobals.argLocPairwise = true;
-      allowableGlobals.argLocGlobal = true;
-      allowableGlobals.roleCooc = false;
-      allowableGlobals.argLocRoleCooc = true;
-      break;
-    case "none":
-    case "off":
-      break;
-    case "argloc":
-      allowableGlobals.argLocPairwise = true;
-      allowableGlobals.argLocGlobal = true;
-      break;
-    case "arglocpairwise":
-      allowableGlobals.argLocPairwise = true;
-      break;
-    case "numarg":
-    case "numargs":
-      allowableGlobals.numArgs = true;
-      break;
-    case "rolecooc":
-      allowableGlobals.roleCooc = true;
-      break;
-    case "full":
-    case "all":
-      allowableGlobals.frameCooc = true;
-      allowableGlobals.numArgs = true;
-      allowableGlobals.argLocPairwise = true;
-      allowableGlobals.argLocGlobal = true;
-      allowableGlobals.roleCooc = true;
-      allowableGlobals.argLocRoleCooc = true;
-      break;
-    default:
-      throw new RuntimeException("unknown globalFeatMode: " + gfm);
-    }
-
-    Log.info("[main] allowableGlobals=" + allowableGlobals);
-    Log.info("frameCooc=" + allowableGlobals.frameCooc);
-
     // This is how many passes over ALL training files are given. If there are
     // 10 train files, each of which is all the data shuffled in a particular
     // way, then setting this to 3 would mean making 30 epochs.
@@ -283,7 +243,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] includeGoldArgsAtTrain=" + pipe.includeGoldArgsAtTrain);
 
     pipe.predictionsDir = config.getFile("predictions.outputDir", null);
+    if (pipe.predictionsDir.getName().equalsIgnoreCase("none"))
+      pipe.predictionsDir = null;
     if (pipe.predictionsDir != null) {
+      if (!pipe.predictionsDir.isDirectory())
+        pipe.predictionsDir.mkdirs();
       pipe.includeNegativePredictions = config.getBoolean(
           "predictions.includeNegativePredictions", pipe.includeNegativePredictions);
       Log.info("[main] writing predictions to " + pipe.predictionsDir.getPath()
@@ -402,10 +366,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
 
   public void useAvgWeights(boolean useAvg) {
-    for (OldFeaturesWrapper.Ints3 w : rel2feFast3.values()) {
+    for (OldFeaturesWrapper.Ints3 w : rel2localFactor.values()) {
       w.useAverageWeights(useAvg);
     }
-    for (GlobalFactor gf : globalFactors) {
+    for (GlobalFactor gf : name2globalFactor.values()) {
       if (gf instanceof NumArgsRoleCoocArgLoc) {
         ((NumArgsRoleCoocArgLoc) gf).useAverageWeights(useAvg);
       }
@@ -413,9 +377,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   public void completedObservation() {
-    for (OldFeaturesWrapper.Ints3 w : rel2feFast3.values())
+    for (OldFeaturesWrapper.Ints3 w : rel2localFactor.values())
       w.completedObservation();
-    for (GlobalFactor gf : globalFactors) {
+    for (GlobalFactor gf : name2globalFactor.values()) {
       if (gf instanceof NumArgsRoleCoocArgLoc) {
         ((NumArgsRoleCoocArgLoc) gf).completedObservation();
       }
@@ -425,16 +389,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
     super(u, grammarFile, schemaFiles, relationDefs);
 
-    if (allowableGlobals.frameCooc) {
-      Params gp = new Params();
-      gp.frameCooc = true;
-      NumArgsRoleCoocArgLoc p = new NumArgsRoleCoocArgLoc(u.getEdgeType("predicate2"), 0, 1, gp, u);
-      p.storeExactFeatureIndices();
-      globalFactors.add(p);
-      u.addGlobalFactor(p.getTrigger2(), p);
-    }
-
     ExperimentProperties config = ExperimentProperties.getInstance();
+
     updateAccordingToPriority = config.getBoolean("dagger/updateAccordingToPriority", false);
     pOracleRollIn = config.getDouble("dagger/pOracleRollIn", pOracleRollIn);
     batchSize = config.getInt("batchSize", batchSize);
@@ -442,77 +398,90 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] pOracleRollIn=" + pOracleRollIn);
     Log.info("[main] batchSize=" + batchSize);
 
-    if (srl2ByArg && !skipSrlFilterStages) {
-      // srl2(t,s) with mutexArg=s
-      Relation srl2 = u.getEdgeType("srl2", true);
-      if (srl2 == null) {
-        Log.warn("there is no srl2 relation, did you want skipSrlFilterStages=true? NOT ADDING GLOBAL FACTOR.");
-      } else {
-        Params p = new Params();
-        p.argLocGlobal = true;
-        p.argLocPairwise = true;
-        p.numArgs = true;
-        p.and(allowableGlobals);
-        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2, 1, -1, p, u);
+    globalParamConfig = new MultiGlobalParams();
+    globalParamConfig.configure(config);
+
+    String key;
+    GlobalParams p;
+
+    key = "predicate2/t";
+    p = globalParamConfig.getOrAddDefault(key);
+    if (p.frameCooc) {
+      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("predicate2", 0, 1, p, u);
+      a.storeExactFeatureIndices();
+      String gfName = key + p.toString(false);
+      Object old = name2globalFactor.put(gfName, a);
+      assert old == null;
+      u.addGlobalFactor(a.getTrigger2(u), a);
+    } else {
+      assert !p.any() : "why? " + p;
+    }
+
+    Relation srl2 = u.getEdgeType("srl2", true);
+    key = "srl2/s";
+    p = globalParamConfig.getOrAddDefault(key);
+    if (srl2 == null) {
+      if (p.any())
+        Log.warn("there is no srl2 relation. Not adding global factor: " + p);
+    } else {
+      if (p.any()) {
+        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2.getName(), 1, -1, p, u);
         a.storeExactFeatureIndices();
-        globalFactors.add(a);
-        u.addGlobalFactor(a.getTrigger2(), a);
+        String gfName = key + p.toString(false);
+        name2globalFactor.put(gfName, a);
+        u.addGlobalFactor(a.getTrigger2(u), a);
       }
     }
 
-    if (!skipSrlFilterStages) {
-      Relation srl2 = u.getEdgeType("srl2", true);
-      if (srl2 == null) {
-        Log.warn("there is no srl2 relation, did you want skipSrlFilterStages=true? NOT ADDING GLOBAL FACTOR.");
-      } else {
-        Params p = new Params();
-        p.argLocGlobal = true;
-        p.argLocPairwise = true;
-        p.numArgs = true;
-        p.and(allowableGlobals);
-        numArgsArg2 = new NumArgsRoleCoocArgLoc(srl2, 0, -1, p, u);
-        numArgsArg2.storeExactFeatureIndices();
-        globalFactors.add(numArgsArg2);
-        u.addGlobalFactor(numArgsArg2.getTrigger2(), numArgsArg2);
+    key = "srl2/t";
+    p = globalParamConfig.getOrAddDefault(key);
+    if (srl2 == null) {
+      if (p.any())
+        Log.warn("there is no srl2 relation. Not adding global factor: " + p);
+    } else {
+      if (p.any()) {
+        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2.getName(), 0, -1, p, u);
+        a.storeExactFeatureIndices();
+        String gfName = key + p.toString(false);
+        name2globalFactor.put(gfName, a);
+        u.addGlobalFactor(a.getTrigger2(u), a);
       }
     }
 
-    if (!skipSrlFilterStages) {
-      Relation srl3 = u.getEdgeType("srl3", true);
-      if (srl3 == null) {
-        Log.warn("there is no srl3 relation, did you want skipSrlFilterStages=true? NOT ADDING GLOBAL FACTOR.");
-      } else {
-        Params p = new Params();
-        p.numArgs = true;
-        p.roleCooc = true;
-        p.and(allowableGlobals);
-        numArgsArg3 = new NumArgsRoleCoocArgLoc(srl3, 0, -1, p, u);
-        numArgsArg3.storeExactFeatureIndices();
-        globalFactors.add(numArgsArg3);
-        u.addGlobalFactor(numArgsArg3.getTrigger2(), numArgsArg3);
+    Relation srl3 = u.getEdgeType("srl3", true);
+    key = "srl3/t";
+    p = globalParamConfig.getOrAddDefault(key);
+    if (srl3 == null) {
+      if (p.any())
+        Log.warn("there is no srl3 relation. Not adding global factor: " + p);
+    } else {
+      if (p.any()) {
+        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl3.getName(), 0, -1, p, u);
+        a.storeExactFeatureIndices();
+        String gfName = key + p.toString(false);
+        name2globalFactor.put(gfName, a);
+        u.addGlobalFactor(a.getTrigger2(u), a);
       }
     }
 
-    Params p = new Params();
-    p.argLocGlobal = true;
-    p.argLocPairwise = true;
-    p.argLocRoleCooc = true;
-    p.numArgs = true;
-    p.roleCooc = true;
-    p.and(allowableGlobals);
+    key = "argument4/t";
+    p = globalParamConfig.getOrAddDefault(key);
     if (p.any()) {
-      numArgsArg4 = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 0, 1, p, u);
+      NumArgsRoleCoocArgLoc numArgsArg4 = new NumArgsRoleCoocArgLoc("argument4", 0, 1, p, u);
       numArgsArg4.storeExactFeatureIndices();
-      globalFactors.add(numArgsArg4);
-      u.addGlobalFactor(numArgsArg4.getTrigger2(), numArgsArg4);
+      String gfName = key + p.toString(false);
+      name2globalFactor.put(gfName, numArgsArg4);
+      u.addGlobalFactor(numArgsArg4.getTrigger2(u), numArgsArg4);
+    }
 
-      if (argument4ByArg) {
-        // argument4(t,f,s,k) with mutexArg=s
-        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(u.getEdgeType("argument4"), 2, 1, p, u);
-        a.storeExactFeatureIndices();
-        globalFactors.add(a);
-        u.addGlobalFactor(a.getTrigger2(), a);
-      }
+    // argument4(t,f,s,k) with mutexArg=s
+    key = "argument4/s";
+    p = globalParamConfig.getOrAddDefault(key);
+    if (p.any()) {
+      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("argument4", 2, 1, p, u);
+      a.storeExactFeatureIndices();
+      name2globalFactor.put(key + p.toString(false), a);
+      u.addGlobalFactor(a.getTrigger2(u), a);
     }
 
     getParameterIO();
@@ -537,41 +506,24 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (Arrays.asList(oracleFeats).contains(r.rhs.relName)) {
       Log.info("using oracle feats for " + r);
 //      return new FeatureExtractionFactor.Oracle(r.rhs.relName);
-      return new LocalFactor() {
-        @Override
-        public Adjoints score(HypEdge yhat, Uberts x) {
-          boolean y = x.getLabel(yhat);
-          // This needs to be >1 so that it over-rides Agenda.RescoreMode.LOSS_AUGMENTED
-          if (y)
-            return new Adjoints.Constant(+2);
-          else
-            return new Adjoints.Constant(-2);
-        }
-      };
+      return new LocalFactor.Oracle();
     }
 
     if (templateFeats) {
       ExperimentProperties config = ExperimentProperties.getInstance();
-      Log.info("using template feats");
-      if (bft == null)
-        bft = new BasicFeatureTemplates();
-      OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(bft, r.rhs.rel, config);
-      if (rel2feFast3 == null)
-        rel2feFast3 = new HashMap<>();
-      rel2feFast3.put(r.rhs.relName, fe3);
+      if (localFactorHelper == null)
+        localFactorHelper = new BasicFeatureTemplates();
+
+      Instance2 conf = getParameterIO().getOrAddDefault(r.rhs.relName);
+      OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(localFactorHelper, r.rhs.rel, !conf.learn, config);
+      if (rel2localFactor == null)
+        rel2localFactor = new HashMap<>();
+      rel2localFactor.put(r.rhs.relName, fe3);
       f = new LocalFactor.Sum(fe3, f);
 
       // Maybe read in some features
-      File savedModel = getParameterIO().read(r.rhs.relName);
-      if (savedModel != null) {
-        if (savedModel.exists()) {
-          boolean fixed = dontLearn(r.rhs.relName);
-          fe3.readWeightsFrom(savedModel, fixed);
-        } else {
-          Log.info("[main] WARNING: you asked to read " + r.rhs.relName
-              + " weights from " + savedModel.getPath() + " but it doesn't exist, NOT LOADING");
-        }
-      }
+      if (conf.read != null)
+        fe3.readWeightsFrom(conf.read, !conf.learn);
 
       // Setup write-features-to-disk
       String key = r.rhs.relName + ".outputFeatures";
@@ -653,9 +605,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (!mini)
       perfTracker.observe(mode, perf);
 
-    // Maybe save a model.
+    // Maybe save some local factors.
     if (!mini && mode == Mode.DEV) {
-      for (Entry<String, Ints3> x : rel2feFast3.entrySet()) {
+      for (Entry<String, Ints3> x : rel2localFactor.entrySet()) {
         File saveModel = getParameterIO().write(x.getKey());
         if (saveModel != null && perfTracker.shouldSaveParameters(x.getKey())) {
           x.getValue().writeWeightsTo(saveModel);
@@ -671,12 +623,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     boolean verbose = true;
     if (verbose || DEBUG > 1) {
-      if (numArgsArg4 != null)
-        Log.info("numArgsArg4 biggest weights: " + numArgsArg4.getBiggestWeights(10));
-      if (numArgsArg3 != null)
-        Log.info("numArgsArg3 biggest weights: " + numArgsArg3.getBiggestWeights(10));
-      if (numArgsArg2 != null)
-        Log.info("numArgsArg2 biggest weights: " + numArgsArg2.getBiggestWeights(10));
+      int k = 20;
+      for (GlobalFactor gf : name2globalFactor.values()) {
+        if (gf instanceof NumArgsRoleCoocArgLoc) {
+          List<Pair<String, Double>> x = ((NumArgsRoleCoocArgLoc) gf).getBiggestWeights(k);
+          Log.info(gf + " biggest weights: " + x);
+        }
+      }
     }
 
     mode = null;
@@ -966,12 +919,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
         StringBuilder sb = new StringBuilder();
         sb.append("globalFactorStats:");
-        for (GlobalFactor gf : globalFactors) {
-          String msg = gf.getStats();
+        for (Entry<String, GlobalFactor> x : name2globalFactor.entrySet()) {
+          String msg = x.getValue().getStats();
           if (msg != null) {
             sb.append(' ');
             sb.append('(');
-            sb.append(gf.getName());
+//            sb.append(x.getValue().getName());
+            sb.append(x.getKey());
             sb.append(' ');
             sb.append(msg);
             sb.append(')');
@@ -1048,13 +1002,18 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             if (dontLearn(s.edge.getRelation().getName()))
               continue;
 
-            // The score of any Prune action is 0, cannot be changed, derivative of score w.r.t. weights is 0
-            // In earlier DAGGER1 methods, since we only had one trajectory, and
-            // only saw a fact once, we needed to update on every fact.
-            // Now, the oracle will call backwards(-1) on anything which could
-            // be a FN, and some will cancel in loss augmented.
-            if (!s.gold)
-              continue;
+            if (Uberts.MAX_VIOLATION_BUGFIX) {
+              // Uberts already sets reason(Prune(*)) = Const(0), so its fine
+              // to call backwards on it
+            } else {
+              // The score of any Prune action is 0, cannot be changed, derivative of score w.r.t. weights is 0
+              // In earlier DAGGER1 methods, since we only had one trajectory, and
+              // only saw a fact once, we needed to update on every fact.
+              // Now, the oracle will call backwards(-1) on anything which could
+              // be a FN, and some will cancel in loss augmented.
+              if (!s.gold)
+                continue;
+            }
 
             s.getReason().backwards(lr * -1);
 
@@ -1071,8 +1030,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             Step s = cur.getStep();
             if (dontLearn(s.edge.getRelation().getName()))
               continue;
-            if (!s.pred)
-              continue;
+
+            if (Uberts.MAX_VIOLATION_BUGFIX) {
+              // no-op, see above
+            } else {
+              if (!s.pred)
+                continue;
+            }
+
             s.getReason().backwards(lr * +1);
 
             if (Uberts.LEARN_DEBUG) {
@@ -1093,12 +1058,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             System.out.println("aggUpdate:  gold=" + u.getLabel(e) + "\t" + e.getEdge() + "\t" + u.dbgUpdate.get(e));
           }
           u.dbgUpdate.clear();
-
-          if (numArgsArg4 != null) {
-            for (Pair<String, Double> w : numArgsArg4.getBiggestWeights(100)) {
-              System.out.println("aggWeights:  " + w.get2() + "\t" + w.get1());
-            }
-          }
         }
 
       });
