@@ -235,7 +235,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   }
   private GlobalParams params;
 
-  interface PairFeat {
+  public interface PairFeat {
     String getName();
     List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge);
 
@@ -247,18 +247,23 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       return name.startsWith(getName());
     }
 
-    default public void refineByEdgeTypes(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats) {
+    default public void refineByEdgeTypes(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats, boolean backoff) {
       if (agendaEdge.getRelation() != stateEdge.getRelation()) {
         String m = "eRel=" + agendaEdge.getRelation().getName()
             + "_" + stateEdge.getRelation().getName();
         m = shorten(m);
         int n = feats.size();
-        for (int i = 0; i < n; i++)
-          feats.add(feats.get(i) + "/" + m);
+        if (backoff) {
+          for (int i = 0; i < n; i++)
+            feats.add(feats.get(i) + "/" + m);
+        } else {
+          for (int i = 0; i < n; i++)
+            feats.set(i, feats.get(i) + "/" + m);
+        }
       }
     }
 
-    default public void refineByTargets(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats) {
+    default public void refineByTargets(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats, boolean backoff) {
       Span ts = target(stateEdge);
       Span ta = target(agendaEdge);
       String m = null;
@@ -270,47 +275,70 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         m = "tRel=a";
       if (m != null) {
         int n = feats.size();
-        for (int i = 0; i < n; i++)
-          feats.add(feats.get(i) + "/" + m);
+        if (backoff) {
+          for (int i = 0; i < n; i++)
+            feats.add(feats.get(i) + "/" + m);
+        } else {
+          for (int i = 0; i < n; i++)
+            feats.set(i, feats.get(i) + "/" + m);
+        }
       }
     }
   }
 
-  static final PairFeat FRAME_COOC_FEAT = new PairFeat() {
+  public static final PairFeat FRAME_COOC_FEAT = new PairFeat() {
+    private boolean allowDiffTargets = true;
+    private boolean targetRelBackoff = true;
+    private boolean edgeRelBackoff = false;
     @Override
     public String getName() { return "fcPW"; }
     @Override
     public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
+      Span ts = target(stateEdge);
+      Span ta = target(agendaEdge);
+      if (!allowDiffTargets && ts != null && !ts.equals(ta))
+        return Collections.emptyList();
+
       String f1 = frame(stateEdge);
-      if (f1 == null)
-        return Collections.emptyList();
       String f2 = frame(agendaEdge);
-      if (f2 == null)
+      if (f1 == null || f2 == null)
         return Collections.emptyList();
+
       String s = prefix + "/" + agendaEdge.getRelation().getName() + "/" + f1 + "/" + f2;
       s = shorten(s);
       List<String> feats = new ArrayList<>();
       feats.add(s);
-      refineByTargets(stateEdge, agendaEdge, feats);
-      refineByEdgeTypes(stateEdge, agendaEdge, feats);
+      if (allowDiffTargets)
+        refineByTargets(stateEdge, agendaEdge, feats, targetRelBackoff);
+      refineByEdgeTypes(stateEdge, agendaEdge, feats, edgeRelBackoff);
       return feats;
     }
   };
-  static final PairFeat ROLE_COOC_FEAT = new PairFeat() {
+  public static final PairFeat ROLE_COOC_FEAT = new PairFeat() {
+    private boolean allowDiffTargets = false;
+    private boolean targetRelBackoff = false;
+    private boolean edgeRelBackoff = false;
     @Override
     public String getName() { return "rcPW"; }
     @Override
     public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
+      Span ts = target(stateEdge);
+      Span ta = target(agendaEdge);
+      if (!allowDiffTargets && ts != null && !ts.equals(ta))
+        return Collections.emptyList();
+
       String r1 = role(stateEdge);
-      if (r1 == null) return Collections.emptyList();
       String r2 = role(agendaEdge);
-      if (r2 == null) return Collections.emptyList();
+      if (r1 == null || r2 == null)
+        return Collections.emptyList();
+
       String s = prefix + "/" + agendaEdge.getRelation().getName() + "/A=" + r1 + "/a=" + r2;
       s = shorten(s);
       List<String> feats = new ArrayList<>();
       feats.add(s);
-      refineByTargets(stateEdge, agendaEdge, feats);
-      refineByEdgeTypes(stateEdge, agendaEdge, feats);
+      if (allowDiffTargets)
+        refineByTargets(stateEdge, agendaEdge, feats, targetRelBackoff);
+      refineByEdgeTypes(stateEdge, agendaEdge, feats, edgeRelBackoff);
       return feats;
     }
     @Override
@@ -318,15 +346,26 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       return ALLOW_ROLE_COOC_FRAME_REFINEMENT;
     }
   };
-  static final PairFeat ARG_LOC_PAIRWISE_FEAT = new PairFeat() {
+  public static final PairFeat ARG_LOC_PAIRWISE_FEAT = new PairFeat() {
+    private boolean allowDiffTargets = false;
+    private boolean targetRelBackoff = false;
+    private boolean edgeRelBackoff = false;
+    private boolean includeTa = true;
+    private boolean includeTaBackoff = true;
     @Override
     public String getName() { return "alPW"; }
     @Override
     public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
+      Span ts = target(stateEdge);
+      Span ta = target(agendaEdge);
+      if (!allowDiffTargets && ts != null && !ts.equals(ta))
+        return Collections.emptyList();
+
       Span s1 = arg(stateEdge);
-      if (s1 == null) return Collections.emptyList();
       Span s2 = arg(agendaEdge);
-      if (s2 == null) return Collections.emptyList();
+      if (s1 == null || s2 == null)
+        return Collections.emptyList();
+
       String f1 = "Aa=" + BasicFeatureTemplates.spanPosRel(s1, s2, SIMPLE_SPAN_POS_REL);
       String t1 = agendaEdge.getRelation().getName();
       String s = prefix + "/" + t1 + "/" + f1;
@@ -335,18 +374,24 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       List<String> feats = new ArrayList<>();
       feats.add(s);
 
-      Span ts = target(stateEdge);
-      if (ts != null) {
-        // loc(A,a) * loc(T,a)
-        feats.add(s + "/Ta=" + BasicFeatureTemplates.spanPosRel(ts, s2, SIMPLE_SPAN_POS_REL));
+      // loc(A,a) * loc(T,a)
+      if (includeTa && ts != null) {
+        String ss = s + "/Ta=" + BasicFeatureTemplates.spanPosRel(ts, s2, SIMPLE_SPAN_POS_REL);
+        if (includeTaBackoff) {
+          feats.add(ss);
+        } else {
+          assert feats.size() == 1;
+          feats.set(0, ss);
+        }
       }
 
-      refineByTargets(stateEdge, agendaEdge, feats);
-      refineByEdgeTypes(stateEdge, agendaEdge, feats);
+      if (allowDiffTargets)
+        refineByTargets(stateEdge, agendaEdge, feats, targetRelBackoff);
+      refineByEdgeTypes(stateEdge, agendaEdge, feats, edgeRelBackoff);
       return feats;
     }
   };
-  static final PairFeat ARG_LOC_AND_ROLE_COOC = new PairFeat() {
+  public static final PairFeat ARG_LOC_AND_ROLE_COOC = new PairFeat() {
     @Override
     public String getName() {
       return "alrcPW";
@@ -373,7 +418,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
   };
 
-  static Span target(HypEdge e) {
+  public static Span target(HypEdge e) {
     switch (e.getRelation().getName()) {
     case "predicate2":
       return Span.inverseShortString((String) e.getTail(0).getValue());
@@ -384,7 +429,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
   }
 
-  static String frame(HypEdge e) {
+  public static String frame(HypEdge e) {
     switch (e.getRelation().getName()) {
     case "predicate2":
     case "srl3":
@@ -395,7 +440,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
   }
 
-  static String role(HypEdge e) {
+  public static String role(HypEdge e) {
     switch (e.getRelation().getName()) {
     case "argument4":
       // argument4(t,f,s,k)
@@ -410,7 +455,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
   }
 
-  static Span arg(HypEdge e) {
+  public static Span arg(HypEdge e) {
     switch (e.getRelation().getName()) {
     case "argument4":
       // argument4(t,f,s,k)
@@ -423,12 +468,6 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     default:
       return null;
     }
-  }
-
-  static Span target(HypNode t) {
-    if (t.getValue() instanceof String)
-      return Span.inverseShortString((String) t.getValue());
-    return null;
   }
 
   static String shorten(String longFeatureName) {
@@ -470,6 +509,12 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   }
 
   static class Spany implements Comparable<Spany> {
+    static Span target(HypNode t) {
+      if (t.getValue() instanceof String)
+        return Span.inverseShortString((String) t.getValue());
+      return null;
+    }
+
     HypEdge e;
     Span arg;
     Span target;
