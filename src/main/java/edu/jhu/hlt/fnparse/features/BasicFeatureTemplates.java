@@ -60,6 +60,11 @@ public class BasicFeatureTemplates {
   }
 
   public static String missingSubj(Sentence s, DependencyParse d, int predicateTokenIndex) {
+    String pos = s.getPos(predicateTokenIndex);
+    if (pos.startsWith("N"))
+      return "nom";
+    if (!pos.startsWith("V"))
+      return "dv";
     int[] ci = d.getChildren(predicateTokenIndex);
     for (int i = 0; i < ci.length; i++) {
       String deprel = d.getLabel(ci[i]);
@@ -1547,7 +1552,7 @@ public class BasicFeatureTemplates {
     // Role id
     // http://www.dipanjandas.com/files/acl2014frames.pdf (table 1)
     addTemplate("semafor/argId", new Template() {
-      private boolean bo = true;  // bo = "backoff"
+      boolean bo = true;  // bo = "backoff"
       @Override
       public Iterable<String> extract(TemplateContext context) {
         List<String> feats = new ArrayList<>();
@@ -1564,8 +1569,9 @@ public class BasicFeatureTemplates {
         else
           fr = context.getFrameStr() + "-" + r;
 
-        if (Labels.NO_NIL_FACTS && a == Span.nullSpan)
-          throw new RuntimeException("Labels.NO_NIL_FACTS=true and a nullSpan argument was just provided!");
+        assert p >= 0;
+//        if (Labels.NO_NIL_FACTS && a == Span.nullSpan)
+//          throw new RuntimeException("Labels.NO_NIL_FACTS=true and a nullSpan argument was just provided!");
 
         if (context.debugEdge != null && "argument4".equals(context.debugEdge.getRelation().getName())) {
           Log.info("check this: " + context.debugMessage);
@@ -1585,8 +1591,10 @@ public class BasicFeatureTemplates {
           Log.info("computing features: " + context.debugMessage);
 
         // • a bias feature
-        if (bo) feats.add("bias/NIL");
-        feats.add("bias/" + r);
+        if (bo)
+          feats.add("bias/NIL");
+        if (r != null)
+          feats.add("bias/" + r);
         if (fr != null)
           feats.add("bias/" + fr);
 
