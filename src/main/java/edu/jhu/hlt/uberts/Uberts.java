@@ -421,7 +421,7 @@ public class Uberts {
    *
    * See http://www.aclweb.org/anthology/N12-1015
    */
-  public Pair<Traj, Traj> maxViolationPerceptron(Map<Relation, Double> costFP) {
+  public Pair<Traj, Traj> maxViolationPerceptron(Map<Relation, Double> costFP, boolean lasoHack) {
 
     timer.start("duplicate-state");
     State s0 = state.duplicate();
@@ -515,8 +515,13 @@ public class Uberts {
         t2 = new Traj(s, t2);
 
         // But maybe don't add apply it (add it to state)
-        if (yhat)
-          addEdgeToState(ai);
+        if (lasoHack) {
+          if (y)
+            addEdgeToState(ai);
+        } else {
+          if (yhat)
+            addEdgeToState(ai);
+        }
       }
     }
 

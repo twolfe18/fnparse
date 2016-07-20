@@ -347,16 +347,6 @@ public abstract class UbertsPipeline {
   }
 
 
-  private static final String NS_START = i2s(Span.nullSpan.start);
-  private static final String NS_END = i2s(Span.nullSpan.end);
-  public static boolean isNullSpan(HypEdge srl4Edge) {
-    assert srl4Edge.getRelation().getName().equals("srl4");
-//    return s2i(srl4Edge.getTail(3).getValue()) == Span.nullSpan.start
-//        && s2i(srl4Edge.getTail(4).getValue()) == Span.nullSpan.end;
-    return srl4Edge.getTail(3).getValue().equals(NS_START)
-        && srl4Edge.getTail(4).getValue().equals(NS_END);
-  }
-
   /**
    * Calls {@link UbertsPipeline#consume(RelDoc)}
    *

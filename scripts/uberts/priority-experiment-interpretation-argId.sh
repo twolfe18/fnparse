@@ -1,7 +1,7 @@
 #!/bin/bash
 
-set -eu
-set -o pipefail
+#set -eu
+#set -o pipefail
 
 LOG=$1
 

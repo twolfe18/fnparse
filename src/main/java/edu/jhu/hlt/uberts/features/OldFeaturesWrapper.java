@@ -284,8 +284,9 @@ public class OldFeaturesWrapper {
         throw new RuntimeException("not a file: " + ff.getPath());
       int dim = 1 << config.getInt(r.getName() + ".hashBits", 25);
       Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
-      boolean cacheArg4 = r.getName().equals("argument4") && ff.getPath().contains("by-hand");
+      boolean cacheArg4 = r.getName().equals("argument4");  // && ff.getPath().contains("by-hand");
       Ints3 i3 = new Ints3(bft, r, ff, dim, fixed, cacheArg4);
+      i3.inner.onlyUseTS = cacheArg4;
       if (cacheArg4) {
         Log.info("[main] refining with (f,k) and (k,)");
         i3.refine(e -> {
@@ -359,7 +360,7 @@ public class OldFeaturesWrapper {
       Log.info("nnz=" + nnz + " dim=" + dimension + " percentNonzero=" + (100d*nnz)/dimension);
     }
 
-    private OldFeaturesWrapper inner;
+    public OldFeaturesWrapper inner;
     private Relation rel;
     private AveragedPerceptronWeights theta;
     private int dimension;
@@ -654,52 +655,11 @@ public class OldFeaturesWrapper {
 
   public Function<HypEdge, int[]> customRefinements = null;
 
+  public boolean onlyUseTS = false;
+
   public int getNumTemplates() {
     return features.size();
   }
-
-//  public OldFeaturesWrapper(
-//      BasicFeatureTemplates bft,
-//      String featureSetWithPluses,
-//      File bialph, // e.g. data/mimic-coe/framenet/coherent-shards/alphabet.txt.gz
-//      File fcounts // e.g. data/mimic-coe/framenet/feature-counts/all.txt.gz
-//      ) throws IOException {
-//
-//    TemplateTransformerTemplate ttt = new TemplateTransformerTemplate(fcounts, bialph, featureSetWithPluses);
-//    Map<String, Template> extra = ttt.getSpecialTemplates(bft);
-//    ttt.free();
-//
-//    this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
-//    try {
-//      for (Template t : TemplatedFeatures.parseTemplates(featureSetWithPluses, bft, extra)) {
-//        int i = features.size();
-//        this.features.add(new TemplateAlphabet(t, "t" + i, i));
-//      }
-//    } catch (Exception e) {
-//      throw new RuntimeException(e);
-//    }
-//    if (DEBUG > 0)
-//      Log.info("setup with " + features.size() + " features");
-//
-//    customRefinements = e -> {
-//      assert e.getNumTails() == 6;
-//      if (UbertsPipeline.isNullSpan(e))
-//        return new int[] {0};
-////      String f = (String) e.getTail(2).getValue();
-////      String k = (String) e.getTail(5).getValue();
-//      HypNode f = e.getTail(2);
-//      HypNode k = e.getTail(5);
-//      int mask = (1<<14)-1;
-//      int ff = (f.hashCode() & mask) * 2 + 0;
-//      int kk = (k.hashCode() & mask) * 2 + 1;
-////      return new int[] {1, 2 + ff, 2 + kk};
-//      return new int[] {1, 2 + (k.hashCode() & mask)};
-//    };
-//
-//    ctx = new TemplateContext();
-//    hf = new DependencyHeadFinder();
-//    skipped = new Counts<>();
-//  }
 
   public OldFeaturesWrapper(BasicFeatureTemplates bft, File featureSet) {
     if (!featureSet.isFile())
@@ -760,34 +720,9 @@ public class OldFeaturesWrapper {
         throw new RuntimeException("couldn't look up: " + tempNames[i]);
     }
 
-    // For my current ad-hoc SRL, I only have one relation type: srlArg, which
-    // is normally how FeatureExtractionFactor stores its weights (one set of
-    // weights for every Relation).
-//    Template role = bft.getBasicTemplate("roleArg");        // fires role if someSpan
-//    Template arg = bft.getBasicTemplate("arg");            // fires for nullSpan vs someSpan
-//    Template frame = bft.getBasicTemplate("frameRoleArg");  // fires (frame,role) if someSpan
-
-//    customRefinements = e -> {
-//      assert e.getNumTails() == 6;
-//      if (UbertsPipeline.isNullSpan(e))
-//        return new int[] {0};
-////      String f = (String) e.getTail(2).getValue();
-////      String k = (String) e.getTail(5).getValue();
-//      HypNode f = e.getTail(2);
-//      HypNode k = e.getTail(5);
-//      int mask = (1<<14)-1;
-//      int ff = (f.hashCode() & mask) * 2 + 0;
-//      int kk = (k.hashCode() & mask) * 2 + 1;
-////      return new int[] {1, 2 + ff, 2 + kk};
-//      return new int[] {1, 2 + (k.hashCode() & mask)};
-//    };
-
     this.features = new edu.jhu.hlt.fnparse.features.precompute.Alphabet(bft, false);
     // UNIGRAMS
     for (int i = 0; i < temps.length; i++) {
-//      ap(role, temps[i], "k*" + temps[i]);
-//      ap(arg, temps[i], "b*" + temps[i]);
-//      ap(frame, temps[i], "fr*" + temps[i]);
       features.add(new TemplateAlphabet(temps[i], tempNames[i], features.size()));
     }
     // BIGRAMS
@@ -796,9 +731,6 @@ public class OldFeaturesWrapper {
         Template prod = new TemplatedFeatures.TemplateJoin(temps[i], temps[j]);
         String name = tempNames[i] + "*" + tempNames[j];
         features.add(new TemplateAlphabet(prod, name, features.size()));
-//        ap(role, prod, "k*" + name);
-//        ap(arg, prod, "b*" + name);
-//        ap(frame, prod, "fr*" + name);
       }
     }
 
@@ -1090,7 +1022,7 @@ public class OldFeaturesWrapper {
         ctx.setArg(s);
         ctx.setSpan1(s);
         if (s != Span.nullSpan) {
-          int sh = hf.head(s, ctx.getSentence());
+          int sh = hf.headSafe(s, ctx.getSentence());
           if (sh >= 0) {
             ctx.setArgHead(sh);
             ctx.setHead1(ctx.getArgHead());
@@ -1101,7 +1033,7 @@ public class OldFeaturesWrapper {
         ctx.setTarget(t);
         ctx.setSpan2(t);
         if (t != Span.nullSpan) {
-          int th = hf.head(t, ctx.getSentence());
+          int th = hf.headSafe(t, ctx.getSentence());
           if (th >= 0) {
             ctx.setTargetHead(th);
             ctx.setHead2(ctx.getTargetHead());
@@ -1111,13 +1043,13 @@ public class OldFeaturesWrapper {
     } else {
       customEdgeCtxSetup.accept(new Pair<>(yhat, x), ctx);
     }
-    if (f != null) {
-//      ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(f));
-//      assert ctx.getFrame() != null;
-      ctx.setFrameStr(f);
+    if (!onlyUseTS) {
+      if (f != null) {
+        ctx.setFrameStr(f);
+      }
+      if (k != null)
+        ctx.setRoleS(k);
     }
-    if (k != null)
-      ctx.setRoleS(k);
 
     // Actually compute the features
     if (DEBUG > 1) {

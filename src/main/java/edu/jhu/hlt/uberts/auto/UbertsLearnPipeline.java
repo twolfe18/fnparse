@@ -30,7 +30,9 @@ import edu.jhu.hlt.fnparse.features.Pred2ArgPaths;
 import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
+import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
@@ -42,6 +44,7 @@ import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.AgendaPriority;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -61,6 +64,7 @@ import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.GlobalParams;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.MultiGlobalParams;
+import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.PairFeat;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper.Ints3;
@@ -68,7 +72,10 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.PerlRegexFileInputStream;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
+import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.Alphabet;
+import fj.data.fingertrees.One;
 
 public class UbertsLearnPipeline extends UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
@@ -176,6 +183,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   private boolean skipDocsWithoutPredicate2 = true;
 
+  // Re-implementation which doesn't use any fancy machinery and does use nullSpans
+  private boolean hackyImplementation = true;
+
+  // Attempts to make MAX_VIOLATION mimic a LaSO update where if a violation
+  // occurs, the predictor is re-set to the gold history.
+  // This is implemented by using if(y)addEdgeToState(...) in the MV/pred
+  // inference loop instead of if(yhat)addEdgeToState(...).
+  private boolean mvLasoHack = false;
+
+
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -226,6 +243,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     Uberts u = new Uberts(new Random(9001), agendaPriority);
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
+
+    Log.info("[main] hackyImplementation=" + pipe.hackyImplementation);
+
+    pipe.mvLasoHack = config.getBoolean("mvLassoHack", pipe.mvLasoHack);
+    Log.info("[main] mvLasoHack=" + pipe.mvLasoHack);
 
     pipe.skipDocsWithoutPredicate2 = config.getBoolean("skipDocsWithoutPredicate2", pipe.skipDocsWithoutPredicate2);
     Log.info("[main] skipDocsWithoutPredicate2=" + pipe.skipDocsWithoutPredicate2);
@@ -384,6 +406,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         ((NumArgsRoleCoocArgLoc) gf).completedObservation();
       }
     }
+    if (hackyGlobalWeights != null)
+      hackyGlobalWeights.completedObservation();
   }
 
   public UbertsLearnPipeline(Uberts u, File grammarFile, Iterable<File> schemaFiles, File relationDefs) throws IOException {
@@ -516,6 +540,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
       Instance2 conf = getParameterIO().getOrAddDefault(r.rhs.relName);
       OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(localFactorHelper, r.rhs.rel, !conf.learn, config);
+
       if (rel2localFactor == null)
         rel2localFactor = new HashMap<>();
       rel2localFactor.put(r.rhs.relName, fe3);
@@ -792,6 +817,281 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
   }
 
+  private boolean hackyDebug = false;
+  /**
+   * Include parameters for null-span
+   *
+   * Lets make this real dumb, real easy. There is one gold trajectory.
+   *
+   * i = 0
+   * for each (t,s):
+   *   for each k:
+   *     s_hat = argmax_{s in args(t,f) \cup gold(t,s,k)}
+   *     beam[0,i++] = s_hat
+   *
+   * Maybe the problem is in something to do with the agenda, copying, clearing, etc
+   * Is there a simpler way that I can use global features which doesn'nt require rescore?
+   */
+  private void addHocSrlTrain(RelDoc doc, boolean learn) {
+    boolean local = true;
+    if (hackyDebug) {
+      System.out.println("starting on " + doc.getId());
+    }
+
+    // If true, then replace the pred history with the gold history if there
+    // was a violation (i.e. gold score is lower than pred for entire prefix).
+    // Section 4 of https://arxiv.org/pdf/1606.02960.pdf
+    boolean wisemanRushUpdate = true;
+
+    OldFeaturesWrapper.Ints3 localFeats = rel2localFactor.get("argument4");
+
+    Relation p2 = u.getEdgeType("predicate2");
+    Relation xp = u.getEdgeType("xue-palmer-otf-args2");
+    Relation r2 = u.getEdgeType("role2");
+
+    List<Pair<HypEdge, Adjoints>> tOracle = new ArrayList<>();
+    List<Pair<HypEdge, Adjoints>> tPred = new ArrayList<>();
+    double sCumOracle = 0;
+    double sCumPred = 0;
+    DoubleArrayList violationAccum = new DoubleArrayList();
+    DoubleArrayList lossAccum = new DoubleArrayList();
+    ArgMax<Integer> maxViolationIdx = new ArgMax<>();
+    List<HypEdge.WithProps> predicates = doc.match2FromFacts(p2);
+    for (int tfIdx = 0; tfIdx < predicates.size(); tfIdx++) {
+      HypEdge tf = predicates.get(tfIdx);
+      u.addEdgeToStateNoMatch(tf, Adjoints.Constant.ONE);
+      String nullSpanStr = xp.getName() + "(" + tf.getTail(0).getValue() + ", 0-0)";
+      HypEdge nullSpan = u.dbgMakeEdge(nullSpanStr, false);
+
+      // xue-palmer-otf-args2(t,s)
+      List<HypEdge> ts = u.getState().match(0, xp, tf.getTail(0)).toList();
+      ts.add(nullSpan);   // ensure this is last
+
+      // role2(f,k)
+      List<HypEdge> tk = u.getState().match(0, r2, tf.getTail(1)).toList();
+
+      int numArgsOracle = 0;
+      int numArgsPred = 0;
+      for (HypEdge ek : tk) {
+
+        // Loop over all actions
+        ArgMax<Pair<HypEdge, Adjoints>> m = new ArgMax<>();
+        Pair<HypEdge, Adjoints> g = null;
+        for (HypEdge es : ts) {
+          String t = (String) tf.getTail(0).getValue();
+          String f = (String) tf.getTail(1).getValue();
+          String s = (String) es.getTail(1).getValue();
+          String k = (String) ek.getTail(1).getValue();
+          HypEdge a4 = u.dbgMakeEdge("argument4(" + t + ", " + f + ", " + s + ", " + k + ")", false);
+//          if (s.equals("0-0"))
+//            Log.info("interesting");
+
+          Adjoints scoreOracle;
+          Adjoints scorePred;
+          Adjoints sL = localFeats.score(a4, u);
+          if (local) {
+            scoreOracle = Adjoints.cacheIfNeeded(sL);
+            scorePred = Adjoints.cacheIfNeeded(sL);
+          } else {
+            scoreOracle = Adjoints.cacheIfNeeded(Adjoints.sum(sL, globalFeatures(tOracle, a4, numArgsOracle)));
+            if (wisemanRushUpdate && violationAccum.size() > 0) {
+              double v = violationAccum.get(violationAccum.size()-1);
+              List<Pair<HypEdge, Adjoints>> history;
+              int na;
+              if (v > 0) {
+                history = tOracle;
+                na = numArgsOracle;
+              } else {
+                history = tPred;
+                na = numArgsPred;
+              }
+              scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(sL, globalFeatures(history, a4, na)));
+            } else {
+              scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(sL, globalFeatures(tPred, a4, numArgsPred)));
+            }
+          }
+
+          boolean y = u.getLabel(a4);
+          if (y || (g == null && "0-0".equals(s))) {
+            assert g == null;
+            g = new Pair<>(a4, scoreOracle);
+          }
+
+          Pair<HypEdge, Adjoints> p = new Pair<>(a4, scorePred);
+          m.offer(p, p.get2().forwards());
+        } // end loop over s
+
+        // Apply the action
+        assert g != null;
+        assert m.numOffers() > 0;
+        double loss = m.get().get1() != g.get1() ? 0.01 : 0;
+        tOracle.add(g);
+        tPred.add(m.get());
+        sCumOracle += g.get2().forwards();
+        sCumPred += m.get().get2().forwards();
+        sCumPred += loss;
+        double violation = sCumPred - sCumOracle;
+        int i = violationAccum.size();
+        maxViolationIdx.offer(i, violation);
+        lossAccum.add(loss);
+        violationAccum.add(violation);
+        if (!isNullSpan(g.get1()))
+          numArgsOracle++;
+        if (!isNullSpan(m.get().get1()))
+          numArgsPred++;
+
+        if (hackyDebug) {
+          System.out.println("i=" + i + " violation=" + violation
+              + " " + g.get1().getTail(0).getValue()
+              + " " + g.get1().getTail(1).getValue()
+              + " " + g.get1().getTail(3).getValue()
+              + "\tgold=" + g.get1().getTail(2).getValue()
+              + "\tpred=" + m.get().get1().getTail(2).getValue());
+        }
+      }
+    }
+
+    if (learn) {
+      int mvIdx = maxViolationIdx.get();
+      double violation = violationAccum.get(mvIdx);
+      if (hackyDebug) {
+        System.out.println("maxViolation=" + violation + " mvIdx=" + mvIdx);
+      }
+      if (violation > 0) {
+        for (int j = 0; j <= mvIdx; j++) {
+          tOracle.get(j).get2().backwards(-1);
+          tPred.get(j).get2().backwards(+1);
+//          System.out.println("ORACLE[" + j + "]: " + tOracle.get(j).get1());
+//          System.out.println("MV[" + j + "]:     " + tPred.get(j).get1());
+        }
+      }
+      completedObservation();
+    } else {
+      Labels.Perf perf = u.getLabels().new Perf();
+      for (Pair<HypEdge, Adjoints> x : tPred) {
+        if (!"0-0".equals(x.get1().getTail(2).getValue())) {
+          perf.add(x.get1());
+          u.addEdgeToState(x.get1(), x.get2());
+        }
+      }
+      perfByRel.add(perf.perfByRel());
+    }
+  }
+
+  private int gfCalls = 0;
+  private AveragedPerceptronWeights hackyGlobalWeights;
+  private Alphabet<String> hackyGlobalAlph;
+  public Adjoints globalFeatures(List<Pair<HypEdge, Adjoints>> history, HypEdge current, int numArgs) {
+    if (hackyGlobalWeights == null) {
+      hackyGlobalWeights = new AveragedPerceptronWeights(1 << 25, 0);
+      hackyGlobalAlph = new Alphabet<>();
+    }
+
+    List<String> feats = new ArrayList<>();
+    String base = isNullSpan(current) ? "n" : "s";
+    feats.add(base);
+
+    /*
+     * roleCooc should run when agendaEdge is nullSpan to learn things like "A=role1 & a=role1 & isNullSpan(a)"
+     *   the problem with this is that we will not be able to have nullSpan when we go back to the other framework... (those aren't put on the agenda)
+     * argLoc should not run when agendaEdge is nullSpan
+     */
+
+    // If true use (1, k, fk) as refinements, otherwise (k, fk)
+    boolean fullBackoff = true;
+
+    // See /tmp/uberts-137-* and /tmp/uberts-138-* for a comparison.
+    // I was wrong in assuming that if you don't have null feats that you can't
+    // learn mutual exclusion... constantly tricked by negative weights on non-nullSpan facts.
+    // It seems that includeNullFactFeats=false works *slightly* better (at least for roleCooc)
+    // Repeated in /tmp/uberts-139-* and /tmp/uberts-140-* for numArgs
+    boolean includeNullFactFeats = false;
+
+    // Since I'm passing in base as a prefix, all of these features are conjoined with nullSpan?
+    boolean useOnlyNumArgs = false;
+//    PairFeat f = NumArgsRoleCoocArgLoc.ROLE_COOC_FEAT;
+    PairFeat f = NumArgsRoleCoocArgLoc.ARG_LOC_PAIRWISE_FEAT;
+//    PairFeat f = NumArgsRoleCoocArgLoc.ARG_LOC_AND_ROLE_COOC;
+
+    if (useOnlyNumArgs) {
+      if (includeNullFactFeats || !isNullSpan(current))
+        feats.add(base + "/" + numArgs);
+    } else {
+      if (includeNullFactFeats || !isNullSpan(current)) {
+        for (Pair<HypEdge, Adjoints> x : history) {
+          if (!isNullSpan(x.get1())) {
+            for (String fx : f.describe(base, x.get1(), current)) {
+              assert fx.startsWith(base);
+              feats.add(fx);
+            }
+          }
+        }
+      }
+    }
+
+    // We'll use (f,k) and (k,) refinements
+    String frame = (String) current.getTail(1).getValue();
+    String role = (String) current.getTail(3).getValue();
+    gfCalls++;
+    if (hackyDebug || gfCalls < 5000) {
+      List<HypEdge> hist = new ArrayList<>();
+      for (Pair<HypEdge, Adjoints> x : history) hist.add(x.get1());
+      System.out.println("META:"
+          + " onlyNumArgs=" + useOnlyNumArgs
+          + " f=" + f.getName()
+          + " includeNullFactFeat=" + includeNullFactFeats
+          + " fullBackoff=" + fullBackoff);
+      System.out.println("hist:    " + hist);
+      System.out.println("cur:     " + current);
+      System.out.println("numArgs: " + numArgs);
+      System.out.println("labels:  " + Arrays.asList("1", role, frame + "/" + role));
+      System.out.println("feats:   " + feats);
+      System.out.println();
+
+      // Check num args
+      int na = 0;
+      for (HypEdge e : hist) {
+        if (!isNullSpan(e)) {
+          if (e.getTail(0) == current.getTail(0)
+              && e.getTail(1) == current.getTail(1)) {
+            na++;
+          }
+        }
+      }
+      assert na == numArgs : "na=" + na + " numArgs=" + numArgs;
+    }
+
+    int rK = Hash.hash(role);
+    int rFK = Hash.mix(Hash.hash(frame), rK);
+    int n = feats.size();
+    int[] ifeats;
+    if (fullBackoff) {
+      ifeats = new int[3 * n];
+      for (int i = 0; i < n; i++) {
+        int fx = hackyGlobalAlph.lookupIndex(feats.get(i));
+        ifeats[3 * i + 0] = fx;
+        ifeats[3 * i + 1] = Hash.mix(rK, fx);
+        ifeats[3 * i + 2] = Hash.mix(rFK, fx);
+      }
+    } else {
+      ifeats = new int[2 * n];
+      for (int i = 0; i < n; i++) {
+        int fx = hackyGlobalAlph.lookupIndex(feats.get(i));
+        ifeats[2 * i + 0] = Hash.mix(rK, fx);
+        ifeats[2 * i + 1] = Hash.mix(rFK, fx);
+      }
+    }
+
+    boolean reindex = true;
+    return hackyGlobalWeights.score(ifeats, reindex);
+  }
+
+  private static boolean isNullSpan(HypEdge srl4Edge) {
+    assert "argument4".equals(srl4Edge.getRelation().getName());
+    return "0-0".equals(srl4Edge.getTail(2).getValue());
+  }
+
+
   @Override
   public void consume(RelDoc doc) {
 //    System.out.println("[consume] " + doc.getId());
@@ -829,104 +1129,109 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       System.out.println("uberts counts: " + u.stats.toStringWithEq());
       System.out.println("[memLeak] " + u.getState());
     }
-    switch (mode) {
-    case TRAIN:
-      train(doc);
-      break;
-    case DEV:
-    case TEST:
-      if (DEBUG > 0 && perfByRel.size() % 50 == 0) {
-        System.out.println("mode=" + mode + " doc=" + doc.getId() + " [memLeak] perfByRel.size=" + perfByRel.size());
-      }
-      boolean oracle = false;
-      boolean ignoreDecoder = false;
-      timer.start("inf/" + mode);
-      Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, ignoreDecoder);
-      timer.stop("inf/" + mode);
-      perfByRel.add(p.get1().perfByRel());
 
-      // Write out predictions to a file in (many doc) fact file format with
-      // comments which say gold, pred, score.
-      if (predictionsWriter != null) {
-        try {
-          predictionsWriter.write(doc.def.toLine());
-          predictionsWriter.newLine();
-          for (Step s : p.get2()) {
-            if (!includeNegativePredictions && !s.pred && !s.gold)
-              continue;
-            Adjoints a = s.getReason();
-            predictionsWriter.write(
-                String.format("%s # gold=%s pred=%s score=%.4f",
-                s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, a.forwards()));
+    if (hackyImplementation) {
+      addHocSrlTrain(doc, mode == Mode.TRAIN);
+    } else {
+      switch (mode) {
+      case TRAIN:
+        train(doc);
+        break;
+      case DEV:
+      case TEST:
+        if (DEBUG > 0 && perfByRel.size() % 50 == 0) {
+          System.out.println("mode=" + mode + " doc=" + doc.getId() + " [memLeak] perfByRel.size=" + perfByRel.size());
+        }
+        boolean oracle = false;
+        boolean ignoreDecoder = false;
+        timer.start("inf/" + mode);
+        Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, ignoreDecoder);
+        timer.stop("inf/" + mode);
+        perfByRel.add(p.get1().perfByRel());
+
+        // Write out predictions to a file in (many doc) fact file format with
+        // comments which say gold, pred, score.
+        if (predictionsWriter != null) {
+          try {
+            predictionsWriter.write(doc.def.toLine());
             predictionsWriter.newLine();
-          }
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
-      }
-
-      if (showDevFN && mode == Mode.DEV) {
-
-        // Steps
-        System.out.println();
-        for (Step s : p.get2())
-          System.out.println("step: " + s);
-
-        // True positives
-        Collections.sort(p.get1().tpInstances, HypEdge.BY_RELATION_THEN_TAIL);
-        System.out.println();
-        for (HypEdge e : p.get1().tpInstances)
-          System.out.println("prediction TP: " + e);
-
-        // False Negatives
-//        List<HypEdge> srl3FNs = p.get1().getFalseNegatives(u.getEdgeType("srl3"));
-        List<HypEdge> srl3FNs = p.get1().getFalseNegatives();
-        System.out.println();
-        for (HypEdge e : srl3FNs)
-          System.out.println("prediction FN: " + e);
-      }
-
-      ExperimentProperties config = ExperimentProperties.getInstance();
-      if (DEBUG > 0 && config.getBoolean("showDevTestDetails", true)) {// && perfByRel.size() % 50 == 0) {
-
-        // Show some stats about this example
-        System.out.println("trajLength=" + p.get2().size());
-//        System.out.println("perDocStats: " + u.stats.toString());
-
-        // Agenda size
-        OrderStatistics<Integer> os = new OrderStatistics<>();
-        assert u.statsAgendaSizePerStep.size() > 0 || p.get2().size() == 0;
-        for (int i = 0; i < u.statsAgendaSizePerStep.size(); i++)
-          os.add(u.statsAgendaSizePerStep.get(i));
-        System.out.println("agendaSize: mean=" + os.getMean() + " orders=" + os.getOrdersStr());
-
-        // Sentence length
-        LL<HypEdge> words = u.getState().match2(u.getEdgeType("word2"));
-        int nWords = 0;
-        for (LL<HypEdge> cur = words; cur != null; cur = cur.next) nWords++;
-        System.out.println("nWords=" + nWords);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("globalFactorStats:");
-        for (Entry<String, GlobalFactor> x : name2globalFactor.entrySet()) {
-          String msg = x.getValue().getStats();
-          if (msg != null) {
-            sb.append(' ');
-            sb.append('(');
-//            sb.append(x.getValue().getName());
-            sb.append(x.getKey());
-            sb.append(' ');
-            sb.append(msg);
-            sb.append(')');
+            for (Step s : p.get2()) {
+              if (!includeNegativePredictions && !s.pred && !s.gold)
+                continue;
+              Adjoints a = s.getReason();
+              predictionsWriter.write(
+                  String.format("%s # gold=%s pred=%s score=%.4f",
+                  s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, a.forwards()));
+              predictionsWriter.newLine();
+            }
+          } catch (IOException e) {
+            e.printStackTrace();
           }
         }
-        System.out.println(sb.toString());
 
-        if (DEBUG > 1) {
-          System.out.println(StringUtils.join("\n", Labels.showPerfByRel(perfByRel.get(perfByRel.size()-1))));
+        if (showDevFN && mode == Mode.DEV) {
+
+          // Steps
+          System.out.println();
+          for (Step s : p.get2())
+            System.out.println("step: " + s);
+
+          // True positives
+          Collections.sort(p.get1().tpInstances, HypEdge.BY_RELATION_THEN_TAIL);
+          System.out.println();
+          for (HypEdge e : p.get1().tpInstances)
+            System.out.println("prediction TP: " + e);
+
+          // False Negatives
+  //        List<HypEdge> srl3FNs = p.get1().getFalseNegatives(u.getEdgeType("srl3"));
+          List<HypEdge> srl3FNs = p.get1().getFalseNegatives();
+          System.out.println();
+          for (HypEdge e : srl3FNs)
+            System.out.println("prediction FN: " + e);
         }
+
+        ExperimentProperties config = ExperimentProperties.getInstance();
+        if (DEBUG > 0 && config.getBoolean("showDevTestDetails", true)) {// && perfByRel.size() % 50 == 0) {
+
+          // Show some stats about this example
+          System.out.println("trajLength=" + p.get2().size());
+  //        System.out.println("perDocStats: " + u.stats.toString());
+
+          // Agenda size
+          OrderStatistics<Integer> os = new OrderStatistics<>();
+          assert u.statsAgendaSizePerStep.size() > 0 || p.get2().size() == 0;
+          for (int i = 0; i < u.statsAgendaSizePerStep.size(); i++)
+            os.add(u.statsAgendaSizePerStep.get(i));
+          System.out.println("agendaSize: mean=" + os.getMean() + " orders=" + os.getOrdersStr());
+
+          // Sentence length
+          LL<HypEdge> words = u.getState().match2(u.getEdgeType("word2"));
+          int nWords = 0;
+          for (LL<HypEdge> cur = words; cur != null; cur = cur.next) nWords++;
+          System.out.println("nWords=" + nWords);
+
+          StringBuilder sb = new StringBuilder();
+          sb.append("globalFactorStats:");
+          for (Entry<String, GlobalFactor> x : name2globalFactor.entrySet()) {
+            String msg = x.getValue().getStats();
+            if (msg != null) {
+              sb.append(' ');
+              sb.append('(');
+  //            sb.append(x.getValue().getName());
+              sb.append(x.getKey());
+              sb.append(' ');
+              sb.append(msg);
+              sb.append(')');
+            }
+          }
+          System.out.println(sb.toString());
+
+          if (DEBUG > 1) {
+            System.out.println(StringUtils.join("\n", Labels.showPerfByRel(perfByRel.get(perfByRel.size()-1))));
+          }
+        }
+        break;
       }
-      break;
     }
 
     u.clearAgenda();
@@ -978,7 +1283,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case MAX_VIOLATION:
       timer.start("train/maxViolation");
-      Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP());
+      Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP(), mvLasoHack);
       batch.add(lr -> {
         if (maxViolation != null) {
           Traj oracleTraj = maxViolation.get1();

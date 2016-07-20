@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
 
-import edu.jhu.hlt.fnparse.util.LearningRateSchedule.Exp;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -161,13 +160,14 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
       return new File("/tmp/Arg4ByRoleFrequency-cache-" + f);
     }
 
+    @SuppressWarnings("unchecked")
     public Arg4ByRoleFrequency(File containsArgument4Facts) {
       ExperimentProperties config = ExperimentProperties.getInstance();
       boolean c = config.getBoolean("cacheArg4RoleFreqCounts", false);
       File cache = cacheFor(containsArgument4Facts);
       if (c && cache.isFile()) {
         providence = cache;
-        roleCounts = (Counts) FileUtil.deserialize(cache);
+        roleCounts = (Counts<String>) FileUtil.deserialize(cache);
       } else {
         Log.info("reading role counts from " + containsArgument4Facts.getPath());
         roleCounts = new Counts<>();
