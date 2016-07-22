@@ -3,14 +3,19 @@ package edu.jhu.hlt.uberts;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -18,6 +23,7 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
+import edu.jhu.hlt.uberts.srl.EdgeUtils;
 import edu.jhu.prim.tuple.Pair;
 
 public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
@@ -30,7 +36,15 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     return priority(e, s);
   }
 
-  public static AgendaPriority parse(String description) {
+  /**
+   * Uberts arg is used for {@link AgendaPriority}s which need some data from
+   * Uberts, like the role2 priority. If you know you won't be using one of these,
+   * you can pass in null.
+   *
+   * Future is not called until the agenda priority function is called, can fail
+   * before that.
+   */
+  public static AgendaPriority parse(String description, Supplier<Uberts> fu) {
     if (DEBUG > 0)
       Log.info("parsing agenda priority " + description);
     String[] toks = description.split("\\+");
@@ -39,19 +53,19 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
       String[] wp = toks[i].trim().split("\\*");
       if (wp.length == 1) {
         assert toks.length == 1 : "assuming weight=1 only works if there are no other terms! " + description;
-        AgendaPriority p = byName(wp[0].trim());
+        AgendaPriority p = byName(wp[0].trim(), fu);
         w.add(p, 1);
       } else {
         assert wp.length == 2;
         double weight = Double.parseDouble(wp[0].trim());
-        AgendaPriority p = byName(wp[1].trim());
+        AgendaPriority p = byName(wp[1].trim(), fu);
         w.add(p, weight);
       }
     }
     return w;
   }
 
-  public static AgendaPriority byName(String name) {
+  public static AgendaPriority byName(String name, Supplier<Uberts> fu) {
     switch (name.toLowerCase()) {
     case "leftright":
     case "left2right":
@@ -69,6 +83,12 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
       return new Bfs();
     case "arg4target":
       return new Arg4Target();
+    case "argendthenwidth":
+      return new ByArgEndThenWidth();
+    case "rolename":
+      return new ByRoleName();
+    case "role2":
+      return new ByRole2(fu);
     case "frequency":
       ExperimentProperties config = ExperimentProperties.getInstance();
       List<File> train = config.getExistingFiles("train.facts");
@@ -106,7 +126,7 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
 
   public static class EasyFirst implements AgendaPriority {
     // helps avoid saturation, requires knowing typical score range
-    public double scale = 5;
+    public double scale = 100;  //5;
     @Override
     public double priority(HypEdge edge, Adjoints score) {
       return Math.tanh(score.forwards() / scale);
@@ -146,8 +166,76 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     public double priority(HypEdge edge, Adjoints score) {
       if (!edge.getRelation().getName().equals("argument4"))
         return 0;
-      Span t = Span.inverseShortString((String) edge.getTail(0).getValue());
-      return -t.start;
+      Span t = EdgeUtils.target(edge);
+      return -(t.start + t.width() / 1000);
+    }
+  }
+
+  public static class ByArgEndThenWidth implements AgendaPriority {
+    @Override
+    public double priority(HypEdge edge, Adjoints score) {
+      Span arg = EdgeUtils.arg(edge);
+      if (arg == null)
+        return 0;
+      return -(arg.end + arg.width() / 1000);
+    }
+  }
+
+  /**
+   * Goes through the role2(frame,role) table and assigns every row an id starting
+   * at 0. Assigns a priority of 0 to first row and 1 to the last.
+   */
+  public static class ByRole2 implements AgendaPriority {
+    private Map<Pair<String, String>, Integer> fk2id;
+    private Supplier<Uberts> fu;
+    public ByRole2(Supplier<Uberts> fu) {
+      this.fu = fu;
+    }
+    private void init() {
+      try {
+        Uberts u = fu.get();
+        Relation role2 = u.getEdgeType("role2");
+        assert role2 != null;
+        fk2id = new HashMap<>();
+        for (LL<HypEdge> cur = u.getState().match2(role2); cur != null; cur = cur.next) {
+          assert cur.item.getNumTails() == 2;
+          String f = (String) cur.item.getTail(0).getValue();
+          String k = (String) cur.item.getTail(1).getValue();
+          fk2id.put(new Pair<>(f, k), fk2id.size());
+        }
+      } catch (Exception e) {
+        throw new RuntimeException();
+      }
+    }
+    @Override
+    public double priority(HypEdge edge, Adjoints score) {
+      if (fk2id == null)
+        init();
+      String f = EdgeUtils.frame(edge);
+      String k = EdgeUtils.role(edge);
+      int id = fk2id.get(new Pair<>(f, k));
+      // The reason for not reversing the order is that the LL used to store
+      // facts in the State means that we will get LIFO access to role2 facts,
+      // meaning the highest ids are already assigned to the last role2 facts
+      // appearing in a fact file.
+      return ((double) id) / fk2id.size();
+//      return -((double) id) / fk2id.size();
+    }
+  }
+
+  /**
+   * Sorts any edge which has a role (see {@link EdgeUtils#role(HypEdge)} by
+   * role (ascending, case insensitive). Returns a value between 0 and 1.
+   */
+  public static class ByRoleName implements AgendaPriority {
+    @Override
+    public double priority(HypEdge edge, Adjoints score) {
+      String r = EdgeUtils.role(edge);
+      if (r == null) {
+        // not relevant
+        return 0;
+      }
+      return 1-StringUtils.ascii2reals(r);
     }
   }
 
@@ -156,7 +244,13 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     private File providence;
 
     private static File cacheFor(File containsArgument4Facts) {
-      String f = Hash.sha256(containsArgument4Facts.getPath()) + ".jser.gz";
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      boolean fn = config.getString("train.facts").contains("framenet");
+      boolean pb = config.getString("train.facts").contains("propbank");
+      assert fn != pb;
+      String f = Hash.sha256(containsArgument4Facts.getPath())
+          + (fn ? ".fn" : ".pb")
+          + ".jser.gz";
       return new File("/tmp/Arg4ByRoleFrequency-cache-" + f);
     }
 
@@ -234,8 +328,23 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     }
     public double priority(HypEdge edge, Adjoints score) {
       double p = 0;
-      for (Pair<AgendaPriority, Double> pp : priorities)
-        p += pp.get2() * pp.get1().priority(edge, score);
+      StringBuilder sb = null;
+      boolean debug = Uberts.DEBUG > 2;
+      if (debug) {
+        sb = new StringBuilder();
+        sb.append("PRIORITY for " + edge);
+      }
+      for (Pair<AgendaPriority, Double> pp : priorities) {
+        double pri = pp.get1().priority(edge, score);
+        p += pp.get2() * pri;
+        if (debug) {
+          sb.append(" " + pp.get1() + " weight=" + pp.get2() + " priority=" + pri);
+        }
+      }
+      if (debug) {
+        sb.append(" result=" + p);
+        System.out.println(sb.toString());
+      }
       return p;
     }
   }
