@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -15,7 +16,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -46,7 +46,8 @@ import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
-import edu.jhu.hlt.uberts.AgendaPriority;
+import edu.jhu.hlt.uberts.Agenda;
+import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.Labels;
@@ -65,6 +66,7 @@ import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.GlobalParams;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.MultiGlobalParams;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.PairFeat;
+import edu.jhu.hlt.uberts.features.DebugFeatureAdj;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper.Ints3;
@@ -72,10 +74,11 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.PerlRegexFileInputStream;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
+import edu.jhu.hlt.uberts.srl.AddNullSpanArgs;
+import edu.jhu.hlt.uberts.srl.EdgeUtils;
 import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
-import fj.data.fingertrees.One;
 
 public class UbertsLearnPipeline extends UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
@@ -98,7 +101,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // which may not allow you to get 100% recall.
   static boolean showDevFN = false;
 
+  // DEPRECATED: This works by implementing a LocalFactor which will vote up
+  // or down any edge it sees based on its label. The problem with this is that
+  // the transition system may force some FNs which means that you can't train
+  // on them. SEE UbertsPipeline.oracleRelations for another option which
+  // immediately adds all facts to the state before calling consume.
   static String[] oracleFeats = new String[] {};
+
   static boolean graphFeats = false;
   static boolean templateFeats = true;
   static boolean pipeline = false;
@@ -190,12 +199,36 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // occurs, the predictor is re-set to the gold history.
   // This is implemented by using if(y)addEdgeToState(...) in the MV/pred
   // inference loop instead of if(yhat)addEdgeToState(...).
-  private boolean mvLasoHack = false;
+  private boolean mvLasoHack = true;
 
+  // Does two things if true:
+  // 1) adds the rule: "predicate2(t,f) & role2(f,k) & nullSpan(s) => argument4(t,f,s,k)
+  // 2) runs AddNullSpanArgs on incoming RelDocs to add gold nullSpan arg4 facts
+  private boolean addNullSpanFacts = true;
+
+  private static boolean HACKY_DEBUG = true;
+
+  public static void turnOnDebug() {
+    Log.info("");
+    HACKY_DEBUG = true;
+    Uberts.LEARN_DEBUG = true;
+    Uberts.DEBUG = 3;
+    NumArgsRoleCoocArgLoc.SHOW_GLOBAL_FEAT_COMMUNICATION = true;
+  }
+  public static void turnOffDebug() {
+    Log.info("");
+    HACKY_DEBUG = false;
+    Uberts.LEARN_DEBUG = false;
+    Uberts.DEBUG = 1;
+    NumArgsRoleCoocArgLoc.SHOW_GLOBAL_FEAT_COMMUNICATION = false;
+  }
 
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
+
+    if (config.getBoolean("learnDebug", false))
+      turnOnDebug();
 
     File grammarFile = config.getExistingFile("grammar");
     File relationDefs = config.getExistingFile("relations");
@@ -223,7 +256,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     argument4ByArg = config.getBoolean("argument4ByArg", argument4ByArg);
     Log.info("[main] argument4ByArg=" + argument4ByArg);
 
-    oracleFeats = config.getStrings("oracleFeats", oracleFeats);
+    oracleFeats = config.getStrings("oracleFeatures", oracleFeats);
     graphFeats = config.getBoolean("graphFeats", graphFeats);
     templateFeats = config.getBoolean("templateFeats", templateFeats);
 
@@ -236,17 +269,32 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     int passes = config.getInt("passes", 10);
     Log.info("[main] passes=" + passes);
 
-    String ap = config.getString("agendaPriority");
-    BiFunction<HypEdge, Adjoints, Double> agendaPriority =
-        AgendaPriority.parse(ap);
-    Log.info("[main] agendaPriority=" + ap.replaceAll("\\s+", "_"));
-
-    Uberts u = new Uberts(new Random(9001), agendaPriority);
+    Comparator<AgendaItem> comparator = Agenda.BY_RELATION
+        .thenComparing(Agenda.BY_TARGET)
+        .thenComparing(Agenda.BY_FRAME)
+        .thenComparing(Agenda.BY_ROLE)
+        .thenComparing(Agenda.BY_SCORE)
+        .thenComparing(Agenda.BY_ARG);
+    final Uberts u = new Uberts(new Random(9001), null, comparator);
+//    String ap = config.getString("agendaPriority");
+//    BiFunction<HypEdge, Adjoints, Double> agendaPriority =
+//        AgendaPriority.parse(ap, () -> u);
+//    Log.info("[main] agendaPriority=" + ap.replaceAll("\\s+", "_"));
+//    u.setAgendaPriority(agendaPriority);
+    Log.warn("IGNORING agendaPriority!");
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
     Log.info("[main] hackyImplementation=" + pipe.hackyImplementation);
 
-    pipe.mvLasoHack = config.getBoolean("mvLassoHack", pipe.mvLasoHack);
+    Log.info("[main] addNullSpanFacts=" + pipe.addNullSpanFacts);
+    if (pipe.addNullSpanFacts) {
+      pipe.u.readRelData("def nullSpan <span>");
+      pipe.u.readRelData("schema nullSpan 0-0");
+      Rule r = Rule.parseRule("predicate2(t,f) & role2(f,k) & nullSpan(s) => argument4(t,f,s,k)", pipe.u);
+      pipe.addRule(r);
+    }
+
+    pipe.mvLasoHack = config.getBoolean("mvLasoHack", pipe.mvLasoHack);
     Log.info("[main] mvLasoHack=" + pipe.mvLasoHack);
 
     pipe.skipDocsWithoutPredicate2 = config.getBoolean("skipDocsWithoutPredicate2", pipe.skipDocsWithoutPredicate2);
@@ -525,13 +573,32 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       return new LocalFactor.Constant(0.5);
     }
 
-    LocalFactor f = LocalFactor.Constant.ZERO;
+    if (rel2localFactor != null) {
+      LocalFactor phi = rel2localFactor.get(r.rhs.rel);
+      if (phi != null) {
+        Log.info("[main] re-using " + r.rhs.relName + " parameters for " + r);
+        return phi;
+      }
+    }
 
+    if (oracleRelations.contains(r.rhs.relName)) {
+      Log.info("using oracle relations for " + r);
+//      return LocalFactor.Constant.ZERO;
+      return new LocalFactor() {
+        @Override
+        public Adjoints score(HypEdge y, Uberts x) {
+          return null;
+        }
+      };
+    }
     if (Arrays.asList(oracleFeats).contains(r.rhs.relName)) {
       Log.info("using oracle feats for " + r);
+      Log.warn("are you sure you want to use oracleFeatures and not oracleRelations?");
 //      return new FeatureExtractionFactor.Oracle(r.rhs.relName);
       return new LocalFactor.Oracle();
     }
+
+    LocalFactor f = LocalFactor.Constant.ZERO;
 
     if (templateFeats) {
       ExperimentProperties config = ExperimentProperties.getInstance();
@@ -539,7 +606,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         localFactorHelper = new BasicFeatureTemplates();
 
       Instance2 conf = getParameterIO().getOrAddDefault(r.rhs.relName);
-      OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(localFactorHelper, r.rhs.rel, !conf.learn, config);
+      boolean learnDebug = config.getBoolean("learnDebug", false);
+      OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(localFactorHelper, r.rhs.rel, !conf.learn, learnDebug, config);
 
       if (rel2localFactor == null)
         rel2localFactor = new HashMap<>();
@@ -621,7 +689,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Compute performance over last segment
     Map<String, FPR> perf = new HashMap<>();
     for (Map<String, FPR> p : perfByRel)
-      perf = Labels.combinePerfByRel(perf, p);
+      perf = FPR.combineStratifiedPerf(perf, p);
     perfByRel.clear();
     for (String line : Labels.showPerfByRel(perf))
       System.out.println("[main] " + dataName + ": " + line);
@@ -684,7 +752,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Set<LabeledSpanPair> added = null;
     if (this.mode == Mode.TRAIN && includeGoldArgsAtTrain)
       added = new HashSet<>();
-    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
+    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1, false)) {
       assert target.getEdge().getNumTails() == 1;
       Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
       int thead = hf.headSafe(t, sent);
@@ -702,7 +770,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
     if (this.mode == Mode.TRAIN && includeGoldArgsAtTrain) {
       Relation a4 = u.getEdgeType("argument4");
-      for (HashableHypEdge e : u.getLabels().getGoldEdges(a4)) {
+      for (HashableHypEdge e : u.getLabels().getGoldEdges(a4, false)) {
         Span t = Span.inverseShortString((String) e.getEdge().getTail(0).getValue());
         Span s = Span.inverseShortString((String) e.getEdge().getTail(2).getValue());
         String k = (String) e.getEdge().getTail(3).getValue();
@@ -737,7 +805,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Find args
     DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
     Relation ev1 = u.getEdgeType("event1");
-    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
+    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1, false)) {
       assert target.getEdge().getNumTails() == 1;
       Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
       int thead = hf.headSafe(t, sent);
@@ -771,7 +839,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Set<Span> uniq = new HashSet<>();
     Set<Span> goldTargets = new HashSet<>();
     Frame f = new Frame(0, "propbank/dummyframe", null, new String[] {"ARG0", "ARG1"});
-    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1)) {
+    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1, false)) {
       assert target.getEdge().getNumTails() == 1;
       Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
       if (goldTargets.add(t) && uniq.add(t))
@@ -806,9 +874,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
     if (this.mode == Mode.TRAIN && includeGoldArgsAtTrain) {
       Relation a4 = u.getEdgeType("argument4");
-      for (HashableHypEdge e : u.getLabels().getGoldEdges(a4)) {
-        Span t = Span.inverseShortString((String) e.getEdge().getTail(0).getValue());
-        Span s = Span.inverseShortString((String) e.getEdge().getTail(2).getValue());
+      for (HashableHypEdge e : u.getLabels().getGoldEdges(a4, false)) {
+        Span t = EdgeUtils.target(e.getEdge());// Span.inverseShortString((String) e.getEdge().getTail(0).getValue());
+        Span s = EdgeUtils.arg(e.getEdge());  //Span.inverseShortString((String) e.getEdge().getTail(2).getValue());
         if (added.add(new SpanPair(t, s))) {
           eventCounts.increment("xuePalmerOTF/ts/gold");
           u.readRelData("x xue-palmer-otf-args2 " + t.shortString() + " " + s.shortString());
@@ -817,24 +885,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
   }
 
-  private boolean hackyDebug = false;
   /**
-   * Include parameters for null-span
-   *
-   * Lets make this real dumb, real easy. There is one gold trajectory.
-   *
-   * i = 0
-   * for each (t,s):
-   *   for each k:
-   *     s_hat = argmax_{s in args(t,f) \cup gold(t,s,k)}
-   *     beam[0,i++] = s_hat
-   *
-   * Maybe the problem is in something to do with the agenda, copying, clearing, etc
-   * Is there a simpler way that I can use global features which doesn'nt require rescore?
+   * Proof of concept, LaSO does work.
    */
   private void addHocSrlTrain(RelDoc doc, boolean learn) {
     boolean local = true;
-    if (hackyDebug) {
+    if (HACKY_DEBUG) {
       System.out.println("starting on " + doc.getId());
     }
 
@@ -857,18 +913,22 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     DoubleArrayList lossAccum = new DoubleArrayList();
     ArgMax<Integer> maxViolationIdx = new ArgMax<>();
     List<HypEdge.WithProps> predicates = doc.match2FromFacts(p2);
+    Collections.sort(predicates, EdgeUtils.BY_TF);
     for (int tfIdx = 0; tfIdx < predicates.size(); tfIdx++) {
       HypEdge tf = predicates.get(tfIdx);
-      u.addEdgeToStateNoMatch(tf, Adjoints.Constant.ONE);
+      u.addEdgeToStateNoMatch(tf, Adjoints.Constant.ZERO);
       String nullSpanStr = xp.getName() + "(" + tf.getTail(0).getValue() + ", 0-0)";
       HypEdge nullSpan = u.dbgMakeEdge(nullSpanStr, false);
+      assert Span.nullSpan == EdgeUtils.arg(nullSpan);
 
       // xue-palmer-otf-args2(t,s)
       List<HypEdge> ts = u.getState().match(0, xp, tf.getTail(0)).toList();
-      ts.add(nullSpan);   // ensure this is last
+      ts.add(nullSpan);
+      Collections.sort(ts, EdgeUtils.BY_S);
 
       // role2(f,k)
       List<HypEdge> tk = u.getState().match(0, r2, tf.getTail(1)).toList();
+      Collections.sort(tk, EdgeUtils.BY_K_NAME);
 
       int numArgsOracle = 0;
       int numArgsPred = 0;
@@ -878,13 +938,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         ArgMax<Pair<HypEdge, Adjoints>> m = new ArgMax<>();
         Pair<HypEdge, Adjoints> g = null;
         for (HypEdge es : ts) {
-          String t = (String) tf.getTail(0).getValue();
-          String f = (String) tf.getTail(1).getValue();
-          String s = (String) es.getTail(1).getValue();
-          String k = (String) ek.getTail(1).getValue();
-          HypEdge a4 = u.dbgMakeEdge("argument4(" + t + ", " + f + ", " + s + ", " + k + ")", false);
-//          if (s.equals("0-0"))
-//            Log.info("interesting");
+          Span t = EdgeUtils.target(tf);
+          String f = EdgeUtils.frame(tf);
+          Span s = EdgeUtils.arg(es);
+          String k = EdgeUtils.role(ek);
+          HypEdge a4 = u.dbgMakeEdge("argument4(" + t.shortString() + ", " + f + ", " + s.shortString() + ", " + k + ")", false);
 
           Adjoints scoreOracle;
           Adjoints scorePred;
@@ -894,7 +952,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             scorePred = Adjoints.cacheIfNeeded(sL);
           } else {
             scoreOracle = Adjoints.cacheIfNeeded(Adjoints.sum(sL, globalFeatures(tOracle, a4, numArgsOracle)));
-            if (wisemanRushUpdate && violationAccum.size() > 0) {
+            if (mode == Mode.TRAIN && wisemanRushUpdate && violationAccum.size() > 0) {
               double v = violationAccum.get(violationAccum.size()-1);
               List<Pair<HypEdge, Adjoints>> history;
               int na;
@@ -912,41 +970,55 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           }
 
           boolean y = u.getLabel(a4);
-          if (y || (g == null && "0-0".equals(s))) {
-            assert g == null;
+          if (HACKY_DEBUG)
+            System.out.println("[hackyLab] y=" + y + "\t" + a4 + scorePred.forwards() + "\t" + scorePred);
+          if (y)
             g = new Pair<>(a4, scoreOracle);
-          }
 
           Pair<HypEdge, Adjoints> p = new Pair<>(a4, scorePred);
           m.offer(p, p.get2().forwards());
         } // end loop over s
 
         // Apply the action
-        assert g != null;
-        assert m.numOffers() > 0;
-        double loss = m.get().get1() != g.get1() ? 0.01 : 0;
-        tOracle.add(g);
         tPred.add(m.get());
-        sCumOracle += g.get2().forwards();
-        sCumPred += m.get().get2().forwards();
-        sCumPred += loss;
-        double violation = sCumPred - sCumOracle;
-        int i = violationAccum.size();
-        maxViolationIdx.offer(i, violation);
-        lossAccum.add(loss);
-        violationAccum.add(violation);
-        if (!isNullSpan(g.get1()))
-          numArgsOracle++;
         if (!isNullSpan(m.get().get1()))
           numArgsPred++;
+        if (mode == Mode.TRAIN) {
+          if (g == null) {
+            List<HypEdge> l = new ArrayList<>();
+            for (HashableHypEdge y : u.getLabels().getGoldEdges(u.getEdgeType("argument4"), true))
+              l.add(y.getEdge());
+            Collections.sort(l, HypEdge.BY_RELATION_THEN_TAIL);
+            for (HypEdge y : l)
+              System.out.println("gold: " + y);
+            for (HypEdge y : ts)
+              System.out.println("goldSpan: " + y);
+            System.out.println("tf=" + tf);
+            System.out.println("ek=" + ek);
+          }
+          assert g != null : "tf=" + tf + " ek=" + ek;
+          assert m.numOffers() > 0;
+          double loss = m.get().get1() != g.get1() ? 0.01 : 0;
+          tOracle.add(g);
+          sCumOracle += g.get2().forwards();
+          sCumPred += m.get().get2().forwards();
+          sCumPred += loss;
+          double violation = sCumPred - sCumOracle;
+          int i = violationAccum.size();
+          maxViolationIdx.offer(i, violation);
+          lossAccum.add(loss);
+          violationAccum.add(violation);
+          if (!isNullSpan(g.get1()))
+            numArgsOracle++;
 
-        if (hackyDebug) {
-          System.out.println("i=" + i + " violation=" + violation
-              + " " + g.get1().getTail(0).getValue()
-              + " " + g.get1().getTail(1).getValue()
-              + " " + g.get1().getTail(3).getValue()
-              + "\tgold=" + g.get1().getTail(2).getValue()
-              + "\tpred=" + m.get().get1().getTail(2).getValue());
+          if (HACKY_DEBUG) {
+            System.out.println("i=" + i + " violation=" + violation
+                + " " + g.get1().getTail(0).getValue()
+                + " " + g.get1().getTail(1).getValue()
+                + " " + g.get1().getTail(3).getValue()
+                + "\tgold=" + g.get1().getTail(2).getValue()
+                + "\tpred=" + m.get().get1().getTail(2).getValue());
+          }
         }
       }
     }
@@ -954,14 +1026,23 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (learn) {
       int mvIdx = maxViolationIdx.get();
       double violation = violationAccum.get(mvIdx);
-      if (hackyDebug) {
+      if (HACKY_DEBUG) {
         System.out.println("maxViolation=" + violation + " mvIdx=" + mvIdx);
       }
-      if (violation > 0) {
+      if (violation <= 0) {
+        eventCounts.increment("hacky/noViolation");
+      } else {
+        eventCounts.increment("hacky/violation");
+        if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+          System.out.println("starting ORACLE update...");
         for (int j = 0; j <= mvIdx; j++) {
           tOracle.get(j).get2().backwards(-1);
-          tPred.get(j).get2().backwards(+1);
 //          System.out.println("ORACLE[" + j + "]: " + tOracle.get(j).get1());
+        }
+        if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+          System.out.println("starting LOSS_AUGMENTED update...");
+        for (int j = 0; j <= mvIdx; j++) {
+          tPred.get(j).get2().backwards(+1);
 //          System.out.println("MV[" + j + "]:     " + tPred.get(j).get1());
         }
       }
@@ -969,7 +1050,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     } else {
       Labels.Perf perf = u.getLabels().new Perf();
       for (Pair<HypEdge, Adjoints> x : tPred) {
-        if (!"0-0".equals(x.get1().getTail(2).getValue())) {
+        if (Span.nullSpan != EdgeUtils.arg(x.get1())) {
+//        if (!"0-0".equals(x.get1().getTail(2).getValue())) {
           perf.add(x.get1());
           u.addEdgeToState(x.get1(), x.get2());
         }
@@ -978,7 +1060,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
   }
 
-  private int gfCalls = 0;
   private AveragedPerceptronWeights hackyGlobalWeights;
   private Alphabet<String> hackyGlobalAlph;
   public Adjoints globalFeatures(List<Pair<HypEdge, Adjoints>> history, HypEdge current, int numArgs) {
@@ -987,9 +1068,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       hackyGlobalAlph = new Alphabet<>();
     }
 
+    boolean includeGlobalIntercept = true;
+
     List<String> feats = new ArrayList<>();
-    String base = isNullSpan(current) ? "n" : "s";
-    feats.add(base);
+//    String base = isNullSpan(current) ? "n" : "s";
+    String base = isNilFact(current) ? "n" : "s";
+    if (includeGlobalIntercept)
+      feats.add(base);
 
     /*
      * roleCooc should run when agendaEdge is nullSpan to learn things like "A=role1 & a=role1 & isNullSpan(a)"
@@ -998,6 +1083,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
      */
 
     // If true use (1, k, fk) as refinements, otherwise (k, fk)
+    // true is what should match the standard/good implementation
     boolean fullBackoff = true;
 
     // See /tmp/uberts-137-* and /tmp/uberts-138-* for a comparison.
@@ -1020,7 +1106,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       if (includeNullFactFeats || !isNullSpan(current)) {
         for (Pair<HypEdge, Adjoints> x : history) {
           if (!isNullSpan(x.get1())) {
-            for (String fx : f.describe(base, x.get1(), current)) {
+            for (String fx : f.describe(base + "/" + f.getName(), x.get1(), current)) {
               assert fx.startsWith(base);
               feats.add(fx);
             }
@@ -1032,8 +1118,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // We'll use (f,k) and (k,) refinements
     String frame = (String) current.getTail(1).getValue();
     String role = (String) current.getTail(3).getValue();
-    gfCalls++;
-    if (hackyDebug || gfCalls < 5000) {
+    if (HACKY_DEBUG) {
       List<HypEdge> hist = new ArrayList<>();
       for (Pair<HypEdge, Adjoints> x : history) hist.add(x.get1());
       System.out.println("META:"
@@ -1065,7 +1150,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     int rFK = Hash.mix(Hash.hash(frame), rK);
     int n = feats.size();
     int[] ifeats;
+    List<String> fy;
     if (fullBackoff) {
+      fy = Arrays.asList("1", "fk", "k");
       ifeats = new int[3 * n];
       for (int i = 0; i < n; i++) {
         int fx = hackyGlobalAlph.lookupIndex(feats.get(i));
@@ -1074,6 +1161,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         ifeats[3 * i + 2] = Hash.mix(rFK, fx);
       }
     } else {
+      fy = Arrays.asList("fk", "k");
       ifeats = new int[2 * n];
       for (int i = 0; i < n; i++) {
         int fx = hackyGlobalAlph.lookupIndex(feats.get(i));
@@ -1083,18 +1171,28 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
 
     boolean reindex = true;
-    return hackyGlobalWeights.score(ifeats, reindex);
+    Adjoints a = hackyGlobalWeights.score(ifeats, reindex);
+    if (HACKY_DEBUG)
+      a = new DebugFeatureAdj(a, fy, feats, "GLOBAL: agenda=" + current);// + " state=" + stateEdge);
+    return a;
   }
 
-  private static boolean isNullSpan(HypEdge srl4Edge) {
+  public static boolean isNullSpan(HypEdge srl4Edge) {
     assert "argument4".equals(srl4Edge.getRelation().getName());
     return "0-0".equals(srl4Edge.getTail(2).getValue());
+  }
+
+  public static boolean isNilFact(HypEdge f) {
+    if (f.getRelation().getName().equals("argument4"))
+      return isNullSpan(f);
+    return false;
   }
 
 
   @Override
   public void consume(RelDoc doc) {
-//    System.out.println("[consume] " + doc.getId());
+    if (Uberts.DEBUG > 1)
+      System.out.println("[consume] " + doc.getId());
 
     if (skipDocsWithoutPredicate2) {
       assert doc.items.isEmpty();
@@ -1111,8 +1209,19 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       }
     }
 
+    if (addNullSpanFacts) {
+      AddNullSpanArgs ans = new AddNullSpanArgs(u);
+      List<HypEdge.WithProps> ns = ans.goldNullSpanFacts(doc);
+//      doc.facts.addAll(ns);
+      for (HypEdge.WithProps y : ns) {
+        assert y.hasProperty(HypEdge.IS_Y);
+//        if (hackyDebug)
+//          System.out.println("[addNullSpanFacts] " + y);
+        u.addLabel(y);
+      }
+    }
+
     // Add xue-palmer-args2
-    buildSentenceCacheInUberts();
     try { buildXuePalmerOTF(); }
     catch (Exception e) {
       e.printStackTrace();
@@ -1285,13 +1394,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       timer.start("train/maxViolation");
       Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP(), mvLasoHack);
       batch.add(lr -> {
-        if (maxViolation != null) {
+        if (maxViolation == null) {
+          eventCounts.increment("good/noViolation");
+        } else {
+          eventCounts.increment("good/violation");
           Traj oracleTraj = maxViolation.get1();
           Traj mvTraj = maxViolation.get2();
 
           if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
-            Log.info("[MAX_VIOLATION backwards] starting ORACLE backwards pass...");
-          for (Traj cur = oracleTraj; cur != null; cur = cur.getPrev()) {
+            System.out.println("starting ORACLE update...");
+          for (Traj cur : oracleTraj.reverse()) {
             Step s = cur.getStep();
             if (dontLearn(s.edge.getRelation().getName()))
               continue;
@@ -1319,8 +1431,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           }
 
           if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
-            Log.info("[MAX_VIOLATION backwards] starting LOSS_AUGMENTED backwards pass...");
-          for (Traj cur = mvTraj; cur != null; cur = cur.getPrev()) {
+            System.out.println("starting LOSS_AUGMENTED update...");
+          for (Traj cur : mvTraj.reverse()) {
             Step s = cur.getStep();
             if (dontLearn(s.edge.getRelation().getName()))
               continue;
@@ -1377,7 +1489,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       u.showTrajDiagnostics = verbose >= 2;
       if (verbose >= 1) {
         System.out.println();
-        for (HypEdge e : u.getLabels().getGoldEdges())
+        for (HypEdge e : u.getLabels().getGoldEdges(false))
           System.out.println("gold: " + e);
       }
       boolean oracle = u.getRandom().nextDouble() < pOracleRollIn;

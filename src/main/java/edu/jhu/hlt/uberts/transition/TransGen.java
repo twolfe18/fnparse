@@ -2,6 +2,7 @@ package edu.jhu.hlt.uberts.transition;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -14,7 +15,6 @@ import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Rule;
-import edu.jhu.hlt.uberts.factor.HypEdgeAdjoints;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.prim.tuple.Pair;
 
@@ -37,18 +37,29 @@ public interface TransGen {
     public static final List<String> RELEVANT_RELATIONS =
         Arrays.asList("predicate2", "srl2", "srl3");
 
-    public Regular(Rule rule, LocalFactor score) {
+    private boolean pruneFactsWithNullScore;
+
+    public Regular(Rule rule, LocalFactor score, boolean pruneFactsWithNullScore) {
       this.rule = rule;
       this.score = score;
+      this.pruneFactsWithNullScore = pruneFactsWithNullScore;
       ExperimentProperties config = ExperimentProperties.getInstance();
       addLhsToRhsScore = config.getBoolean("addLhsScoreToRhsScore", false);
-      Log.info("[main] addLhsToRhs=" + addLhsToRhsScore + " " + rule + " " + score);
+      Log.info("[main] addLhsToRhs=" + addLhsToRhsScore
+          + " " + rule
+          + " " + score
+          + " pruneFactsWithNullScore=" + pruneFactsWithNullScore);
     }
 
     @Override
     public List<Pair<HypEdge, Adjoints>> match(HypEdge[] trigger, Uberts u) {
       HypEdge e = instantiateRule(trigger, rule, u);
       Adjoints s = score.score(e, u);
+
+      if (s == null) {
+        assert pruneFactsWithNullScore;
+        return Collections.emptyList();
+      }
 
       if (addLhsToRhsScore) {
         State st = u.getState();
@@ -60,10 +71,6 @@ public interface TransGen {
           }
         }
       }
-
-      // For debugging, keep around the edge within the score
-      if (Uberts.LEARN_DEBUG)
-        s = new HypEdgeAdjoints(new HashableHypEdge(e), s, u);
 
       return Arrays.asList(new Pair<>(e, s));
     }

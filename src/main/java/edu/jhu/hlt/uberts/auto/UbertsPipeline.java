@@ -375,6 +375,13 @@ public abstract class UbertsPipeline {
   }
 
 
+
+  int interval = 500;
+  Timer tIter = new Timer("UbertsPipeline.IO", interval, true);
+  Timer tExp = new Timer("UbertsPipeline.TypeInf.Expand", interval, true);
+  Timer tSetup = new Timer("UbertsPipeline.Setup", interval, true);
+  Timer tConsume = new Timer("UbertsPipeline.Consume", interval, true);
+  Timer tCleanup = new Timer("UbertsPipeline.Cleanup", interval, true);
   /**
    * Calls {@link UbertsPipeline#consume(RelDoc)}
    *
@@ -385,13 +392,6 @@ public abstract class UbertsPipeline {
     start(dataName);
     TimeMarker tm = new TimeMarker();
     int docs = 0;
-
-    int interval = 500;
-    Timer tIter = new Timer("UbertsPipeline.IO", interval, true);
-    Timer tExp = new Timer("UbertsPipeline.TypeInf.Expand", interval, true);
-    Timer tSetup = new Timer("UbertsPipeline.Setup", interval, true);
-    Timer tConsume = new Timer("UbertsPipeline.Consume", interval, true);
-    Timer tCleanup = new Timer("UbertsPipeline.Cleanup", interval, true);
 
     // NOTE: This iterator calls lookupNode which makes Uberts grow in memory
     // usage. See Uberts.clearNodes, which is called from cleanupUbertsForDoc.
@@ -441,7 +441,7 @@ public abstract class UbertsPipeline {
     File xyDefsFile = config.getExistingFile("relationDefs");
     List<File> schemaFiles = config.getExistingFiles("schemaFiles");
     File grammarFile = config.getExistingFile("grammarFile");
-    Uberts u = new Uberts(new Random(9001), (edge, score) -> score.forwards());
+    Uberts u = new Uberts(new Random(9001), (edge, score) -> score.forwards(), null);
     UbertsPipeline srl;
     String mode = config.getString("mode");
     if (mode.equals("learn")) {

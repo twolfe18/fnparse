@@ -350,7 +350,8 @@ public class State {
     Adjoints old = scores.put(hhe, Adjoints.cacheIfNeeded(score));
     if (old != null) {
 //      throw new RuntimeException("two scores for " + e + " first=" + old + " second=" + score);
-      Log.warn("two scores for " + e + " first=" + old + " second=" + score);
+      if (Adjoints.uncacheIfNeeded(old) != Adjoints.uncacheIfNeeded(score))
+        Log.warn("two scores for " + e + " first=" + old + " second=" + score);
       return null;
     }
 
