@@ -14,6 +14,7 @@ import java.util.function.BiFunction;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.DecisionFunction.ByGroup.ByGroupMode;
@@ -419,6 +420,8 @@ public interface DecisionFunction {
     private Map<List<Object>, Pair<HypEdge, Adjoints>> firstGoldInBucket;
     private Map<List<Object>, Pair<HypEdge, Adjoints>> firstPredInBucket;
 
+    private Map<List<Object>, Pair<HypEdge, Adjoints>> lastPredInGroup;
+
     private Map<List<Object>, List<Adjoints>> dbgScoresInBucket;
 
     private ByGroupMode mode;
@@ -434,6 +437,7 @@ public interface DecisionFunction {
       this.observedKeys = new HashSet<>();
       this.firstPredInBucket = new HashMap<>();
       this.firstGoldInBucket = new HashMap<>();
+      this.lastPredInGroup = new HashMap<>();
       this.dbgScoresInBucket = new HashMap<>();
       String[] parts = description.split(":");
       assert parts.length >= 2;
@@ -514,9 +518,12 @@ public interface DecisionFunction {
 
     @Override
     public void clear() {
+      if (Uberts.DEBUG > 2)
+        Log.info("CLEAR");
       observedKeys.clear();
       firstPredInBucket.clear();
       firstGoldInBucket.clear();
+      lastPredInGroup.clear();
       dbgScoresInBucket.clear();
     }
 
@@ -525,6 +532,9 @@ public interface DecisionFunction {
       if (e.getRelation() != relation)
         return null;  // Doesn't apply
       List<Object> key = getKey(e);
+
+      checkScoresInGroupSorted(key, e, s);
+
       boolean newEdge = !observedKeys.contains(key);
       switch (mode) {
       case AT_LEAST_ONE:
@@ -564,6 +574,7 @@ public interface DecisionFunction {
 //            : "penultimate=" + l.get(n-2) + " last=" + l.get(n-1);
 //      }
 
+      checkScoresInGroupSorted(key, e, s);
 
       final Pair<HypEdge, Adjoints> p = new Pair<>(e, s);
       boolean first = !firstPredInBucket.containsKey(key);
@@ -602,6 +613,21 @@ public interface DecisionFunction {
      */
     @Override
     public void addedToState(HashableHypEdge he, Adjoints score, Boolean y) {
+    }
+
+    private void checkScoresInGroupSorted(List<Object> key, HypEdge e, Adjoints s) {
+      Pair<HypEdge, Adjoints> prev = lastPredInGroup.put(key, new Pair<>(e, s));
+      if (prev != null && s.forwards() > prev.get2().forwards()) {
+        throw new RuntimeException("In the group defined by " + toString()
+          + ", key=" + key
+          + ". We just popped " + e + " with a score of " + s.forwards() + " " + StringUtils.trunc(s, 100)
+          + ", but this is higher than the last score for a fact in this group, "
+          + prev.get1() + " with a score of " + prev.get2().forwards() + " " + StringUtils.trunc(prev.get2(), 100)
+          + ". This class will only work if facts are sorted with respect to"
+          + " model score within every group."
+          + " Check that your agenda priority doesn't contain any terms which"
+          + " affect items within a group.");
+      }
     }
   }
 
