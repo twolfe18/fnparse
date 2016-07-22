@@ -31,6 +31,9 @@ import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.Term;
+import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
+import edu.jhu.hlt.uberts.features.DebugFeatureAdj;
+import edu.jhu.hlt.uberts.srl.EdgeUtils;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 
@@ -38,6 +41,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public static int DEBUG = 0;
   public static boolean GF_DEBUG = false;
   public static boolean NA_DEBUG = false;
+
+  // Print which edges (on the agenda) are being re-scored on account of other
+  // edges (recently added to the state)
+  public static boolean SHOW_GLOBAL_FEAT_COMMUNICATION = false;
 
   public static final boolean SIMPLE_SPAN_POS_REL = true;
 
@@ -264,8 +271,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
 
     default public void refineByTargets(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats, boolean backoff) {
-      Span ts = target(stateEdge);
-      Span ta = target(agendaEdge);
+      Span ts = EdgeUtils.target(stateEdge);
+      Span ta = EdgeUtils.target(agendaEdge);
       String m = null;
       if (ts != null && ta != null)
         m = "tRel=" + BasicFeatureTemplates.spanPosRel(ts, ta, SIMPLE_SPAN_POS_REL);
@@ -294,13 +301,13 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public String getName() { return "fcPW"; }
     @Override
     public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
-      Span ts = target(stateEdge);
-      Span ta = target(agendaEdge);
+      Span ts = EdgeUtils.target(stateEdge);
+      Span ta = EdgeUtils.target(agendaEdge);
       if (!allowDiffTargets && ts != null && !ts.equals(ta))
         return Collections.emptyList();
 
-      String f1 = frame(stateEdge);
-      String f2 = frame(agendaEdge);
+      String f1 = EdgeUtils.frame(stateEdge);
+      String f2 = EdgeUtils.frame(agendaEdge);
       if (f1 == null || f2 == null)
         return Collections.emptyList();
 
@@ -322,13 +329,13 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public String getName() { return "rcPW"; }
     @Override
     public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
-      Span ts = target(stateEdge);
-      Span ta = target(agendaEdge);
+      Span ts = EdgeUtils.target(stateEdge);
+      Span ta = EdgeUtils.target(agendaEdge);
       if (!allowDiffTargets && ts != null && !ts.equals(ta))
         return Collections.emptyList();
 
-      String r1 = role(stateEdge);
-      String r2 = role(agendaEdge);
+      String r1 = EdgeUtils.role(stateEdge);
+      String r2 = EdgeUtils.role(agendaEdge);
       if (r1 == null || r2 == null)
         return Collections.emptyList();
 
@@ -356,13 +363,13 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public String getName() { return "alPW"; }
     @Override
     public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
-      Span ts = target(stateEdge);
-      Span ta = target(agendaEdge);
+      Span ts = EdgeUtils.target(stateEdge);
+      Span ta = EdgeUtils.target(agendaEdge);
       if (!allowDiffTargets && ts != null && !ts.equals(ta))
         return Collections.emptyList();
 
-      Span s1 = arg(stateEdge);
-      Span s2 = arg(agendaEdge);
+      Span s1 = EdgeUtils.arg(stateEdge);
+      Span s2 = EdgeUtils.arg(agendaEdge);
       if (s1 == null || s2 == null)
         return Collections.emptyList();
 
@@ -418,58 +425,6 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
   };
 
-  public static Span target(HypEdge e) {
-    switch (e.getRelation().getName()) {
-    case "predicate2":
-      return Span.inverseShortString((String) e.getTail(0).getValue());
-    case "argument4":
-      return Span.inverseShortString((String) e.getTail(0).getValue());
-    default:
-      throw new RuntimeException("implement me");
-    }
-  }
-
-  public static String frame(HypEdge e) {
-    switch (e.getRelation().getName()) {
-    case "predicate2":
-    case "srl3":
-    case "argument4":
-      return e.getTail(1).getValue().toString();
-    default:
-      return null;
-    }
-  }
-
-  public static String role(HypEdge e) {
-    switch (e.getRelation().getName()) {
-    case "argument4":
-      // argument4(t,f,s,k)
-      assert e.getNumTails() == 4;
-      return (String) e.getTail(3).getValue();
-    case "srl3":
-      // srl2(t,s)
-      assert e.getNumTails() == 3;
-      return (String) e.getTail(2).getValue();
-    default:
-      return null;
-    }
-  }
-
-  public static Span arg(HypEdge e) {
-    switch (e.getRelation().getName()) {
-    case "argument4":
-      // argument4(t,f,s,k)
-      assert e.getNumTails() == 4;
-      return Span.inverseShortString((String) e.getTail(2).getValue());
-    case "srl2":
-      // srl2(t,s)
-      assert e.getNumTails() == 2;
-      return Span.inverseShortString((String) e.getTail(1).getValue());
-    default:
-      return null;
-    }
-  }
-
   static String shorten(String longFeatureName) {
     String x = longFeatureName;
     x = x.replaceAll("argument4", "a4");
@@ -523,7 +478,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
     public Spany(HypEdge e) {
       this.e = e;
-      this.arg = arg(e);
+      this.arg = EdgeUtils.arg(e);
     }
     public boolean hasSpan() {
       return arg != null || target != null;
@@ -552,15 +507,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
   }
 
-  /**
-   * Compute global argLoc feature for agendaEdge
-   * @param t is the aggregate node
-   * @param stateEdge was the last edge added to the state
-   * @param agendaEdge is the edge on the agenda being re-scored
-   */
-//  private List<Integer> argLocGlobal(HypNode t, LL<HypEdge> stateEdge, HypEdge agendaEdge) {
-  private List<String> argLocGlobal(HypNode t, LL<HypEdge> stateEdge, HypEdge agendaEdge) {
+  private List<String> argLocGlobal(HypNode t, LL<HypEdge> stateEdgesInGroup, HypEdge agendaEdge) {
     events.increment("argLocGlobal");
+
+    // SANITY CHECK: These should all share the same target
+    Span tg = EdgeUtils.target(agendaEdge);
+    assert tg != null;
+    for (LL<HypEdge> cur = stateEdgesInGroup; cur != null; cur = cur.next)
+      assert tg == EdgeUtils.target(cur.item);
 
     // Gather target
     Spany target = new Spany(t);
@@ -577,7 +531,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
     List<Spany> allArgs = new ArrayList<>();
     allArgs.add(maybeArg);
-    for (LL<HypEdge> cur = stateEdge; cur != null; cur = cur.next) {
+    for (LL<HypEdge> cur = stateEdgesInGroup; cur != null; cur = cur.next) {
       Spany arg = new Spany(cur.item);
       if (arg.hasSpan()) {
         allArgs.add(arg);
@@ -592,8 +546,6 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     // Compute the hash of every t-a and a-a relation
     int n = allArgs.size();
-//    long globalFeatWithT = n;
-//    long globalFeatNoT = -(n+1);
     StringBuilder globalFeatSWithT = new StringBuilder("alG1/");
     StringBuilder globalFeatSNoT = new StringBuilder("alG2/");
     Spany aPrev = null;
@@ -604,29 +556,17 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
       Spany a = allArgs.get(i);
       if (aPrev != null) {
-        String x = BasicFeatureTemplates.spanPosRel(aPrev.getSpan(), a.getSpan(), SIMPLE_SPAN_POS_REL);
-//        long x = BasicFeatureTemplates.spanPosRel2(aPrev.getSpan(), a.getSpan()).getProdFeature();
-//        globalFeatWithT = Hash.mix64(globalFeatWithT, x);
+        String x = "AA" + i + "=" + BasicFeatureTemplates.spanPosRel(aPrev.getSpan(), a.getSpan(), SIMPLE_SPAN_POS_REL);
         globalFeatSWithT.append(x);
         globalFeatSWithT.append('-');
       }
-      String x = BasicFeatureTemplates.spanPosRel(target.target, a.getSpan(), SIMPLE_SPAN_POS_REL);
-//      long x = BasicFeatureTemplates.spanPosRel2(target.target, a.getSpan()).getProdFeature();
-//      globalFeatWithT = Hash.mix64(globalFeatWithT, x);
-//      globalFeatNoT = Hash.mix64(globalFeatNoT, x);
+      String x = "TA" + i + "=" + BasicFeatureTemplates.spanPosRel(target.target, a.getSpan(), SIMPLE_SPAN_POS_REL);
       globalFeatSWithT.append(x);
       globalFeatSNoT.append(x);
       aPrev = a;
     }
 
-//    String aeh = agendaEdge.getRelation().getName();
     String aeh = agendaEdge.getTail(refineArgPos).getValue().toString();
-//    int aeh = agendaEdge.getRelation().getName().hashCode();
-//    return Arrays.asList(
-//        (int) globalFeatWithT,
-//        (int) globalFeatNoT,
-//        Hash.mix((int) globalFeatWithT, aeh),
-//        Hash.mix((int) globalFeatNoT, aeh));
     List<String> l = new ArrayList<>(4);
     l.add(globalFeatSWithT.toString());
     l.add(globalFeatSNoT.toString());
@@ -701,16 +641,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     return gs;
   }
 
-  /**
-   * @param affected is an edge on the agenda which needs to be rescored
-   * @param oldScore
-   * @param a
-   * @param srl4Fact
-   * @param t
-   * @param existing
-   * @return
-   */
-  private Adjoints rescoreImmutable(HypEdge affected, Adjoints oldScore, Agenda a, HypEdge srl4Fact, HypNode t, LL<HypEdge> existing) {
+  private Adjoints rescoreImmutable(HypEdge agendaEdge, Adjoints oldScore, Agenda a, HypEdge stateEdge, HypNode t, LL<HypEdge> otherStateEdgesInGroup) {
+    String base = UbertsLearnPipeline.isNilFact(agendaEdge) ? "n" : "s";
 
     // Create new adjoints with local score
     GlobalFactorAdjoints gs;
@@ -719,20 +651,20 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     if (oldScore instanceof GlobalFactorAdjoints) {
       events.increment("rescoreImmutable/oldIsGlobal");
       gsOld = (GlobalFactorAdjoints) oldScore;
-      gs = new GlobalFactorAdjoints(affected, gsOld.getLocalScore(), globalToLocalScale);
+      gs = new GlobalFactorAdjoints(agendaEdge, gsOld.getLocalScore(), globalToLocalScale);
     } else {
       events.increment("rescoreImmutable/oldIsLocal");
       gsOld = null;
-      gs = new GlobalFactorAdjoints(affected, oldScore, globalToLocalScale);
+      gs = new GlobalFactorAdjoints(agendaEdge, oldScore, globalToLocalScale);
     }
 
     if (params.numArgs) {
       events.increment("numArgs");
       String key = "numArgs";
-      String refinement = refineArgPos < 0 ? "na" : (String) affected.getTail(refineArgPos).getValue();
+      String refinement = refineArgPos < 0 ? "na" : (String) agendaEdge.getTail(refineArgPos).getValue();
       long refinementHash = Hash.hash(refinement);
       NumArgAdj adj = this.new NumArgAdj(firesFor, firesForHash, refinement, refinementHash);
-      adj.dbgEdge = affected;
+      adj.dbgEdge = agendaEdge;
       if (gsOld != null) {
         NumArgAdj na = (NumArgAdj) gsOld.getGlobalScore(key);
         adj.setNumCommitted(na.numCommitted + 1);
@@ -742,33 +674,71 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       gs.addToGlobalScore(key, adj);
     }
 
+    String frame = EdgeUtils.frame(agendaEdge);
+    String role = EdgeUtils.role(agendaEdge);
+
     // roleCooc and argLocPairwise
     if (!pairwiseFeaturesFunctions.isEmpty()) {
       String key = "pairwise";
       // Compute new pairwise features
-      PairwiseAdj pa = this.new PairwiseAdj();
+      List<String> fyx = new ArrayList<>();
+      List<String> fx = new ArrayList<>();
+      List<String> fy = Arrays.asList("1", "fk", "k");
+
+      // INTERCEPT
+//      fx.add(base);
+
+//      PairwiseAdj pa = this.new PairwiseAdj();
       for (PairFeat f : pairwiseFeaturesFunctions) {
-//        List<Integer> fxs = f.describe(srl4Fact, e);
-        List<String> fxs = f.describe(f.getName(), srl4Fact, affected);
+        List<String> fxs = f.describe(f.getName() + "/" + base, stateEdge, agendaEdge);
+        for (String foo : fxs) {
+          fx.add(foo);
+          // Do this with strings rather than hash(f(y)) * alph(f(x)) so that
+          // we can look up what weights are.
+          fyx.add(foo);
+          fyx.add(foo + "/" + frame + "-" + role);
+          fyx.add(foo + "/" + role);
+        }
 
         events.increment(f.getName());
         if (fxs.isEmpty())
           events.increment(f.getName() + "/noFire");
 
-        for (String fx : fxs) {
-          fx = shorten(fx);
-          int idx = featureNames.lookupIndex(fx);
-          pa.add(fx, idx);
+//        for (String fx : fxs) {
+//          fx = shorten(fx);
+//          int idx = featureNames.lookupIndex(fx);
+//          pa.add(fx, idx);
+//
+//          if (refineArgPos >= 0 && f.allowRefinement()) {
+//            String ref = agendaEdge.getTail(refineArgPos).getValue().toString();
+//            ref = shorten(ref);
+//            String fx2 = fx + "/" + ref;
+//            int idx2 = featureNames.lookupIndex(fx2);
+//            pa.add(fx2, idx2);
+//          }
+//        }
 
-          if (refineArgPos >= 0 && f.allowRefinement()) {
-            String ref = affected.getTail(refineArgPos).getValue().toString();
-            ref = shorten(ref);
-            String fx2 = fx + "/" + ref;
-            int idx2 = featureNames.lookupIndex(fx2);
-            pa.add(fx2, idx2);
-          }
-        }
       }
+
+//      int[] fxi = new int[fx.size()];
+//      for (int i = 0; i < fxi.length; i++)
+//        fxi[i] = featureNames.lookupIndex(fx.get(i));
+//      int rK = Hash.hash(role);
+//      int rFK = Hash.mix(Hash.hash(frame), rK);
+//      int[] fyx = new int[fxi.length * 3];
+//      for (int i = 0; i < fxi.length; i++) {
+//        fyx[3 * i + 0] = fxi[i];
+//        fyx[3 * i + 1] = Hash.mix(rK, fxi[i]);
+//        fyx[3 * i + 2] = Hash.mix(rFK, fxi[i]);
+//      }
+      int[] fyxi = new int[fyx.size()];
+      for (int i = 0; i < fyxi.length; i++)
+        fyxi[i] = featureNames.lookupIndex(fyx.get(i));
+      boolean reindex = true;
+      Adjoints pa = useAvg ? theta.averageView().score(fyxi, reindex) : theta.score(fyxi, reindex);
+      if (Uberts.LEARN_DEBUG)
+        pa = new DebugFeatureAdj(pa, fy, fx, "GLOBAL: agenda=" + agendaEdge + " state=" + stateEdge);
+
       if (gsOld != null) {
         // Copy over old ones
         // (as if all of these features were computed at this step)
@@ -778,13 +748,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         // Nothing to copy
         gs.addToGlobalScore(key, pa);
       }
+
     }
 
     if (params.argLocGlobal) {
       // Nothing old to copy, just generate new adjoints
       String key = "argLocGlobal";
 //      List<Integer> argLocGF = argLocGlobal(t, existing, e);
-      List<String> argLocGF = argLocGlobal(t, existing, affected);
+      List<String> argLocGF = argLocGlobal(t, otherStateEdgesInGroup, agendaEdge);
       if (!argLocGF.isEmpty()) {
         boolean reindex = true;
         int[] feats = new int[argLocGF.size()];
@@ -810,36 +781,74 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     metaRescore(u, srl4Fact);
   }
 
+  private List<Object> groupKey(HypEdge f) {
+    // (t,k)
+    assert f.getRelation().getName().equals("argument4");
+    List<Object> key = new ArrayList<>(2);
+    key.add(f.getTail(0));
+    key.add(f.getTail(3));
+    return key;
+  }
+
   private TimeMarker tm = new TimeMarker();
-  private void metaRescore(Uberts u, HypEdge srl4Fact) {
+  private void metaRescore(Uberts u, HypEdge stateEdge) {
+    assert !UbertsLearnPipeline.isNilFact(stateEdge);
     nRescore++;
     Agenda a = u.getAgenda();
     Relation firesForR = u.getEdgeType(firesFor);
-    HypNode t = srl4Fact.getTail(aggregateArgPos);
+    HypNode t = stateEdge.getTail(aggregateArgPos);
     Iterable<HypEdge> affected = a.match(aggregateArgPos, firesForR, t);
 
-    LL<HypEdge> existing = null;
+    // NOTE: This should include stateEdge
+    LL<HypEdge> otherStateEdgesInGroup = null;
     if (params.argLocGlobal) {
       State s = u.getState();
-      existing = s.match(aggregateArgPos, firesForR, t);  // for ArgLoc global
+      otherStateEdgesInGroup = s.match(aggregateArgPos, firesForR, t);  // for ArgLoc global
+
+      // Check that stateEdge is in this list (I believe this is called after adding to the state).
+      boolean found = false;
+      for (LL<HypEdge> cur = otherStateEdgesInGroup; cur != null && !found; cur = cur.next)
+        found |= cur.item == stateEdge;
+      if (!found) {
+        throw new RuntimeException("didn't find " + stateEdge + " in " + otherStateEdgesInGroup);
+      }
     }
 
+    List<Object> newEdgeGroupKey = groupKey(stateEdge);
     int n = 0;
-    for (HypEdge e : affected) {
+    for (HypEdge agendaEdge : affected) {
+
+      // TEMPORARY HACK:
+      // Do not allow global features to signal between facts in the same group
+      List<Object> affEdgeGroupKey = groupKey(agendaEdge);
+      if (newEdgeGroupKey.equals(affEdgeGroupKey)) {
+        continue;
+      }
+
+      if (UbertsLearnPipeline.isNilFact(agendaEdge)) {
+        // Do not re-score e.g. nullSpan arg4 facts.
+        // They are basically an intercept. Rescore everything else, keep intercept the same.
+        continue;
+      }
+
+      if (SHOW_GLOBAL_FEAT_COMMUNICATION || Uberts.LEARN_DEBUG) {
+        System.out.println("[Global rescore] " + agendaEdge + " is going to be re-scored according to " + stateEdge);
+      }
+
       nEdgeRescore++;
       n++;
-      Adjoints oldScore = a.getScore(e);
-      a.remove(e);
+      Adjoints oldScore = a.getScore(agendaEdge);
+      a.remove(agendaEdge);
       Adjoints newScore;
       if (IMMUTABLE_FACTORS)
-        newScore = rescoreImmutable(e, oldScore, a, srl4Fact, t, existing);
+        newScore = rescoreImmutable(agendaEdge, oldScore, a, stateEdge, t, otherStateEdgesInGroup);
       else
-        newScore = rescoreMutable(e, oldScore, a, srl4Fact, t, affected, existing);
+        newScore = rescoreMutable(agendaEdge, oldScore, a, stateEdge, t, affected, otherStateEdgesInGroup);
       if (DEBUG > 1) {
-        System.out.println("IMMUTABLE_FACTORS=" + IMMUTABLE_FACTORS + " e=" + srl4Fact + " newScore=" + newScore + " oldScore=" + oldScore);
+        System.out.println("IMMUTABLE_FACTORS=" + IMMUTABLE_FACTORS + " e=" + stateEdge + " newScore=" + newScore + " oldScore=" + oldScore);
       }
-      a.add(e, newScore);
-      if (GF_DEBUG && new HashableHypEdge(e).hashCode() % 20 == 0) {
+      a.add(agendaEdge, newScore);
+      if (GF_DEBUG && new HashableHypEdge(agendaEdge).hashCode() % 20 == 0) {
         System.out.println("[rescore] GF_DEBUG " + toString());
       }
     }
@@ -877,9 +886,13 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public void maybeDumpDictionary(ExperimentProperties config) {
     String where = config.getString("globalFeatDumpDictionaryDir", "");
     if (!where.isEmpty()) {
+      File wh = new File(where);
+      assert !wh.isFile();
+      if (!wh.isDirectory())
+        wh.mkdirs();
       String name = firesFor + "_" + aggregateArgPos + "_" + refineArgPos;
       name += params.toString(false);
-      File f = new File(where, name + ".alphabet.txt.gz");
+      File f = new File(wh, name + ".alphabet.txt.gz");
       Log.info("writing to " + f.getPath());
       try (BufferedWriter w = FileUtil.getWriter(f)) {
         int n = featureNames.size();
