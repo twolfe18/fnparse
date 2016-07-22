@@ -68,6 +68,10 @@ public abstract class UbertsPipeline {
   public boolean debug = false;
   public MultiTimer timer;
 
+  // Any fact which HypEdge.WithProps.IS_Y and matches a Relation in this list
+  // will be added to the state as a part of setup.
+  public Set<String> oracleRelations;
+
   /**
    * @param u
    * @param grammarFile should be type-able from relation defs
@@ -125,6 +129,16 @@ public abstract class UbertsPipeline {
     for (Rule untypedRule : Rule.parseRules(grammarFile, null))
       typeInf.add(untypedRule);
 
+    ExperimentProperties config = ExperimentProperties.getInstance();
+
+    // Oracle relations
+    String[] oracleRels = config.getStrings("oracleRelations", new String[] {});
+    this.oracleRelations = new HashSet<>();
+    for (String r : oracleRels) {
+      Log.info("[main] oracleRelation: " + r);
+      this.oracleRelations.add(r);
+    }
+
     List<Rule> typedRules = typeInf.runTypeInference();
     List<Rule> temp = new ArrayList<>();
     for (Rule typedRule : typedRules) {
@@ -140,8 +154,6 @@ public abstract class UbertsPipeline {
 
     for (Rule typedRule : typedRules)
       addRule(typedRule);
-
-    ExperimentProperties config = ExperimentProperties.getInstance();
 
     // TODO Re-visit whether this is necessary, what the correct value should be
     double lhsInRhsScoreScale = config.getDouble("lhsInRhsScoreScale", 0);
@@ -192,14 +204,15 @@ public abstract class UbertsPipeline {
     Log.info("finished with " + dataName);
   }
 
-  private void addRule(Rule r) {
+  protected void addRule(Rule r) {
     assert r.rhs.rel != null;
     assert r.rhs.allArgsAreTyped();
     for (Term lt : r.lhs)
       assert lt.allArgsAreTyped();
     rules.add(r);
     LocalFactor phi = getScoreFor(r);
-    u.addTransitionGenerator(r, phi);
+    boolean pruneFactsWithNullScore = oracleRelations.contains(r.rhs.relName);
+    u.addTransitionGenerator(r, phi, pruneFactsWithNullScore);
   }
 
   public void addRelData(File xyValuesFile) throws IOException {
@@ -261,6 +274,7 @@ public abstract class UbertsPipeline {
     assert !doc.facts.isEmpty() : "facts: " + doc.facts;
 
     // Add all labels first
+    List<HypEdge.WithProps> oracleEdges = new ArrayList<>();
     for (HypEdge.WithProps fact : doc.facts) {
       if (fact.hasProperty(HypEdge.IS_Y)) {
         if (debug)
@@ -268,6 +282,8 @@ public abstract class UbertsPipeline {
         if (this.debug && fact.hasProperty(HypEdge.IS_DERIVED))
           System.out.println("derived label: " + fact);
         u.addLabel(fact);
+        if (oracleRelations.contains(fact.getRelation().getName()))
+          oracleEdges.add(fact);
         cy++;
       }
     }
@@ -291,6 +307,18 @@ public abstract class UbertsPipeline {
     // Up to this, most actions will be blocked.
     HypEdge d = u.makeEdge(false /* isSchema */, doneAnnoRel, docidN);
     u.addEdgeToState(d, Adjoints.Constant.ZERO);
+
+    // Build fnparse.Sentence index of the annotations already read in.
+    // This needs to go before adding any oracle edges since they may trigger
+    // edges to be added to the agenda which require the Sentence to be around
+    // for computing features.
+    buildSentenceCacheInUberts();
+
+    // Add the oracle edges
+    for (HypEdge.WithProps f : oracleEdges) {
+//      Log.info("oracleRelationGimme: " + f);
+      u.addEdgeToState(f, Adjoints.Constant.ZERO);
+    }
 
     if (this.debug)
       Log.info("done setup on " + docid);
