@@ -209,7 +209,7 @@ public class AgendaTests {
           Relation r = new Relation("test", col);
           NodeType rNT = new NodeType("witness-" + r.getName());
           DumbAgenda comp = new DumbAgenda();
-          Agenda agenda = new Agenda((edge, score) -> score.forwards());
+          Agenda agenda = new Agenda((edge, score) -> score.forwards(), null);
           for (int i = 0; i < K; i++) {
             HypNode[] tail = new HypNode[] { new HypNode(col, i) };
             HypNode head = new HypNode(rNT, r.encodeTail(tail));
@@ -270,9 +270,9 @@ public class AgendaTests {
   }
 
   public void test1Helper(int K) {
-    Uberts u = new Uberts(rand, (edge, score) -> score.forwards());
+    Uberts u = new Uberts(rand, (edge, score) -> score.forwards(), null);
 
-    Agenda agenda = new Agenda((edge, score) -> score.forwards());
+    Agenda agenda = new Agenda((edge, score) -> score.forwards(), null);
     DumbAgenda dumb = new DumbAgenda();
 
     NodeType col1 = u.lookupNodeType("col1", true);
