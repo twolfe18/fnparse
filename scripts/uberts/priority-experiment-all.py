@@ -150,7 +150,7 @@ if __name__ == '__main__':
         name += '.l2r' if l2r else '.bf'
         name += '.global' if gl_frames else '.local'
 
-        gf_str = 'preicate2/t+frameCooc' if gl_frames else ''
+        gf_str = 'predicate2/t+frameCooc' if gl_frames else ''
 
         param_io = 'predicate2+learn+write:' \
           + os.path.join(model_dir, name + '.jser.gz')
