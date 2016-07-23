@@ -128,6 +128,35 @@ MINI_TRAIN_SIZE=6000
 
 #agendaPriority "$PRIORITY" \
 
+echo -e "java -cp $JAR_STABLE -ea -server -Xmx10G
+  edu.jhu.hlt.uberts.auto.UbertsLearnPipeline
+    data.embeddings $FNPARSE_DATA/embeddings
+    data.wordnet $FNPARSE_DATA/wordnet/dict
+    data.propbank.frames $FNPARSE_DATA/ontonotes-release-5.0-fixed-frames/frames
+    pred2arg.feat.paths $FNPARSE_DATA/pred2arg-paths/propbank.txt
+    rolePathCounts $FNPARSE_DATA/pred2arg-paths/propbank.byRole.txt
+    miniDevSize $MINI_DEV_SIZE
+    trainSegSize $MINI_TRAIN_SIZE
+    passes 3
+    trainTimeLimitMinutes 0
+    skipSrlFilterStages true
+    train.facts $TF
+    dev.facts $RD/srl.dev.shuf.facts.gz
+    test.facts $RD/srl.test.facts.gz
+    grammar $GRAMMAR
+    agendaComparator $AGENDA_COMPARATOR
+    trainMethod $TRAIN_METHOD
+    relations $RD/relations.def
+    schema $SCHEMA
+    oracleFeaturess $ORACLE_RELATIONS
+    oracleRelations $ORACLE_RELATIONS
+    byGroupDecoder $BY_GROUP_DECODER
+    globalFeats $GLOBAL_FEATS
+    parameterIO $PARAM_IO
+    featureSetDir $FEATURE_SET_DIR
+    debugLearn true
+    predictions.outputDir $PREDICTIONS_DIR"
+
 java -cp $JAR_STABLE -ea -server -Xmx10G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
     data.embeddings $FNPARSE_DATA/embeddings \
@@ -148,11 +177,13 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     trainMethod $TRAIN_METHOD \
     relations $RD/relations.def \
     schema "$SCHEMA" \
-    oracleFeats "$ORACLE_RELATIONS" \
+    oracleFeaturess "$ORACLE_RELATIONS" \
+    oracleRelations "$ORACLE_RELATIONS" \
     byGroupDecoder "$BY_GROUP_DECODER" \
     globalFeats "$GLOBAL_FEATS" \
     parameterIO "$PARAM_IO" \
     featureSetDir $FEATURE_SET_DIR \
+    debugLearn true \
     predictions.outputDir $PREDICTIONS_DIR
 
 echo "done at `date`, ret code $?"

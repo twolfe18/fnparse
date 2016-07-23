@@ -147,7 +147,8 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     relations $RD/relations.def \
     schema "$SCHEMA" \
     dontLearnRelations "event1,predicate2" \
-    oracleFeats "$ORACLE_FEATS" \
+    oracleFeatures "$ORACLE_FEATS" \
+    oracleRelations "$ORACLE_FEATS" \
     byGroupDecoder "$BY_GROUP_DECODER" \
     agendaPriority "$PRIORITY" \
     parameterIO "$PARAM_IO" \

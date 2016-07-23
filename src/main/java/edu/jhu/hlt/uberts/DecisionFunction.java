@@ -453,14 +453,6 @@ public interface DecisionFunction {
               + parts[i+1] + " in term " + t);
         }
       }
-
-      // Try to verify that there is an easyFirst term in the agendaPriority.
-      ExperimentProperties config = ExperimentProperties.getInstance();
-      assert config.getString("agendaPriority").toLowerCase().contains("easyfirst")
-          || config.getString("agendaPriority").toLowerCase().contains("bestfirst")
-          || config.getBoolean("ignoreByGroupErrMsg", false)
-          : "You must include an easyFirst term in agendaPriority to at least break ties if you want to use this class";
-
       u.addNewStateEdgeListener(this);
     }
 

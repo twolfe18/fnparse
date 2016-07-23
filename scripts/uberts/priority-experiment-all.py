@@ -5,10 +5,10 @@ def single_global_feature_configs():
   d = {}
   d['+numArgs'] = ['@F', '@F_1']
   d['+argLocGlobal'] = d['+argLocPairwise'] = ['@F', '@F_1', '@FK', '@FK_1', '@K', '@K_F']
-  d['+roleCooc'] = ['@1', '@F', '@F_1']
+  d['+roleCooc'] = ['@CONST', '@F', '@F_1']
   for gf, refs in d.iteritems():
     for r in refs:
-      yield gf + r
+      yield 'argument4/t' + gf + r
 
 small = 0.001
 def weights():
@@ -191,6 +191,12 @@ if __name__ == '__main__':
     for gf_str in single_global_feature_configs():
       name = 'gfRefs.argment4'
       name += '.' + gf_str.replace('/', '_')
+      name = name.replace('@', '-AT-')
+      name = name.replace('+', '-PLUS-')
+
+      # gf_str contains a +
+      # gf_str ~ '+numArgs@F'
+      # param_io cannot
 
       param_io = 'argument4+learn+write:' \
         + os.path.join(model_dir, name + '.jser.gz')

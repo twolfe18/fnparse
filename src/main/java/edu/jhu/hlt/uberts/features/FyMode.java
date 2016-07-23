@@ -6,6 +6,13 @@ import edu.jhu.hlt.uberts.srl.EdgeUtils;
 public enum FyMode {
   // just use null
 //  NONE { String[] f(HypEdge e) { return new String[] {}; } },
+  CONST { public String[] f(HypEdge e) { return new String[] {
+      "const",
+  }; } },
+  K_F { public String[] f(HypEdge e) { return new String[] {
+      EdgeUtils.role(e),
+      EdgeUtils.frame(e),
+  }; } },
   K_F_1 { public String[] f(HypEdge e) { return new String[] {
       EdgeUtils.role(e),
       EdgeUtils.frame(e),
