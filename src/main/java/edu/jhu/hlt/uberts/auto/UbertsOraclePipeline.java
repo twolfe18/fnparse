@@ -46,7 +46,6 @@ public class UbertsOraclePipeline extends UbertsPipeline {
   @Override
   public void consume(RelDoc doc) {
     assert !(train && predict);
-    Log.info("non-schema (hidden and observed) relations: " + u.getLabels().getLabeledRelationNames());
     List<Step> traj;
     if (predict) {
 //      Uberts.DEBUG = true;

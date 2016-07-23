@@ -49,7 +49,10 @@ fi
 # This should be a string of the form "weight * priorityFuncName + ..."
 # e.g. "1 * easyFirst + 1 + dfs"
 # see AgendaPriority.java for a list of all legal values.
-PRIORITY=$4
+#PRIORITY=$4
+# Comparators defined in edu.jhu.hlt.uberts.AgendaComparators separated by commas,
+# e.g. "BY_RELATION,BY_TARGET,BY_FRAME,BY_ROLE,BY_SCORE"
+AGENDA_COMPARATOR=$4
 
 # Comma-separated list of relations which should be predicted correctly
 # by the oracle, at train and test time.
@@ -123,6 +126,7 @@ SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/c
 MINI_DEV_SIZE=300
 MINI_TRAIN_SIZE=6000
 
+#agendaPriority "$PRIORITY" \
 
 java -cp $JAR_STABLE -ea -server -Xmx10G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
@@ -140,12 +144,12 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     dev.facts $RD/srl.dev.shuf.facts.gz \
     test.facts $RD/srl.test.facts.gz \
     grammar $GRAMMAR \
+    agendaComparator $AGENDA_COMPARATOR \
     trainMethod $TRAIN_METHOD \
     relations $RD/relations.def \
     schema "$SCHEMA" \
     oracleFeats "$ORACLE_RELATIONS" \
     byGroupDecoder "$BY_GROUP_DECODER" \
-    agendaPriority "$PRIORITY" \
     globalFeats "$GLOBAL_FEATS" \
     parameterIO "$PARAM_IO" \
     featureSetDir $FEATURE_SET_DIR \

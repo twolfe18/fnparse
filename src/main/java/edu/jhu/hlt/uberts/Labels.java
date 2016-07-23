@@ -7,148 +7,83 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 
 /**
  * Holds a set of labels. Has some extra functionality like the inner Perf class
  * which can report {@link FPR} by {@link Relation}.
  *
- * This class stores a set of true facts and uses that set to determine the
- * cost of facts/actions. In previous work I went deep into how to compute the
- * hamming loss for pruning action, and it has reared its ugly head here too.
- * Facts with NIL arguments are secretly pruning actions.
- *   F(a0,...,a_{i-1},NIL,...,a_n) => !F(a0,...,a_{i=1},x,...,a_n) \forall x
- * This is implicit. Explicitly, the NIL fact is just stored in the State.
- * The implication is only enforced by an AtMost1/AtLeast1 factor.
- * NIL is an agent of AtMost1/AtLeast1, it is not used otherwise.
- * This class participates in this conspiracy by computing the COST assuming
- * there is an AtMost1/AtLeast1 constraint, event if it doesn't see it (only the NIL).
+ * A fact is either a "nil fact" or not. Nil facts are used to give a score for
+ * something that is immaterial, like p(some set of facts are false). This class
+ * keeps track of nil and non-nil facts separately, and you have to specify
+ * whether facts are nil or not.
  *
- * We do not compute "downstream cost". For example, if our grammar has
- * R1(x) => R2(x,y) and R2(x,y) => R3(x,y,z), we estimate the COST of R2(x,NIL)
- * by looking at the number of (back-propped) gold R2 facts which are missed
- * by this, and don't include any possible R3 facts which are now not reachable.
+ * This class doesn't care about mutual exclusion between nil facts and non-nil
+ * facts. They are just two different types of facts for these purporses.
+ *
+ * The non-static inner class {@link Perf} can measure {@link FPR} of predicted
+ * facts added to to it against the gold facts contained in {@link Labels}.
+ * By default this measurement ignores nil facts.
  *
  * @author travis
  */
 public class Labels {
 
   /**
-   * NIL facts are not needed and they make things more complex.
-   * The point was to have a dynamic score for "no fact applies" which can
-   * condition on everything in the fact but the NIL argument. There is nothing
-   * from letting you do this in the scoring function like:
-   *   theta * [ f(argument4(t,f,s,k)) - f(argument4(t,f,NIL,k) ]
-   * And use the decision function score(fact) > 0. This way you get the dynamic
-   * intercept features (second f term) but you don't need to handle NIL facts
-   * specially (they don't exist, except for in halucinations (backoff features)
-   * in the feature function).
+   * This is a temporary measure until HypEdges are either endowed with a boolean
+   * for whether they are nil facts or until I add a nilFact:boolean argument
+   * to every method which takes a HypEdge.
    */
-  public static boolean NO_NIL_FACTS = true;
-
-  // NO means costly/lossy, YES means cost=0
-  public static enum Lossless {
-    NO,
-    YES,
-//    YES_NULL_SPAN,    // prediction=true and prediction is a nullSpan argument4
-    NO_NIL,
-    YES_NIL,
-  }
-
-  static final String NULL_SPAN = "0-0";
-//  static final Object NIL = "NIL";  // TODO
-
-  /**
-   * Returns a bit mask (set) of tail/argument positions which are NIL
-   */
-  public static int getNilArgPosMask(HypEdge e) {
-    if (NO_NIL_FACTS)
-      return 0;
-    int nilArgPos = 0;
-    int n = e.getNumTails();
-    assert n < 32;
-    for (int i = 0; i < n; i++) {
-//      if (e.getTail(i).getValue() == NIL) {
-      // TODO use NIL everywhere, maybe need first class Rule support
-      if (NULL_SPAN.equals(e.getTail(i).getValue())) {
-        nilArgPos |= 1<<i;
-      }
+  public static boolean isNilFact(HypEdge e) {
+    if ("argument4".equals(e.getRelation().getName())) {
+      String s = (String) e.getTail(2).getValue();
+      return Span.nullSpan.shortString().equals(s);
     }
-    return nilArgPos;
-  }
-
-  /**
-   * Presupposing this is a NIL valued fact (in every position denoted by the
-   * bit mask nilArgPosMask), returns true if this rules out at least one other
-   * gold fact (assuming an AtMost1/Exactly1 factor is in play).
-   *
-   * This is implemented by finding some fact f which has the same relation as e
-   * AND matches all of the bindings other than the NIL argument. If this fact
-   * f can be found, then we return true (this NIL fact forces a FN).
-   */
-  public boolean nilFN(HypEdge e, int nilArgPosMask) {
-    assert nilArgPosMask > 0;
-    // Check all god facts which match every binding but NIL,
-    // if we find one then that is a proof of a FN.
-    Set<HashableHypEdge> related = edges2.get(e.getRelation());
-    if (related != null)
-      for (HashableHypEdge f : related)
-        if (bindingsMatch(f.getEdge(), e, nilArgPosMask))
-          return true;
     return false;
   }
 
-  /**
-   * Presupposing f and e are facts of the same type/relation, return true if
-   * they have same arguments in every position except nilArgPos.
-   */
-  public static boolean bindingsMatch(HypEdge f, HypEdge e, int nilArgPosMask) {
-    assert f.getRelation() == e.getRelation();
-    int n = f.getNumTails();
-    assert n < 32;
-    for (int i = 0; i < n; i++) {
-      if (((1<<i) & nilArgPosMask) != 0)
-        continue;
-      Object v1 = f.getTail(i).getValue();
-      Object v2 = e.getTail(i).getValue();
-      if (!v1.equals(v2))
-        return false;
-    }
-    return true;
-  }
-
-//  private Uberts u;
-  private Set<HashableHypEdge> edges;
-  private Counts<String> relationCounts;
+  // These two sets don't intersect.
+  private Set<HashableHypEdge> edges;     // gold facts
+  private Set<HashableHypEdge> edgesNil;  // gold facts which are "nil facts", e.g. argument4(t,f,0-0,k)
 
   // Stratify by relation
   private Map<Relation, Set<HashableHypEdge>> edges2;
+  private Map<Relation, Set<HashableHypEdge>> edgesNil2;
 
   public Labels(Uberts u) {
-//    this.u = u;
     edges = new HashSet<>();
-    relationCounts = new Counts<>();
+    edgesNil = new HashSet<>();
     edges2 = new HashMap<>();
+    edgesNil2 = new HashMap<>();
   }
 
   public void add(HypEdge e) {
     add(new HashableHypEdge(e));
   }
   public void add(HashableHypEdge e) {
-    boolean added = edges.add(e);
+    Set<HashableHypEdge> es;
+    Map<Relation, Set<HashableHypEdge>> em;
+    if (isNilFact(e.getEdge())) {
+      es = edgesNil;
+      em = edgesNil2;
+    } else {
+      es = edges;
+      em = edges2;
+    }
+
+    boolean added = es.add(e);
     assert added;
-    relationCounts.increment(e.getEdge().getRelation().getName());
 
     Relation key = e.getEdge().getRelation();
-    Set<HashableHypEdge> s = edges2.get(key);
+    Set<HashableHypEdge> s = em.get(key);
     if (s == null) {
       s = new HashSet<>();
-      edges2.put(key, s);
+      em.put(key, s);
     }
     s.add(e);
   }
@@ -163,86 +98,35 @@ public class Labels {
    * non-NIL-value-containing gold edge.
    */
   public boolean getLabel(HashableHypEdge e) {
-    Lossless y = lossless(e);
-//    if (y == Lossless.NO_NIL)
-//      System.currentTimeMillis();
-    return y == Lossless.YES || y == Lossless.YES_NIL;
-  }
-
-  public Lossless lossless(HashableHypEdge e) {
-    int nilArgPosMask = getNilArgPosMask(e.getEdge());
-    if (nilArgPosMask == 0)
-      return edges.contains(e) ? Lossless.YES : Lossless.NO;
-    return nilFN(e.getEdge(), nilArgPosMask) ? Lossless.NO_NIL : Lossless.YES_NIL;
+    if (isNilFact(e.getEdge()))
+      return edgesNil.contains(e);
+    return edges.contains(e);
   }
 
   public void clear() {
     edges.clear();
-    relationCounts.clear();
+    edgesNil.clear();
+    edges2.clear();
+    edgesNil2.clear();
   }
 
-  public Counts<String> getRelCounts() {
-    return relationCounts;
-  }
-
-  public int getRelCount(String relName) {
-    return relationCounts.getCount(relName);
-  }
-
-  /**
-   * All the relation names which have gold/label facts.
-   */
-  public List<String> getLabeledRelationNames() {
-    List<String> r = new ArrayList<>();
-    for (Relation rel : edges2.keySet())
-      r.add(rel.getName());
-    Collections.sort(r);
-    return r;
-  }
-  /**
-   * All the relation names which have gold/label facts.
-   */
-  public List<Relation> getLabeledRelation() {
-    List<Relation> r = new ArrayList<>(edges2.keySet());
-    Collections.sort(r, Relation.BY_NAME);
-    return r;
-  }
-
-  public List<HypEdge> getGoldEdges() {
+  public List<HypEdge> getGoldEdges(boolean includeNilFacts) {
     List<HypEdge> all = new ArrayList<>();
     for (HashableHypEdge hhe : edges)
       all.add(hhe.getEdge());
+    if (includeNilFacts) {
+      for (HashableHypEdge hhe : edgesNil)
+        all.add(hhe.getEdge());
+    }
     Collections.sort(all, HypEdge.BY_RELATION_THEN_TAIL);
     return all;
   }
 
-  public Collection<HashableHypEdge> getGoldEdges(Relation r) {
-    Collection<HashableHypEdge> c = edges2.get(r);
-    return c == null ? Collections.emptyList() : c;
-  }
-
-  public static <T> Map<T, FPR> combinePerfByRel(Map<T, FPR> a, Map<T, FPR> b) {
-    Map<T, FPR> c = new HashMap<>();
-    // c += a
-    for (Entry<T, FPR> x : a.entrySet()) {
-      FPR aa = x.getValue();
-      FPR cc = c.get(x.getKey());
-      if (cc == null) {
-        cc = new FPR();
-        c.put(x.getKey(), cc);
-      }
-      cc.accum(aa);
-    }
-    // c += b
-    for (Entry<T, FPR> x : b.entrySet()) {
-      FPR bb = x.getValue();
-      FPR cc = c.get(x.getKey());
-      if (cc == null) {
-        cc = new FPR();
-        c.put(x.getKey(), cc);
-      }
-      cc.accum(bb);
-    }
+  public Collection<HashableHypEdge> getGoldEdges(Relation r, boolean includeNilFacts) {
+    Collection<HashableHypEdge> c = new ArrayList<>();
+    c.addAll(edges2.getOrDefault(r, Collections.emptySet()));
+    if (includeNilFacts)
+      c.addAll(edgesNil2.getOrDefault(r, Collections.emptySet()));
     return c;
   }
 
@@ -265,63 +149,41 @@ public class Labels {
     return lines;
   }
 
-  /** You add predicted edges to this and it tracks precision, recall, F1 */
+  /**
+   * You add predicted edges to this and it tracks precision, recall, F1.
+   *
+   * Any nil facts added to this are ignored, and {@link FPR} numbers are computed
+   * with respect to non-nil facts.
+   */
   public class Perf {
-    Set<HashableHypEdge> seen = new HashSet<>();
-    public List<HypEdge> tpInstances = new ArrayList<>();
-
-    // You only need to keep track of non-NIL facts.
-    // Gold facts are always non-NIL and we don't want to evaluate against
-    // NIL facts, whose semantics has more to do with pruning than predictions.
-    int tp = 0, fp = 0;
-
-//    // split predictions by nullSpan vs realSpan, gold does not contain any nullSpan edges
-//    int tpNullSpan = 0, fpNullSpan = 0;
-
+    Set<HashableHypEdge> seen;
+    public List<HypEdge> tpInstances;
+    int tp, fp;
     Counts<Relation> tpByRel, fpByRel;
-//    Counts<Relation> tpByRelNS; // FPs for nullSpan are not counted against
 
     public Perf() {
+      tp = fp = 0;
+      seen = new HashSet<>();
+      tpInstances = new ArrayList<>();
       tpByRel = new Counts<>();
       fpByRel = new Counts<>();
-//      tpByRelNS = new Counts<>();
     }
 
     public void add(HypEdge e) {
+      if (isNilFact(e))
+        return;
+      // Set semantics: adding an edge twice doesn't change the performance.
       HashableHypEdge he = new HashableHypEdge(e);
-      if (e.getRelation().getName().startsWith("srl")
-          || e.getRelation().getName().startsWith("argument")) {
-        System.currentTimeMillis();
-      }
-      assert seen.add(he);
-      Lossless y = lossless(he);
-      switch (y) {
-      case NO:
-        fp++;
-        fpByRel.increment(e.getRelation());
-        break;
-      case YES:
-        tp++;
-        tpByRel.increment(e.getRelation());
+      if (seen.add(he)) {
         tpInstances.add(e);
-        break;
-      default:
-        // We can ignore NIL-facts (pruning actions)
-        break;
+        if (edges.contains(he)) {
+          tp++;
+          tpByRel.increment(e.getRelation());
+        } else {
+          fp++;
+          fpByRel.increment(e.getRelation());
+        }
       }
-//      if (contains(he)) {
-//        if (seen.add(he)) {
-//          tp++;
-//          tpByRel.increment(e.getRelation());
-//        }
-//        return true;
-//      } else {
-//        if (seen.add(he)) {
-//          fp++;
-//          fpByRel.increment(e.getRelation());
-//        }
-//        return false;
-//      }
     }
 
     public Map<String, FPR> perfByRel() {

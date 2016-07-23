@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -34,8 +35,8 @@ public class Agenda {
     private HashableHypEdge hashableEdge;
 
     public AgendaItem(HashableHypEdge edge, Adjoints score, double priority) {
-      assert Double.isFinite(priority) : "priority=" + priority;
-      assert !Double.isNaN(priority) : "priority=" + priority;
+//      assert Double.isFinite(priority) : "priority=" + priority;
+//      assert !Double.isNaN(priority) : "priority=" + priority;
       this.edge = edge.getEdge();
       this.hashableEdge = edge;
       this.score = Adjoints.cacheIfNeeded(score);
@@ -62,6 +63,7 @@ public class Agenda {
 
     @Override
     public int compareTo(AgendaItem o) {
+      assert false : "use comparator instead!";
       if (priority < o.priority) return -1;
       if (priority > o.priority) return +1;
       return 0;
@@ -108,7 +110,17 @@ public class Agenda {
   private Map<State.ArgVal, LinkedHashSet<HypEdge>> fineView;
 
   // Priority function
+  // This is problematic. Sometimes you need one way of sorting to completely
+  // overwhelm another, and this gets hard to gaurantee by packing all this
+  // information into 64 bits (non-uniform spacing is the problem).
   private BiFunction<HypEdge, Adjoints, Double> priority;
+  // The solution is to use a comparison-based method for ordering the agenda.
+  // Earlier I had worried that I could create conflicts (transitivity violations)
+  // by combining Comparators, but this can be done safely in at least one way:
+  // sequential ordering (if (cmp1 != 0) return cmp1; else if (cmp2 != 0) ...)
+  // This is like having a base 3 number where each comparator specifies the digit
+  // in a particular position of the number.
+  private Comparator<AgendaItem> comparator;
 
   // This operation applies every time you push an edge.
   // If you push when rescoreMode != NONE, and exception is thrown.
@@ -122,7 +134,7 @@ public class Agenda {
     this.labels = y;
   }
 
-  public Agenda(BiFunction<HypEdge, Adjoints, Double> priority) {
+  public Agenda(BiFunction<HypEdge, Adjoints, Double> priority, Comparator<AgendaItem> comparator) {
     this.top = 0;
     int initSize = 16;
     this.heap = new AgendaItem[initSize];
@@ -131,10 +143,12 @@ public class Agenda {
     this.fineView = new HashMap<>();
     this.priority = priority;
     this.uniq = new HashSet<>();
+    this.comparator = comparator;
+    assert (priority != null) || (comparator != null);
   }
 
   public Agenda duplicate() {
-    Agenda c = new Agenda(priority);
+    Agenda c = new Agenda(priority, comparator);
     c.heap = Arrays.copyOf(heap, heap.length);
     c.top = top;
     c.n2ei.putAll(n2ei);
@@ -315,7 +329,10 @@ public class Agenda {
     if (i == top)
       return true;
     int parent = (i - 1) >>> 1;
-    return heap[parent].compareTo(heap[i]) >= 0;
+//    return heap[parent].compareTo(heap[i]) >= 0;
+    if (priority != null)
+      return heap[parent].priority >= heap[i].priority;
+    return comparator.compare(heap[parent], heap[i]) <= 0;
   }
 
   public void add(HypEdge edge, Adjoints score) {
@@ -361,7 +378,7 @@ public class Agenda {
     assert a : "duplicate?: " + edge;
     HypEdge e = edge.getEdge();
     addEdgeToFineView(e);
-    double p = priority.apply(e, score);
+    double p = priority == null ? Double.NaN : priority.apply(e, score);
 
     if (DEBUG)
       Log.info("adding " + edge.getEdge() + " priority=" + p + " score=" + score);
@@ -430,6 +447,13 @@ public class Agenda {
   }
 
   public void siftDown(int i) {
+    assert (priority == null) != (comparator == null);
+    if (priority != null)
+      siftDownOldUsingPriority(i);
+    else
+      siftDownUsingComparator(i);
+  }
+  private void siftDownOldUsingPriority(int i) {
     if (i >= top)
       return;
     double sc = heap[i].priority;
@@ -441,18 +465,56 @@ public class Agenda {
       return;
     if (lcScore > rcScore) {
       swap(i, lc);
-      siftDown(lc);
+      siftDownOldUsingPriority(lc);
     } else {
       swap(i, rc);
-      siftDown(rc);
+      siftDownOldUsingPriority(rc);
+    }
+  }
+  private void siftDownUsingComparator(int i) {
+    if (i >= top)
+      return;
+    int lc = (i << 1) + 1;
+    int rc = lc + 1;
+    int i2lc = lc < top ? comparator.compare(heap[i], heap[lc]) : 0;
+    int i2rc = rc < top ? comparator.compare(heap[i], heap[rc]) : 0;
+    if (i2lc <= 0 && i2rc <= 0)
+      return;
+    if (lc < top && rc < top && comparator.compare(heap[lc], heap[rc]) < 0) {
+      swap(i, lc);
+      siftDownUsingComparator(lc);
+    } else if (rc < top) {
+      swap(i, rc);
+      siftDownUsingComparator(rc);
+    } else {
+      swap(i, lc);
+      siftDownUsingComparator(lc);
     }
   }
 
   public void siftUp(int i) {
+    assert (priority == null) != (comparator == null);
+    if (priority != null)
+      siftUpUsingPriority(i);
+    else
+      siftUpUsingComparator(i);
+  }
+  private void siftUpUsingPriority(int i) {
     assert i < top && i >= 0;
     while (i > 0) {
       int parent = (i - 1) >>> 1;
       if (heap[parent].compareTo(heap[i]) > 0)
+        break;
+      swap(i, parent);
+      i = parent;
+    }
+  }
+  private void siftUpUsingComparator(int i) {
+    assert i < top && i >= 0;
+    while (i > 0) {
+      int parent = (i - 1) >>> 1;
+      int p2c = comparator.compare(heap[parent], heap[i]);
+      if (p2c <= 0)
         break;
       swap(i, parent);
       i = parent;

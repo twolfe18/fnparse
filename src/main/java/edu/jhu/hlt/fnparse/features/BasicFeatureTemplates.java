@@ -60,6 +60,11 @@ public class BasicFeatureTemplates {
   }
 
   public static String missingSubj(Sentence s, DependencyParse d, int predicateTokenIndex) {
+    String pos = s.getPos(predicateTokenIndex);
+    if (pos.startsWith("N"))
+      return "nom";
+    if (!pos.startsWith("V"))
+      return "dv";
     int[] ci = d.getChildren(predicateTokenIndex);
     for (int i = 0; i < ci.length; i++) {
       String deprel = d.getLabel(ci[i]);
@@ -106,17 +111,25 @@ public class BasicFeatureTemplates {
   }
 
   public static String spanPosRel(Span s1, Span s2) {
-    return posRel(s1.start, s2.start)
-        + posRel(s1.end-1, s2.end-1)
-        + posRel(s1.start, s2.end-1)
-        + posRel(s1.end-1, s2.start);
+    return spanPosRel(s1, s2, false);
+  }
+
+  public static String spanPosRel(Span s1, Span s2, boolean simple) {
+    return posRel(s1.start, s2.start, simple)
+        + posRel(s1.end-1, s2.end-1, simple)
+        + posRel(s1.start, s2.end-1, simple)
+        + posRel(s1.end-1, s2.start, simple);
   }
 
   public static String posRel(int i, int j) {
+    return posRel(i, j, false);
+  }
+
+  public static String posRel(int i, int j, boolean simple) {
     if (i+1 == j) return "b";
-    if (i+2 == j) return "B";
+    if (i+2 == j && !simple) return "B";
     if (j+1 == i) return "a";
-    if (j+2 == i) return "A";
+    if (j+2 == i && !simple) return "A";
     if (i < j) return "L";
     if (i > j) return "R";
     return "E";
@@ -1539,7 +1552,7 @@ public class BasicFeatureTemplates {
     // Role id
     // http://www.dipanjandas.com/files/acl2014frames.pdf (table 1)
     addTemplate("semafor/argId", new Template() {
-      private boolean bo = true;  // bo = "backoff"
+      boolean bo = true;  // bo = "backoff"
       @Override
       public Iterable<String> extract(TemplateContext context) {
         List<String> feats = new ArrayList<>();
@@ -1556,8 +1569,9 @@ public class BasicFeatureTemplates {
         else
           fr = context.getFrameStr() + "-" + r;
 
-        if (Labels.NO_NIL_FACTS && a == Span.nullSpan)
-          throw new RuntimeException("Labels.NO_NIL_FACTS=true and a nullSpan argument was just provided!");
+        assert p >= 0;
+//        if (Labels.NO_NIL_FACTS && a == Span.nullSpan)
+//          throw new RuntimeException("Labels.NO_NIL_FACTS=true and a nullSpan argument was just provided!");
 
         if (context.debugEdge != null && "argument4".equals(context.debugEdge.getRelation().getName())) {
           Log.info("check this: " + context.debugMessage);
@@ -1577,8 +1591,10 @@ public class BasicFeatureTemplates {
           Log.info("computing features: " + context.debugMessage);
 
         // • a bias feature
-        if (bo) feats.add("bias/NIL");
-        feats.add("bias/" + r);
+        if (bo)
+          feats.add("bias/NIL");
+        if (r != null)
+          feats.add("bias/" + r);
         if (fr != null)
           feats.add("bias/" + fr);
 

@@ -13,7 +13,6 @@ import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
-import edu.jhu.hlt.uberts.factor.AtMost1;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 
@@ -180,10 +179,11 @@ public class UbertsTest {
 //        new TKey(tokenIndex),
     }, true);
     newNerGraphFragment.getValue().u = u;
-    newNerGraphFragment.getValue().gf = new AtMost1.RelNode2(
-        u.getEdgeType("ner"),
-        gtt -> gtt.getBoundNode(1),
-        gtt -> gtt.getBoundNode(2), "span-start", "span-end");  // 2 and not 3 since GOTO_PARENT doesn't bind anything
+    throw new RuntimeException("get AtMost1 back");
+//    newNerGraphFragment.getValue().gf = new AtMost1.RelNode2(
+//        u.getEdgeType("ner"),
+//        gtt -> gtt.getBoundNode(1),
+//        gtt -> gtt.getBoundNode(2), "span-start", "span-end");  // 2 and not 3 since GOTO_PARENT doesn't bind anything
   }
 
   /**

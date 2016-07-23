@@ -19,7 +19,6 @@ import java.util.function.Function;
 
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
@@ -319,7 +318,8 @@ public class Pred2ArgPaths {
 //          assert a4fs != null : "no argument4 facts?";
 //          for (edu.jhu.hlt.tutils.LL<HypEdge> cur = a4fs; cur != null; cur = cur.next)
 //            paths.add(cur.item, sent);
-          Collection<HashableHypEdge> a4fs = u.getLabels().getGoldEdges(a4);
+          boolean includeNilFacts = false;
+          Collection<HashableHypEdge> a4fs = u.getLabels().getGoldEdges(a4, includeNilFacts);
           for (HashableHypEdge he : a4fs)
             paths.add(he.getEdge(), sent);
           u.clearNonSchemaNodes();

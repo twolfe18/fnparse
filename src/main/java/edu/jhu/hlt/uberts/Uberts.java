@@ -15,11 +15,13 @@ import java.util.Random;
 import java.util.function.BiFunction;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
@@ -29,6 +31,7 @@ import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.hlt.uberts.auto.Trigger;
+import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
@@ -36,6 +39,7 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.rules.Env.Trie3;
+import edu.jhu.hlt.uberts.srl.EdgeUtils;
 import edu.jhu.hlt.uberts.transition.TransGen;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
@@ -83,9 +87,6 @@ public class Uberts {
   // if the edge should be added to the state. The default implementation checks
   // whether score(edge) > 0.
   private DecisionFunction.DispatchByRelation thresh;
-//  private DecisionFunction.Cascade thresh =
-//      new DecisionFunction.Cascade(
-//          new DecisionFunction.Unanimous(), DecisionFunction.DEFAULT);
 
   // So you can ask for Relations by name and keep them unique
   private Map<String, Relation> relations;
@@ -119,7 +120,6 @@ public class Uberts {
   // Counts up dErr_dForwards for each edge
   public Map<HashableHypEdge, Double> dbgUpdate = new HashMap<>();
 
-
   // TODO Remove
   // Ancillary data for features which don't look at the State graph.
   // New data backend (used to be fnparse.Sentence and FNParse)
@@ -134,11 +134,6 @@ public class Uberts {
     this.doc = doc;
   }
 
-//  public void prependDecisionFunction(DecisionFunction df) {
-//    Log.info("[main] " + df);
-//    DecisionFunction.Unanimous u = (DecisionFunction.Unanimous) thresh.getCur();
-//    u.add(df);
-//  }
   public DecisionFunction.DispatchByRelation getThresh() {
     return thresh;
   }
@@ -189,12 +184,17 @@ public class Uberts {
   }
 
   public Uberts(Random rand) {
-    this(rand, (edge, score) -> score.forwards());
+    this(rand, (edge, score) -> score.forwards(), null);
   }
-  public Uberts(Random rand, BiFunction<HypEdge, Adjoints, Double> agendaPriority) {
+
+  /**
+   * You can provide a null agenda priority if you call setAgendaPriority soon
+   * after construction.
+   */
+  public Uberts(Random rand, BiFunction<HypEdge, Adjoints, Double> agendaPriority, Comparator<AgendaItem> agendaComparator) {
     this.rand = rand;
     this.relations = new HashMap<>();
-    this.agenda = new Agenda(agendaPriority);
+    this.agenda = new Agenda(agendaPriority, agendaComparator);
     this.state = new State.Split();
     this.trie3 = Trie3.makeRoot();
 
@@ -212,6 +212,13 @@ public class Uberts {
 
     this.timer = new MultiTimer();
     this.timer.put(REC_ORACLE_TRAJ, new Timer(REC_ORACLE_TRAJ, 30, true));
+  }
+
+  /**
+   * Allocates a new agenda with the given priority.
+   */
+  public void setAgendaPriority(BiFunction<HypEdge, Adjoints, Double> agendaPriority) {
+    this.agenda = new Agenda(agendaPriority, null);
   }
 
   // TODO This is an ugly hack, fixme.
@@ -354,7 +361,7 @@ public class Uberts {
         if (prev == null)
           totalLoss = actionLoss;
         else
-          totalLoss = Labels.combinePerfByRel(prev.totalLoss, actionLoss);
+          totalLoss = FPR.combineStratifiedPerf(prev.totalLoss, actionLoss);
       }
 
       totalScore = prevToCur.score.forwards();
@@ -421,7 +428,7 @@ public class Uberts {
    *
    * See http://www.aclweb.org/anthology/N12-1015
    */
-  public Pair<Traj, Traj> maxViolationPerceptron(Map<Relation, Double> costFP) {
+  public Pair<Traj, Traj> maxViolationPerceptron(Map<Relation, Double> costFP, boolean lasoHack) {
 
     timer.start("duplicate-state");
     State s0 = state.duplicate();
@@ -440,37 +447,17 @@ public class Uberts {
       while (agenda.size() > 0) {
         AgendaItem ai = agenda.popBoth2();
         boolean y = getLabel(ai);
+
         Pair<Boolean, Adjoints> p = thresh.decide2(ai);
         boolean yhat = p.get1();
         if (DEBUG > 1)
           System.out.println("[maxViolationPerceptron] popped=" + ai);
 
-        // Always record the action
-        Step s = new Step(ai, y, yhat);
-//        s.setDecision(p.get2());
-        if (MAX_VIOLATION_BUGFIX) {
-//          assert ai.score == p.get2() : "ai=" + ai.score + " p2=" + p.get2();
-//          s.setDecision(y ? p.get2() : Adjoints.Constant.ZERO);
-          s.setDecision(y ? ai.score : Adjoints.Constant.ZERO);
-        } else {
-          if (!y) {
-            // We want to "reinforce" the actions of the oracle. This doesn't
-            // mean making their scores higher necessarily. If the score of some
-            // fact evaluates to -0.5 it will be Pruned. This does not mean that
-            // because the oracle did it we want to push the score up (closer to
-            // Commit), but rather "reinforce" this score by lower it.
-            // If this same fact was also Pruned in the MV trajectory, then it
-            // will also flip, but receive the opposite dErr_dForwards in the
-            // update, which would make their score changes cancel.
-            s.flipSignOfScore();
-          }
-        }
-        t1 = new Traj(s, t1);
-
-        // But maybe don't add apply it (add it to state)
-        // TODO This probably doesn't work, need to devise better multi-stage learning
-        if (y)
+        if (y) {
+          Step s = new Step(ai, y, yhat);
+          t1 = new Traj(s, t1);
           addEdgeToState(ai);
+        }
       }
     }
     assert t1 != null : "oracle took no steps?";
@@ -489,10 +476,8 @@ public class Uberts {
       // This is not a problem since we are not learning event1 parameters.
 //      agenda.setRescoreMode(RescoreMode.LOSS_AUGMENTED, goldEdges);
 
-      // We can stop the trajectory earlier if it goes longer than the oracle,
-      // which is likely to happen.
       statsAgendaSizePerStep.clear();
-      while (agenda.size() > 0 && (t2 == null || t2.length < t1.length)) {
+      while (agenda.size() > 0) {
         statsAgendaSizePerStep.add(agenda.size());
         AgendaItem ai = agenda.popBoth2();
         boolean y = getLabel(ai);
@@ -501,21 +486,14 @@ public class Uberts {
         if (DEBUG > 1)
           System.out.println("[maxViolationPerceptron] popped=" + ai);
 
-        // Always record the action
-        Step s = new Step(ai, y, yhat);
-//        s.setDecision(p.get2());
-        if (MAX_VIOLATION_BUGFIX) {
-//          assert ai.score == p.get2() : "ai=" + ai.score + " p2=" + p.get2();
-//          s.setDecision(yhat ? p.get2() : Adjoints.Constant.ZERO);
-          s.setDecision(yhat ? ai.score : Adjoints.Constant.ZERO);
-        } else {
-          if (!yhat)
-            s.flipSignOfScore();
+        if (yhat) {
+          Step s = new Step(ai, y, yhat);
+          t2 = new Traj(s, t2);
         }
-        t2 = new Traj(s, t2);
 
         // But maybe don't add apply it (add it to state)
-        if (yhat)
+        boolean h = lasoHack && "argument4".equals(ai.getHashableEdge().getEdge().getRelation().getName());
+        if ((h && y) || (!h && yhat))
           addEdgeToState(ai);
       }
     }
@@ -525,70 +503,32 @@ public class Uberts {
     // Compute the violation
     Deque<Traj> t1r = t1.reverse();
     Deque<Traj> t2r = t2.reverse();
-    boolean noArg4Oracle = true;
-    boolean noArg4MV = true;
-    double violation = 0;
-    for (Traj cur : t1r) {
-      Step s = cur.getStep();
-      if (!s.edge.getRelation().getName().equals("argument4"))
-        continue;
-      noArg4Oracle = false;
-      // With Agenda.RescoreMode.ORACLE, this score will come out to +/-1e-8
-      // What we really want is the true model score.
-      // The score is changed to ensure that the oracle actually does the right thing.
-      // That isn't really necessary since we control the pred=? above.
-      double sGold = s.getReason().forwards();
-      violation -= sGold;
+
+    // Lets assume that these trajectories are the same length
+    // I have to make this true to implement the violation computation used in UbertsLearnPipeline.adHockSrl.
+    assert t1r.size() == t2r.size();
+    double sCumOracle = 0;
+    double sCumPred = 0;
+    ArgMax<Pair<Traj, Traj>> m = new ArgMax<>();
+    while (!t1r.isEmpty()) {
+      Traj sG = t1r.removeFirst();
+      Traj sP = t2r.removeFirst();
+      assert sG.getStep().gold;
+      assert sP.getStep().pred;
+      assert EdgeUtils.target(sG.getStep().edge) == EdgeUtils.target(sP.getStep().edge);
+      assert EdgeUtils.frame(sG.getStep().edge).equals(EdgeUtils.frame(sP.getStep().edge));
+      assert EdgeUtils.role(sG.getStep().edge).equals(EdgeUtils.role(sP.getStep().edge));
+      Span g = EdgeUtils.arg(sG.getStep().edge);
+      Span p = EdgeUtils.arg(sP.getStep().edge);
+      double loss = (g == p) ? 0 : 0.01;
+      sCumOracle += sG.getStep().score.forwards();
+      sCumPred += sP.getStep().score.forwards();
+      sCumPred += loss;
+      double violation = sCumPred - sCumOracle;
+      m.offer(new Pair<>(sG, sP), violation);
     }
-
-    for (Traj cur : t2r) {
-      Step s = cur.getStep();
-      if (!s.edge.getRelation().getName().equals("argument4"))
-        continue;
-      noArg4MV = false;
-
-      // Aha!   (NOTE, I'm using the slightly simpler case of EXACTLY_ONE instead of AT_MOST_ONE to simplify some explanations here)
-      // I do not need to pull this trickery with include loss. The basic
-      // motivation was sane, use a argmax_{s'} g(y_{s,k}) - g(y_{s',k})
-      // structured SVM update as opposed to a classification based
-      // "is the score of this argument4(t,f,s,k) on the correct side of 0"
-      // update. In the former update either 0 or two argument4 facts are updated
-      // per k-block. In the latter many facts could be updated.
-      // BUT, the reason that we don't need to do any special checking to
-      // ensure that 0 or 2 facts are updated is that using the EXACTLY_ONE
-      // decoder, we can gaurantee that the number of gold=true or pred=true is
-      // limited to 1, and the hamming distance between two bitstrings with one
-      // 1 in them is either 0 or 2!
-//      if (s.getReason() instanceof DecisionFunction.IncludeLossAdjoints) {
-//        DecisionFunction.IncludeLossAdjoints a = (DecisionFunction.IncludeLossAdjoints) s.getReason();
-//        if (!a.includeLoss())
-//          continue;
-//      }
-
-      double sPred = s.getReason().forwards();
-      double loss = 0; //cur.getActionLoss();
-      assert !MAX_VIOLATION_BUGFIX || (s.getReason() == Adjoints.Constant.ZERO || sPred > 0) : s.toString();
-      violation += sPred + loss;
-    }
-    Pair<Traj, Traj> best = null;
-    if (violation >= 0)
-      best = new Pair<>(t1r.getLast(), t2r.getLast());
-
-    if (LEARN_DEBUG) {
-      System.out.println("[maxViolationPerceptron] violation=" + violation);
-      System.out.println("[maxViolationPerceptron] doc=" + dbgSentenceCache);
-      System.out.println("[maxViolationPerceptron] noArg4Oracle=" + noArg4Oracle + " noArg4MV=" + noArg4MV);
-      int i = 0;
-      for (Traj t : t1r) {
-        System.out.println(" oracle[" + i + "]: " + dbgShrtStr(t.prevToCur.toString()));
-        i++;
-      }
-      i = 0;
-      for (Traj t : t2r) {
-        System.out.println("lossAug[" + i + "]: " + dbgShrtStr(t.prevToCur.toString()));
-        i++;
-      }
-    }
+    assert m.numOffers() > 0;
+    Pair<Traj, Traj> best = m.get();
 
     return best;
   }
@@ -1049,9 +989,9 @@ public class Uberts {
     transitionGenrators = Arrays.copyOf(transitionGenrators, newLength);
   }
 
-  public void addTransitionGenerator(Rule r, LocalFactor s) {
+  public void addTransitionGenerator(Rule r, LocalFactor s, boolean pruneFactsWithNullScore) {
     Trigger t = lookupTrigger(r.lhs);
-    TransGen tg = new TransGen.Regular(r, s);
+    TransGen tg = new TransGen.Regular(r, s, pruneFactsWithNullScore);
     addTransitionGenerator(t, tg);
   }
   public void addTransitionGenerator(Term[] t, TransGen tg) {
@@ -1098,6 +1038,12 @@ public class Uberts {
       stats.increment("state/" + e.getRelation().getName());
     }
     assert nodesContains(e);
+
+    if (UbertsLearnPipeline.isNilFact(e)) {
+      stats.increment("state/nilFact");
+      return null;
+    }
+
     state.add(e, score);
 
     HashableHypEdge he = new HashableHypEdge(e);
@@ -1127,6 +1073,12 @@ public class Uberts {
    */
   public void addEdgeToStateNoMatch(HypEdge e, Adjoints score) {
     assert nodesContains(e) : e + " has some HypNodes which aren't in Uberts.nodes";
+
+    if (UbertsLearnPipeline.isNilFact(e)) {
+      stats.increment("state/nilFact");
+      return;
+    }
+
     stats.increment("state/noMatch");
     stats.increment("state/noMatch/" + e.getRelation().getName());
     state.add(e, score);
@@ -1139,7 +1091,7 @@ public class Uberts {
     HashableHypEdge hhe = new HashableHypEdge(e);
     if (DEBUG > 2) {
       if (DEBUG > 3)
-        System.out.println("Uberts addEdgeToAgenda: " + e.toString() + " " + score);
+        System.out.println("Uberts addEdgeToAgenda: " + e.toString() + "\t" + score.forwards() + "\t" + score);
       else
         System.out.println("Uberts addEdgeToAgenda: " + e.toString());
     }
