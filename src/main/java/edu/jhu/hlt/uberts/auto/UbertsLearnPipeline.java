@@ -46,8 +46,8 @@ import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
-import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
+import edu.jhu.hlt.uberts.AgendaComparators;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.Labels;
@@ -68,6 +68,7 @@ import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.MultiGlobalParams;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc.PairFeat;
 import edu.jhu.hlt.uberts.features.DebugFeatureAdj;
 import edu.jhu.hlt.uberts.features.FeatureExtractionFactor;
+import edu.jhu.hlt.uberts.features.FyMode;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.features.OldFeaturesWrapper.Ints3;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
@@ -77,6 +78,7 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.srl.AddNullSpanArgs;
 import edu.jhu.hlt.uberts.srl.EdgeUtils;
 import edu.jhu.prim.list.DoubleArrayList;
+import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 
@@ -193,7 +195,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private boolean skipDocsWithoutPredicate2 = true;
 
   // Re-implementation which doesn't use any fancy machinery and does use nullSpans
-  private boolean hackyImplementation = true;
+  private boolean hackyImplementation = false;
 
   // Attempts to make MAX_VIOLATION mimic a LaSO update where if a violation
   // occurs, the predictor is re-set to the gold history.
@@ -269,12 +271,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     int passes = config.getInt("passes", 10);
     Log.info("[main] passes=" + passes);
 
-    Comparator<AgendaItem> comparator = Agenda.BY_RELATION
-        .thenComparing(Agenda.BY_TARGET)
-        .thenComparing(Agenda.BY_FRAME)
-        .thenComparing(Agenda.BY_ROLE)
-        .thenComparing(Agenda.BY_SCORE)
-        .thenComparing(Agenda.BY_ARG);
+//    Comparator<AgendaItem> comparator = AgendaComparators.BY_RELATION
+//        .thenComparing(AgendaComparators.BY_TARGET)
+//        .thenComparing(AgendaComparators.BY_FRAME)
+//        .thenComparing(AgendaComparators.BY_ROLE)
+//        .thenComparing(AgendaComparators.BY_SCORE)
+//        .thenComparing(AgendaComparators.BY_ARG);
+    Comparator<AgendaItem> comparator = AgendaComparators.getPriority(config);
     final Uberts u = new Uberts(new Random(9001), null, comparator);
 //    String ap = config.getString("agendaPriority");
 //    BiFunction<HypEdge, Adjoints, Double> agendaPriority =
@@ -478,7 +481,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     key = "predicate2/t";
     p = globalParamConfig.getOrAddDefault(key);
-    if (p.frameCooc) {
+    if (p.frameCooc != null) {
       NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("predicate2", 0, 1, p, u);
       a.storeExactFeatureIndices();
       String gfName = key + p.toString(false);
@@ -889,7 +892,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
    * Proof of concept, LaSO does work.
    */
   private void addHocSrlTrain(RelDoc doc, boolean learn) {
-    boolean local = true;
+    boolean local = false;
     if (HACKY_DEBUG) {
       System.out.println("starting on " + doc.getId());
     }
@@ -1060,21 +1063,37 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
   }
 
-  private AveragedPerceptronWeights hackyGlobalWeights;
-  private Alphabet<String> hackyGlobalAlph;
+  private AveragedPerceptronWeights hackyGlobalWeights; // weights for (fy,fx)
+  private Alphabet<String> hackyGlobalFxAlph;   // stores fx
+  private InverseHashingMapping hackyInv;     // stores (fy,fx)
+
+  /**
+   * @param history is all actions, including Prunes and actions on ALL TARGETS.
+   * @param current
+   * @param numArgs
+   * @return
+   */
   public Adjoints globalFeatures(List<Pair<HypEdge, Adjoints>> history, HypEdge current, int numArgs) {
     if (hackyGlobalWeights == null) {
       hackyGlobalWeights = new AveragedPerceptronWeights(1 << 25, 0);
-      hackyGlobalAlph = new Alphabet<>();
+      hackyGlobalFxAlph = new Alphabet<>();
+      hackyInv = new InverseHashingMapping();
     }
 
     boolean includeGlobalIntercept = true;
+    boolean includeEmptyHistoryBoolInBase = true;
 
-    List<String> feats = new ArrayList<>();
-//    String base = isNullSpan(current) ? "n" : "s";
+    List<Pair<HypEdge, Adjoints>> commitHistory = new ArrayList<>();
+    for (Pair<HypEdge, Adjoints> x : history)
+      if (!isNullSpan(x.get1()))
+        commitHistory.add(x);
+
+    List<String> fx = new ArrayList<>();
     String base = isNilFact(current) ? "n" : "s";
+    if (includeEmptyHistoryBoolInBase)
+      base += (commitHistory.isEmpty() ? "0" : "1");
     if (includeGlobalIntercept)
-      feats.add(base);
+      fx.add(base);
 
     /*
      * roleCooc should run when agendaEdge is nullSpan to learn things like "A=role1 & a=role1 & isNullSpan(a)"
@@ -1084,7 +1103,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     // If true use (1, k, fk) as refinements, otherwise (k, fk)
     // true is what should match the standard/good implementation
-    boolean fullBackoff = true;
+    FyMode fyMode = FyMode.F;
 
     // See /tmp/uberts-137-* and /tmp/uberts-138-* for a comparison.
     // I was wrong in assuming that if you don't have null feats that you can't
@@ -1094,87 +1113,123 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     boolean includeNullFactFeats = false;
 
     // Since I'm passing in base as a prefix, all of these features are conjoined with nullSpan?
-    boolean useOnlyNumArgs = false;
-//    PairFeat f = NumArgsRoleCoocArgLoc.ROLE_COOC_FEAT;
-    PairFeat f = NumArgsRoleCoocArgLoc.ARG_LOC_PAIRWISE_FEAT;
+    boolean useOnlyNumArgs = true;
+    PairFeat f = NumArgsRoleCoocArgLoc.roleCoocFeat(FyMode.K);
+//    PairFeat f = NumArgsRoleCoocArgLoc.ARG_LOC_PAIRWISE_FEAT;
 //    PairFeat f = NumArgsRoleCoocArgLoc.ARG_LOC_AND_ROLE_COOC;
 
     if (useOnlyNumArgs) {
       if (includeNullFactFeats || !isNullSpan(current))
-        feats.add(base + "/" + numArgs);
+        fx.add(base + "/" + numArgs);
     } else {
       if (includeNullFactFeats || !isNullSpan(current)) {
-        for (Pair<HypEdge, Adjoints> x : history) {
-          if (!isNullSpan(x.get1())) {
-            for (String fx : f.describe(base + "/" + f.getName(), x.get1(), current)) {
-              assert fx.startsWith(base);
-              feats.add(fx);
-            }
+        for (Pair<HypEdge, Adjoints> x : commitHistory) {
+          for (String ff : f.describe(base + "/" + f.getName(), x.get1(), current)) {
+            assert ff.startsWith(base);
+            fx.add(ff);
           }
         }
       }
     }
 
-    // We'll use (f,k) and (k,) refinements
-    String frame = (String) current.getTail(1).getValue();
-    String role = (String) current.getTail(3).getValue();
+    int[] hfx = new int[fx.size()];
+    for (int i = 0; i < hfx.length; i++)
+      hfx[i] = hackyGlobalFxAlph.lookupIndex(fx.get(i));
+
+    String[] fy = fyMode.f(current);
+    int[] hfy = new int[fy.length];
+    for (int i = 0; i < hfy.length; i++)
+      hfy[i] = Hash.hash(fy[i]);
+
+    int[] ifeats = new int[hfy.length * hfx.length];
+    for (int i = 0; i < hfx.length; i++) {
+      for (int j = 0; j < hfy.length; j++) {
+        ifeats[hfy.length * i + j] = hackyInv.add(hfy[j], fy[j], hfx[i], fx.get(i));
+      }
+    }
+
     if (HACKY_DEBUG) {
       List<HypEdge> hist = new ArrayList<>();
       for (Pair<HypEdge, Adjoints> x : history) hist.add(x.get1());
+      List<HypEdge> commHist = new ArrayList<>();
+      for (Pair<HypEdge, Adjoints> x : commitHistory) commHist.add(x.get1());
       System.out.println("META:"
           + " onlyNumArgs=" + useOnlyNumArgs
-          + " f=" + f.getName()
           + " includeNullFactFeat=" + includeNullFactFeats
-          + " fullBackoff=" + fullBackoff);
-      System.out.println("hist:    " + hist);
+          + " includeGlobalIntercept=" + includeGlobalIntercept);
+//      System.out.println("hist:    " + hist);
+      System.out.println("hist:    " + commHist);
       System.out.println("cur:     " + current);
       System.out.println("numArgs: " + numArgs);
-      System.out.println("labels:  " + Arrays.asList("1", role, frame + "/" + role));
-      System.out.println("feats:   " + feats);
+      System.out.println("y:       " + fyMode);
+      System.out.println("fy:      " + Arrays.toString(fy));
+      System.out.println("x:       " + f.getName());
+      System.out.println("fx:      " + fx);
+      hackyInv.showCollisions();
       System.out.println();
 
       // Check num args
-      int na = 0;
-      for (HypEdge e : hist) {
-        if (!isNullSpan(e)) {
-          if (e.getTail(0) == current.getTail(0)
-              && e.getTail(1) == current.getTail(1)) {
-            na++;
-          }
-        }
-      }
-      assert na == numArgs : "na=" + na + " numArgs=" + numArgs;
-    }
-
-    int rK = Hash.hash(role);
-    int rFK = Hash.mix(Hash.hash(frame), rK);
-    int n = feats.size();
-    int[] ifeats;
-    List<String> fy;
-    if (fullBackoff) {
-      fy = Arrays.asList("1", "fk", "k");
-      ifeats = new int[3 * n];
-      for (int i = 0; i < n; i++) {
-        int fx = hackyGlobalAlph.lookupIndex(feats.get(i));
-        ifeats[3 * i + 0] = fx;
-        ifeats[3 * i + 1] = Hash.mix(rK, fx);
-        ifeats[3 * i + 2] = Hash.mix(rFK, fx);
-      }
-    } else {
-      fy = Arrays.asList("fk", "k");
-      ifeats = new int[2 * n];
-      for (int i = 0; i < n; i++) {
-        int fx = hackyGlobalAlph.lookupIndex(feats.get(i));
-        ifeats[2 * i + 0] = Hash.mix(rK, fx);
-        ifeats[2 * i + 1] = Hash.mix(rFK, fx);
-      }
+//      int na = 0;
+//      for (HypEdge e : hist) {
+//        if (!isNullSpan(e)) {
+//          if (e.getTail(0) == current.getTail(0)
+//              && e.getTail(1) == current.getTail(1)) {
+//            na++;
+//          }
+//        }
+//      }
+//      assert na == numArgs : "na=" + na + " numArgs=" + numArgs;
     }
 
     boolean reindex = true;
     Adjoints a = hackyGlobalWeights.score(ifeats, reindex);
     if (HACKY_DEBUG)
-      a = new DebugFeatureAdj(a, fy, feats, "GLOBAL: agenda=" + current);// + " state=" + stateEdge);
+      a = new DebugFeatureAdj(a, Arrays.asList(fy), fx, "GLOBAL: agenda=" + current);// + " state=" + stateEdge);
     return a;
+  }
+
+  static class InverseHashingMapping {
+    private IntObjectHashMap<List<Pair<String, String>>> hfyx2fyfx = new IntObjectHashMap<>();
+    private IntObjectHashMap<List<String>> hfy2fy = new IntObjectHashMap<>();
+    private IntObjectHashMap<List<String>> hfx2fx = new IntObjectHashMap<>();
+
+    /**
+     * Returns a hashed index of the two inputs.
+     */
+    public int add(int hfy, String fy, int hfx, String fx) {
+      int h = Hash.mix(hfy, hfx);
+      add(hfyx2fyfx, h, new Pair<>(fy, fx));
+      add(hfy2fy, hfy, fy);
+      add(hfx2fx, hfx, fx);
+      return h;
+    }
+
+    public void showCollisions() {
+      List<Integer> coll = findCollisions(hfyx2fyfx);
+      for (int c : coll) {
+        System.out.println("COLLISION: " + c + ": " + hfyx2fyfx.get(c));
+      }
+    }
+
+    static <T> void add(IntObjectHashMap<List<T>> m, int k, T v) {
+      List<T> fyfx = m.get(k);
+      if (fyfx == null) {
+        fyfx = new ArrayList<>(1);
+        m.put(k, fyfx);
+      }
+      if (!fyfx.contains(v))
+        fyfx.add(v);
+    }
+
+    static <T> List<Integer> findCollisions(IntObjectHashMap<List<T>> m) {
+      List<Integer> coll = new ArrayList<>();
+      for (int k : m.keys()) {
+        List<T> vals = m.get(k);
+        if (vals.size() > 1)
+          coll.add(k);
+      }
+      return coll;
+    }
   }
 
   public static boolean isNullSpan(HypEdge srl4Edge) {

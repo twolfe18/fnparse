@@ -16,11 +16,11 @@ public class AgendaComparatorTests {
 
   @Test
   public void test0() {
-    Comparator<AgendaItem> c = Agenda.BY_RELATION
-        .thenComparing(Agenda.BY_TARGET)
-        .thenComparing(Agenda.BY_FRAME)
-        .thenComparing(Agenda.BY_ROLE)
-        .thenComparing(Agenda.BY_SCORE);
+    Comparator<AgendaItem> c = AgendaComparators.BY_RELATION
+        .thenComparing(AgendaComparators.BY_TARGET)
+        .thenComparing(AgendaComparators.BY_FRAME)
+        .thenComparing(AgendaComparators.BY_ROLE)
+        .thenComparing(AgendaComparators.BY_SCORE);
     Agenda imp = new Agenda(null, c);
     PriorityQueue<AgendaItem> ref = new PriorityQueue<>(c);
 

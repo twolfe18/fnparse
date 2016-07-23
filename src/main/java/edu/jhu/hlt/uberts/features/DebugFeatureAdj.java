@@ -1,5 +1,6 @@
 package edu.jhu.hlt.uberts.features;
 
+import java.util.Arrays;
 import java.util.List;
 
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -16,6 +17,10 @@ public class DebugFeatureAdj implements Adjoints {
   private List<String> fy;
   private List<String> fx;
   private Object ancillaryInfo;
+
+  public DebugFeatureAdj(Adjoints wrapped, String[] fy, String[] fx, Object ancillaryInfo) {
+    this(wrapped, Arrays.asList(fy), Arrays.asList(fx), ancillaryInfo);
+  }
 
   public DebugFeatureAdj(Adjoints wrapped, List<String> fy, List<String> fx, Object ancillaryInfo) {
     this.wrapped = wrapped;

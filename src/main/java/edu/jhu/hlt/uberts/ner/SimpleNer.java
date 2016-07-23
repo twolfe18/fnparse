@@ -1,10 +1,7 @@
 package edu.jhu.hlt.uberts.ner;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
@@ -22,9 +19,7 @@ import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.Uberts;
-import edu.jhu.hlt.uberts.factor.AtMost1;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
-import edu.jhu.prim.tuple.Pair;
 
 /**
  * Goal is to get a simple NER system trained as fast as possible.
