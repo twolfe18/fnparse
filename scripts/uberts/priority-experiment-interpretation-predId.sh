@@ -1,7 +1,7 @@
 #!/bin/bash
 
-set -eu
-set -o pipefail
+#set -eu
+#set -o pipefail
 
 LOG=$1
 
@@ -13,7 +13,11 @@ T=`echo $LOG | awk -F"." '{print $NF}'`
 FS="ukn"
 
 #GF=`grep -m 1 globalFeatMode $LOG | key-values globalFeatMode`
-GF=`grep -m 1 -oP 'allowableGlobals=\S*' $LOG`
+#GF=`grep -m 1 -oP 'allowableGlobals=\S*' $LOG`
+GF=`grep 'GlobalParams::<init>' $LOG | awk '{print $NF}' | tr '\n' '_' | sed 's/_$//'`
+if [[ "$GF" == "" ]]; then
+GF="none";
+fi
 
 AP=`grep -m 1 -oP '(?<=parsing agenda priority ).*' $LOG`
 
