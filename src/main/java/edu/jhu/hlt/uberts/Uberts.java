@@ -501,6 +501,14 @@ public class Uberts {
     agenda.setRescoreMode(RescoreMode.NONE, null);
 
     // Compute the violation
+    if (t1 == null) {
+      Log.info("WARNING: null ORACLE in " + dbgSentenceCache);
+      return null;
+    }
+    if (t2 == null) {
+      Log.info("WARNING: null LOSS_AUGMENTED in " + dbgSentenceCache);
+      return null;
+    }
     Deque<Traj> t1r = t1.reverse();
     Deque<Traj> t2r = t2.reverse();
 
