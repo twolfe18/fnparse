@@ -1081,6 +1081,8 @@ public class Uberts {
    */
   public void addEdgeToStateNoMatch(HypEdge e, Adjoints score) {
     assert nodesContains(e) : e + " has some HypNodes which aren't in Uberts.nodes";
+    if (DEBUG > 1)
+      System.out.println("Uberts addEdgeToStateNoMatch: " + e.toString() + " " + score.forwards() + " " + score);
 
     if (UbertsLearnPipeline.isNilFact(e)) {
       stats.increment("state/nilFact");
