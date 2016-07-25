@@ -8,6 +8,7 @@ import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -291,9 +292,10 @@ public class OldFeaturesWrapper {
       boolean cacheArg4 = !learnDebug && r.getName().equals("argument4");  // && ff.getPath().contains("by-hand");
       Ints3 i3 = new Ints3(bft, r, ff, dim, fixed, cacheArg4, learnDebug);
       i3.inner.onlyUseTS = cacheArg4;
+
       if ("argument4".equals(r.getName())) {
         Log.info("[main] refining with (f,k) and (k,)");
-        i3.refine(e -> {
+        i3.refine((ToIntFunction<HypEdge> & Serializable) e -> {
           assert e.getRelation().getName().equals("argument4");
           String frame = (String) e.getTail(1).getValue();
           String role = (String) e.getTail(3).getValue();
@@ -301,23 +303,17 @@ public class OldFeaturesWrapper {
             return (int) Hash.sha256(frame + "/" + role);
           return Hash.mix(Hash.hash(frame), Hash.hash(role));
         }, "fk");
-        i3.refine(e -> {
+        i3.refine((ToIntFunction<HypEdge> & Serializable) e -> {
           assert e.getRelation().getName().equals("argument4");
           String role = (String) e.getTail(3).getValue();
           if (USE_SHA256)
             return (int) Hash.sha256(role);
           return Hash.hash(role);
         }, "k");
-//        i3.refine(e -> {
-//          assert e.getRelation().getName().equals("argument4");
-//          String frame = (String) e.getTail(1).getValue();
-//          if (USE_SHA256)
-//            return (int) Hash.sha256(frame);
-//          return Hash.hash(frame);
-//        });
       } else {
         throw new RuntimeException("how to handle: " + r);
       }
+
       return i3;
     }
 
@@ -355,7 +351,9 @@ public class OldFeaturesWrapper {
         oos.writeObject(theta);
         oos.writeObject(theta2);
       } catch (Exception e) {
-        throw new RuntimeException(e);
+//        throw new RuntimeException(e);
+        Log.info("WARNING: failed to serialize, " + e.getMessage());
+        e.printStackTrace();
       }
 
       // Diagnostic, how many nonzero features are there?
@@ -384,6 +382,9 @@ public class OldFeaturesWrapper {
     private List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>> theta2;
     private List<String> theta2RefName;
 
+    // For writing out features to a file
+    private BufferedWriter featStrDebug;
+
     // For caching refined features based on (t,s)
     // Only for use with refinements.
     private Map<SpanPair, int[]> arg4FeatureCache;
@@ -398,6 +399,10 @@ public class OldFeaturesWrapper {
     }
 
     public void refine(ToIntFunction<HypEdge> f, String name) {
+
+      // By default lambdas aren't Serializable...
+      f = (ToIntFunction<HypEdge> & Serializable) f;
+
       if (!rel.getName().equals("argument4"))
         throw new IllegalStateException("refinements are only setup to work with argument4(t,f,s,k) edges");
       if (theta2 == null) {
@@ -407,8 +412,6 @@ public class OldFeaturesWrapper {
       theta2.add(new Pair<>(f, new AveragedPerceptronWeights(dimension, 0)));
       theta2RefName.add(name);
     }
-
-    private BufferedWriter featStrDebug;
 
     /**
      * For _feature_ IO (e.g. computing mutual information), not _weight_ IO (e.g. saving model parameters).
