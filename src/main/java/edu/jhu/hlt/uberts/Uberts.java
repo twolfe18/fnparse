@@ -524,11 +524,14 @@ public class Uberts {
 
     // Lets assume that these trajectories are the same length
     // I have to make this true to implement the violation computation used in UbertsLearnPipeline.adHockSrl.
-    assert t1r.size() == t2r.size();
+    if (t1r.size() != t2r.size()) {
+      Log.info("WARNING: t1r.size=" + t1r.size() + " t2r.size=" + t2r.size());
+//      assert false;
+    }
     double sCumOracle = 0;
     double sCumPred = 0;
     ArgMax<Pair<Traj, Traj>> m = new ArgMax<>();
-    while (!t1r.isEmpty()) {
+    while (!t1r.isEmpty() && !t2r.isEmpty()) {
       Traj sG = t1r.removeFirst();
       Traj sP = t2r.removeFirst();
       assert sG.getStep().gold;

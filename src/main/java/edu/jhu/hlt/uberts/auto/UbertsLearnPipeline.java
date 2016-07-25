@@ -296,7 +296,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (pipe.addNullSpanFacts) {
       pipe.u.readRelData("def nullSpan <span>");
       pipe.u.readRelData("schema nullSpan 0-0");
-      Rule r = Rule.parseRule("predicate2(t,f) & role2(f,k) & nullSpan(s) => argument4(t,f,s,k)", pipe.u);
+      Rule r = Rule.parseRule("predicate2(t,f) & coarsenFrame2(f,fc) & role2(fc,k) & nullSpan(s) => argument4(t,f,s,k)", pipe.u);
       pipe.addRule(r);
     }
 
