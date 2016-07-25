@@ -100,6 +100,14 @@ public class State {
     }
 
     @Override
+    public List<HypEdge> getEdges() {
+      List<HypEdge> edges = new ArrayList<>();
+      edges.addAll(regularEdges.getEdges());
+      edges.addAll(schemaEdges.getEdges());
+      return edges;
+    }
+
+    @Override
     public void clear() {
       regularEdges.clear();
       schemaEdges.clear();
@@ -407,6 +415,10 @@ public class State {
       if ((p+f) % z == 0 && es2 == null)
         Log.info("nodes=" + f + " args=" + p + " curFact=" + e);
     }
+  }
+
+  public List<HypEdge> getEdges() {
+    return edges;
   }
 
   /** May return null */

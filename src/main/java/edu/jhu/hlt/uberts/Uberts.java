@@ -1144,6 +1144,13 @@ public class Uberts {
     return l;
   }
 
+  public Counts<String> getStateFactCounts() {
+    Counts<String> c = new Counts<>();
+    for (HypEdge e : state.getEdges())
+      c.increment(e.getRelation().getName());
+    return c;
+  }
+
   public NodeType getWitnessNodeType(String relationName) {
     return getWitnessNodeType(getEdgeType(relationName));
   }

@@ -670,6 +670,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         e.printStackTrace();
       }
     }
+
+    // Print the number of edges in the state.
+    // Useful when you've accidentally included the wrong set of schema edges.
+    Log.info("state fact counts by relation: " + u.getStateFactCounts());
   }
 
   @Override
