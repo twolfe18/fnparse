@@ -10,6 +10,12 @@ SHELL = /bin/bash
 DATASET = propbank
 
 
+# This makes a role2 fact file with roles seen in the train+dev data.
+# The original assumes that any frame can have any role, which is too relaxed.
+role2.observed.rel.gz: srl.train.facts.gz srl.dev.facts.gz
+	zgrep '^y argument4 ' srl.train.facts.gz srl.dev.facts.gz | awk '{print $$4, $$6}' | sort | uniq -c >role2-byTrainDevCounts.txt
+	awk '{if(NR==1){print "def role2 <frame> <role>";} printf "schema role2 %s %s\n", $$2, $$3}' <role2-byTrainDevCounts.txt | gzip -c >$@
+
 null-span1.facts:
 	echo "def null-span1 <span>" >$@
 	echo "schema null-span1 0-0" >>$@
@@ -158,6 +164,7 @@ coe:
 	rsync -aLvz --delete ./ test3b:/export/projects/twolfe/fnparse-output/experiments/priority-experiments/$(DATASET)/rel-data
 
 all: relations.def grammar.trans grammar.predicate2.trans frameTriage4.rel.gz coarsenFrame2.rel.gz role2.rel.gz spans.schema.facts.gz null-span1.facts coarsenPos2.rel
+	make role2.observed.rel.gz
 	make srl.train.shuf0.facts.gz
 	make srl.train.shuf1.facts.gz
 	make srl.train.shuf2.facts.gz
