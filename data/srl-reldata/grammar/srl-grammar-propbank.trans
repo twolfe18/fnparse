@@ -99,5 +99,11 @@ event1(t) & span-w1(t,i,j) & pos2(i,posFine) & lemma2(i,lemma) & coarsenPos2(pos
 # NOTE: I don't think I'll ever be able to beat Tackstrom args for srl2 pruning.
 # srl3 pruning is still an option, but as of now this is fast enough.
 #predicate2(t,f) & tackstrom-args4(t,s,sHead,k) & coarsenFrame2(f,fc) => argument4(t,fc,s,k)
-predicate2(t,f) & tackstrom-args4(t,s,sHead,k) => argument4(t,f,s,k)
+#predicate2(t,f) & tackstrom-args4(t,s,sHead,k) => argument4(t,f,s,k)
+
+# This is like above except that it is more strict.
+# Vanilla tackstrom args will add an (t,s,k) if path(t,s) and k have been seen together in training.
+# This can allow roles which are not admitted by the frame, e.g. (propbank/be-v-1, ARG0).
+# This can mess up AddNullSpanArguments which will only add null spans for roles which are possible.
+predicate2(t,f) & tackstrom-args4(t,s,sHead,k) & coarsenFrame2(f,fc) & role2(fc,k) => argument4(t,f,s,k)
 
