@@ -59,10 +59,7 @@ AGENDA_COMPARATOR=$4
 ORACLE_RELATIONS=$5
 
 # See ParameterSimpleIO.Instance2
-# e.g. "predicate2=+frozen+read:path,argument4=+learn+write:path"
-# i.e. "<key>=<value>(,<key>=<value>)*"
-# keys (e.g. "predicate2" and "argument4") refer to local/global factors,
-# and may contain misc characters, e.g. the global factor "argument4/t/+roleCooc".
+# e.g. "predicate2+frozen+read:path,argument4+learn+write:path"
 PARAM_IO=$6
 echo "using PARAM_IO=$PARAM_IO"
 
@@ -115,7 +112,7 @@ fi
 
 
 BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t"
-BY_GROUP_DECODER="$BY_GROUP_DECODER AT_MOST_ONE:argument4(t,f,s,k):t:k"
+BY_GROUP_DECODER="$BY_GROUP_DECODER EXACTLY_ONE:argument4(t,f,s,k):t:k"
 
 SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/coarsenPos2.rel"
 

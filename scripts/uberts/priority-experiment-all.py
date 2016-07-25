@@ -85,7 +85,7 @@ if __name__ == '__main__':
 
   exp_names = set(x.strip().lower() for x in exp_names.split(','))
 
-  mock = True
+  mock = False
 
   engine = 'qsub'
 
