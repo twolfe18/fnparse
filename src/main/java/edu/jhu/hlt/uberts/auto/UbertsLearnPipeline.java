@@ -92,11 +92,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     DAGGER1,  // Only updates w.r.t. top item on the agenda at every state
   }
 
-  // How should the document being consumed be interpretted?
-  public static enum Mode {
-    TRAIN, DEV, TEST,
-  }
-
   static boolean performTest = false;
 
   // Useful when you use oracle features and test out various hard constraints
@@ -124,8 +119,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   static double costFP_srl3 = 0.1;
   static double costFP_srl2 = 0.1;
   static double costFP_event1 = 1;
-
-  private Mode mode;
 
   // LOCAL FACTORS
   // These are saved with e.g. "predicate2:rw:/foo/bar.jser.gz"

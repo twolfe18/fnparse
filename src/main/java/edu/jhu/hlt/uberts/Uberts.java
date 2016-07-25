@@ -11,6 +11,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.function.BiFunction;
 
@@ -41,6 +42,7 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.uberts.rules.Env.Trie3;
 import edu.jhu.hlt.uberts.srl.EdgeUtils;
 import edu.jhu.hlt.uberts.transition.TransGen;
+import edu.jhu.hlt.uberts.util.EdgeDiff;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
@@ -82,6 +84,8 @@ public class Uberts {
   private TransGen[] transitionGenrators; // may contain nulls
   private GlobalFactor[] globalFactors;   // may contain nulls
   private int numTriggers;
+  // TODO Add some debugging counts for how many times each trigger/transgen/globalfactor is used.
+  // This will help with finding some un-expected grammar screw-ups.
 
   // When an edge is popped off the agenda, this is responsible for determining
   // if the edge should be added to the state. The default implementation checks
@@ -461,7 +465,7 @@ public class Uberts {
         Pair<Boolean, Adjoints> p = thresh.decide2(ai);
         boolean yhat = p.get1();
         if (DEBUG > 1)
-          System.out.println("[maxViolationPerceptron] step=oracle gold=" + y + " pred=" + yhat + " popped=" + ai);
+          System.out.println("[maxViolationPerceptron] step=oracle gold=" + y + " pred=" + yhat + " addToState=" + y + " popped=" + ai);
 
         if (y) {
           Step s = new Step(ai, y, yhat);
@@ -470,7 +474,12 @@ public class Uberts {
         }
       }
     }
-    assert t1 != null : "oracle took no steps?";
+    if (t1 == null) {
+      // This can happen if there are no role2 facts corresponding to a given
+      // frame. This can happen if you build role2 (observed) from training
+      // facts and there is a predicate2 frame which has no argument4s.
+      stats.increment("maxViolation/emptyTraj");
+    }
 
     // Loss Augmented Inference
     state = s0;
@@ -493,17 +502,17 @@ public class Uberts {
         boolean y = getLabel(ai);
         Pair<Boolean, Adjoints> p = thresh.decide2(ai);
         boolean yhat = p.get1();
-        if (DEBUG > 1)
-          System.out.println("[maxViolationPerceptron] step=lossAugmented gold=" + y + " pred=" + yhat + " popped=" + ai);
 
         if (yhat) {
           Step s = new Step(ai, y, yhat);
           t2 = new Traj(s, t2);
         }
 
-        // But maybe don't add apply it (add it to state)
         boolean h = lasoHack && "argument4".equals(ai.getHashableEdge().getEdge().getRelation().getName());
-        if ((h && y) || (!h && yhat))
+        boolean addToState = (h && y) || (!h && yhat);
+        if (DEBUG > 1)
+          System.out.println("[maxViolationPerceptron] step=lossAugmented gold=" + y + " pred=" + yhat + " addToState=" + addToState + " popped=" + ai);
+        if (addToState)
           addEdgeToState(ai);
       }
     }
@@ -511,6 +520,7 @@ public class Uberts {
     agenda.setRescoreMode(RescoreMode.NONE, null);
 
     // Compute the violation
+    assert (t1 == null) == (t2 == null);
     if (t1 == null) {
       Log.info("WARNING: null ORACLE in " + dbgSentenceCache);
       return null;
@@ -525,6 +535,38 @@ public class Uberts {
     // Lets assume that these trajectories are the same length
     // I have to make this true to implement the violation computation used in UbertsLearnPipeline.adHockSrl.
     if (t1r.size() != t2r.size()) {
+
+      // Try to automatically figure out what is different
+      List<HypEdge> e1 = new ArrayList<>();
+      List<HypEdge> e2 = new ArrayList<>();
+      for (Traj t : t1r)
+        e1.add(t.prevToCur.edge);
+      for (Traj t : t2r)
+        e2.add(t.prevToCur.edge);
+      EdgeDiff.showDiff(e1, e2);
+
+      // What I want is a diff of keys when grouped by (t,f,k)
+      System.out.println();
+      EdgeDiff.Grouping g1 = new EdgeDiff.Grouping(getEdgeType("argument4"), new int[] {0,1,3});
+      EdgeDiff.Grouping g2 = new EdgeDiff.Grouping(getEdgeType("argument4"), new int[] {0,1,3});
+      g1.addAll(e1);
+      g2.addAll(e2);
+      EdgeDiff.sameKeys(g1, g2);
+
+      System.out.println("e1 more than one per key:");
+      for (Entry<List<Object>, List<HypEdge>> x : g1.getKeysWithMoreThanOneValue())
+        System.out.println(x);
+      System.out.println("e2 more than one per key:");
+      for (Entry<List<Object>, List<HypEdge>> x : g2.getKeysWithMoreThanOneValue())
+        System.out.println(x);
+
+      System.out.println("e1 dups:");
+      for (HypEdge e : EdgeDiff.duplicates(e1))
+        System.out.println("e1 duplicate: " + e);
+      System.out.println("e2 dups:");
+      for (HypEdge e : EdgeDiff.duplicates(e2))
+        System.out.println("e2 duplicate: " + e);
+
       Log.info("WARNING: t1r.size=" + t1r.size() + " t2r.size=" + t2r.size());
       assert false;
     }
@@ -1076,8 +1118,17 @@ public class Uberts {
       Trigger t = m.getTrigger();
       int ti = t.getIndex();
       HypEdge[] values = m.getValues();
+
+      if (DEBUG > 2) {
+        Log.info("just tripped: " + t
+            + " with values=" + Arrays.toString(values)
+            + " triggersGlobalFactor=" + (globalFactors[ti] != null)
+            + " triggersTransitionGenerator=" + (transitionGenrators[ti] != null));
+      }
+
       if (globalFactors[ti] != null)
         globalFactors[ti].rescore(this, values);
+
       if (transitionGenrators[ti] != null) {
         List<Pair<HypEdge, Adjoints>> edges = transitionGenrators[ti].match(values, this);
         for (Pair<HypEdge, Adjoints> se : edges)

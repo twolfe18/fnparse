@@ -37,6 +37,7 @@ import edu.jhu.hlt.uberts.features.OldFeaturesWrapper;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
+import edu.jhu.hlt.uberts.srl.EdgeUtils;
 
 /**
  * A super-class for implementing functionality which needs to scan over a
@@ -48,10 +49,17 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator;
 public abstract class UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
 
+  // How should the document being consumed be interpretted?
+  public static enum Mode {
+    TRAIN, DEV, TEST,
+  }
+
   protected Uberts u;
   protected List<Rule> rules;
   protected List<Relation> helperRelations;
   protected TypeInference typeInf;
+
+  protected Mode mode;
 
   // Both of these are single arg relations and their argument is a doc id.
   protected NodeType docidNT;
@@ -71,6 +79,13 @@ public abstract class UbertsPipeline {
   // Any fact which HypEdge.WithProps.IS_Y and matches a Relation in this list
   // will be added to the state as a part of setup.
   public Set<String> oracleRelations;
+
+  // META: The reason for these are that EXACTLY_ONE chokes during training when there are more than one gold fact per ByGroup decoder group
+  // Removes all facts in a RelDoc which end in "/C"
+  protected boolean removeContinuationRolesDuringTrain = true;
+  // Removes all facts in a RelDoc which end in "/R"
+  protected boolean removeReferenceRolesDuringTrain = false;
+
 
   /**
    * @param u
@@ -189,6 +204,13 @@ public abstract class UbertsPipeline {
 //      }
     }
 
+    removeContinuationRolesDuringTrain =
+        config.getBoolean("removeContinuationRolesDuringTrain", removeContinuationRolesDuringTrain);
+    removeReferenceRolesDuringTrain =
+        config.getBoolean("removeReferenceRolesDuringTrain", removeReferenceRolesDuringTrain);
+    Log.info("[main] removeContinuationRolesDuringTrain=" + removeContinuationRolesDuringTrain);
+    Log.info("[main] removeReferenceRolesDuringTrain=" + removeReferenceRolesDuringTrain);
+
     Log.info("done");
   }
 
@@ -259,6 +281,23 @@ public abstract class UbertsPipeline {
     boolean debug = false;
     if (debug)
       System.out.println("[setupUbertsForDoc] " + doc.getId());
+
+    if (mode == Mode.TRAIN && removeContinuationRolesDuringTrain) {
+      Relation arg4 = u.getEdgeType("argument4");
+      assert doc.items.isEmpty();
+      eventCounts.increment("removedContinuationRoles/docs");
+      for (int i = 0; i < doc.facts.size(); ) {
+        HypEdge.WithProps e = doc.facts.get(i);
+        if (e.getRelation() == arg4 && EdgeUtils.role(e).endsWith("/C")) {
+          doc.facts.remove(i);
+          eventCounts.increment("removedContinuationRoles/facts");
+        } else {
+          i++;
+        }
+      }
+    }
+    if (mode == Mode.TRAIN && removeReferenceRolesDuringTrain)
+      throw new RuntimeException("implement me");
 
 //    u.getAgenda().clear();
     u.clearAgenda();

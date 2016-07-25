@@ -6,7 +6,7 @@ import java.util.Map;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
-import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline.Mode;
+import edu.jhu.hlt.uberts.auto.UbertsPipeline.Mode;
 
 /**
  * Knows about a metric of interest, e.g. F(argument4), and tracks its value

@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.LL;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -150,6 +151,8 @@ public class AddNullSpanArgs {
         }
       }
     }
+    if (nullSpanFacts.isEmpty())
+      Log.warn("nullSpanFacts.size=0, there is probably a problem, perhaps with coarsenFrames2?");
     return nullSpanFacts;
   }
 }
