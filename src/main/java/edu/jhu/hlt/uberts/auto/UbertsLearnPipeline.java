@@ -781,8 +781,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (this.mode == Mode.TRAIN && includeGoldArgsAtTrain) {
       Relation a4 = u.getEdgeType("argument4");
       for (HashableHypEdge e : u.getLabels().getGoldEdges(a4, false)) {
-        Span t = Span.inverseShortString((String) e.getEdge().getTail(0).getValue());
-        Span s = Span.inverseShortString((String) e.getEdge().getTail(2).getValue());
+        Span t = EdgeUtils.target(e.getEdge());
+        Span s = EdgeUtils.arg(e.getEdge());
         String k = (String) e.getEdge().getTail(3).getValue();
         if (added.add(new LabeledSpanPair(t, s, k))) {
           int shead = hf.headSafe(s, sent);

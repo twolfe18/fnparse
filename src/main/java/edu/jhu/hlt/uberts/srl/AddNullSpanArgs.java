@@ -64,15 +64,27 @@ public class AddNullSpanArgs {
 
   private Uberts u; // used to lookup role2 facts
   private Relation role2;
+  private Relation coarsenFrame2; // coarsenFrame(f,fc)
   private Relation argument4;
   private Relation predicate2;
 
   public AddNullSpanArgs(Uberts u) {
-    this(u, u.getEdgeType("role2"), u.getEdgeType("argument4"), u.getEdgeType("predicate2"));
+    this(u, u.getEdgeType("role2"), u.getEdgeType("coarsenFrame2"), u.getEdgeType("argument4"), u.getEdgeType("predicate2"));
   }
-  public AddNullSpanArgs(Uberts u, Relation role2, Relation argument4, Relation predicate2) {
+  public AddNullSpanArgs(Uberts u, Relation role2, Relation coarsenFrame2, Relation argument4, Relation predicate2) {
+    if (u == null)
+      throw new IllegalArgumentException();
+    if (role2 == null)
+      throw new IllegalArgumentException();
+    if (coarsenFrame2 == null)
+      throw new IllegalArgumentException();
+    if (argument4 == null)
+      throw new IllegalArgumentException();
+    if (predicate2 == null)
+      throw new IllegalArgumentException();
     this.u = u;
     this.role2 = role2;
+    this.coarsenFrame2 = coarsenFrame2;
     this.argument4 = argument4;
     this.predicate2 = predicate2;
   }
@@ -117,7 +129,12 @@ public class AddNullSpanArgs {
       // Look up possible roles
       assert role2.getTypeForArg(0) == argument4.getTypeForArg(1);
       HypNode fNode = u.lookupNode(argument4.getTypeForArg(1), tf.f, false, true);
-      LL<HypEdge> roles = u.getState().match(0, role2, fNode);
+
+      // Coarsen f. Currently only relevant to PB, e.g. "propbank/kill-v-1" => "propbank/kill-v"
+      HypEdge fCoarsenFact = u.getState().match1(0, coarsenFrame2, fNode);
+      HypNode fcNode = fCoarsenFact.getTail(1);
+
+      LL<HypEdge> roles = u.getState().match(0, role2, fcNode);
       // For each possible which isn't realized, instantiate nullSpan arg4 fact
       for (LL<HypEdge> cur = roles; cur != null; cur = cur.next) {
         String kRealized = (String) cur.item.getTail(1).getValue();

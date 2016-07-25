@@ -526,7 +526,7 @@ public class Uberts {
     // I have to make this true to implement the violation computation used in UbertsLearnPipeline.adHockSrl.
     if (t1r.size() != t2r.size()) {
       Log.info("WARNING: t1r.size=" + t1r.size() + " t2r.size=" + t2r.size());
-//      assert false;
+      assert false;
     }
     double sCumOracle = 0;
     double sCumPred = 0;
