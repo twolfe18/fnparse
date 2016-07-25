@@ -438,11 +438,21 @@ public class Uberts {
     Agenda a0 = agenda.duplicate();
     timer.stop("duplicate-agenda");
 
+    boolean debug = true;
+    if (debug) {
+      Log.info("at the start of MV:");
+      Log.info("lasoHack=" + lasoHack);
+      Log.info(getStateFactCounts());
+      int i = 0;
+      for (AgendaItem ai : a0.getContentsInNoParticularOrder())
+        System.out.println("agenda[" + (i++) + "]: " + ai);
+    }
+
     // Oracle
     Traj t1 = null;
     {
       if (Agenda.DEBUG || DEBUG > 1)
-        Log.info("starting ORACLE inference");
+        Log.info("starting ORACLE inference, agenda=" + agenda + " thresh=" + thresh);
 //      agenda.setRescoreMode(RescoreMode.ORACLE, goldEdges);
       while (agenda.size() > 0) {
         AgendaItem ai = agenda.popBoth2();
@@ -451,7 +461,7 @@ public class Uberts {
         Pair<Boolean, Adjoints> p = thresh.decide2(ai);
         boolean yhat = p.get1();
         if (DEBUG > 1)
-          System.out.println("[maxViolationPerceptron] popped=" + ai);
+          System.out.println("[maxViolationPerceptron] step=oracle gold=" + y + " pred=" + yhat + " popped=" + ai);
 
         if (y) {
           Step s = new Step(ai, y, yhat);
@@ -469,7 +479,7 @@ public class Uberts {
     Traj t2 = null;
     {
       if (Agenda.DEBUG || DEBUG > 1)
-        Log.info("starting LOSS_AUGMENTED inference");
+        Log.info("starting LOSS_AUGMENTED inference, agenda=" + agenda + " thresh=" + thresh);
 
       // NOTE: Since the event1 facts are already on the agenda,
       // RescoreMode.LOSS_AUGMENTED doesn't apply to those edges.
@@ -484,7 +494,7 @@ public class Uberts {
         Pair<Boolean, Adjoints> p = thresh.decide2(ai);
         boolean yhat = p.get1();
         if (DEBUG > 1)
-          System.out.println("[maxViolationPerceptron] popped=" + ai);
+          System.out.println("[maxViolationPerceptron] step=lossAugmented gold=" + y + " pred=" + yhat + " popped=" + ai);
 
         if (yhat) {
           Step s = new Step(ai, y, yhat);

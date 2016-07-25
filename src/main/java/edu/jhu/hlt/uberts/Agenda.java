@@ -144,7 +144,19 @@ public class Agenda {
     this.priority = priority;
     this.uniq = new HashSet<>();
     this.comparator = comparator;
-    assert (priority != null) || (comparator != null);
+    assert (priority == null) != (comparator == null) : "priority=" + priority + " comparator=" + comparator;
+  }
+
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("(Agenda top=" + top);
+    if (priority != null)
+      sb.append(" priority=" + priority);
+    else
+      sb.append(" comparator=" + comparator);
+    sb.append(')');
+    return sb.toString();
   }
 
   public Agenda duplicate() {
