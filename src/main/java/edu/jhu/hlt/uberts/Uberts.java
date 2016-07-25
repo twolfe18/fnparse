@@ -439,7 +439,7 @@ public class Uberts {
     timer.stop("duplicate-agenda");
 
     boolean debug = true;
-    if (debug) {
+    if (debug && DEBUG > 1) {
       Log.info("at the start of MV:");
       Log.info("lasoHack=" + lasoHack);
       Log.info(getStateFactCounts());
