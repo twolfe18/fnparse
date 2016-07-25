@@ -438,6 +438,12 @@ public class OldFeaturesWrapper {
     }
 
     public Ints3(BasicFeatureTemplates bft, Relation r, File featureSet, int dimension, boolean fixed, boolean cacheArg4, boolean learnDebug) {
+      Log.info("r=" + r.getName()
+          + " featureSet=" + featureSet.getPath()
+          + " dimension=" + dimension
+          + " fixed=" + fixed
+          + " cacheArg4=" + cacheArg4
+          + " learnDebug=" + learnDebug);
       if (cacheArg4) assert !learnDebug : "if you want learnDebug=true, you should set cacheArg4=false";
       this.inner = new OldFeaturesWrapper(bft, featureSet);
       this.rel = r;
