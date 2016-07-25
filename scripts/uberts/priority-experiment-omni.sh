@@ -154,7 +154,7 @@ echo -e "java -cp $JAR_STABLE -ea -server -Xmx10G
     globalFeats $GLOBAL_FEATS
     parameterIO $PARAM_IO
     featureSetDir $FEATURE_SET_DIR
-    debugLearn true
+    learnDebug true
     predictions.outputDir $PREDICTIONS_DIR"
 
 java -cp $JAR_STABLE -ea -server -Xmx10G \
@@ -183,7 +183,7 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     globalFeats "$GLOBAL_FEATS" \
     parameterIO "$PARAM_IO" \
     featureSetDir $FEATURE_SET_DIR \
-    debugLearn true \
+    learnDebug true \
     predictions.outputDir $PREDICTIONS_DIR
 
 echo "done at `date`, ret code $?"
