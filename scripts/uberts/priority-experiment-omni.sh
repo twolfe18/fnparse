@@ -116,17 +116,13 @@ fi
 
 BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t"
 BY_GROUP_DECODER="$BY_GROUP_DECODER AT_MOST_ONE:argument4(t,f,s,k):t:k"
-#BY_GROUP_DECODER="$BY_GROUP_DECODER AT_MOST_ONE:argument4(t,f,s,k):t:s"
 
-#SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/null-span1.facts,$RD/coarsenPos2.rel"
 SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/coarsenPos2.rel"
 
 #MINI_DEV_SIZE=200
 #MINI_TRAIN_SIZE=1000
 MINI_DEV_SIZE=300
 MINI_TRAIN_SIZE=6000
-
-#agendaPriority "$PRIORITY" \
 
 echo -e "java -cp $JAR_STABLE -ea -server -Xmx10G
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline
@@ -148,8 +144,8 @@ echo -e "java -cp $JAR_STABLE -ea -server -Xmx10G
     trainMethod $TRAIN_METHOD
     relations $RD/relations.def
     schema $SCHEMA
-    oracleFeaturess $ORACLE_RELATIONS
     oracleRelations $ORACLE_RELATIONS
+    oracleFeatures $ORACLE_RELATIONS
     byGroupDecoder $BY_GROUP_DECODER
     globalFeats $GLOBAL_FEATS
     parameterIO $PARAM_IO
@@ -177,8 +173,8 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     trainMethod $TRAIN_METHOD \
     relations $RD/relations.def \
     schema "$SCHEMA" \
-    oracleFeaturess "$ORACLE_RELATIONS" \
     oracleRelations "$ORACLE_RELATIONS" \
+    oracleFeatures "$ORACLE_RELATIONS" \
     byGroupDecoder "$BY_GROUP_DECODER" \
     globalFeats "$GLOBAL_FEATS" \
     parameterIO "$PARAM_IO" \

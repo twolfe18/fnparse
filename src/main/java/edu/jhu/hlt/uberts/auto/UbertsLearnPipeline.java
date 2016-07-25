@@ -214,7 +214,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("");
     HACKY_DEBUG = true;
     Uberts.LEARN_DEBUG = true;
-    Uberts.DEBUG = 3;
+    Uberts.DEBUG = 4;
     NumArgsRoleCoocArgLoc.SHOW_GLOBAL_FEAT_COMMUNICATION = true;
   }
   public static void turnOffDebug() {
@@ -261,6 +261,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     oracleFeats = config.getStrings("oracleFeatures", oracleFeats);
     graphFeats = config.getBoolean("graphFeats", graphFeats);
     templateFeats = config.getBoolean("templateFeats", templateFeats);
+    Log.info("[main] oracleFeats=" + Arrays.toString(oracleFeats));
+    Log.info("[main] graphFeats=" + graphFeats);
+    Log.info("[main] templateFeats=" + templateFeats);
 
     trainMethod = TrainMethod.valueOf(config.getString("trainMethod", trainMethod.toString()));
     Log.info("[main] trainMethod=" + trainMethod);
