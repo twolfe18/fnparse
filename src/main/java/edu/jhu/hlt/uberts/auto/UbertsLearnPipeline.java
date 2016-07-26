@@ -479,7 +479,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     key = "predicate2/t";
     p = globalParamConfig.getOrAddDefault(key);
     if (p.frameCooc != null) {
-      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("predicate2", 0, 1, p, u);
+      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("predicate2", 0, p, u);
       a.storeExactFeatureIndices();
       String gfName = key + p.toString(false);
       Object old = name2globalFactor.put(gfName, a);
@@ -497,7 +497,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         Log.warn("there is no srl2 relation. Not adding global factor: " + p);
     } else {
       if (p.any()) {
-        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2.getName(), 1, -1, p, u);
+        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2.getName(), 1, p, u);
         a.storeExactFeatureIndices();
         String gfName = key + p.toString(false);
         name2globalFactor.put(gfName, a);
@@ -512,7 +512,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         Log.warn("there is no srl2 relation. Not adding global factor: " + p);
     } else {
       if (p.any()) {
-        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2.getName(), 0, -1, p, u);
+        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2.getName(), 0, p, u);
         a.storeExactFeatureIndices();
         String gfName = key + p.toString(false);
         name2globalFactor.put(gfName, a);
@@ -528,7 +528,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         Log.warn("there is no srl3 relation. Not adding global factor: " + p);
     } else {
       if (p.any()) {
-        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl3.getName(), 0, -1, p, u);
+        NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl3.getName(), 0, p, u);
         a.storeExactFeatureIndices();
         String gfName = key + p.toString(false);
         name2globalFactor.put(gfName, a);
@@ -539,7 +539,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     key = "argument4/t";
     p = globalParamConfig.getOrAddDefault(key);
     if (p.any()) {
-      NumArgsRoleCoocArgLoc numArgsArg4 = new NumArgsRoleCoocArgLoc("argument4", 0, 1, p, u);
+      NumArgsRoleCoocArgLoc numArgsArg4 = new NumArgsRoleCoocArgLoc("argument4", 0, p, u);
       numArgsArg4.storeExactFeatureIndices();
       String gfName = key + p.toString(false);
       name2globalFactor.put(gfName, numArgsArg4);
@@ -550,7 +550,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     key = "argument4/s";
     p = globalParamConfig.getOrAddDefault(key);
     if (p.any()) {
-      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("argument4", 2, 1, p, u);
+      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("argument4", 2, p, u);
       a.storeExactFeatureIndices();
       name2globalFactor.put(key + p.toString(false), a);
       u.addGlobalFactor(a.getTrigger2(u), a);
