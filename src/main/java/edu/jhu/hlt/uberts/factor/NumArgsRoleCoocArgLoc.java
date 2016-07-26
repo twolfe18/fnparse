@@ -76,6 +76,12 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private boolean useAvg = false;
   private Alphabet<String> featureNames;  // for debugging
 
+  // If true, then when scoring an agenda edge when there are already 3
+  // arguments in the state, the features will be roughly [n=1, n=2, n=3].
+  // If false, then we don't include the prefix features, just [n=3].
+  private boolean additiveNumArgs = false;
+  private boolean additiveArgLocGlobal = false;
+
   private Counts<String> events = new Counts<>();
 
   // Each is called on f(newEdge,fOldEdge) where each argument is a firesFor Relation
@@ -482,6 +488,15 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       this.pairwiseFeaturesFunctions.add(argLocAndRoleCooc(p.argLocRoleCooc));
     if (p.frameCooc != null)
       this.pairwiseFeaturesFunctions.add(frameCoocFeat(p.frameCooc));
+
+    if (p.numArgs != null) {
+      additiveNumArgs = config.getBoolean("additiveNumArgs", additiveNumArgs);
+      Log.info("[main] additiveNumArgs=" + additiveNumArgs);
+    }
+    if (p.argLocGlobal != null) {
+      additiveArgLocGlobal = config.getBoolean("additiveArgLocGlobal", additiveArgLocGlobal);
+      Log.info("[main] additiveArgLocGlobal=" + additiveArgLocGlobal);
+    }
   }
 
   static class Spany implements Comparable<Spany> {
@@ -662,13 +677,26 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       forwards = null;
     }
 
+    /** Keeps features previously associated with this key */
     public void add(String key, String[] fy, List<String> fx) {
+      update(key, fy, fx, true);
+    }
+
+    /** Replaces features previously associated with this key */
+    public void put(String key, String[] fy, List<String> fx) {
+      update(key, fy, fx, false);
+    }
+
+    /**
+     * @param add if true then like calling add, else like calling put
+     */
+    public void update(String key, String[] fy, List<String> fx, boolean add) {
       int nx = fx.size();
       int[] fyx = new int[fy.length * nx];
       for (int i = 0; i < fy.length; i++)
         for (int j = 0; j < nx; j++)
           fyx[i*nx + j] = featureNames.lookupIndex(fy[i] + "/" + fx.get(j));
-      FeatureLL prev = globalByKey.get(key);
+      FeatureLL prev = add ? globalByKey.get(key) : null;
       AveragedPerceptronWeights w = useAvg ? theta.averageView() : theta;
       globalByKey.put(key, new FeatureLL(w, fyx, fy, fx, prev));
     }
@@ -765,15 +793,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
           numArgsPrev = Integer.parseInt(c);
         }
         List<String> fx = Arrays.asList("na1=" + (numArgsPrev+1), "na2=" + Math.min(5, numArgsPrev+1));
-        gfeats.add(key, fy, fx);
+        gfeats.update(key, fy, fx, additiveNumArgs);
       }
     }
 
     if (params.argLocGlobal != null) {
-      // Nothing old to copy, just generate new adjoints
       String[] fy = params.argLocGlobal.f(agendaEdge);
       List<String> fx = argLocGlobal(t, otherStateEdgesInGroup, agendaEdge);
-      gfeats.add("argLocGlobal", fy, fx);
+      gfeats.update("argLocGlobal", fy, fx, additiveArgLocGlobal);
     }
 
     return gfeats;
