@@ -792,7 +792,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
           String c = fll.fx.get(0).substring(4);
           numArgsPrev = Integer.parseInt(c);
         }
-        List<String> fx = Arrays.asList("na1=" + (numArgsPrev+1), "na2=" + Math.min(5, numArgsPrev+1));
+        List<String> fx = Arrays.asList("na1/" + (numArgsPrev+1), "na2/" + Math.min(5, numArgsPrev+1));
         gfeats.update(key, fy, fx, additiveNumArgs);
       }
     }
@@ -1182,9 +1182,9 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   }
 
   public static boolean isArgLocGlobalFeature(String name) {
-    if (name.startsWith("alG1/"))
+    if (name.startsWith("alG/"))
       return true;
-    if (name.startsWith("alG2/"))
+    if (name.startsWith("alG/"))
       return true;
     return false;
   }
