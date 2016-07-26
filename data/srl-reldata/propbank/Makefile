@@ -45,18 +45,20 @@ frameTriage4.rel.gz: ../unified/frameTriage4.rel.gz
 
 ../unified/role2.rel.gz: ../unified/frameTriage4.rel.gz
 
-role2.rel.gz:  ../unified/role2.rel.gz
+role2.rel.gz: ../unified/role2.rel.gz
 	zcat ../unified/role2.rel.gz | head -n 1 >role2.rel
 	zgrep $(DATASET) ../unified/role2.rel.gz >>role2.rel
 	gzip role2.rel
 
 ../unified/coarsenFrame2.rel.gz: ../unified/frameTriage4.rel.gz
 
-coarsenFrame2.rel.gz:  ../unified/coarsenFrame2.rel.gz
+coarsenFrame2.rel.gz: ../unified/coarsenFrame2.rel.gz
 	zcat ../unified/coarsenFrame2.rel.gz | head -n 1 >coarsenFrame2.rel
 	zgrep $(DATASET) ../unified/coarsenFrame2.rel.gz >>coarsenFrame2.rel
 	gzip coarsenFrame2.rel
 
+coarsenFrame2.identity.rel.gz: coarsenFrame2.rel.gz
+	zcat coarsenFrame2.rel.gz | awk '{if(NR>1){$$4=$$3} print}' | gzip -c >$@
 
 spans.schema.facts.gz:
 	python $(FNPARSE)/data/srl-reldata/make-spans.py 300 | gzip -c >$@
@@ -165,6 +167,7 @@ coe:
 
 all: relations.def grammar.trans grammar.predicate2.trans frameTriage4.rel.gz coarsenFrame2.rel.gz role2.rel.gz spans.schema.facts.gz null-span1.facts coarsenPos2.rel
 	make role2.observed.rel.gz
+	make coarsenFrame2.identity.rel.gz
 	make srl.train.shuf0.facts.gz
 	make srl.train.shuf1.facts.gz
 	make srl.train.shuf2.facts.gz

@@ -2,13 +2,17 @@ package edu.jhu.hlt.uberts.factor;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.function.Predicate;
 
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
@@ -20,6 +24,7 @@ import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda;
@@ -314,7 +319,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       private boolean targetRelBackoff = false;
       private boolean edgeRelBackoff = false;
       private boolean unordered = true;
-      private boolean ordered = false;
+      private boolean ordered = false;    // Use ordered=false and make it behave like ordered=true by using an K or FK label feature.
       @Override
       public String getName() { return "rcPW"; }
       @Override
@@ -597,65 +602,224 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     return l;
   }
 
+//  public static class GlobalPairwise {
+//    private NumArgAdj numArgs;
+//    private DebugFeatureAdj argLocGlobal;
+//    private LinkedHashMap<PairFeat, Thingy> pairwise;
+//
+//    public GlobalPairwise(GlobalPairwise add) {
+//      numArgs = null;
+//      argLocGlobal = null;
+//      pairwise = new LinkedHashMap<>();
+//    }
+//  }
+//
+//  public static class Thingy {
+//    private String[] fy;
+//    private List<String> fx;
+//    private int[] fyx;
+//    private double score;
+//    private Thingy prev;
+//  }
+
+  /**
+   * There are two types of Adjoints we need.
+   * 1) {@link DebugFeatureAdj}, one for each type of feature (key)
+   * 2) something fast: namely this class itself.
+   */
+  public class MultiFeatureLL implements Adjoints.ICaching {
+    private Adjoints local;
+    private LinkedHashMap<String, FeatureLL> globalByKey;
+    private Double forwards;
+    private HypEdge edge;
+
+    public MultiFeatureLL(Adjoints score, HypEdge beingScored) {
+      this.edge = beingScored;
+      if (score instanceof MultiFeatureLL) {
+        MultiFeatureLL m = (MultiFeatureLL) score;
+        this.local = m.local;
+        this.globalByKey = new LinkedHashMap<>(m.globalByKey);
+      } else {
+        this.local = score;
+        this.globalByKey = new LinkedHashMap<>();
+      }
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append("(MultiFeatureLL");
+      sb.append(" local=" + StringUtils.trunc(local, 100));
+      for (Entry<String, FeatureLL> x : globalByKey.entrySet()) {
+        sb.append(" global." + x.getKey() + "=" + x.getValue());
+      }
+      sb.append(')');
+      return sb.toString();
+    }
+
+    @Override
+    public double forwards() {
+      if (forwards == null) {
+        forwards = local.forwards();
+        for (FeatureLL f : globalByKey.values())
+          forwards += f.forwards();
+      }
+      return forwards;
+    }
+    @Override
+    public void backwards(double dErr_dForwards) {
+      if (dErr_dForwards == 0)
+        return;
+      local.backwards(dErr_dForwards);
+      for (String k : globalByKey.keySet()) {
+        if (Uberts.LEARN_DEBUG) {
+          getDebugAdjFor(k).backwards(dErr_dForwards);
+        } else {
+          globalByKey.get(k).backwards(dErr_dForwards);
+        }
+      }
+      forwards = null;
+    }
+
+    public void add(String key, String[] fy, List<String> fx) {
+      int nx = fx.size();
+      int[] fyx = new int[fy.length * nx];
+      for (int i = 0; i < fy.length; i++)
+        for (int j = 0; j < nx; j++)
+          fyx[i*nx + j] = featureNames.lookupIndex(fy[i] + "/" + fx.get(j));
+      FeatureLL prev = globalByKey.get(key);
+      AveragedPerceptronWeights w = useAvg ? theta.averageView() : theta;
+      globalByKey.put(key, new FeatureLL(w, fyx, fy, fx, prev));
+    }
+
+    public FeatureLL getGlobal(String key) {
+      return globalByKey.get(key);
+    }
+
+    public DebugFeatureAdj getDebugAdjFor(String key) {
+      FeatureLL fll = globalByKey.get(key);
+      List<String> fx = new ArrayList<>();
+      // Pull these out backwards because the LL already reverses the order of appearance
+      Deque<FeatureLL> fs = new ArrayDeque<>();
+      for (FeatureLL cur = fll; cur != null; cur = cur.prev)
+        fs.push(cur);
+      while (fs.size() > 0)
+        for (String fxi : fs.pop().fx)
+          fx.add(fxi);
+      return new DebugFeatureAdj(fll, Arrays.asList(fll.fy), fx, "GLOBAL: agenda=" + edge);
+    }
+  }
+
+  // Wrap this in a DebugFeatureAdj if you want it to look pretty
+  public static class FeatureLL implements Adjoints.ICaching {
+    private AveragedPerceptronWeights thetaView;
+    private String[] fy;
+    private int[] fyx;          // should be converted into [0,dimension)
+    private List<String> fx;
+    private double tfyx;        // theta * fyx + prev.tfyx
+    private FeatureLL prev;
+
+    public FeatureLL(AveragedPerceptronWeights w, int[] fyx, String[] fy, List<String> fx, FeatureLL prev) {
+      this.thetaView = w;
+      this.fy = fy;
+      this.fx = fx;
+      this.prev = prev;
+      this.fyx = fyx;
+      this.tfyx = prev == null ? 0 : prev.tfyx;
+      for (int i = 0; i < fyx.length; i++)
+        this.tfyx += thetaView.getWeight(fyx[i]);
+    }
+
+    @Override
+    public String toString() {
+      return "(fy=" + Arrays.toString(fy) + " fx=" + fx + ")";
+    }
+
+    @Override
+    public double forwards() {
+      return tfyx;
+    }
+    @Override
+    public void backwards(double dErr_dForwards) {
+      for (FeatureLL cur = this; cur != null; cur = cur.prev)
+        for (int i = 0; i < cur.fyx.length; i++)
+          thetaView.bwh(cur.fyx[i], dErr_dForwards);
+    }
+
+  }
+
   private Adjoints rescoreImmutable(HypEdge agendaEdge, Adjoints oldScore, Agenda a, HypEdge stateEdge, HypNode t, LL<HypEdge> otherStateEdgesInGroup) {
-//    String base = UbertsLearnPipeline.isNilFact(agendaEdge) ? "n" : "s";
+    String base = UbertsLearnPipeline.isNilFact(agendaEdge) ? "n" : "s";
+    if (UbertsLearnPipeline.INCLUDE_EMPTY_HISTORY_BOOL_IN_BASE)
+      base += (otherStateEdgesInGroup == null ? "0" : "1");
     assert !UbertsLearnPipeline.isNilFact(agendaEdge);
     assert !UbertsLearnPipeline.isNilFact(stateEdge);
 
-    // Create new adjoints with local score
-    GlobalFactorAdjoints gs;
-    GlobalFactorAdjoints gsOld;
-    oldScore = Adjoints.uncacheIfNeeded(oldScore);
-    if (oldScore instanceof GlobalFactorAdjoints) {
-      events.increment("rescoreImmutable/oldIsGlobal");
-      gsOld = (GlobalFactorAdjoints) oldScore;
-      gs = new GlobalFactorAdjoints(agendaEdge, gsOld.getLocalScore(), globalToLocalScale);
-    } else {
-      // oldScore is local score
-      events.increment("rescoreImmutable/oldIsLocal");
-      gsOld = null;
-      gs = new GlobalFactorAdjoints(agendaEdge, oldScore, globalToLocalScale);
-    }
+//    // Create new adjoints with local score
+//    GlobalFactorAdjoints gs;
+//    GlobalFactorAdjoints gsOld;
+//    oldScore = Adjoints.uncacheIfNeeded(oldScore);  // Sum(DFA/local, Const.ZERO)
+//    if (oldScore instanceof GlobalFactorAdjoints) {
+//      events.increment("rescoreImmutable/oldIsGlobal");
+//      gsOld = (GlobalFactorAdjoints) oldScore;
+//      // TODO This is wrong!
+//      // gsOld has {global, local} Adjoints
+//      // here we are passing along the local but dropping the global
+//      // I would say that we should just pass the global:Adjoints in in place of local:Adjoints, but then we can't merge global features into one DebugLearnFeatures
+//      gs = new GlobalFactorAdjoints(agendaEdge, gsOld.getLocalScore(), globalToLocalScale);
+//    } else {
+//      // oldScore is local score
+//      events.increment("rescoreImmutable/oldIsLocal");
+//      gsOld = null;
+//      gs = new GlobalFactorAdjoints(agendaEdge, oldScore, globalToLocalScale);
+//    }
 
+    MultiFeatureLL gfeats = new MultiFeatureLL(oldScore, agendaEdge);
+
+    // NUM_ARGS
     if (params.numArgs != null) {
-      events.increment("numArgs");
-      String key = "numArgs";
-      String[] fy = params.numArgs.f(agendaEdge);
-      Span target = EdgeUtils.target(agendaEdge);
-      NumArgAdj adj = this.new NumArgAdj(target, firesFor, fy);
-      if (gsOld != null) {
-        NumArgAdj na = (NumArgAdj) gsOld.getGlobalScore(key);
-        assert target == na.target : "you need to check for this!";
-        adj.setNumCommitted(na.numCommitted + 1);
-      } else {
-        adj.setNumCommitted(1);
+      Span agendaTarget = EdgeUtils.target(agendaEdge);
+      Span stateTarget = EdgeUtils.target(stateEdge);
+      if (agendaTarget == stateTarget) {
+        events.increment("numArgs");
+        String key = params.numArgs.name();
+        String[] fy = params.numArgs.f(agendaEdge);
+        FeatureLL fll = gfeats.getGlobal(key);
+        int numArgsPrev;
+        if (fll == null) {
+          numArgsPrev = 0;
+        } else {
+          assert fll.fx.size() == 2;
+          String c = fll.fx.get(0).substring(4);
+          numArgsPrev = Integer.parseInt(c);
+        }
+        List<String> fx = Arrays.asList("na1=" + (numArgsPrev+1), "na2=" + Math.min(5, numArgsPrev+1));
+        gfeats.add(key, fy, fx);
       }
-      gs.addToGlobalScore(key, adj);
     }
 
+    // Pariwise features
     for (PairFeat pf : pairwiseFeaturesFunctions) {
-      String[] fy = pf.fy(agendaEdge);
-      String fxBase = pf.getName();
-      List<String> fx = pf.describe(fxBase, stateEdge, agendaEdge);
-      Adjoints score = score(fy, fx, fxBase);
-
-      if (Uberts.LEARN_DEBUG)
-        score = new DebugFeatureAdj(score, Arrays.asList(fy), fx, "GLOBAL: state=" + stateEdge);
-
       String key = pf.getName();
-      gs.addToGlobalScore(key, score);
+      String[] fy = pf.fy(agendaEdge);
+      String fxBase = pf.getName() + "/" + base;
+      List<String> fx = pf.describe(fxBase, stateEdge, agendaEdge);
+//      Adjoints score = score(fy, fx, fxBase);
+//      if (Uberts.LEARN_DEBUG)
+//        score = new DebugFeatureAdj(score, Arrays.asList(fy), fx, "GLOBAL: agenda=" + agendaEdge);
+//      gs.addToGlobalScore(key, score);
+      gfeats.add(key, fy, fx);
     }
 
     if (params.argLocGlobal != null) {
       // Nothing old to copy, just generate new adjoints
       String[] fy = params.argLocGlobal.f(agendaEdge);
       List<String> fx = argLocGlobal(t, otherStateEdgesInGroup, agendaEdge);
-      Adjoints score = score(fy, fx, null);
-
-      if (Uberts.LEARN_DEBUG)
-        score = new DebugFeatureAdj(score, Arrays.asList(fy), fx, "GLOBAL: state=" + stateEdge);
-
-      gs.addToGlobalScore("argLocGlobal", score);
+//      Adjoints score = score(fy, fx, null);
+//      if (Uberts.LEARN_DEBUG)
+//        score = new DebugFeatureAdj(score, Arrays.asList(fy), fx, "GLOBAL: agenda=" + agendaEdge);
+//      gs.addToGlobalScore("argLocGlobal", score);
+      gfeats.add(params.argLocGlobal.name(), fy, fx);
     }
 
 //    String frame = EdgeUtils.frame(agendaEdge);
@@ -734,7 +898,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 //
 //    }
 
-    return gs;
+//    return gs;
+    return gfeats;
   }
 
   private Adjoints score(String[] fy, List<String> fx, String fxSuffix) {
@@ -778,7 +943,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     // NOTE: This should include stateEdge
     LL<HypEdge> otherStateEdgesInGroup = null;
-    if (params.argLocGlobal != null) {
+    if (params.argLocGlobal != null || UbertsLearnPipeline.INCLUDE_EMPTY_HISTORY_BOOL_IN_BASE) {
       State s = u.getState();
       otherStateEdgesInGroup = s.match(aggregateArgPos, firesForR, t);  // for ArgLoc global
 
@@ -794,6 +959,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     List<Object> newEdgeGroupKey = groupKey(stateEdge);
     int n = 0;
     for (HypEdge agendaEdge : affected) {
+
+      if (agendaEdge.toString().equals("argument4(10-11, framenet/Artifact, 19-32, Use)")) {
+        Log.info("check me!");
+      }
 
       // TEMPORARY HACK:
       // Do not allow global features to signal between facts in the same group

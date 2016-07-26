@@ -270,7 +270,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   }
 
   // bwh = "backwards helper"
-  private void bwh(int i, double dErr_dForwards) {
+  public void bwh(int i, double dErr_dForwards) {
     assert !(this instanceof AverageView) : "don't call backwards on average views!";
     w.add(i, -dErr_dForwards);
     u.add(i, c * -dErr_dForwards);

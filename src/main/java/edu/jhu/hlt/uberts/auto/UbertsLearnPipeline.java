@@ -194,7 +194,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // occurs, the predictor is re-set to the gold history.
   // This is implemented by using if(y)addEdgeToState(...) in the MV/pred
   // inference loop instead of if(yhat)addEdgeToState(...).
-  private boolean mvLasoHack = true;
+  private boolean mvLasoHack = false;
 
   // Does two things if true:
   // 1) adds the rule: "predicate2(t,f) & role2(f,k) & nullSpan(s) => argument4(t,f,s,k)
@@ -283,6 +283,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.warn("IGNORING agendaPriority!");
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
+    pipe.hackyImplementation = config.getBoolean("hackyImplementation", pipe.hackyImplementation);
     Log.info("[main] hackyImplementation=" + pipe.hackyImplementation);
 
     Log.info("[main] addNullSpanFacts=" + pipe.addNullSpanFacts);
@@ -787,6 +788,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   private Pred2ArgPaths.DepDecompArgCandidiates depDecompArgs;
+  @SuppressWarnings("unused")
   private void buildDepDecompArgs() {
     Sentence sent = u.dbgSentenceCache;
     if (sent == null)
@@ -891,7 +893,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   /**
    * Proof of concept, LaSO does work.
    */
-  private void addHocSrlTrain(RelDoc doc, boolean learn) {
+  private void adHocSrlTrain(RelDoc doc, boolean learn) {
     boolean local = false;
     if (HACKY_DEBUG) {
       System.out.println("starting on " + doc.getId());
@@ -930,7 +932,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       Collections.sort(ts, EdgeUtils.BY_S);
 
       // role2(f,k)
-      List<HypEdge> tk = u.getState().match(0, r2, tf.getTail(1)).toList();
+      LL<HypEdge> tkll = u.getState().match(0, r2, tf.getTail(1));
+      if (tkll == null)
+        Log.warn("there are no roles for " + tf + "?");
+      List<HypEdge> tk = tkll == null ? Collections.emptyList() : tkll.toList();
       Collections.sort(tk, EdgeUtils.BY_K_NAME);
 
       int numArgsOracle = 0;
@@ -1067,6 +1072,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private Alphabet<String> hackyGlobalFxAlph;   // stores fx
   private InverseHashingMapping hackyInv;     // stores (fy,fx)
 
+
+  public static boolean INCLUDE_EMPTY_HISTORY_BOOL_IN_BASE = true;
   /**
    * @param history is all actions, including Prunes and actions on ALL TARGETS.
    * @param current
@@ -1080,8 +1087,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       hackyInv = new InverseHashingMapping();
     }
 
-    boolean includeGlobalIntercept = true;
-    boolean includeEmptyHistoryBoolInBase = true;
+    // This really shouldn't be necessary, as this intercept correlates perfectly
+    // with the local intecept. Further, it makes comparisons between this and the regular implementation more difficult.
+    boolean includeGlobalIntercept = false;
 
     List<Pair<HypEdge, Adjoints>> commitHistory = new ArrayList<>();
     for (Pair<HypEdge, Adjoints> x : history)
@@ -1090,20 +1098,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     List<String> fx = new ArrayList<>();
     String base = isNilFact(current) ? "n" : "s";
-    if (includeEmptyHistoryBoolInBase)
+    if (INCLUDE_EMPTY_HISTORY_BOOL_IN_BASE)
       base += (commitHistory.isEmpty() ? "0" : "1");
     if (includeGlobalIntercept)
       fx.add(base);
 
-    /*
-     * roleCooc should run when agendaEdge is nullSpan to learn things like "A=role1 & a=role1 & isNullSpan(a)"
-     *   the problem with this is that we will not be able to have nullSpan when we go back to the other framework... (those aren't put on the agenda)
-     * argLoc should not run when agendaEdge is nullSpan
-     */
-
     // If true use (1, k, fk) as refinements, otherwise (k, fk)
     // true is what should match the standard/good implementation
-    FyMode fyMode = FyMode.F;
+    FyMode fyMode = null;
 
     // See /tmp/uberts-137-* and /tmp/uberts-138-* for a comparison.
     // I was wrong in assuming that if you don't have null feats that you can't
@@ -1113,30 +1115,60 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     boolean includeNullFactFeats = false;
 
     // Since I'm passing in base as a prefix, all of these features are conjoined with nullSpan?
-    boolean useOnlyNumArgs = true;
-    PairFeat f = NumArgsRoleCoocArgLoc.roleCoocFeat(FyMode.K);
-//    PairFeat f = NumArgsRoleCoocArgLoc.ARG_LOC_PAIRWISE_FEAT;
-//    PairFeat f = NumArgsRoleCoocArgLoc.ARG_LOC_AND_ROLE_COOC;
+    boolean useOnlyNumArgs = false;
+    PairFeat f = null;
 
+    // Figure out what features to call
+    GlobalParams gp = globalParamConfig.getOrAddDefault("argument4/t");
+    if (gp.numArgs != null) {
+      assert f == null;
+      useOnlyNumArgs = true;
+      fyMode = gp.numArgs;
+    }
+    if (gp.roleCooc != null) {
+      assert f == null;
+      f = NumArgsRoleCoocArgLoc.roleCoocFeat(gp.roleCooc);
+    }
+    if (gp.argLocPairwise != null) {
+      assert f == null;
+      f = NumArgsRoleCoocArgLoc.argLocPairwiseFeat(gp.argLocPairwise);
+    }
+    if (gp.argLocRoleCooc != null) {
+      assert f == null;
+      f = NumArgsRoleCoocArgLoc.argLocPairwiseFeat(gp.argLocRoleCooc);
+    }
+    assert gp.argLocGlobal == null : "can't do this the hacky way";
+    assert f != null;
+
+
+    // Compute features (as Strings)
     if (useOnlyNumArgs) {
       if (includeNullFactFeats || !isNullSpan(current))
-        fx.add(base + "/" + numArgs);
+        fx.add(numArgs + "/" + base);
     } else {
       if (includeNullFactFeats || !isNullSpan(current)) {
         for (Pair<HypEdge, Adjoints> x : commitHistory) {
-          for (String ff : f.describe(base + "/" + f.getName(), x.get1(), current)) {
-            assert ff.startsWith(base);
+          for (String ff : f.describe(f.getName() + "/" + base, x.get1(), current)) {
             fx.add(ff);
           }
         }
       }
     }
 
+    // Convert Strings to ints
+    if (fx.isEmpty())
+      return Adjoints.Constant.ZERO;
     int[] hfx = new int[fx.size()];
     for (int i = 0; i < hfx.length; i++)
       hfx[i] = hackyGlobalFxAlph.lookupIndex(fx.get(i));
 
-    String[] fy = fyMode.f(current);
+    String[] fy;
+    if (useOnlyNumArgs) {
+      fy = fyMode.f(current);
+      assert f == null;
+    } else {
+      fy = f.fy(current);
+    }
     int[] hfy = new int[fy.length];
     for (int i = 0; i < hfy.length; i++)
       hfy[i] = Hash.hash(fy[i]);
@@ -1157,7 +1189,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           + " onlyNumArgs=" + useOnlyNumArgs
           + " includeNullFactFeat=" + includeNullFactFeats
           + " includeGlobalIntercept=" + includeGlobalIntercept);
-//      System.out.println("hist:    " + hist);
       System.out.println("hist:    " + commHist);
       System.out.println("cur:     " + current);
       System.out.println("numArgs: " + numArgs);
@@ -1295,7 +1326,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
 
     if (hackyImplementation) {
-      addHocSrlTrain(doc, mode == Mode.TRAIN);
+      adHocSrlTrain(doc, mode == Mode.TRAIN);
     } else {
       switch (mode) {
       case TRAIN:
