@@ -20,23 +20,19 @@ GF="none";
 fi
 
 AP=`grep -m 1 -oP '(?<=parsing agenda priority ).*' $LOG`
+AC=`grep -m 1 agendaComparator $LOG | key-values agendaComparator`
+if [[ "$AP" == "" ]]; then AP="noPriority"; fi
+if [[ "$AC" == "" ]]; then AP="noComparator"; fi
 
 PERF=`mktemp`
-grep 'dev-full.*tp.*predicate2' $LOG >$PERF
+grep 'dev-full.*tp.*predicate2' $LOG | key-values "F(predicate2)" "P(predicate2)" "R(predicate2)" | awk '{print $0, NR}' | sort -rn >$PERF
 N=`cat $PERF | wc -l`
+N_OPT=`head -n 1 $PERF | awk '{print $4}'`
+F=`head -n 1 $PERF | awk '{print $1}'`
+P=`head -n 1 $PERF | awk '{print $2}'`
+R=`head -n 1 $PERF | awk '{print $3}'`
 
-# TODO Take the max instead of the last?
-PL=`key-values 'F(predicate2)' 'P(predicate2)' 'R(predicate2)' <$PERF | awk 'BEGIN{p=0;r=0;f=0} $1>f {f=$1; p=$2; r=$3} END {print f, p, r}'`
-F=`echo $PL | cut -d' ' -f1`
-P=`echo $PL | cut -d' ' -f2`
-R=`echo $PL | cut -d' ' -f3`
-#PL=`cat $PERF | tail -n 1`
-#F=`echo $PL | key-values "F(predicate2)"`
-#P=`echo $PL | key-values "P(predicate2)"`
-#R=`echo $PL | key-values "R(predicate2)"`
-
-
-echo -e "$F\t$P\t$R\t$N\t$T\t$GF\t$FS\t$AP"
+echo -e "$F\t$P\t$R\t$N_OPT\t$N\t$T\t$GF\t$FS\t$AP\t$AC"
 
 rm $PERF
 
