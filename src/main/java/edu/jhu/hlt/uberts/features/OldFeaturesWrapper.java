@@ -494,7 +494,7 @@ public class OldFeaturesWrapper {
       assert y.getRelation() == rel;
       cnt.increment("score/" + y.getRelation().getName());
 
-      if (AUTO_LEARN_DEBUG && scoreCalls == 25000) {
+      if (AUTO_LEARN_DEBUG && scoreCalls == 5000) {
         learnDebug = false;
         UbertsLearnPipeline.turnOffDebug();
       }
@@ -592,9 +592,9 @@ public class OldFeaturesWrapper {
       fy.add("1");
       if (theta2 != null) {
         for (int i = 0; i < theta2.size(); i++) {
-          fy.add(theta2RefName.get(i));
           Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights> ref = theta2.get(i);
           int r = ref.get1().applyAsInt(y);
+          fy.add(theta2RefName.get(i) + "=" + r);
           int[] fr = new int[features.length];
           for (int j = 0; j < fr.length; j++)
             fr[j] = Hash.mix(r, features[j]);

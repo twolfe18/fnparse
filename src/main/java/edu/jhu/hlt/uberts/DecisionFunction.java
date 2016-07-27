@@ -12,7 +12,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.function.BiFunction;
 
-import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -197,6 +196,10 @@ public interface DecisionFunction {
         sb.append(" " + x.getKey() + "=" + x.getValue());
       sb.append(')');
       return sb.toString();
+    }
+
+    public DecisionFunction get(String relation) {
+      return rel2df.get(relation);
     }
 
     /**
@@ -428,6 +431,21 @@ public interface DecisionFunction {
 
     private Uberts u;
 
+    // If true check that all of the scores that you see (in popped order) are
+    // non-increasing. If this is true than you solve the argmax properly. This
+    // can be violated if we choose a fact f1 as the argmax of a group, and then
+    // adding it to the state forces global features to fire raising the score
+    // of f2, which is also in the group, making score(f2)>score(f1), meaning
+    // that the argmax was correct at the time but has changed.
+    // f1 and f2 do not have to be in the same group, there could be a chain of
+    // facts whose global features affect each other, leading in a cycle which
+    // leads to changing the argmax of a group.
+    // I DON'T THINK THIS IS A PROBLEM because of an analogy to a simpler
+    // transition system in which all of the actions and global features are
+    // computed at every timestep. In fact, I used to have this, with an argmax
+    // over all (t,f,s,k) facts!
+    private boolean checkScoresNonIncreasing = false;
+
     /**
      * @param description should look like: <term>(:<varName>)+, e.g. "predicate2(t,f):t"
      */
@@ -453,7 +471,7 @@ public interface DecisionFunction {
               + parts[i+1] + " in term " + t);
         }
       }
-      u.addNewStateEdgeListener(this);
+//      u.addNewStateEdgeListener(this);
     }
 
     public ByGroup(ByGroupMode mode, Relation relation, int[] keyArgs) {
@@ -525,7 +543,8 @@ public interface DecisionFunction {
         return null;  // Doesn't apply
       List<Object> key = getKey(e);
 
-      checkScoresInGroupSorted(key, e, s);
+      if (checkScoresNonIncreasing)
+        checkScoresInGroupSorted(key, e, s);
 
       boolean newEdge = !observedKeys.contains(key);
       switch (mode) {
@@ -553,20 +572,8 @@ public interface DecisionFunction {
         return new Pair<>(null, null);  // Doesn't apply
       List<Object> key = getKey(e);
 
-//      // This should be true if we are sorting by easyfirst
-//      List<Adjoints> l = dbgScoresInBucket.get(key);
-//      if (l == null) {
-//        l = new ArrayList<>();
-//        dbgScoresInBucket.put(key, l);
-//      }
-//      l.add(s);
-//      int n = l.size();
-//      if (n >= 2) {
-//        assert l.get(n-2).forwards() >= l.get(n-1).forwards()
-//            : "penultimate=" + l.get(n-2) + " last=" + l.get(n-1);
-//      }
-
-      checkScoresInGroupSorted(key, e, s);
+      if (checkScoresNonIncreasing)
+        checkScoresInGroupSorted(key, e, s);
 
       final Pair<HypEdge, Adjoints> p = new Pair<>(e, s);
       boolean first = !firstPredInBucket.containsKey(key);

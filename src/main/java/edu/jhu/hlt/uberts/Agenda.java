@@ -134,6 +134,10 @@ public class Agenda {
     this.labels = y;
   }
 
+  public RescoreMode getRescoreMode() {
+    return rescoreMode;
+  }
+
   public Agenda(BiFunction<HypEdge, Adjoints, Double> priority, Comparator<AgendaItem> comparator) {
     this.top = 0;
     int initSize = 16;

@@ -17,12 +17,14 @@ public class DebugFeatureAdj implements Adjoints {
   private List<String> fy;
   private List<String> fx;
   private Object ancillaryInfo;
+  private double origScore;
 
   public DebugFeatureAdj(Adjoints wrapped, String[] fy, String[] fx, Object ancillaryInfo) {
     this(wrapped, Arrays.asList(fy), Arrays.asList(fx), ancillaryInfo);
   }
 
   public DebugFeatureAdj(Adjoints wrapped, List<String> fy, List<String> fx, Object ancillaryInfo) {
+    this.origScore = wrapped.forwards();
     this.wrapped = wrapped;
     this.fy = fy;
     this.fx = fx;
@@ -38,6 +40,8 @@ public class DebugFeatureAdj implements Adjoints {
     sb.append(" fx=" + fx);
     if (showWrapped) {
       sb.append(" " + wrapped);
+    } else {
+      sb.append(String.format(" s0=%+.2f sN=%+.2f", origScore, wrapped.forwards()));
     }
     sb.append(')');
     return sb.toString();
@@ -50,7 +54,7 @@ public class DebugFeatureAdj implements Adjoints {
 
   @Override
   public void backwards(double dErr_dForwards) {
-    System.out.printf("[DebugFeatureAdj backwards] dErr=%+.1f %s\n", dErr_dForwards, this);
+    System.out.printf("[DebugFeatureAdj backwards] fwd0=%+.2f fwdN=%.2f dErr=%+.1f %s\n", origScore, wrapped.forwards(), dErr_dForwards, this);
     wrapped.backwards(dErr_dForwards);
   }
 }

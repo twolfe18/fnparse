@@ -98,8 +98,8 @@ public class AddNullSpanArgs {
    */
   public List<HypEdge.WithProps> goldNullSpanFacts(RelDoc doc) {
     // Collect information about what arg4 facts are present
-    Set<TFK>  seenTF = new HashSet<>();
-    Set<TFK>  seenTFK = new HashSet<>();
+    Set<TFK> seenTF = new HashSet<>();
+    Set<TFK> seenTFK = new HashSet<>();
     assert doc.items.isEmpty();
     Long properties = null;
     for (HypEdge.WithProps e : doc.facts) {
@@ -151,8 +151,6 @@ public class AddNullSpanArgs {
         }
       }
     }
-    if (nullSpanFacts.isEmpty())
-      Log.warn("nullSpanFacts.size=0, there is probably a problem, perhaps with coarsenFrames2?");
     return nullSpanFacts;
   }
 }
