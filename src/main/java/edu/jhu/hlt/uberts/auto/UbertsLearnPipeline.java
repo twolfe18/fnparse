@@ -76,12 +76,11 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.PerlRegexFileInputStream;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.srl.AddNullSpanArgs;
+import edu.jhu.hlt.uberts.srl.AddNullSpanArgs.TFK;
 import edu.jhu.hlt.uberts.srl.EdgeUtils;
-import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
-import edu.stanford.nlp.util.HashableCoreMap;
 
 public class UbertsLearnPipeline extends UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
@@ -201,6 +200,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // 1) adds the rule: "predicate2(t,f) & role2(f,k) & nullSpan(s) => argument4(t,f,s,k)
   // 2) runs AddNullSpanArgs on incoming RelDocs to add gold nullSpan arg4 facts
   private boolean addNullSpanFacts = true;
+
+  enum TfkRerorder {
+    NONE,               // leave order as T.then(F).then(K)
+    CONF_ABS,           // score(bucket) = max_{f in bucket} score(f)
+    CONF_ABS_NON_NIL,   // score(bucket) = max_{f in bucket and f is not nil} score(f)
+    CONF_REL,           // score(bucket) = max_{f in bucket} score(f) - secondmax_{f in bucket} score(f)
+    CONF_REL_NON_NIL,   // score(bucket) = max_{f in bucket and f is not nil} diff(score(f), score(nil))
+  }
+  public TfkRerorder hackyTFKReorderMethod = TfkRerorder.NONE;
+
 
   private static boolean HACKY_DEBUG = true;
 
@@ -898,6 +907,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
   }
 
+  /** Classification example (within a bucket) */
   private static class ClassEx {
     public final HypEdge goldEdge;
     public final Adjoints goldScore;
@@ -916,8 +926,80 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
   }
 
+  /** Sorts (t,f,k) by confidence (maximum score of a fact within that bucket) */
+  private static class DecoderBucketReorder {
+    private Map<TFK, Double> bestFactLocalScore;
+    private Map<TFK, Double> bestNonNilFactLocalScore;
+    private Map<TFK, List<Pair<HypEdge, Adjoints>>> group2actions;
+
+    public DecoderBucketReorder() {
+      bestFactLocalScore = new HashMap<>();
+      bestNonNilFactLocalScore = new HashMap<>();
+      group2actions = new HashMap<>();
+    }
+
+    public void add(Span t, String f, String k, HypEdge a4, Adjoints score) {
+      double s = score.forwards();
+      TFK tfk = new TFK(t, f, k);
+      Double b = bestFactLocalScore.get(tfk);
+      if (b == null || s > b)
+        bestFactLocalScore.put(tfk, s);
+      if (!isNilFact(a4)) {
+        b = bestNonNilFactLocalScore.get(tfk);
+        if (b == null || s > b)
+          bestNonNilFactLocalScore.put(tfk, s);
+      }
+      List<Pair<HypEdge, Adjoints>> a = group2actions.get(tfk);
+      if (a == null) {
+        a = new ArrayList<>();
+        group2actions.put(tfk, a);
+      }
+      a.add(new Pair<>(a4, score));
+    }
+
+    public List<Pair<HypEdge, Adjoints>> getActionsInBucket(TFK bucketKey) {
+      return group2actions.get(bucketKey);
+    }
+
+    public List<TFK> getGroupsSortedTFK() {
+      assert bestFactLocalScore.size() == bestNonNilFactLocalScore.size();
+      List<TFK> l = new ArrayList<>();
+      l.addAll(bestFactLocalScore.keySet());
+      Collections.sort(l, TFK.BY_TFK);
+      return l;
+    }
+
+    public List<TFK> getGroupsSortedByScore() {
+      assert bestFactLocalScore.size() == bestNonNilFactLocalScore.size();
+      return getKeysSortedByValueDecreasing(bestFactLocalScore);
+    }
+
+    public List<TFK> getGroupsSortedByNonNilScore() {
+      assert bestFactLocalScore.size() == bestNonNilFactLocalScore.size();
+      return getKeysSortedByValueDecreasing(bestNonNilFactLocalScore);
+    }
+
+    private static List<TFK> getKeysSortedByValueDecreasing(Map<TFK, Double> score) {
+      List<TFK> l = new ArrayList<>();
+      l.addAll(score.keySet());
+      Collections.sort(l, new Comparator<TFK>() {
+        @Override
+        public int compare(TFK o1, TFK o2) {
+          double s1 = score.get(o1);
+          double s2 = score.get(o2);
+          if (s1 > s2)
+            return -1;
+          if (s1 < s2)
+            return +1;
+          return 0;
+        }
+      });
+      return l;
+    }
+  }
+
   /**
-   * Proof of concept, LaSO does work.
+   * Home of all things hacky.
    */
   private void adHocSrlTrain(RelDoc doc, boolean learn) {
     boolean local = false;
@@ -952,12 +1034,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Relation xp = u.getEdgeType("xue-palmer-otf-args2");
     Relation r2 = u.getEdgeType("role2");
 
-    List<Pair<HypEdge, Adjoints>> tOracle = new ArrayList<>();
-    List<Pair<HypEdge, Adjoints>> tPred = new ArrayList<>();
-    double sCumOracle = 0;
-    double sCumPred = 0;
-    int index = 0;
-    ArgMax<Integer> maxViolationIdx = new ArgMax<>();
+    // This stores the actions and computes an ordering over deocoder buckets
+    DecoderBucketReorder tfk2LocalScore = new DecoderBucketReorder();
+
+    // Generate actions
     List<HypEdge.WithProps> predicates = doc.match2FromFacts(p2);
     Collections.sort(predicates, EdgeUtils.BY_TF);
     for (int tfIdx = 0; tfIdx < predicates.size(); tfIdx++) {
@@ -978,99 +1058,131 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         Log.warn("there are no roles for " + tf + "?");
       List<HypEdge> tk = tkll == null ? Collections.emptyList() : tkll.toList();
       Collections.sort(tk, EdgeUtils.BY_K_NAME);
-
-      int numArgsOracle = 0;
-      int numArgsPred = 0;
-      for (HypEdge ek : tk) {                     // FOR EACH ROLE
-
-        // Loop over all actions
-        ArgMax<Pair<HypEdge, Adjoints>> pArgmaxS = new ArgMax<>();
-        ArgMax<Pair<HypEdge, Adjoints>> pArgmaxSLocal = new ArgMax<>();
-        Pair<HypEdge, Adjoints> g = null;
-        Pair<HypEdge, Adjoints> gLocal = null;
-        for (HypEdge es : ts) {                   // FOR EACH ARG SPAN
+      for (HypEdge ek : tk) {
+        for (HypEdge es : ts) {
           Span t = EdgeUtils.target(tf);
           String f = EdgeUtils.frame(tf);
           Span s = EdgeUtils.arg(es);
           String k = EdgeUtils.role(ek);
           HypEdge a4 = u.dbgMakeEdge("argument4(" + t.shortString() + ", " + f + ", " + s.shortString() + ", " + k + ")", false);
-          boolean y = u.getLabel(a4);
+          Adjoints sL = Adjoints.cacheIfNeeded(localFeats.score(a4, u));
+          tfk2LocalScore.add(t, f, k, a4, sL);
+        }
+      }
+    }
 
-          Adjoints sL = localFeats.score(a4, u);
-          Adjoints scoreOracleLocal = sL;
-          Adjoints scorePredLocal = sL;
+    // Re-order
+    // TODO: In addition to trying to sort by score of a nil or non-nil fact,
+    // try sorting by max_{s1, s2 = top2(bucket)} s1-s2
+    // or maybe max_{s1 in bucket} s1-avgScore(bucket)
+    List<TFK> buckets;
+    switch (hackyTFKReorderMethod) {
+    case NONE:
+      buckets = tfk2LocalScore.getGroupsSortedTFK();
+      break;
+    case CONF_ABS:
+      buckets = tfk2LocalScore.getGroupsSortedByScore();
+      break;
+    case CONF_ABS_NON_NIL:
+      buckets = tfk2LocalScore.getGroupsSortedByNonNilScore();
+      break;
+    case CONF_REL:
+      throw new RuntimeException("implement me: " + hackyTFKReorderMethod);
+    case CONF_REL_NON_NIL:
+      throw new RuntimeException("implement me: " + hackyTFKReorderMethod);
+    default:
+      throw new RuntimeException("unknown reorder: " + hackyTFKReorderMethod);
+    }
 
-          // Add in the loss if doing LOSS_AUGMENTED inference (learn) vs DECODE (!learn)
-          if (learn && !y) {
-            scorePredLocal = Adjoints.sum(scorePredLocal, Adjoints.Constant.ONE);
+    // Predict
+    List<Pair<HypEdge, Adjoints>> tOracle = new ArrayList<>();
+    List<Pair<HypEdge, Adjoints>> tPred = new ArrayList<>();
+    double sCumOracle = 0;
+    double sCumPred = 0;
+    int index = 0;
+    ArgMax<Integer> maxViolationIdx = new ArgMax<>();
+    Counts<TFK> tfNumArgGold = new Counts<>();
+    Counts<TFK> tfNumArgPred = new Counts<>();
+    for (TFK b : buckets) {
+
+      TFK tf = new TFK(b.t, b.f, null);
+      ArgMax<Pair<HypEdge, Adjoints>> pArgmaxS = new ArgMax<>();
+      ArgMax<Pair<HypEdge, Adjoints>> pArgmaxSLocal = new ArgMax<>();
+      Pair<HypEdge, Adjoints> g = null;
+      Pair<HypEdge, Adjoints> gLocal = null;
+
+      for (Pair<HypEdge, Adjoints> a : tfk2LocalScore.getActionsInBucket(b)) {
+        HypEdge a4 = a.get1();
+        Adjoints sL = a.get2();
+        Adjoints scoreOracleLocal = sL;
+        Adjoints scorePredLocal = sL;
+        boolean y = u.getLabel(a4);
+
+        // Add in the loss if doing LOSS_AUGMENTED inference (learn) vs DECODE (!learn)
+        if (learn && !y) {
+          scorePredLocal = Adjoints.sum(scorePredLocal, Adjoints.Constant.ONE);
+        }
+
+        Adjoints scoreOracle = null;
+        Adjoints scorePred;
+        if (local) {
+          scorePred = scorePredLocal;
+        } else {
+          int numArgsOracle = tfNumArgGold.getCount(tf);
+          int numArgsPred = tfNumArgPred.getCount(tf);
+          if (mode == Mode.TRAIN)
+            scoreOracle = Adjoints.cacheIfNeeded(Adjoints.sum(scoreOracleLocal, globalFeatures(tOracle, a4, numArgsOracle)));
+          if (mode == Mode.TRAIN && wisemanRushUpdate && maxViolationIdx.getBestScore() > 0)
+            scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tOracle, a4, numArgsOracle)));
+          else
+            scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tPred, a4, numArgsPred)));
+        }
+
+        // Store this action if it is the right answer in this group
+        if (y) {
+          assert g == null : "no uniq gold?";
+          assert gLocal == null : "no uniq gold?";
+          g = new Pair<>(a4, scoreOracle);
+          gLocal = new Pair<>(a4, scoreOracleLocal);
+        }
+
+        Pair<HypEdge, Adjoints> p = new Pair<>(a4, scorePred);
+        pArgmaxS.offer(p, p.get2().forwards());
+        Pair<HypEdge, Adjoints> pLocal = new Pair<>(a4, scorePredLocal);
+        pArgmaxSLocal.offer(pLocal, scorePredLocal.forwards());
+      } // END FOR ACTIONS in BUCKET
+
+
+      // Apply the best action in the decoder group
+      Pair<HypEdge, Adjoints> p = pArgmaxS.get();
+      tPred.add(p);
+      tOracle.add(g);
+      if (!isNullSpan(p.get1())) {
+//        numArgsPred++;
+        tfNumArgPred.increment(tf);
+      }
+
+      // Do book-keeping for MV and classification updates
+      if (mode == Mode.TRAIN) {
+        if (includeClassificationObjectiveTerm) {
+          Pair<HypEdge, Adjoints> pLocal = pArgmaxSLocal.get();
+          if (pLocal.get2().forwards() > gLocal.get2().forwards()) {
+            classEx.add(new ClassEx(gLocal, pLocal, index));
           }
+        }
 
-          Adjoints scoreOracle = null;
-          Adjoints scorePred;
-          if (local) {
-            scorePred = scorePredLocal;
-          } else {
-            if (mode == Mode.TRAIN)
-              scoreOracle = Adjoints.cacheIfNeeded(Adjoints.sum(scoreOracleLocal, globalFeatures(tOracle, a4, numArgsOracle)));
-            if (mode == Mode.TRAIN && wisemanRushUpdate && maxViolationIdx.getBestScore() > 0)
-              scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tOracle, a4, numArgsOracle)));
-            else
-              scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tPred, a4, numArgsPred)));
-          }
+        sCumOracle += g.get2().forwards();
+        sCumPred += p.get2().forwards();
+        maxViolationIdx.offer(index, sCumPred - sCumOracle);
+        index++;
 
-          // Store this action if it is the right answer in this group
-          if (y) {
-            assert g == null : "no uniq gold?";
-            assert gLocal == null : "no uniq gold?";
-            g = new Pair<>(a4, scoreOracle);
-            gLocal = new Pair<>(a4, scoreOracleLocal);
-          }
+        if (!isNullSpan(g.get1())) {
+//          numArgsOracle++;
+          tfNumArgGold.increment(tf);
+        }
+      }
 
-          Pair<HypEdge, Adjoints> p = new Pair<>(a4, scorePred);
-          pArgmaxS.offer(p, p.get2().forwards());
-          Pair<HypEdge, Adjoints> pLocal = new Pair<>(a4, scorePredLocal);
-          pArgmaxSLocal.offer(pLocal, scorePredLocal.forwards());
-        } // END FOR EACH ARG SPAN
-
-        // Apply the action
-        Pair<HypEdge, Adjoints> p = pArgmaxS.get();
-        tPred.add(p);
-        tOracle.add(g);
-        if (!isNullSpan(p.get1()))
-          numArgsPred++;
-
-        if (mode == Mode.TRAIN) {
-          if (g == null) {
-            List<HypEdge> l = new ArrayList<>();
-            for (HashableHypEdge y : u.getLabels().getGoldEdges(u.getEdgeType("argument4"), true))
-              l.add(y.getEdge());
-            Collections.sort(l, HypEdge.BY_RELATION_THEN_TAIL);
-            for (HypEdge y : l)
-              System.out.println("gold: " + y);
-            for (HypEdge y : ts)
-              System.out.println("goldSpan: " + y);
-            System.out.println("tf=" + tf);
-            System.out.println("ek=" + ek);
-          }
-          assert g != null : "tf=" + tf + " ek=" + ek;
-
-          if (includeClassificationObjectiveTerm) {
-            Pair<HypEdge, Adjoints> pLocal = pArgmaxSLocal.get();
-            if (pLocal.get2().forwards() > gLocal.get2().forwards()) {
-              classEx.add(new ClassEx(gLocal, pLocal, index));
-            }
-          }
-
-          sCumOracle += g.get2().forwards();
-          sCumPred += p.get2().forwards();
-          maxViolationIdx.offer(index, sCumPred - sCumOracle);
-          index++;
-
-          if (!isNullSpan(g.get1()))
-            numArgsOracle++;
-        } // END IF TRAIN
-      }   // END FOR EACH ROLE
-    }     // END FOR EACH PREDICATE2
+    } // END FOR BUCKETS
 
     if (learn) {
       assert maxViolationIdx.numOffers() > 0;
@@ -1121,6 +1233,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       }
       perfByRel.add(perf.perfByRel());
     }
+
   }
 
   /** Use discrete so that diff can work with this without making a mess and running into numerical issues */
@@ -1142,14 +1255,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
    */
   public Adjoints globalFeatures(List<Pair<HypEdge, Adjoints>> history, HypEdge current, int numArgs) {
     if (hackyGlobalWeights == null) {
-      // How can I steal these weights from 
+      // Steal these weights and alphabet from NumArgsRoleCoocArgLoc
       assert name2globalFactor.size() == 1;
       NumArgsRoleCoocArgLoc gf = (NumArgsRoleCoocArgLoc) name2globalFactor.values().iterator().next();
       hackyGlobalWeights = gf.theta;
       hackyGlobalFxAlph = gf.featureNames;
-//      hackyGlobalWeights = new AveragedPerceptronWeights(1 << 25, 0);
-//      hackyGlobalFxAlph = new Alphabet<>();
-      hackyInv = new InverseHashingMapping();
+//      hackyInv = new InverseHashingMapping();
     }
 
     // This really shouldn't be necessary, as this intercept correlates perfectly
@@ -1215,6 +1326,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         fx.add(numArgs + "/" + base);
     } else {
       if (includeNullFactFeats || !isNullSpan(current)) {
+        // CHANGE: include NIL facts in history, useful to roleCooc
         for (Pair<HypEdge, Adjoints> x : history) {
 //        for (Pair<HypEdge, Adjoints> x : commitHistory) {
           for (String ff : f.describe(f.getName() + "/" + base, x.get1(), current)) {
@@ -1285,7 +1397,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       System.out.println("fy:      " + Arrays.toString(fy));
       System.out.println("x:       " + f.getName());
       System.out.println("fx:      " + fx);
-      hackyInv.showCollisions();
+//      hackyInv.showCollisions();
       System.out.println();
 
       // Check num args

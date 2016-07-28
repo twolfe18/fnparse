@@ -1,12 +1,12 @@
 package edu.jhu.hlt.uberts.srl;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.LL;
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.HypEdge;
@@ -29,11 +29,11 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
  */
 public class AddNullSpanArgs {
 
-  static class TFK {
-    final Span t;
-    final String f;
-    final String k;
-    final int hc;
+  public static class TFK {
+    public final Span t;
+    public final String f;
+    public final String k;
+    private final int hc;
     public TFK(Span t, String f, String k) {
       assert t != null && t != Span.nullSpan;
       assert f != null;
@@ -61,6 +61,19 @@ public class AddNullSpanArgs {
       }
       return false;
     }
+
+    public static Comparator<TFK> BY_TFK = new Comparator<TFK>() {
+      @Override
+      public int compare(TFK o1, TFK o2) {
+        int i1 = Span.BY_END_LR_THEN_WIDTH_THIN.compare(o1.t, o2.t);
+        if (i1 != 0)
+          return i1;
+        int i2 = o1.f.compareTo(o2.f);
+        if (i2 != 0)
+          return i2;
+        return o1.k.compareTo(o2.k);
+      }
+    };
   }
 
   private Uberts u; // used to lookup role2 facts
