@@ -3,6 +3,7 @@ import os, sys, subprocess, shutil
 
 def single_global_feature_configs():
   d = {}
+  d['+none'] = ['@CONST']
   d['+numArgs'] = ['@F', '@F_1']
   d['+argLocGlobal'] = d['+argLocPairwise'] = ['@F', '@F_1', '@FK', '@FK_1', '@K', '@K_F']
   d['+roleCooc'] = ['@CONST', '@F', '@F_1']

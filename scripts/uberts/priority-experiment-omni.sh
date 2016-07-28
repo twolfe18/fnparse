@@ -114,41 +114,13 @@ fi
 BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t"
 BY_GROUP_DECODER="$BY_GROUP_DECODER EXACTLY_ONE:argument4(t,f,s,k):t:k"
 
-SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/coarsenPos2.rel"
+#SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.rel.gz,$RD/coarsenPos2.rel"
+SCHEMA="$RD/frameTriage4.rel.gz,$RD/role2.observed.rel.gz,$RD/spans.schema.facts.gz,$RD/coarsenFrame2.identity.rel.gz,$RD/coarsenPos2.rel"
 
 #MINI_DEV_SIZE=200
 #MINI_TRAIN_SIZE=1000
 MINI_DEV_SIZE=300
 MINI_TRAIN_SIZE=6000
-
-echo -e "java -cp $JAR_STABLE -ea -server -Xmx10G
-  edu.jhu.hlt.uberts.auto.UbertsLearnPipeline
-    data.embeddings $FNPARSE_DATA/embeddings
-    data.wordnet $FNPARSE_DATA/wordnet/dict
-    data.propbank.frames $FNPARSE_DATA/ontonotes-release-5.0-fixed-frames/frames
-    pred2arg.feat.paths $FNPARSE_DATA/pred2arg-paths/propbank.txt
-    rolePathCounts $FNPARSE_DATA/pred2arg-paths/propbank.byRole.txt
-    miniDevSize $MINI_DEV_SIZE
-    trainSegSize $MINI_TRAIN_SIZE
-    passes 3
-    trainTimeLimitMinutes 0
-    skipSrlFilterStages true
-    train.facts $TF
-    dev.facts $RD/srl.dev.shuf.facts.gz
-    test.facts $RD/srl.test.facts.gz
-    grammar $GRAMMAR
-    agendaComparator $AGENDA_COMPARATOR
-    trainMethod $TRAIN_METHOD
-    relations $RD/relations.def
-    schema $SCHEMA
-    oracleRelations $ORACLE_RELATIONS
-    oracleFeatures $ORACLE_RELATIONS
-    byGroupDecoder $BY_GROUP_DECODER
-    globalFeats $GLOBAL_FEATS
-    parameterIO $PARAM_IO
-    featureSetDir $FEATURE_SET_DIR
-    learnDebug true
-    predictions.outputDir $PREDICTIONS_DIR"
 
 java -cp $JAR_STABLE -ea -server -Xmx10G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
