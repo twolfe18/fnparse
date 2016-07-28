@@ -23,6 +23,11 @@ public enum FyMode {
       EdgeUtils.frame(e) + "-" + EdgeUtils.role(e),
       "const",
   }; } },
+  F_FK_1 { public String[] f(HypEdge e) { return new String[] {
+      EdgeUtils.frame(e),
+      EdgeUtils.frame(e) + "-" + EdgeUtils.role(e),
+      "const",
+  }; } },
   K_FK_F_1 { public String[] f(HypEdge e) { return new String[] {
       EdgeUtils.role(e),
       EdgeUtils.frame(e) + "-" + EdgeUtils.role(e),

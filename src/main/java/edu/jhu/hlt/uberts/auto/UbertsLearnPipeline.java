@@ -201,6 +201,21 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // 2) runs AddNullSpanArgs on incoming RelDocs to add gold nullSpan arg4 facts
   private boolean addNullSpanFacts = true;
 
+  // MAX_VIOLATION is concerned with keeping valid prefixes on the beam.
+  // It can in principle suffer the same issues as EARLY_UPDATE though:
+  // the max violation (z[1:i],y[1:i]) may leave off valuable information in
+  // the [i:n] range.
+  // If we didn't have global features, then we wouldn't treat this as a transition
+  // system and would instead train a classifier on all examples. In this
+  // case there would be an instance for every (t,s,k), which possible answers
+  // ranging over s.
+  // If this boolean is true, then in addition to a MV update, we perform a
+  // classification based update, as if there were two terms in the objective.
+  // NOTE: If there are no global features then arguably MV is NOT APPROPRIATE,
+  // since it can cleave off the [i:n] suffix which could contain individual
+  // (t,f,k) violations which do not increase the global/max violation.
+  private boolean includeClassificationObjectiveTerm = true;
+
   enum TfkRerorder {
     NONE,               // leave order as T.then(F).then(K)
     CONF_ABS,           // score(bucket) = max_{f in bucket} score(f)
@@ -227,13 +242,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Uberts.DEBUG = 1;
     NumArgsRoleCoocArgLoc.SHOW_GLOBAL_FEAT_COMMUNICATION = false;
   }
-
-//  public void showWeights() {
-//    for (Entry<String, Ints3> x : rel2localFactor.entrySet()) {
-//    }
-//    for (Entry<String, GlobalFactor> x : name2globalFactor.entrySet()) {
-//    }
-//  }
 
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
@@ -302,6 +310,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     pipe.hackyImplementation = config.getBoolean("hackyImplementation", pipe.hackyImplementation);
     Log.info("[main] hackyImplementation=" + pipe.hackyImplementation);
+
+    pipe.includeClassificationObjectiveTerm = config.getBoolean("includeClassificationObjectiveTerm", pipe.includeClassificationObjectiveTerm);
+    Log.info("[main] includeClassificationObjectiveTerm=" + pipe.includeClassificationObjectiveTerm);
+
+    pipe.hackyTFKReorderMethod = TfkRerorder.valueOf(config.getString("hackyTFKReorderMethod", pipe.hackyTFKReorderMethod.name()));
+    Log.info("[main] hackyTFKReorderMethod=" + pipe.hackyTFKReorderMethod);
 
     Log.info("[main] addNullSpanFacts=" + pipe.addNullSpanFacts);
     if (pipe.addNullSpanFacts) {
@@ -908,7 +922,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   /** Classification example (within a bucket) */
-  private static class ClassEx {
+  static class ClassEx {
     public final HypEdge goldEdge;
     public final Adjoints goldScore;
     public final HypEdge predEdge;
@@ -1006,21 +1020,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (HACKY_DEBUG) {
       System.out.println("starting on " + doc.getId());
     }
-
-    // MAX_VIOLATION is concerned with keeping valid prefixes on the beam.
-    // It can in principle suffer the same issues as EARLY_UPDATE though:
-    // the max violation (z[1:i],y[1:i]) may leave off valuable information in
-    // the [i:n] range.
-    // If we didn't have global features, then we wouldn't treat this as a transition
-    // system and would instead train a classifier on all examples. In this
-    // case there would be an instance for every (t,s,k), which possible answers
-    // ranging over s.
-    // If this boolean is true, then in addition to a MV update, we perform a
-    // classification based update, as if there were two terms in the objective.
-    // NOTE: If there are no global features then arguably MV is NOT APPROPRIATE,
-    // since it can cleave off the [i:n] suffix which could contain individual
-    // (t,f,k) violations which do not increase the global/max violation.
-    boolean includeClassificationObjectiveTerm = true;
     List<ClassEx> classEx = new ArrayList<>();
 
     // If true, then replace the pred history with the gold history if there
@@ -1314,7 +1313,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       f = NumArgsRoleCoocArgLoc.argLocPairwiseFeat(gp.argLocRoleCooc);
     }
     assert gp.argLocGlobal == null : "can't do this the hacky way";
-    if (f == null) {
+    if (f == null && !useOnlyNumArgs) {
       // No global features
       return Adjoints.Constant.ZERO;
     }
@@ -1323,7 +1322,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Compute features (as Strings)
     if (useOnlyNumArgs) {
       if (includeNullFactFeats || !isNullSpan(current))
-        fx.add(numArgs + "/" + base);
+        fx.add("na1/" + numArgs + "/" + base);
     } else {
       if (includeNullFactFeats || !isNullSpan(current)) {
         // CHANGE: include NIL facts in history, useful to roleCooc
@@ -1395,7 +1394,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       System.out.println("numArgs: " + numArgs);
       System.out.println("y:       " + fyMode);
       System.out.println("fy:      " + Arrays.toString(fy));
-      System.out.println("x:       " + f.getName());
+      System.out.println("x:       " + (f == null ? "null" : f.getName()));
       System.out.println("fx:      " + fx);
 //      hackyInv.showCollisions();
       System.out.println();

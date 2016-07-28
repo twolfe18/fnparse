@@ -1004,7 +1004,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       public String getName() { return "alPW"; }
       @Override
       public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
-        assert !UbertsLearnPipeline.isNilFact(stateEdge);
+        if (UbertsLearnPipeline.isNilFact(stateEdge))
+          return Collections.emptyList();
         assert !UbertsLearnPipeline.isNilFact(agendaEdge);
         Span ts = EdgeUtils.target(stateEdge);
         Span ta = EdgeUtils.target(agendaEdge);
@@ -1057,7 +1058,8 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
       @Override
       public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
-        assert !UbertsLearnPipeline.isNilFact(stateEdge);
+        if (UbertsLearnPipeline.isNilFact(stateEdge))
+          return Collections.emptyList();
         assert !UbertsLearnPipeline.isNilFact(agendaEdge);
         List<String> a = argLoc.describe(prefix, stateEdge, agendaEdge);
         int an = a.size();
