@@ -22,7 +22,6 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
-import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
@@ -407,7 +406,6 @@ public class Uberts {
     }
   }
 
-  public static final boolean MAX_VIOLATION_BUGFIX = true;
   /**
    * Returns (gold trajectory, predicted trajectory).
    *
@@ -433,6 +431,7 @@ public class Uberts {
    * See http://www.aclweb.org/anthology/N12-1015
    */
   public Pair<Traj, Traj> maxViolationPerceptron(Map<Relation, Double> costFP, boolean lasoHack) {
+    assert agenda.getRescoreMode() == RescoreMode.NONE;
 
     timer.start("duplicate-state");
     State s0 = state.duplicate();
@@ -572,6 +571,8 @@ public class Uberts {
     }
     double sCumOracle = 0;
     double sCumPred = 0;
+    int bestIndex = -1, index = 0;
+    boolean violation = false;
     ArgMax<Pair<Traj, Traj>> m = new ArgMax<>();
     while (!t1r.isEmpty() && !t2r.isEmpty()) {
       Traj sG = t1r.removeFirst();
@@ -580,18 +581,27 @@ public class Uberts {
       assert sP.getStep().pred;
       assert EdgeUtils.target(sG.getStep().edge) == EdgeUtils.target(sP.getStep().edge);
       assert EdgeUtils.frame(sG.getStep().edge).equals(EdgeUtils.frame(sP.getStep().edge));
-      assert EdgeUtils.role(sG.getStep().edge).equals(EdgeUtils.role(sP.getStep().edge));
-      Span g = EdgeUtils.arg(sG.getStep().edge);
-      Span p = EdgeUtils.arg(sP.getStep().edge);
-      double loss = (g == p) ? 0 : 0.01;
+//      assert EdgeUtils.role(sG.getStep().edge).equals(EdgeUtils.role(sP.getStep().edge));
+//      Span gs = EdgeUtils.arg(sG.getStep().edge);
+//      Span ps = EdgeUtils.arg(sP.getStep().edge);
+      assert getLabel(sG.getStep().edge);
+      violation |= !getLabel(sP.getStep().edge);
       sCumOracle += sG.getStep().score.forwards();
       sCumPred += sP.getStep().score.forwards();
-      sCumPred += loss;
-      double violation = sCumPred - sCumOracle;
-      m.offer(new Pair<>(sG, sP), violation);
+      boolean valid = sCumPred >= sCumOracle;
+      if (violation && valid) {
+        if (m.offer(new Pair<>(sG, sP), sCumPred - sCumOracle))
+          bestIndex = index;
+      }
+      index++;
     }
-    assert m.numOffers() > 0;
     Pair<Traj, Traj> best = m.get();
+    if (Uberts.LEARN_DEBUG) {
+      System.out.println("maxViolation=" + violation
+          + " mvIdx=" + bestIndex
+          + " trajLength=" + index
+          + " discreteLogViolation=" + UbertsLearnPipeline.discreteLogViolation(m.getBestScore()));
+    }
 
     return best;
   }
@@ -1102,15 +1112,18 @@ public class Uberts {
     }
     assert nodesContains(e);
 
-    if (UbertsLearnPipeline.isNilFact(e)) {
+    boolean nilFact = UbertsLearnPipeline.isNilFact(e);
+    if (nilFact) {
       stats.increment("state/nilFact");
-      return null;
+//      return null;
+    } else {
+      state.add(e, score);
     }
-
-    state.add(e, score);
 
     HashableHypEdge he = new HashableHypEdge(e);
     Boolean y = goldEdges == null ? null : getLabel(he);
+    if (newStateEdgeListeners.size() > 0)
+      throw new RuntimeException("figure out if they should get nil facts or if I should remove NewStateEdgeListeners altogether");
     for (NewStateEdgeListener l : newStateEdgeListeners)
       l.addedToState(he, score, y);
 
@@ -1122,6 +1135,7 @@ public class Uberts {
       if (DEBUG > 2) {
         Log.info("just tripped: " + t
             + " with values=" + Arrays.toString(values)
+            + " nilFact=" + nilFact
             + " triggersGlobalFactor=" + (globalFactors[ti] != null)
             + " triggersTransitionGenerator=" + (transitionGenrators[ti] != null));
       }
@@ -1129,7 +1143,7 @@ public class Uberts {
       if (globalFactors[ti] != null)
         globalFactors[ti].rescore(this, values);
 
-      if (transitionGenrators[ti] != null) {
+      if (!nilFact && transitionGenrators[ti] != null) {
         List<Pair<HypEdge, Adjoints>> edges = transitionGenrators[ti].match(values, this);
         for (Pair<HypEdge, Adjoints> se : edges)
           addEdgeToAgenda(se);

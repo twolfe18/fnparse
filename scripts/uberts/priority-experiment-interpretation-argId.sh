@@ -14,6 +14,7 @@ FS="unknownFeatureSet"
 
 #GF=`grep -m 1 globalFeatMode $LOG | key-values globalFeatMode`
 GF=`grep 'GlobalParams::<init>' $LOG | awk '{print $NF}' | tr '\n' '_' | sed 's/_$//'`
+if [[ "$GF" == "" ]]; then GF="local"; fi
 
 AP=`grep -m 1 -oP '(?<=parsing agenda priority ).*' $LOG`
 AC=`grep -m 1 agendaComparator $LOG | key-values agendaComparator`

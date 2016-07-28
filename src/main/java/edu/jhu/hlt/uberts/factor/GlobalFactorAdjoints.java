@@ -12,6 +12,7 @@ import edu.jhu.hlt.uberts.HypEdge;
  * than just seeing a flat {@link Adjoints}. This class lets us de-structure
  * the global+local scores.
  *
+ * @deprecated
  * @author travis
  */
 public class GlobalFactorAdjoints implements Adjoints {
