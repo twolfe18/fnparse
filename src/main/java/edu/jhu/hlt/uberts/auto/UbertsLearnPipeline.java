@@ -1092,6 +1092,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     default:
       throw new RuntimeException("unknown reorder: " + hackyTFKReorderMethod);
     }
+    if (buckets.isEmpty()) {
+      Log.warn("no buckets for inference task with predicates: " + predicates);
+      return;
+    }
 
     // Predict
     List<Pair<HypEdge, Adjoints>> tOracle = new ArrayList<>();
