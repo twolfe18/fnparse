@@ -188,7 +188,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private boolean skipDocsWithoutPredicate2 = true;
 
   // Re-implementation which doesn't use any fancy machinery and does use nullSpans
-  private boolean hackyImplementation = false;
+  private boolean hackyImplementation = true;
 
   // Attempts to make MAX_VIOLATION mimic a LaSO update where if a violation
   // occurs, the predictor is re-set to the gold history.
@@ -1253,41 +1253,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
    * @return
    */
   public Adjoints globalFeatures(List<Pair<HypEdge, Adjoints>> history, HypEdge current, int numArgs) {
-    if (hackyGlobalWeights == null) {
-      // Steal these weights and alphabet from NumArgsRoleCoocArgLoc
-      assert name2globalFactor.size() == 1;
-      NumArgsRoleCoocArgLoc gf = (NumArgsRoleCoocArgLoc) name2globalFactor.values().iterator().next();
-      hackyGlobalWeights = gf.theta;
-      hackyGlobalFxAlph = gf.featureNames;
-//      hackyInv = new InverseHashingMapping();
-    }
-
-    // This really shouldn't be necessary, as this intercept correlates perfectly
-    // with the local intecept. Further, it makes comparisons between this and the regular implementation more difficult.
-    boolean includeGlobalIntercept = false;
-
-    List<Pair<HypEdge, Adjoints>> commitHistory = new ArrayList<>();
-    for (Pair<HypEdge, Adjoints> x : history)
-      if (!isNullSpan(x.get1()))
-        commitHistory.add(x);
-
-    List<String> fx = new ArrayList<>();
-    String base = isNilFact(current) ? "n" : "s";
-    if (INCLUDE_EMPTY_HISTORY_BOOL_IN_BASE)
-      base += (commitHistory.isEmpty() ? "0" : "1");
-    if (includeGlobalIntercept)
-      fx.add(base);
-
     // If true use (1, k, fk) as refinements, otherwise (k, fk)
     // true is what should match the standard/good implementation
     FyMode fyMode = null;
-
-    // See /tmp/uberts-137-* and /tmp/uberts-138-* for a comparison.
-    // I was wrong in assuming that if you don't have null feats that you can't
-    // learn mutual exclusion... constantly tricked by negative weights on non-nullSpan facts.
-    // It seems that includeNullFactFeats=false works *slightly* better (at least for roleCooc)
-    // Repeated in /tmp/uberts-139-* and /tmp/uberts-140-* for numArgs
-    boolean includeNullFactFeats = false;
 
     // Since I'm passing in base as a prefix, all of these features are conjoined with nullSpan?
     boolean useOnlyNumArgs = false;
@@ -1317,6 +1285,39 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       // No global features
       return Adjoints.Constant.ZERO;
     }
+
+    if (hackyGlobalWeights == null) {
+      // Steal these weights and alphabet from NumArgsRoleCoocArgLoc
+      assert name2globalFactor.size() == 1;
+      NumArgsRoleCoocArgLoc gf = (NumArgsRoleCoocArgLoc) name2globalFactor.values().iterator().next();
+      hackyGlobalWeights = gf.theta;
+      hackyGlobalFxAlph = gf.featureNames;
+//      hackyInv = new InverseHashingMapping();
+    }
+
+    // This really shouldn't be necessary, as this intercept correlates perfectly
+    // with the local intecept. Further, it makes comparisons between this and the regular implementation more difficult.
+    boolean includeGlobalIntercept = false;
+
+    List<Pair<HypEdge, Adjoints>> commitHistory = new ArrayList<>();
+    for (Pair<HypEdge, Adjoints> x : history)
+      if (!isNullSpan(x.get1()))
+        commitHistory.add(x);
+
+    List<String> fx = new ArrayList<>();
+    String base = isNilFact(current) ? "n" : "s";
+    if (INCLUDE_EMPTY_HISTORY_BOOL_IN_BASE)
+      base += (commitHistory.isEmpty() ? "0" : "1");
+    if (includeGlobalIntercept)
+      fx.add(base);
+
+    // See /tmp/uberts-137-* and /tmp/uberts-138-* for a comparison.
+    // I was wrong in assuming that if you don't have null feats that you can't
+    // learn mutual exclusion... constantly tricked by negative weights on non-nullSpan facts.
+    // It seems that includeNullFactFeats=false works *slightly* better (at least for roleCooc)
+    // Repeated in /tmp/uberts-139-* and /tmp/uberts-140-* for numArgs
+    boolean includeNullFactFeats = false;
+
 
 
     // Compute features (as Strings)
