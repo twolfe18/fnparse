@@ -1025,7 +1025,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // If true, then replace the pred history with the gold history if there
     // was a violation (i.e. gold score is lower than pred for entire prefix).
     // Section 4 of https://arxiv.org/pdf/1606.02960.pdf
-    boolean wisemanRushUpdate = false;
+    boolean rewritePredHistory = false;
+
+    // max_{z : Proj(z) = {y}) s(z) >= max_{z'} s(z) + loss(y,z)
+    // where loss(y,z) = max_{y' in Proj(z)} loss(y,y')
+    // Currently, we are using an deterministic transition system, so the set
+    // of z s.t. Proj(z) = {y} is exactly one trajectory.
+    // On the RHS, loss(y,z) can be written as hamminLossAccumulated(z) + (length(oracle)-length(z))
+    // And again, since we have a deterministic transition system, we can do a "line search" of sorts over z[1:i]
+    boolean travisMargins = false;
 
     OldFeaturesWrapper.Ints3 localFeats = rel2localFactor.get("argument4");
 
@@ -1106,6 +1114,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     ArgMax<Integer> maxViolationIdx = new ArgMax<>();
     Counts<TFK> tfNumArgGold = new Counts<>();
     Counts<TFK> tfNumArgPred = new Counts<>();
+
+    // Build this up
+    Pair<LL<HypEdge>, Adjoints> trajOracle = new Pair<>(null, Adjoints.Constant.ZERO);
+    Pair<LL<HypEdge>, Adjoints> trajLA = new Pair<>(null, Adjoints.Constant.ZERO);
+    // Takes argmax over above
+    ArgMax<Pair<LL<HypEdge>, Adjoints>> trajLAMax = new ArgMax<>();
+
     for (TFK b : buckets) {
 
       TFK tf = new TFK(b.t, b.f, null);
@@ -1135,7 +1150,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           int numArgsPred = tfNumArgPred.getCount(tf);
           if (mode == Mode.TRAIN)
             scoreOracle = Adjoints.cacheIfNeeded(Adjoints.sum(scoreOracleLocal, globalFeatures(tOracle, a4, numArgsOracle)));
-          if (mode == Mode.TRAIN && wisemanRushUpdate && maxViolationIdx.getBestScore() > 0)
+          if (mode == Mode.TRAIN && rewritePredHistory && maxViolationIdx.getBestScore() > 0)
             scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tOracle, a4, numArgsOracle)));
           else
             scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tPred, a4, numArgsPred)));
@@ -1174,6 +1189,21 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           }
         }
 
+        // score(LA) = [score(LA.traj) + loss(LA.tra)]
+        //              + remainingPossibleMistakes
+        // The first bracketed term is already in p, remainingPossibleMistakes is not
+        int remainingPossibleMistakes = buckets.size() - (index+1);
+        trajLA = new Pair<>(
+            new LL<>(p.get1(), trajLA.get1()),
+            Adjoints.cacheSum(
+                p.get2(),       // score(a_i) + loss(a_i)
+                trajLA.get2(),  // sum_{i=0}^{cur-1} score(a_i) + loss(a_i)
+                new Adjoints.Constant(remainingPossibleMistakes)));
+        trajOracle = new Pair<>(
+            new LL<>(g.get1(), trajOracle.get1()),
+            Adjoints.cacheSum(g.get2(), trajOracle.get2()));
+        trajLAMax.offer(trajLA, trajLA.get2().forwards());
+
         sCumOracle += g.get2().forwards();
         sCumPred += p.get2().forwards();
         maxViolationIdx.offer(index, sCumPred - sCumOracle);
@@ -1188,44 +1218,64 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     } // END FOR BUCKETS
 
     if (learn) {
-      assert maxViolationIdx.numOffers() > 0;
-      int mvIdx = maxViolationIdx.get();
-      double violation = maxViolationIdx.getBestScore();
-      if (Uberts.LEARN_DEBUG) {
-        System.out.println("maxViolation=" + 0
-            + " mvIdx=" + mvIdx
-            + " trajLength=" + index
-            + " discreteLogViolation=" + discreteLogViolation(0));
+
+      double violation;
+      if (travisMargins) {
+        Pair<LL<HypEdge>, Adjoints> la = trajLAMax.get();
+        violation = la.get2().forwards() - trajOracle.get2().forwards();
+        if (violation > 0) {
+          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+            System.out.println("starting travisMargins ORACLE update...\t" + u.dbgSentenceCache.getId());
+          trajOracle.get2().backwards(-1);
+          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+            System.out.println("starting travisMargins LOSS_AUGMENTED update...\t" + u.dbgSentenceCache.getId());
+          la.get2().backwards(+1);
+        }
+      } else {
+        assert maxViolationIdx.numOffers() > 0;
+        int mvIdx = maxViolationIdx.get();
+        violation = maxViolationIdx.getBestScore();
+        if (Uberts.LEARN_DEBUG) {
+          System.out.println("maxViolation=" + 0
+              + " mvIdx=" + mvIdx
+              + " trajLength=" + index
+              + " discreteLogViolation=" + discreteLogViolation(0));
+        }
+        if (violation > 0) {
+          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+            System.out.println("starting ORACLE update...\t" + u.dbgSentenceCache.getId());
+          for (int j = 0; j <= mvIdx; j++)
+            tOracle.get(j).get2().backwards(-1);
+          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+            System.out.println("starting LOSS_AUGMENTED update...\t" + u.dbgSentenceCache.getId());
+          for (int j = 0; j <= mvIdx; j++)
+            tPred.get(j).get2().backwards(+1);
+        }
+
+        if (includeClassificationObjectiveTerm) {
+          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+            System.out.println("starting ORACLE classification update...\t" + u.dbgSentenceCache.getId());
+          for (ClassEx e : classEx) {
+            e.goldScore.backwards(-1);
+            eventCounts.increment("hacky/classifyUpdate");
+            if (violation <= 0 || e.index > mvIdx)
+              eventCounts.increment("hacky/classifyUpdateAfterMV");
+          }
+          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+            System.out.println("starting LOSS_AUGMENTED classification update...\t" + u.dbgSentenceCache.getId());
+          for (ClassEx e : classEx)
+            e.predScore.backwards(+1);
+        }
       }
 
       if (violation <= 0) {
         eventCounts.increment("hacky/noViolation");
       } else {
         eventCounts.increment("hacky/violation");
-        if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
-          System.out.println("starting ORACLE update...\t" + u.dbgSentenceCache.getId());
-        for (int j = 0; j <= mvIdx; j++)
-          tOracle.get(j).get2().backwards(-1);
-        if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
-          System.out.println("starting LOSS_AUGMENTED update...\t" + u.dbgSentenceCache.getId());
-        for (int j = 0; j <= mvIdx; j++)
-          tPred.get(j).get2().backwards(+1);
       }
-
-      if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
-        System.out.println("starting ORACLE classification update...\t" + u.dbgSentenceCache.getId());
-      for (ClassEx e : classEx) {
-        e.goldScore.backwards(-1);
-        eventCounts.increment("hacky/classifyUpdate");
-        if (violation <= 0 || e.index > mvIdx)
-          eventCounts.increment("hacky/classifyUpdateAfterMV");
-      }
-      if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
-        System.out.println("starting LOSS_AUGMENTED classification update...\t" + u.dbgSentenceCache.getId());
-      for (ClassEx e : classEx)
-        e.predScore.backwards(+1);
 
       completedObservation();
+
     } else {
       Labels.Perf perf = u.getLabels().new Perf();
       for (Pair<HypEdge, Adjoints> x : tPred) {
