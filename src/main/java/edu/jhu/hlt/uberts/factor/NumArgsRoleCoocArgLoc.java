@@ -438,11 +438,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         if (fll == null) {
           numArgsPrev = 0;
         } else {
-          assert fll.fx.size() == 2;
-          String c = fll.fx.get(0).substring(4);
+//          assert fll.fx.size() == 2;
+          assert fll.fx.size() == 1;
+          int ns = fll.fx.get(0).indexOf('/', 4);
+          String c = fll.fx.get(0).substring(4, ns);
           numArgsPrev = Integer.parseInt(c);
         }
-        List<String> fx = Arrays.asList("na1/" + (numArgsPrev+1), "na2/" + Math.min(5, numArgsPrev+1));
+//        List<String> fx = Arrays.asList("na1/" + (numArgsPrev+1), "na2/" + Math.min(5, numArgsPrev+1));
+        List<String> fx = Arrays.asList("na1/" + (numArgsPrev+1) + "/" + base);
         gfeats.update(key, fy, fx, additiveNumArgs);
       }
     }
