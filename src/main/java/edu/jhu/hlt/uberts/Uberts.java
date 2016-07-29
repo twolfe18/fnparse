@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -27,11 +28,13 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.Agenda.LabledAgendaItem;
 import edu.jhu.hlt.uberts.Agenda.RescoreMode;
+import edu.jhu.hlt.uberts.DecisionFunction.ByGroup.ByGroupMode;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.auto.Rule;
 import edu.jhu.hlt.uberts.auto.Term;
 import edu.jhu.hlt.uberts.auto.Trigger;
 import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
+import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline.ClassEx;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.factor.NumArgsRoleCoocArgLoc;
@@ -122,6 +125,12 @@ public class Uberts {
 
   // Counts up dErr_dForwards for each edge
   public Map<HashableHypEdge, Double> dbgUpdate = new HashMap<>();
+
+  // Used to implement classification update which may need to live side-by-side
+  // with some other global feature update. Flip this switch, and then triggers
+  // for global factors will never fire.
+  // Keep this private!
+  private boolean disableGlobalFeats = false;
 
   // TODO Remove
   // Ancillary data for features which don't look at the State graph.
@@ -600,9 +609,92 @@ public class Uberts {
           + " trajLength=" + index
           + " discreteLogViolation=" + UbertsLearnPipeline.discreteLogViolation(m.getBestScore()));
     }
+
     if (violation <= 0)
       return null;
     return best;
+  }
+
+  /**
+   * Like maxViolation but disables global features.
+   *
+   * Modifies {@link State}, {@link Agenda}, and {@link DecisionFunction} (and
+   * potentially anything else in this class which can be modified).
+   */
+  public List<ClassEx> getClassificationUpdate() {
+    boolean dgOld = disableGlobalFeats;
+    disableGlobalFeats = true;
+
+    // ORACLE INFERENCE
+    State s0 = state.duplicate();
+    Agenda a0 = agenda.duplicate();
+    while (agenda.size() > 0) {
+      AgendaItem ai = agenda.popBoth2();
+      boolean y = getLabel(ai);
+      // DO NOT COMMENT OUT: Need the side effects.
+      thresh.decide2(ai);
+      if (y)
+        addEdgeToState(ai);
+    }
+
+    // These are the facts that the oracle chose for each decoder group
+    Map<String, LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>>> rel2firstGoldByGroup = new HashMap<>();
+    for (Entry<String, DecisionFunction> x : thresh.entries()) {
+      DecisionFunction.ByGroup df = (DecisionFunction.ByGroup) x.getValue();
+      assert df.getMode() == ByGroupMode.EXACTLY_ONE : "this doesn't work if isn't exactly one right answer per group";
+      rel2firstGoldByGroup.put(x.getKey(), df.getFirstGoldInBucket());
+    }
+
+    // Reset to initial conditions, and save a memo which will let you do it one more timei
+    thresh.clear();
+    state = s0;
+    agenda = a0;
+    s0 = s0.duplicate();
+    a0 = a0.duplicate();
+
+    // LOSS AUGMENTED INFERENCE
+    agenda.oneTimeRescore(RescoreMode.LOSS_AUGMENTED, goldEdges);
+    while (agenda.size() > 0) {
+      AgendaItem ai = agenda.popBoth2();
+      Pair<Boolean, Adjoints> p = thresh.decide2(ai);
+      boolean yhat = p.get1();
+      if (yhat)
+        addEdgeToState(ai);
+    }
+
+    // These are the facts that LA inference chose for each decoder group
+    Map<String, LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>>> rel2firstPredByGroup = new HashMap<>();
+    for (Entry<String, DecisionFunction> x : thresh.entries()) {
+      DecisionFunction.ByGroup df = (DecisionFunction.ByGroup) x.getValue();
+      assert df.getMode() == ByGroupMode.EXACTLY_ONE : "this doesn't work if isn't exactly one right answer per group";
+      rel2firstPredByGroup.put(x.getKey(), df.getFirstPredInBucket());
+    }
+
+    // Join the chosen facts on the group to produce the classification examples
+    List<ClassEx> classEx = new ArrayList<>();
+    assert rel2firstGoldByGroup.size() == rel2firstPredByGroup.size();
+    for (String rel : rel2firstGoldByGroup.keySet()) {
+      Map<List<Object>, Pair<HypEdge, Adjoints>> firstGoldByGroup = rel2firstGoldByGroup.get(rel);
+      Map<List<Object>, Pair<HypEdge, Adjoints>> firstPredByGroup = rel2firstPredByGroup.get(rel);
+      assert firstGoldByGroup.size() == firstPredByGroup.size();
+      for (List<Object> key : firstGoldByGroup.keySet()) {
+        Pair<HypEdge, Adjoints> a = firstGoldByGroup.get(key);
+        Pair<HypEdge, Adjoints> b = firstPredByGroup.get(key);
+        // Check if this is a mistake
+        HashableHypEdge aa = new HashableHypEdge(a.get1());
+        HashableHypEdge bb = new HashableHypEdge(b.get1());
+        if (!aa.equals(bb)) {
+          ClassEx c = new ClassEx(a, b, -1);
+          classEx.add(c);
+        }
+      }
+    }
+
+    state = s0;
+    agenda = a0;
+    thresh.clear();
+    disableGlobalFeats = dgOld;
+    return classEx;
   }
 
   public static String dbgShrtStr(String x) {
@@ -1139,10 +1231,13 @@ public class Uberts {
             + " triggersTransitionGenerator=" + (transitionGenrators[ti] != null));
       }
 
-      if (globalFactors[ti] != null)
+      if (globalFactors[ti] != null && !disableGlobalFeats)
         globalFactors[ti].rescore(this, values);
 
       if (!nilFact && transitionGenrators[ti] != null) {
+        // TODO This could become a bug, or at least unexpected behavior.
+        // Triggers for global features are not tripped when an edge is first
+        // created.
         List<Pair<HypEdge, Adjoints>> edges = transitionGenrators[ti].match(values, this);
         for (Pair<HypEdge, Adjoints> se : edges)
           addEdgeToAgenda(se);

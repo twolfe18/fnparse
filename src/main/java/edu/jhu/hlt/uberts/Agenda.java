@@ -366,9 +366,13 @@ public class Agenda {
   }
 
   public boolean parentInvariantSatisfied() {
-    for (int i = 0; i < top; i++)
-      if (!parentInvariantSatisfied(i))
+    for (int i = 0; i < top; i++) {
+      if (!parentInvariantSatisfied(i)) {
+        int parent = (i - 1) >>> 1;
+        Log.warn("parent=" + heap[parent] + " child=" + heap[i] + " i=" + i + " iparent=" + parent + " top=" + top);
         return false;
+      }
+    }
     return true;
   }
   public boolean parentInvariantSatisfied(int i) {
@@ -377,7 +381,6 @@ public class Agenda {
     if (i == top)
       return true;
     int parent = (i - 1) >>> 1;
-//    return heap[parent].compareTo(heap[i]) >= 0;
     if (priority != null)
       return heap[parent].priority >= heap[i].priority;
     return comparator.compare(heap[parent], heap[i]) <= 0;

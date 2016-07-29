@@ -214,7 +214,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // NOTE: If there are no global features then arguably MV is NOT APPROPRIATE,
   // since it can cleave off the [i:n] suffix which could contain individual
   // (t,f,k) violations which do not increase the global/max violation.
-  private boolean includeClassificationObjectiveTerm = false;
+  private boolean includeClassificationObjectiveTerm = true;
 
   enum TfkRerorder {
     NONE,               // leave order as T.then(F).then(K)
@@ -922,12 +922,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   /** Classification example (within a bucket) */
-  static class ClassEx {
+  public static class ClassEx {
     public final HypEdge goldEdge;
     public final Adjoints goldScore;
     public final HypEdge predEdge;
     public final Adjoints predScore;
     public final int index;   // where in the traj does this example occur?
+
     public ClassEx(HypEdge goldEdge, Adjoints goldScore, HypEdge predEdge, Adjoints predScore, int index) {
       this.goldEdge = goldEdge;
       this.goldScore = goldScore;
@@ -935,8 +936,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       this.predScore = predScore;
       this.index = index;
     }
+
     public ClassEx(Pair<HypEdge, Adjoints> gold, Pair<HypEdge, Adjoints> pred, int index) {
       this(gold.get1(), gold.get2(), pred.get1(), pred.get2(), index);
+    }
+
+    @Override
+    public String toString() {
+      return "(ClassEx gold=" + goldEdge + " pred=" + predEdge + ")";
     }
   }
 
@@ -1377,7 +1384,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Compute features (as Strings)
     if (useOnlyNumArgs) {
       if (includeNullFactFeats || !isNullSpan(current))
-        fx.add("na1/" + numArgs + "/" + base);
+        if (numArgs > 0)
+          fx.add("na1/" + numArgs + "/" + base);
     } else {
       if (includeNullFactFeats || !isNullSpan(current)) {
         // CHANGE: include NIL facts in history, useful to roleCooc
@@ -1733,13 +1741,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       break;
     case MAX_VIOLATION:
       timer.start("train/maxViolation");
-      // Perhaps a mix of updates which have either gold or pred history
-      // used for LOSS_AUGMENTED global features will work better than one or
-      // the other.
-      // LaSO (with beam=1) is equivalent to "oracle roll in"
-      // MV is equivalent to "model roll in"
-//      boolean laso = u.getRandom().nextBoolean();
-//      Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP(), laso);
+
+      // This classification update code modifies and restores the state to how
+      // it is now. The maxViolation method is destructive, put second.
+      final List<ClassEx> classEx = includeClassificationObjectiveTerm ? u.getClassificationUpdate() : null;
 
       Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP(), mvLasoHack);
       batch.add(lr -> {
@@ -1785,9 +1790,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
               u.dbgUpdate.put(he, d+1);
             }
           }
-
-          if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
-            Log.info("[MAX_VIOLATION backwards] done with trajectory");
         }
 
         if (Uberts.LEARN_DEBUG) {
@@ -1799,6 +1801,17 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           u.dbgUpdate.clear();
         }
 
+        // Classification update
+        if (classEx != null) {
+          if (Uberts.LEARN_DEBUG)
+            System.out.println("starting ORACLE classification update...\t" + u.dbgSentenceCache.getId());
+          for (ClassEx c : classEx)
+            c.goldScore.backwards(-1);
+          if (Uberts.LEARN_DEBUG)
+            System.out.println("starting LOSS_AUGMENTED classification update...\t" + u.dbgSentenceCache.getId());
+          for (ClassEx c : classEx)
+            c.predScore.backwards(+1);
+        }
       });
       timer.stop("train/maxViolation");
       break;

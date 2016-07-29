@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -188,6 +189,11 @@ public interface DecisionFunction {
 
     private Map<String, DecisionFunction> rel2df = new HashMap<>();
 
+    /** Returns the number of relation this explicitly tracks */
+    public int size() {
+      return rel2df.size();
+    }
+
     @Override
     public String toString() {
       StringBuilder sb = new StringBuilder();
@@ -200,6 +206,10 @@ public interface DecisionFunction {
 
     public DecisionFunction get(String relation) {
       return rel2df.get(relation);
+    }
+
+    public List<Entry<String, DecisionFunction>> entries() {
+      return new ArrayList<>(rel2df.entrySet());
     }
 
     /**
@@ -420,8 +430,8 @@ public interface DecisionFunction {
     // A set of lists of argument (determined by keyArgs).
     // E.g. for "at least one predicate2(t,f) per event1(t)", we might use
     private Set<List<Object>> observedKeys;
-    private Map<List<Object>, Pair<HypEdge, Adjoints>> firstGoldInBucket;
-    private Map<List<Object>, Pair<HypEdge, Adjoints>> firstPredInBucket;
+    private LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> firstGoldInBucket;
+    private LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> firstPredInBucket;
 
     private Map<List<Object>, Pair<HypEdge, Adjoints>> lastPredInGroup;
 
@@ -453,8 +463,8 @@ public interface DecisionFunction {
       this.u = u;
       this.mode = mode;
       this.observedKeys = new HashSet<>();
-      this.firstPredInBucket = new HashMap<>();
-      this.firstGoldInBucket = new HashMap<>();
+      this.firstPredInBucket = new LinkedHashMap<>();
+      this.firstGoldInBucket = new LinkedHashMap<>();
       this.lastPredInGroup = new HashMap<>();
       this.dbgScoresInBucket = new HashMap<>();
       String[] parts = description.split(":");
@@ -494,9 +504,13 @@ public interface DecisionFunction {
       this.relation = relation;
       this.keyArgs = keyArgs;
       this.observedKeys = new HashSet<>();
-      this.firstPredInBucket = new HashMap<>();
-      this.firstGoldInBucket = new HashMap<>();
+      this.firstPredInBucket = new LinkedHashMap<>();
+      this.firstGoldInBucket = new LinkedHashMap<>();
       this.dbgScoresInBucket = new HashMap<>();
+    }
+
+    public ByGroupMode getMode() {
+      return mode;
     }
 
     @Override
@@ -535,6 +549,16 @@ public interface DecisionFunction {
       firstGoldInBucket.clear();
       lastPredInGroup.clear();
       dbgScoresInBucket.clear();
+    }
+
+    public LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> getFirstPredInBucket() {
+      LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> m = new LinkedHashMap<>(firstPredInBucket);
+      return m;
+    }
+
+    public LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> getFirstGoldInBucket() {
+      LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> m = new LinkedHashMap<>(firstGoldInBucket);
+      return m;
     }
 
     @Override
