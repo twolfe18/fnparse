@@ -214,7 +214,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // NOTE: If there are no global features then arguably MV is NOT APPROPRIATE,
   // since it can cleave off the [i:n] suffix which could contain individual
   // (t,f,k) violations which do not increase the global/max violation.
-  private boolean includeClassificationObjectiveTerm = true;
+  private boolean includeClassificationObjectiveTerm = false;
 
   enum TfkRerorder {
     NONE,               // leave order as T.then(F).then(K)
@@ -1236,10 +1236,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         int mvIdx = maxViolationIdx.get();
         violation = maxViolationIdx.getBestScore();
         if (Uberts.LEARN_DEBUG) {
-          System.out.println("maxViolation=" + 0
+          System.out.println("maxViolation=" + violation
               + " mvIdx=" + mvIdx
               + " trajLength=" + index
-              + " discreteLogViolation=" + discreteLogViolation(0));
+              + " discreteLogViolation=" + discreteLogViolation(violation));
         }
         if (violation > 0) {
           if (HACKY_DEBUG || Uberts.LEARN_DEBUG)

@@ -416,11 +416,13 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     // Pariwise features
     for (PairFeat pf : pairwiseFeaturesFunctions) {
-      String key = pf.getName();
-      String[] fy = pf.fy(agendaEdge);
       String fxBase = pf.getName() + "/" + base;
       List<String> fx = pf.describe(fxBase, stateEdge, agendaEdge);
-      gfeats.add(key, fy, fx);
+      if (!fx.isEmpty()) {
+        String[] fy = pf.fy(agendaEdge);
+        String key = pf.getName();
+        gfeats.add(key, fy, fx);
+      }
     }
 
     // NUM_ARGS

@@ -493,6 +493,10 @@ public class Uberts {
       // RescoreMode.LOSS_AUGMENTED doesn't apply to those edges.
       // This is not a problem since we are not learning event1 parameters.
 //      agenda.setRescoreMode(RescoreMode.LOSS_AUGMENTED, goldEdges);
+      // I think the reason this doesn't work is that the arg4 edges are already on the agenda!
+      // I can just heapify to add that score to the items which are already on the agenda.
+      agenda.oneTimeRescore(RescoreMode.LOSS_AUGMENTED, goldEdges);
+//      agenda.setRescoreMode(RescoreMode.NONE, null);
 
       statsAgendaSizePerStep.clear();
       while (agenda.size() > 0) {
@@ -515,8 +519,7 @@ public class Uberts {
           addEdgeToState(ai);
       }
     }
-
-    agenda.setRescoreMode(RescoreMode.NONE, null);
+//    agenda.setRescoreMode(RescoreMode.NONE, null);
 
     // Compute the violation
     assert (t1 == null) == (t2 == null);
@@ -572,7 +575,6 @@ public class Uberts {
     double sCumOracle = 0;
     double sCumPred = 0;
     int bestIndex = -1, index = 0;
-    boolean violation = false;
     ArgMax<Pair<Traj, Traj>> m = new ArgMax<>();
     while (!t1r.isEmpty() && !t2r.isEmpty()) {
       Traj sG = t1r.removeFirst();
@@ -582,27 +584,24 @@ public class Uberts {
       assert EdgeUtils.target(sG.getStep().edge) == EdgeUtils.target(sP.getStep().edge);
       assert EdgeUtils.frame(sG.getStep().edge).equals(EdgeUtils.frame(sP.getStep().edge));
 //      assert EdgeUtils.role(sG.getStep().edge).equals(EdgeUtils.role(sP.getStep().edge));
-//      Span gs = EdgeUtils.arg(sG.getStep().edge);
-//      Span ps = EdgeUtils.arg(sP.getStep().edge);
       assert getLabel(sG.getStep().edge);
-      violation |= !getLabel(sP.getStep().edge);
+//      assert sP.getStep().score.forwards() == sP.getStep().scoreV;
       sCumOracle += sG.getStep().score.forwards();
       sCumPred += sP.getStep().score.forwards();
-      boolean valid = sCumPred >= sCumOracle;
-      if (violation && valid) {
-        if (m.offer(new Pair<>(sG, sP), sCumPred - sCumOracle))
-          bestIndex = index;
-      }
+      if (m.offer(new Pair<>(sG, sP), sCumPred - sCumOracle))
+        bestIndex = index;
       index++;
     }
     Pair<Traj, Traj> best = m.get();
+    double violation = m.getBestScore();
     if (Uberts.LEARN_DEBUG) {
       System.out.println("maxViolation=" + violation
           + " mvIdx=" + bestIndex
           + " trajLength=" + index
           + " discreteLogViolation=" + UbertsLearnPipeline.discreteLogViolation(m.getBestScore()));
     }
-
+    if (violation <= 0)
+      return null;
     return best;
   }
 

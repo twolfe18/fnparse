@@ -10,6 +10,8 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  */
 public class DebugFeatureAdj implements Adjoints {
 
+  public static boolean SHOW_CURRENT_FORWARDS_VALUE = false;
+
   private boolean showWrapped = false;
   private Adjoints wrapped;
 
@@ -41,7 +43,10 @@ public class DebugFeatureAdj implements Adjoints {
     if (showWrapped) {
       sb.append(" " + wrapped);
     } else {
-      sb.append(String.format(" s0=%+.2f sN=%+.2f", origScore, wrapped.forwards()));
+      if (SHOW_CURRENT_FORWARDS_VALUE)
+        sb.append(String.format(" s0=%+.2f sN=%+.2f", origScore, wrapped.forwards()));
+      else
+        sb.append(String.format(" s0=%+.2f", origScore));
     }
     sb.append(')');
     return sb.toString();
@@ -54,7 +59,10 @@ public class DebugFeatureAdj implements Adjoints {
 
   @Override
   public void backwards(double dErr_dForwards) {
-    System.out.printf("[DebugFeatureAdj backwards] fwd0=%+.2f fwdN=%.2f dErr=%+.1f %s\n", origScore, wrapped.forwards(), dErr_dForwards, this);
+    if (SHOW_CURRENT_FORWARDS_VALUE)
+      System.out.printf("[DebugFeatureAdj backwards] fwd0=%+.2f fwdN=%.2f dErr=%+.1f %s\n", origScore, wrapped.forwards(), dErr_dForwards, this);
+    else
+      System.out.printf("[DebugFeatureAdj backwards] fwd0=%+.2f dErr=%+.1f %s\n", origScore, dErr_dForwards, this);
     wrapped.backwards(dErr_dForwards);
   }
 }

@@ -127,15 +127,47 @@ public class Agenda {
   private RescoreMode rescoreMode = RescoreMode.NONE;
   private Labels labels;  // needed for rescoreMode != NONE
 
-  public void setRescoreMode(RescoreMode m, Labels y) {
-    if (m != RescoreMode.NONE && y == null)
-      throw new IllegalArgumentException();
-    this.rescoreMode = m;
-    this.labels = y;
-  }
+
+  /*
+   * DO NOT USE THIS METHOD.
+   * First problem: GlobalFactors will remove and re-add edges to re-score them,
+   * which will mean that in LOSS_AUGMENTED mode, the loss will be added in multiple
+   * times for a single edge/fact/AgendaItem, which is wrong.
+   *
+   * TODO The correct way to implement this is to add a "search bias" term in
+   * either AgendaItem, or as an argument to priority.
+   */
+//  public void setRescoreMode(RescoreMode m, Labels y) {
+//    if (m != RescoreMode.NONE && y == null)
+//      throw new IllegalArgumentException();
+//    this.rescoreMode = m;
+//    this.labels = y;
+//  }
 
   public RescoreMode getRescoreMode() {
     return rescoreMode;
+  }
+
+  /**
+   * Rescores all edges on the agenda according to the given mode.
+   */
+  public void oneTimeRescore(RescoreMode m, Labels gold) {
+//    this.rescoreMode = m;
+    this.labels = gold;
+    // Rescore
+    for (int i = 0; i < top; i++) {
+      HashableHypEdge he = heap[i].getHashableEdge();
+      boolean y = gold.getLabel(he);
+      if (!y) {
+        Adjoints score = Adjoints.sum(heap[i].score, Adjoints.Constant.ONE);
+        double p = priority == null ? Double.NaN : priority.apply(he.getEdge(), score);
+        heap[i] = new AgendaItem(he, score, p);
+      }
+    }
+    // Heapify
+    for (int i = 0; i < top; i++)
+      siftDown(i);
+    assert parentInvariantSatisfied();
   }
 
   public Agenda(BiFunction<HypEdge, Adjoints, Double> priority, Comparator<AgendaItem> comparator) {
@@ -363,11 +395,11 @@ public class Agenda {
 
     if (rescoreMode == RescoreMode.LOSS_AUGMENTED) {
       boolean y = labels.getLabel(edge);
-      Adjoints d = y ? Adjoints.Constant.NEGATIVE_ONE : Adjoints.Constant.ONE;
-      score = Adjoints.sum(score, d);
+      if (!y)
+        score = Adjoints.sum(score, Adjoints.Constant.ONE);
       if (DEBUG) {
         Log.info(String.format("LOSS_AUGMENTED: y=%s score %+.2f => %+.2f %s",
-            y, score.forwards()-d.forwards(), score.forwards(), edge.getEdge()));
+            y, score.forwards() - (!y ? 1 : 0), score.forwards(), edge.getEdge()));
       }
     } else if (rescoreMode == RescoreMode.ORACLE) {
       boolean y = labels.getLabel(edge);
