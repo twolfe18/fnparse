@@ -292,6 +292,7 @@ public class OldFeaturesWrapper {
       boolean cacheArg4 = !learnDebug && r.getName().equals("argument4");  // && ff.getPath().contains("by-hand");
       Ints3 i3 = new Ints3(bft, r, ff, dim, fixed, cacheArg4, learnDebug);
       i3.inner.onlyUseTS = cacheArg4;
+      i3.useBaseFeatures(false);
 
       if ("argument4".equals(r.getName())) {
         Log.info("[main] refining with (f,k) and (k,)");
@@ -330,6 +331,7 @@ public class OldFeaturesWrapper {
 //        System.out.println("before: dim=" + dimension + " useAvg=" + useAvg);
         dimension = dis.readInt();
         useAvg = dis.readBoolean();
+        useBaseFeatures = dis.readBoolean();
 //        System.out.println("after:  dim=" + dimension + " useAvg=" + useAvg);
         theta = (AveragedPerceptronWeights) ois.readObject();
         theta2 = (List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>>) ois.readObject();
@@ -348,6 +350,7 @@ public class OldFeaturesWrapper {
         dos.writeUTF(rel.getName());
         dos.writeInt(dimension);
         dos.writeBoolean(useAvg);
+        dos.writeBoolean(useBaseFeatures);
         oos.writeObject(theta);
         oos.writeObject(theta2);
       } catch (Exception e) {
@@ -390,6 +393,11 @@ public class OldFeaturesWrapper {
     private Map<SpanPair, int[]> arg4FeatureCache;
     private Counts<String> cacheCounts = new Counts<>();
     private Sentence cacheTag = null;
+
+    // You can add refinements (label features) to make the features more specific,
+    // but this boolean says whether just f(x) should be included in every feature
+    // vector, as a sort of data-relative intercept.
+    public boolean useBaseFeatures = true;
 
     public boolean learnDebug;
 
@@ -464,6 +472,11 @@ public class OldFeaturesWrapper {
         Log.info("[main] using " + k + "=" + mag);
         this.intercept = new Intercept(mag);
       }
+    }
+
+    public void useBaseFeatures(boolean useBase) {
+      Log.info(this + "\t" + useBaseFeatures + " => " + useBase);
+      this.useBaseFeatures = useBase;
     }
 
     public void useAverageWeights(boolean useAvg) {
@@ -576,20 +589,22 @@ public class OldFeaturesWrapper {
       }
 
       boolean reindex = true;
-      Adjoints a;
-      if (useAvg) {
-        a = theta.averageView().score(features, reindex);
-        if (intercept != null)
-          a = Adjoints.sum(a, intercept.avgScore());
-      } else {
-        a = theta.score(features, reindex);
-        if (intercept != null)
-          a = Adjoints.sum(a, intercept.score());
+      List<String> fy = new ArrayList<>();
+      Adjoints a = Adjoints.Constant.ZERO;
+      if (useBaseFeatures) {
+        fy.add("1");
+        if (useAvg) {
+          a = theta.averageView().score(features, reindex);
+          if (intercept != null)
+            a = Adjoints.sum(a, intercept.avgScore());
+        } else {
+          a = theta.score(features, reindex);
+          if (intercept != null)
+            a = Adjoints.sum(a, intercept.score());
+        }
       }
 
       // If there are refinements, take the product of those with appropriate weights
-      List<String> fy = new ArrayList<>();
-      fy.add("1");
       if (theta2 != null) {
         for (int i = 0; i < theta2.size(); i++) {
           Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights> ref = theta2.get(i);
@@ -604,9 +619,11 @@ public class OldFeaturesWrapper {
           } else {
             a2 = ref.get2().score(fr, reindex);
           }
-          a = Adjoints.sum(a, a2);
+          a = Adjoints.sum(a2, a);
         }
       }
+
+      assert a != Adjoints.Constant.ZERO : "useBaseFeatures=" + useBaseFeatures + " and refinements=" + theta2RefName;
 
       // If fixed, make sure the parameters are not updated via backwards
       if (fixed)
