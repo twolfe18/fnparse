@@ -57,6 +57,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 //  public static final boolean ALLOW_ROLE_COOC_FRAME_REFINEMENT;
   public static final int MIN_BETWEEN_BIGGEST_WEIGHTS;
 
+  // Flip these on at test time to see specific cases where global features are hurting
+  public static boolean SHOW_GLOBAL_FACTOR_LOWERING_FN = false;
+  public static boolean SHOW_GLOBAL_FACTOR_BOOSTING_FP = false;
+
   static {
     ExperimentProperties config = ExperimentProperties.getInstance();
 //    String t = config.getString("train.facts"); // see UbertsLearnPipeline
@@ -101,6 +105,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private int nRescore = 0;
   private int nEdgeRescore = 0;
   private TimeMarker tm = new TimeMarker();
+  private Counts<String> eventCounts = new Counts<>();
 
   /**
    * @param refinementArgPos can be <0 if you don't want a refinement
@@ -294,6 +299,30 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       return sb.toString();
     }
 
+    public String details(boolean showLocal, boolean showGlobal) {
+      StringBuilder sb = new StringBuilder();
+      sb.append("(MultiFeatureLL");
+      if (showGlobal) {
+        for (Entry<String, FeatureLL> x : globalByKey.entrySet()) {
+          FeatureLL f = x.getValue();
+//          sb.append(" global." + x.getKey() + "=" + x.getValue().details());
+          double wsum = 0;
+          for (int fyx : f.fyx) {
+            String fn = featureNames.lookupObject(fyx);
+            double w = theta.getWeight(fyx);
+            double wa = theta.getAveragedWeight(fyx);
+            sb.append(String.format(" %s w=%+.1f wa=%+.1f", fn, w, wa));
+            wsum += w;
+          }
+          sb.append(String.format(" SUM(%s)=%+.2f", x.getKey(), wsum));
+        }
+      }
+      if (showGlobal)
+        sb.append(" local=" + local);
+      sb.append(')');
+      return sb.toString();
+    }
+
     @Override
     public double forwards() {
       if (forwards == null) {
@@ -303,6 +332,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
       return forwards;
     }
+
+    public double onlyGlobalForwards() {
+      double forwards = 0;
+      for (FeatureLL f : globalByKey.values())
+        forwards += f.forwards();
+      return forwards;
+    }
+
     @Override
     public void backwards(double dErr_dForwards) {
       if (dErr_dForwards == 0)
@@ -385,6 +422,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         this.tfyx += thetaView.getWeight(fyx[i]);
     }
 
+    public String details() {
+      return String.format("(tfyx=%+.2f fy=%s fx=%s)", tfyx, Arrays.toString(fy), fx);
+    }
+
     @Override
     public String toString() {
       return "(fy=" + Arrays.toString(fy) + " fx=" + fx + ")";
@@ -455,6 +496,33 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       List<String> fx = argLocGlobal(t, inGroupInState, agendaEdge);
       gfeats.update("argLocGlobal", fy, fx, additiveArgLocGlobal);
     }
+
+    // DEBUGGING: Check if this global feature is hurting at test time
+    // TODO Move this to ??? Some time after popping from the agenda?
+    if (SHOW_GLOBAL_FACTOR_BOOSTING_FP || SHOW_GLOBAL_FACTOR_LOWERING_FN) {
+      boolean y = u.getLabel(agendaEdge);
+      boolean yhat = gfeats.forwards() > 0;   // this can't really be relied on, since the DF chooses the argmax
+      if (y != yhat || true) {
+        boolean helping = y == (gfeats.onlyGlobalForwards() > 0);
+        if (!helping) {
+//          System.out.println(agendaEdge + " is y=false and the global features are pushing its score up!");
+          System.out.println("y=" + y + "\tyhat=" + yhat + "\thelping=" + helping + "\t" + agendaEdge);
+          System.out.println("totalScore=" + gfeats.forwards() + " globalScore=" + gfeats.onlyGlobalForwards());
+          System.out.println(gfeats.details(false, true));
+          for (LL<HypEdge> cur = inGroupInState; cur != null; cur = cur.next)
+            System.out.println("hist: " + cur.item);
+          System.out.println();
+        }
+      }
+    }
+//    if (SHOW_GLOBAL_FACTOR_LOWERING_FN && gfeats.onlyGlobalForwards() < 0 && u.getLabel(agendaEdge)) {
+//      System.out.println(agendaEdge + " is y=true and the global features are pulling its score down!");
+//      System.out.println("totalScore=" + gfeats.forwards() + " globalScore=" + gfeats.onlyGlobalForwards());
+//      System.out.println(gfeats.details(false, true));
+//      for (LL<HypEdge> cur = inGroupInState; cur != null; cur = cur.next)
+//        System.out.println("hist: " + cur.item);
+//      System.out.println();
+//    }
 
     return gfeats;
   }

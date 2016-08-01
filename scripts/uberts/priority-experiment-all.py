@@ -1,11 +1,28 @@
 
 import os, sys, subprocess, shutil
 
-def single_global_feature_configs():
+
+def reorder_methods():
+  ''' this only works with hacky implementation, see comparators below
+      for how to vary this with the regular/permanent implementation
+  '''
+  # NONE,               // leave order as T.then(F).then(K)
+  # CONF_ABS,           // score(bucket) = max_{f in bucket} score(f)
+  # CONF_ABS_NON_NIL,   // score(bucket) = max_{f in bucket and f is not nil} score(f)
+  # CONF_REL,           // score(bucket) = max_{f in bucket} score(f) - secondmax_{f in bucket} score(f)
+  # CONF_REL_NON_NIL,   // score(bucket) = max_{f in bucket and f is not nil} diff(score(f), score(nil))
+  return ['NONE', 'CONF_ABS', 'CONF_ABS_NON_NIL']
+
+def agenda_comparators():
+  yield 'BY_RELATION,BY_TARGET,BY_FRAME,BY_ROLE,BY_SCORE'
+  yield 'BY_RELATION,BY_TARGET,BY_FRAME,BY_SCORE'
+  yield 'BY_RELATION,BY_SCORE'
+
+def arg4t_global_feature_configs():
   d = {}
   d['+none'] = ['@CONST']
   d['+roleCooc'] = ['@CONST', '@F', '@F_1']
-  d['+numArgs'] = ['@F', '@F_1']
+  d['+numArgs'] = ['@F', '@F_1', '@FK', '@FK_F']
   d['+argLocRoleCooc'] = ['@F', '@F_1', '@FK', '@FK_1', '@K', '@K_F']
   d['+argLocPairwise'] = ['@F', '@F_1', '@FK', '@FK_1', '@K', '@K_F']
   #d['+argLocGlobal'] = ['@F', '@F_1', '@FK', '@FK_1', '@K', '@K_F']
@@ -13,6 +30,11 @@ def single_global_feature_configs():
     for r in refs:
       yield 'argument4/t' + gf + r
 
+def arg4s_global_feature_configs():
+  raise Exception('figure out what these should be')
+
+
+# DEPRECATED
 small = 0.001
 def weights():
   # #w = [0, 2, 3, 4, 6, 8, 9, 12]  # 55 options which sum to 12
@@ -186,42 +208,39 @@ if __name__ == '__main__':
     if not mock:
       sys.exit(11)
 
+
   ### Test out different types of Fy for various global features
   if 'arg4fine' not in exp_names:
     print 'skipping arg4fine'
   else:
-    agenda_comparator = 'BY_RELATION,BY_TARGET,BY_FRAME,BY_ROLE,BY_SCORE'
-    for gf_str in single_global_feature_configs():
-      name = 'gfRefs.argment4'
-      name += '.' + gf_str.replace('/', '_')
-      name = name.replace('@', '-AT-')
-      name = name.replace('+', '-PLUS-')
+    for agenda_comparator in agenda_comparators():
+      for gf_str in arg4t_global_feature_configs():
+        name = 'a4fine'
+        name += '.' + gf_str.replace('/', '_')
+        name = name.replace('@', '-AT-')
+        name = name.replace('+', '-PLUS-')
 
-      # gf_str contains a +
-      # gf_str ~ '+numArgs@F'
-      # param_io cannot
+        param_io = 'argument4+learn+write:' \
+          + os.path.join(model_dir, name + '.jser.gz')
 
-      param_io = 'argument4+learn+write:' \
-        + os.path.join(model_dir, name + '.jser.gz')
+        oracle_relations = 'event1,predicate2'
 
-      oracle_relations = 'event1,predicate2'
+        job_name = tag + '-' + name
+        args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_omni, \
+           wd, \
+           arg4_grammar, \
+           os.path.join(predictions_dir, name), \
+           agenda_comparator, \
+           oracle_relations, \
+           param_io, \
+           fs_stable, \
+           gf_str, \
+           train_method, \
+           jar_stable]
 
-      job_name = tag + '-' + name
-      args = [engine, '-N', job_name, '-cwd', '-o', logs, sh_omni, \
-         wd, \
-         arg4_grammar, \
-         os.path.join(predictions_dir, name), \
-         agenda_comparator, \
-         oracle_relations, \
-         param_io, \
-         fs_stable, \
-         gf_str, \
-         train_method, \
-         jar_stable]
-
-      print args
-      if not mock:
-        subprocess.check_call(args)
+        print args
+        if not mock:
+          subprocess.check_call(args)
 
   # DEPRECATED
   ### Test out various global feature and agenda priority combinations

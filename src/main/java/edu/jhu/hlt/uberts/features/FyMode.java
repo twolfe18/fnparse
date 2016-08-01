@@ -55,6 +55,10 @@ public enum FyMode {
   FK { public String[] f(HypEdge e) { return new String[] {
       EdgeUtils.frame(e) + "-" + EdgeUtils.role(e),
   }; } },
+  FK_F { public String[] f(HypEdge e) { return new String[] {
+      EdgeUtils.frame(e) + "-" + EdgeUtils.role(e),
+      EdgeUtils.frame(e),
+  }; } },
   FK_1 { public String[] f(HypEdge e) { return new String[] {
       EdgeUtils.frame(e) + "-" + EdgeUtils.role(e),
       "const",

@@ -216,6 +216,18 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // (t,f,k) violations which do not increase the global/max violation.
   private boolean includeClassificationObjectiveTerm = true;
 
+  // Normally, the update phi(y_{gold},x) - phi(y_{pred},x) uses the oracle
+  // history in computing phi(y_{gold},x). I have reason to believe that is a
+  // bad idea, and that the model must learn to use global features GIVEN that
+  // it will make mistakes (i.e. compute phi(y_{gold},x) using predHistory, not
+  // goldHistory). If this is set to true, then the oracle will only be used to
+  // determine what action to take in a state reached purely by the pred model.
+  // NOTE: This implementation is trickier than it needs to be, see
+  // the description given in Algorithm 1 of http://nlp.stanford.edu/pubs/clark2016improving.pdf
+  // TODO: Check that this implementation is exactly what it should be.
+  // TODO: Check original LaSO paper to see if this is what they where calling for, and if so s/laso2/laso/
+  private boolean laso2 = true;
+
   enum TfkRerorder {
     NONE,               // leave order as T.then(F).then(K)
     CONF_ABS,           // score(bucket) = max_{f in bucket} score(f)
@@ -310,6 +322,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     pipe.hackyImplementation = config.getBoolean("hackyImplementation", pipe.hackyImplementation);
     Log.info("[main] hackyImplementation=" + pipe.hackyImplementation);
+
+    pipe.laso2 = config.getBoolean("laso2", pipe.laso2);
+    Log.info("[main] laso2=" + pipe.laso2);
 
     pipe.includeClassificationObjectiveTerm = config.getBoolean("includeClassificationObjectiveTerm", pipe.includeClassificationObjectiveTerm);
     Log.info("[main] includeClassificationObjectiveTerm=" + pipe.includeClassificationObjectiveTerm);
@@ -696,6 +711,18 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       }
     }
 
+    // Show when global features are hurting performance
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    if (config.getBoolean("showGlobalFactorMistakes", false)
+        && (mode == Mode.DEV || mode == Mode.TEST)) {
+      Log.info("showing when global features are huring performance");
+      NumArgsRoleCoocArgLoc.SHOW_GLOBAL_FACTOR_BOOSTING_FP = true;
+      NumArgsRoleCoocArgLoc.SHOW_GLOBAL_FACTOR_LOWERING_FN = true;
+    } else {
+      NumArgsRoleCoocArgLoc.SHOW_GLOBAL_FACTOR_BOOSTING_FP = false;
+      NumArgsRoleCoocArgLoc.SHOW_GLOBAL_FACTOR_LOWERING_FN = false;
+    }
+
     // Print the number of edges in the state.
     // Useful when you've accidentally included the wrong set of schema edges.
     Log.info("state fact counts by relation: " + u.getStateFactCounts());
@@ -1048,7 +1075,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Relation xp = u.getEdgeType("xue-palmer-otf-args2");
     Relation r2 = u.getEdgeType("role2");
 
-    // This stores the actions and computes an ordering over deocoder buckets
+    // This stores the actions and computes an ordering over decoder buckets
     DecoderBucketReorder tfk2LocalScore = new DecoderBucketReorder();
 
     // Generate actions
@@ -1131,10 +1158,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     for (TFK b : buckets) {
 
       TFK tf = new TFK(b.t, b.f, null);
+
+      // The predicted edge.
+      // Serves double-duty between prediction and loss augmented inference.
       ArgMax<Pair<HypEdge, Adjoints>> pArgmaxS = new ArgMax<>();
       ArgMax<Pair<HypEdge, Adjoints>> pArgmaxSLocal = new ArgMax<>();
+
+      // The gold edge in this group. Exactly one must exist.
       Pair<HypEdge, Adjoints> g = null;
-      Pair<HypEdge, Adjoints> gLocal = null;
+      Pair<HypEdge, Adjoints> gLocal = null;    // same edge, but only local score
 
       for (Pair<HypEdge, Adjoints> a : tfk2LocalScore.getActionsInBucket(b)) {
         HypEdge a4 = a.get1();
@@ -1155,12 +1187,23 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         } else {
           int numArgsOracle = tfNumArgGold.getCount(tf);
           int numArgsPred = tfNumArgPred.getCount(tf);
-          if (mode == Mode.TRAIN)
-            scoreOracle = Adjoints.cacheIfNeeded(Adjoints.sum(scoreOracleLocal, globalFeatures(tOracle, a4, numArgsOracle)));
-          if (mode == Mode.TRAIN && rewritePredHistory && maxViolationIdx.getBestScore() > 0)
-            scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tOracle, a4, numArgsOracle)));
-          else
+
+          if (laso2) {
+            // NOTE: The "oracle" trajectory could in principle have loss in this
+            // case, but I think won't for this argument4 grammar, since decisions
+            // can inform each other but can't rule out the right answer to each other.
+            if (mode == Mode.TRAIN) {
+              scoreOracle = Adjoints.cacheIfNeeded(Adjoints.sum(scoreOracleLocal, globalFeatures(tPred, a4, numArgsPred)));
+            }
             scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tPred, a4, numArgsPred)));
+          } else {
+            if (mode == Mode.TRAIN)
+              scoreOracle = Adjoints.cacheIfNeeded(Adjoints.sum(scoreOracleLocal, globalFeatures(tOracle, a4, numArgsOracle)));
+            if (mode == Mode.TRAIN && rewritePredHistory && maxViolationIdx.getBestScore() > 0)
+              scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tOracle, a4, numArgsOracle)));
+            else
+              scorePred = Adjoints.cacheIfNeeded(Adjoints.sum(scorePredLocal, globalFeatures(tPred, a4, numArgsPred)));
+          }
         }
 
         // Store this action if it is the right answer in this group
@@ -1190,9 +1233,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       // Do book-keeping for MV and classification updates
       if (mode == Mode.TRAIN) {
         if (includeClassificationObjectiveTerm) {
-          Pair<HypEdge, Adjoints> pLocal = pArgmaxSLocal.get();
-          if (pLocal.get2().forwards() > gLocal.get2().forwards()) {
-            classEx.add(new ClassEx(gLocal, pLocal, index));
+          if (laso2) {
+//            Log.warn("not adding classification term since laso2 covers this");
+          } else {
+            Pair<HypEdge, Adjoints> pLocal = pArgmaxSLocal.get();
+            if (pLocal.get2().forwards() > gLocal.get2().forwards()) {
+              classEx.add(new ClassEx(gLocal, pLocal, index));
+            }
           }
         }
 
@@ -1213,7 +1260,26 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
         sCumOracle += g.get2().forwards();
         sCumPred += p.get2().forwards();
-        maxViolationIdx.offer(index, sCumPred - sCumOracle);
+        if (laso2) {
+          // For laso2, we are not concerned with the max violator, and take
+          // the entire sequence. If pred didn't get anything wrong, then all
+          // updates will cancel and we're done. Otherwise, we update every
+          // index of the trajectory, with global features becoming more and
+          // more meaningless the more mistakes we make further into the trajectory.
+          // TODO: Is there a way to condition the training on the fact that
+          // we are likely to make more and more mistakes as we go on? The updates
+          // from the last indices in the trajectory are likely to include some
+          // global features computed from mistakes, which I presume will introduce
+          // noise. If our prediction model was cognizant of this fact, then we
+          // could maybe shrink the effect of the global features at the end of
+          // the trajectory? The real way to do this would be to marginalize
+          // out the uncertainty over early actions and let the effects be large
+          // (letting the p(history is right) do the shrinkage rather than the
+          //  magnitude of the global features...)
+          maxViolationIdx.offer(index, index+1);
+        } else {
+          maxViolationIdx.offer(index, sCumPred - sCumOracle);
+        }
         index++;
 
         if (!isNullSpan(g.get1())) {
@@ -1260,18 +1326,22 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         }
 
         if (includeClassificationObjectiveTerm) {
-          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
-            System.out.println("starting ORACLE classification update...\t" + u.dbgSentenceCache.getId());
-          for (ClassEx e : classEx) {
-            e.goldScore.backwards(-1);
-            eventCounts.increment("hacky/classifyUpdate");
-            if (violation <= 0 || e.index > mvIdx)
-              eventCounts.increment("hacky/classifyUpdateAfterMV");
+          if (laso2) {
+            // no-op
+          } else {
+            if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+              System.out.println("starting ORACLE classification update...\t" + u.dbgSentenceCache.getId());
+            for (ClassEx e : classEx) {
+              e.goldScore.backwards(-1);
+              eventCounts.increment("hacky/classifyUpdate");
+              if (violation <= 0 || e.index > mvIdx)
+                eventCounts.increment("hacky/classifyUpdateAfterMV");
+            }
+            if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
+              System.out.println("starting LOSS_AUGMENTED classification update...\t" + u.dbgSentenceCache.getId());
+            for (ClassEx e : classEx)
+              e.predScore.backwards(+1);
           }
-          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
-            System.out.println("starting LOSS_AUGMENTED classification update...\t" + u.dbgSentenceCache.getId());
-          for (ClassEx e : classEx)
-            e.predScore.backwards(+1);
         }
       }
 
@@ -1477,7 +1547,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     boolean reindex = true;
     Adjoints a = hackyGlobalWeights.score(ifeats, reindex);
-    if (HACKY_DEBUG)
+    if (Uberts.LEARN_DEBUG)
       a = new DebugFeatureAdj(a, Arrays.asList(fy), fx, "GLOBAL: agenda=" + current);// + " state=" + stateEdge);
     return a;
   }
