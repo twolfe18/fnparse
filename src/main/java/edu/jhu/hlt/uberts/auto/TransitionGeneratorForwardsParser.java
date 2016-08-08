@@ -1370,7 +1370,7 @@ public class TransitionGeneratorForwardsParser {
     u.readRelData("def srl1 <tokenIndex> <tokenIndex>");
     u.readRelData("def srl2 <witness-srl1> <witness-event1>");
     u.readRelData("def srl3 <witness-srl2> <witness-event2> <role>");
-    Rule ru1 = Rule.parseRule("event1'(e1,i,j) & srl1'(s1,k,l) => srl2(s1,e1)", u);
+    Rule ru1 = Rule.parseRule("event1'(e1,i,j) & srl1'(s1,k,l) => srl2(s1,e1)", null, u);
     ru1.resolveRelations(u);
     System.out.println(ru1);
     List<TKey> lhs1 = OLD_WAY
@@ -1383,7 +1383,7 @@ public class TransitionGeneratorForwardsParser {
     System.out.println();
 
     System.out.println("this example requires enforcing a node equality constraint (e1 which appears in the first two LHS terms)");
-    Rule ru2 = Rule.parseRule("srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) => srl3(s2,e2,k)", u);
+    Rule ru2 = Rule.parseRule("srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) => srl3(s2,e2,k)", null, u);
     ru2.resolveRelations(u);
     System.out.println(ru2);
     List<TKey> lhs2 = OLD_WAY
@@ -1429,7 +1429,7 @@ public class TransitionGeneratorForwardsParser {
     Uberts u = new Uberts(new Random(9001));
     u.readRelData("def csyn3-stanford <tokenIndex> <tokenIndex> <cfgLabel>");
     u.readRelData("def srl1 <tokenIndex> <tokenIndex>");
-    Rule ru1 = Rule.parseRule("csyn3-stanford(i,j,lhs) & csyn3-stanford(j,k,lhs2) => srl1(i,k)", u);
+    Rule ru1 = Rule.parseRule("csyn3-stanford(i,j,lhs) & csyn3-stanford(j,k,lhs2) => srl1(i,k)", null, u);
     ru1.resolveRelations(u);
     System.out.println("this example requires you to be able to bind a relation twice in the LHS");
     System.out.println(ru1);
@@ -1454,7 +1454,7 @@ public class TransitionGeneratorForwardsParser {
     u.readRelData("def csyn3-stanford <tokenIndex> <tokenIndex> <cfgLabel>");
     u.readRelData("def role2 <frame> <role>");
     u.readRelData("def foo <tokenIndex> <role>");
-    Rule ru1 = Rule.parseRule("csyn3-stanford(i,j,lhs) & role2(f,k) => foo(i,k)", u);
+    Rule ru1 = Rule.parseRule("csyn3-stanford(i,j,lhs) & role2(f,k) => foo(i,k)", null, u);
     ru1.resolveRelations(u);
     System.out.println("this example does not have a spanning tree over LHS relations, requires two entries from root");
     System.out.println(ru1);

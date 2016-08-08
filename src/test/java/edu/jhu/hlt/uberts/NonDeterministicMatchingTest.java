@@ -63,7 +63,7 @@ public class NonDeterministicMatchingTest {
     Relation event2 = u.readRelData("def event2 <witness-event1> <frame>");
     Relation role = u.readRelData("def role <frame> <roleLabel>");
     Relation srl3 = u.readRelData("def srl3 <witness-srl2> <witness-event2> <roleLabel>");
-    Rule untyped = Rule.parseRule("srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) => srl3(s2,e2,k)", null);
+    Rule untyped = Rule.parseRule("srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) => srl3(s2,e2,k)", null, null);
     ti.add(untyped);
     List<Rule> typed = ti.runTypeInference();
     assertEquals(typed.size(), 1);
@@ -127,7 +127,7 @@ public class NonDeterministicMatchingTest {
     Relation roleRef = u.readRelData("def roleRef <frame> <roleLabel> <refinement>"); // e.g. -R and -C for reference and continuation roles
     Relation srl3 = u.readRelData("def srl3 <witness-srl2> <witness-event2> <roleLabel> <refinement>");
 //    Rule untyped = Rule.parseRule("srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) => srl3(s2,e2,k)", null);
-    Rule untyped = Rule.parseRule("srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) & roleRef(f,k,c) => srl3(s2,e2,k,c)", null);
+    Rule untyped = Rule.parseRule("srl2'(s2,s1,e1) & event2'(e2,e1,f) & role(f,k) & roleRef(f,k,c) => srl3(s2,e2,k,c)", null, null);
     ti.add(untyped);
     List<Rule> typed = ti.runTypeInference();
     assertEquals(typed.size(), 1);
@@ -195,7 +195,7 @@ public class NonDeterministicMatchingTest {
 //    u.readRelData("def R3 <foo> <bar> <baz> <quux>");
 //    Rule untyped = Rule.parseRule("R1(a,b) & R2(c,d) => R3(a,b,c,d)", null);
     u.readRelData("def R3 <baz> <quux> <foo> <bar>");
-    Rule untyped = Rule.parseRule("R2(a,b) & R1(c,d) => R3(a,b,c,d)", null);
+    Rule untyped = Rule.parseRule("R2(a,b) & R1(c,d) => R3(a,b,c,d)", null, null);
     ti.add(untyped);
     List<Rule> typed = ti.runTypeInference();
     assertEquals(typed.size(), 1);
@@ -287,7 +287,7 @@ public class NonDeterministicMatchingTest {
 
     // cat grammar.trans | perl -pe 's/(.*)/ti.add(Rule.parseRule("\1", null));/'
 //    ti.add(Rule.parseRule("span-w1(t,i,j) & lemma2(i,l) & pos2(i,p) => pred1(t)", null));
-    ti.add(Rule.parseRule("lemma2(i,l) & span-w1(t,i,j) & pos2(i,p) => pred1(t)", null));
+    ti.add(Rule.parseRule("lemma2(i,l) & span-w1(t,i,j) & pos2(i,p) => pred1(t)", null, null));
 //    ti.add(Rule.parseRule("pred1(t) & span-w1(t,i,j) & lemma2(i,l) & frameTriage(l,f) => predicate(t,f)", null));
 //    ti.add(Rule.parseRule("pred1(t) & constituent(span,label) => arg2(t,span)", null));
 //    ti.add(Rule.parseRule("pred2(t,f) & role(f,k) => arg3(t,f,k)", null));

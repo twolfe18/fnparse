@@ -28,6 +28,7 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.Agenda.LabledAgendaItem;
 import edu.jhu.hlt.uberts.Agenda.RescoreMode;
+import edu.jhu.hlt.uberts.DecisionFunction.ByGroup;
 import edu.jhu.hlt.uberts.DecisionFunction.ByGroup.ByGroupMode;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.auto.Rule;
@@ -695,6 +696,57 @@ public class Uberts {
     thresh.clear();
     disableGlobalFeats = dgOld;
     return classEx;
+  }
+
+  /**
+   * Runs inference in loss augmented mode and records every pred=true step.
+   * After inference is complete, it goes back to the ByGroup and asks for the
+   * first gold in every bucket s.t. there is a pred in said bucket.
+   *
+   * Only works when using {@link DecisionFunction.ByGroup} with EXACTLY_ONE.
+   *
+   * This is distinct from max-violation updates in that the "oracle", or the
+   * trajectory that you boost the score of, uses features computed from the
+   * current model + loss augmentation rather than using oracle global features.
+   * If there is a large difference between the oracle and the model, what
+   * global features fire on oracle trajectories may not be informative as to
+   * what action should be taken from states that the model will put inself in.
+   */
+  public List<ClassEx> getLaso2Update() {
+
+    // LOSS AUGMENTED INFERENCE
+    List<Step> traj = new ArrayList<>();
+    assert agenda.getRescoreMode() == RescoreMode.NONE;
+    agenda.oneTimeRescore(RescoreMode.LOSS_AUGMENTED, goldEdges);
+    while (agenda.size() > 0) {
+      AgendaItem ai = agenda.popBoth2();
+      Pair<Boolean, Adjoints> p = thresh.decide2(ai);
+//      assert ai.score == p.get2();    // THEY'RE NOT, thresh hands out junk with (LearningRate 0 wrapped)
+      boolean yhat = p.get1();
+      boolean y = getLabel(ai);
+
+      if (yhat) {
+        traj.add(new Step(ai, y, yhat));
+        addEdgeToState(ai);
+      }
+    }
+
+    List<ClassEx> updates = new ArrayList<>();
+    for (Step s : traj) {
+      assert s.pred;
+      DecisionFunction.ByGroup t = (ByGroup) thresh.get(s.edge.getRelation().getName());
+      List<Object> key = t.getKey(s.edge);
+      Pair<HypEdge, Adjoints> g = t.getFirstGoldInBucket(key);
+      // compare edges
+      HashableHypEdge gg = new HashableHypEdge(g.get1());
+      HashableHypEdge pp = new HashableHypEdge(s.edge);
+      boolean debug = true;   // adHoc doesn't cancel updates
+      if (!gg.equals(pp) || debug) {
+        // add to updates
+        updates.add(new ClassEx(g, new Pair<>(s.edge, s.score), -1));
+      }
+    }
+    return updates;
   }
 
   public static String dbgShrtStr(String x) {

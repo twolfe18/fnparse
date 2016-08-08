@@ -105,7 +105,6 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private int nRescore = 0;
   private int nEdgeRescore = 0;
   private TimeMarker tm = new TimeMarker();
-  private Counts<String> eventCounts = new Counts<>();
 
   /**
    * @param refinementArgPos can be <0 if you don't want a refinement
@@ -126,14 +125,17 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     Log.info("[main] globalToLocalScale=" + globalToLocalScale);
 
     this.pairwiseFeaturesFunctions = new ArrayList<>();
-    if (p.argLocPairwise != null)
-      this.pairwiseFeaturesFunctions.add(argLocPairwiseFeat(p.argLocPairwise));
+    if (p.argLocPairwise != null) {
+      this.pairwiseFeaturesFunctions.add(argLocPairwiseFeat(p.argLocPairwise, false));
+    }
     if (p.roleCooc != null)
       this.pairwiseFeaturesFunctions.add(roleCoocFeat(p.roleCooc));
     if (p.argLocRoleCooc != null)
-      this.pairwiseFeaturesFunctions.add(argLocAndRoleCooc(p.argLocRoleCooc));
+      this.pairwiseFeaturesFunctions.add(argLocAndRoleCooc(p.argLocRoleCooc, false));
     if (p.frameCooc != null)
       this.pairwiseFeaturesFunctions.add(frameCoocFeat(p.frameCooc));
+    if (p.targetLocPairwise != null)
+      this.pairwiseFeaturesFunctions.add(targetLocPairwiseFeat(p.targetLocPairwise));
 
     if (p.numArgs != null) {
       additiveNumArgs = config.getBoolean("additiveNumArgs", additiveNumArgs);
@@ -408,8 +410,11 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     private String[] fy;
     private int[] fyx;          // should be converted into [0,dimension)
     private List<String> fx;
-    private double tfyx;        // theta * fyx + prev.tfyx
+    private double tfyx;        // theta * fyx + prev.tfyx, NOT USED in UPDATE_BUFFER_FIX
     private FeatureLL prev;
+
+    // For AveragedPerceptronWeights.UPDATE_BUFFER_FIX
+    private Adjoints afyx;  // Adjoints(fyx, thetaView) + (prev == null ? 0 : prev.afyx)
 
     public FeatureLL(AveragedPerceptronWeights w, int[] fyx, String[] fy, List<String> fx, FeatureLL prev) {
       this.thetaView = w;
@@ -417,9 +422,18 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       this.fx = fx;
       this.prev = prev;
       this.fyx = fyx;
-      this.tfyx = prev == null ? 0 : prev.tfyx;
-      for (int i = 0; i < fyx.length; i++)
-        this.tfyx += thetaView.getWeight(fyx[i]);
+
+      if (AveragedPerceptronWeights.UPDATE_BUFFER_FIX) {
+        boolean reindex = true;
+        if (prev == null)
+          this.afyx = Adjoints.cacheIfNeeded(w.score(fyx, reindex));
+        else
+          this.afyx = Adjoints.cacheSum(w.score(fyx, reindex), prev.afyx);
+      } else {
+        this.tfyx = prev == null ? 0 : prev.tfyx;
+        for (int i = 0; i < fyx.length; i++)
+          this.tfyx += thetaView.getWeight(fyx[i]);
+      }
     }
 
     public String details() {
@@ -433,13 +447,20 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     @Override
     public double forwards() {
-      return tfyx;
+      if (AveragedPerceptronWeights.UPDATE_BUFFER_FIX)
+        return afyx.forwards();
+      else
+        return tfyx;
     }
     @Override
     public void backwards(double dErr_dForwards) {
-      for (FeatureLL cur = this; cur != null; cur = cur.prev)
-        for (int i = 0; i < cur.fyx.length; i++)
-          thetaView.bwh(cur.fyx[i], dErr_dForwards);
+      if (AveragedPerceptronWeights.UPDATE_BUFFER_FIX) {
+        this.afyx.backwards(dErr_dForwards);
+      } else {
+        for (FeatureLL cur = this; cur != null; cur = cur.prev)
+          for (int i = 0; i < cur.fyx.length; i++)
+            thetaView.bwh(cur.fyx[i], dErr_dForwards);
+      }
     }
 
   }
@@ -550,6 +571,15 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     Agenda a = u.getAgenda();
     Relation firesForR = u.getEdgeType(firesFor);
     HypNode t = stateEdge.getTail(aggregateArgPos);
+
+    if ("argument4".equals(firesFor) && "0-0".equals(t.getValue())) {
+      // Do not allow nil facts to trigger re-scorings.
+      // This is a problem with argument4/s global factors since 0-0 facts are very common.
+      events.increment("rescore/nilFactSkip");
+      return;
+    }
+    events.increment("rescore");
+
     Iterable<HypEdge> inGroupOnAgenda = a.match(aggregateArgPos, firesForR, t);
 
     // NOTE: This should include stateEdge
@@ -610,9 +640,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       System.out.println("showing stats for: " + this.toString());
       int k = 30;
       PairFeat frameCooc = frameCoocFeat(FyMode.K);
-      PairFeat argLocPW = argLocPairwiseFeat(FyMode.K);
-      PairFeat argLocRoleCooc = argLocAndRoleCooc(FyMode.K);
+      PairFeat argLocPW = argLocPairwiseFeat(FyMode.K, false);
+      PairFeat argLocRoleCooc = argLocAndRoleCooc(FyMode.K, false);
       PairFeat roleCooc = roleCoocFeat(FyMode.K);
+      PairFeat targetLoc = targetLocPairwiseFeat(FyMode.K);
       for (boolean byAvg : Arrays.asList(true, false)) {
         System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=frameCoocPW: " + getBiggestWeights(k, byAvg, frameCooc::isFeatureOfMine));
         System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=numArgs: " + getBiggestWeights(k, byAvg, NumArgsRoleCoocArgLoc::isNumArgsFeat));
@@ -620,6 +651,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=argLocPW: " + getBiggestWeights(k, byAvg, argLocPW::isFeatureOfMine));
         System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=argLocRoleCoocPW: " + getBiggestWeights(k, byAvg, argLocRoleCooc::isFeatureOfMine));
         System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=roleCoocPW: " + getBiggestWeights(k, byAvg, roleCooc::isFeatureOfMine));
+        System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=targetLocPW: " + getBiggestWeights(k, byAvg, targetLoc::isFeatureOfMine));
         System.out.println(k + " biggest weights " + name() + " byAvg=" + byAvg + " rel=ANY: " + getBiggestWeights(k, byAvg, e -> true));
       }
       System.out.println("feature counts: " + featureStats());
@@ -802,6 +834,14 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
     }
 
+    public List<GlobalParams> nonDefaultConfigs() {
+      List<GlobalParams> g = new ArrayList<>();
+      for (GlobalParams gg : name2params.values())
+        if (gg.any())
+          g.add(gg);
+      return g;
+    }
+
     public GlobalParams getOrAddDefault(String name) {
       GlobalParams gp = name2params.get(name);
       if (gp == null) {
@@ -821,6 +861,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public FyMode argLocGlobal = null;
     public FyMode argLocRoleCooc = null;
     public FyMode roleCooc = null;
+    public FyMode targetLocPairwise = null;
 
     public GlobalParams(String desc) {
       String[] toks = desc.split("\\+");
@@ -832,7 +873,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         if (a < 0)
           throw new RuntimeException("each must be <argType>@<FyMode>");
         FyMode fy = FyMode.valueOf(toks[i].substring(a+1));
-        String name = toks[i].substring(0, a);
+        String name = toks[i].substring(0, a).toLowerCase();
         switch (name) {
         case "none":
           break;
@@ -843,28 +884,34 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
           argLocRoleCooc = fy;
           roleCooc = fy;
           break;
-        case "frameCooc":
+        case "framecooc":
           frameCooc = fy;
           break;
-        case "numArgs":
+        case "numargs":
           numArgs = fy;
           break;
-        case "argLoc":
+        case "argloc":
           argLocPairwise = fy;
           argLocGlobal = fy;
           break;
-        case "argLocPairwise":
+        case "arglocpairwise":
           argLocPairwise = fy;
           break;
-        case "argLocGlobal":
+        case "arglocglobal":
           argLocGlobal = fy;
           break;
-        case "argLocRoleCooc":
+        case "arglocrolecooc":
           argLocRoleCooc = fy;
           break;
-        case "roleCooc":
+        case "rolecooc":
           roleCooc = fy;
           break;
+        case "targetloc":
+        case "targetlocpairwise":
+          targetLocPairwise = fy;
+          break;
+        default:
+          throw new RuntimeException("unknown: " + name);
         }
       }
     }
@@ -874,7 +921,11 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     }
 
     public boolean any() {
-      return frameCooc != null || numArgs != null || argLocPairwise != null || argLocGlobal != null || argLocRoleCooc != null || roleCooc != null;
+      return frameCooc != null
+          || numArgs != null
+          || argLocPairwise != null || argLocGlobal != null || argLocRoleCooc != null
+          || roleCooc != null
+          || targetLocPairwise != null;
     }
 
     public GlobalParams(GlobalParams copy) {
@@ -884,6 +935,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       argLocPairwise = copy.argLocPairwise;
       argLocRoleCooc = copy.argLocRoleCooc;
       numArgs = copy.numArgs;
+      targetLocPairwise = copy.targetLocPairwise;
     }
 
     @Override
@@ -915,6 +967,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       if (argLocRoleCooc != null) {
         if (includeSpaces) sb.append(' ');
         sb.append("+argLocRoleCooc@" + argLocRoleCooc);
+      }
+      if (targetLocPairwise != null) {
+        if (includeSpaces) sb.append(' ');
+        sb.append("+targetLocPairwise@" + targetLocPairwise);
       }
       return sb.toString().trim();
     }
@@ -950,16 +1006,20 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       }
     }
 
-    default public void refineByTargets(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats, boolean backoff) {
+    default public void refineByTargets(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats, boolean backoff, boolean onlyUseEquality) {
       Span ts = EdgeUtils.target(stateEdge);
       Span ta = EdgeUtils.target(agendaEdge);
       String m = null;
-      if (ts != null && ta != null)
-        m = "tRel=" + BasicFeatureTemplates.spanPosRel(ts, ta, SIMPLE_SPAN_POS_REL);
-      else if (ts != null)
+      if (ts != null && ta != null) {
+        if (onlyUseEquality)
+          m = ts == ta ? "tEq=T" : "tEq=F";
+        else
+          m = "tRel=" + BasicFeatureTemplates.spanPosRel(ts, ta, SIMPLE_SPAN_POS_REL);
+      } else if (ts != null) {
         m = "tRel=s";
-      else if (ta != null)
+      } else if (ta != null) {
         m = "tRel=a";
+      }
       if (m != null) {
         int n = feats.size();
         if (backoff) {
@@ -971,6 +1031,61 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         }
       }
     }
+
+    default public void refineByRoles(
+        HypEdge stateEdge,
+        HypEdge agendaEdge,
+        List<String> feats,
+        boolean backoff,
+        boolean ordered,
+        boolean includeFrame) {
+      String k1 = EdgeUtils.role(stateEdge);
+      String k2 = EdgeUtils.role(agendaEdge);
+
+      if (includeFrame) {
+        String f1 = EdgeUtils.frame(stateEdge);
+        String f2 = EdgeUtils.frame(agendaEdge);
+        assert f1 != null && f2 != null;
+        k1 = f1 + "-" + k1;
+        k2 = f2 + "-" + k2;
+      }
+
+      if (!ordered && k1.compareTo(k2) > 0) {
+        String t = k1; k1 = k2; k2 = t;
+      }
+      String ref = "/K=" + k1 + "/k=" + k2;
+      int n = feats.size();
+      if (backoff) {
+        for (int i = 0; i < n; i++)
+          feats.add(feats.get(i) + ref);
+      } else {
+        for (int i = 0; i < n; i++)
+          feats.set(i, feats.get(i) + ref);
+      }
+    }
+
+    // NOTE: If you use this with refineByRoles, and you want ordered=false,
+    // then check that compare(k1,k2) == compare(f1,f2)
+//    default public void refineByFrames(HypEdge stateEdge, HypEdge agendaEdge, List<String> feats, boolean backoff, Boolean flip) {
+//      String k1 = EdgeUtils.frame(stateEdge);
+//      String k2 = EdgeUtils.frame(agendaEdge);
+//      if (flip != null) {
+//        if (flip) {
+//          String t = k1; k1 = k2; k2 = t;
+//        }
+//      } else if (k1.compareTo(k2) > 0) {
+//        String t = k1; k1 = k2; k2 = t;
+//      }
+//      String ref = "/F=" + k1 + "/f=" + k2;
+//      int n = feats.size();
+//      if (backoff) {
+//        for (int i = 0; i < n; i++)
+//          feats.add(feats.get(i) + ref);
+//      } else {
+//        for (int i = 0; i < n; i++)
+//          feats.set(i, feats.get(i) + ref);
+//      }
+//    }
   }
 
   public static PairFeat frameCoocFeat(final FyMode fy) {
@@ -999,7 +1114,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         List<String> feats = new ArrayList<>();
         feats.add(s);
         if (allowDiffTargets)
-          refineByTargets(stateEdge, agendaEdge, feats, targetRelBackoff);
+          refineByTargets(stateEdge, agendaEdge, feats, targetRelBackoff, false);
         refineByEdgeTypes(stateEdge, agendaEdge, feats, edgeRelBackoff);
         return feats;
       }
@@ -1054,7 +1169,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
 
         if (allowDiffTargets)
-          refineByTargets(stateEdge, agendaEdge, feats, targetRelBackoff);
+          refineByTargets(stateEdge, agendaEdge, feats, targetRelBackoff, true);
         refineByEdgeTypes(stateEdge, agendaEdge, feats, edgeRelBackoff);
         return feats;
       }
@@ -1065,9 +1180,55 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     };
   }
 
-  public static final PairFeat argLocPairwiseFeat(FyMode fy) {
+  public static final PairFeat targetLocPairwiseFeat(FyMode fy) {
     return new PairFeat() {
-      private boolean allowDiffTargets = false;
+      @Override
+      public String getName() { return "tlPW"; }
+      @Override
+      public List<String> describe(String prefix, HypEdge stateEdge, HypEdge agendaEdge) {
+        if (UbertsLearnPipeline.isNilFact(stateEdge))
+          return Collections.emptyList();
+        assert !UbertsLearnPipeline.isNilFact(agendaEdge);
+
+        if (agendaEdge.getRelation() != stateEdge.getRelation()) {
+          assert false : "why is this happening?";
+          return Collections.emptyList();
+        }
+
+        Span s1 = EdgeUtils.arg(stateEdge);
+        Span s2 = EdgeUtils.arg(agendaEdge);
+        if (s1 == null || s2 == null)
+          return Collections.emptyList();
+        if (s1 != s2)
+          return Collections.emptyList();
+
+        Span t1 = EdgeUtils.target(stateEdge);
+        Span t2 = EdgeUtils.target(agendaEdge);
+
+//        String f = "sEq/Tt=" + BasicFeatureTemplates.spanPosRel(t1, t2, SIMPLE_SPAN_POS_REL);
+        String f = "sEq/" + (t1 == t2 ? "tEq" : "tNeq");
+        String r = agendaEdge.getRelation().getName();
+        String s = prefix + "/" + r + "/" + f;
+        s = shorten(s);
+
+        List<String> feats = new ArrayList<>();
+        feats.add(s);
+        boolean backoff = false;
+        boolean ordered = false;
+        boolean includeFrame = true;
+        refineByRoles(stateEdge, agendaEdge, feats, backoff, ordered, includeFrame);
+        return feats;
+      }
+      @Override
+      public String[] fy(HypEdge e) {
+        return fy.f(e);
+      }
+    };
+  }
+
+  public static final PairFeat argLocPairwiseFeat(FyMode fy, boolean allowDifferentTargets) {
+    return new PairFeat() {
+      private boolean allowDiffTargets = allowDifferentTargets;
       private boolean targetRelBackoff = false;
       private boolean edgeRelBackoff = false;
       private boolean includeTa = true;
@@ -1109,7 +1270,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
         }
 
         if (allowDiffTargets)
-          refineByTargets(stateEdge, agendaEdge, feats, targetRelBackoff);
+          refineByTargets(stateEdge, agendaEdge, feats, targetRelBackoff, true);
         refineByEdgeTypes(stateEdge, agendaEdge, feats, edgeRelBackoff);
         return feats;
       }
@@ -1120,9 +1281,9 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     };
   }
 
-  public static final PairFeat argLocAndRoleCooc(FyMode fy) {
+  public static final PairFeat argLocAndRoleCooc(FyMode fy, boolean allowDiffTargets) {
     return new PairFeat() {
-      private PairFeat argLoc = argLocPairwiseFeat(fy);
+      private PairFeat argLoc = argLocPairwiseFeat(fy, allowDiffTargets);
       private PairFeat roleCooc = roleCoocFeat(fy);
       @Override
       public String getName() {

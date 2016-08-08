@@ -69,7 +69,7 @@ public class RuleMatchingTests {
     // TODO Try all orders and ensure that results are the same.
 
     String rs = StringUtils.join(" & ", lhs) + " => " + rhs;
-    Rule rule = Rule.parseRule(rs, u);
+    Rule rule = Rule.parseRule(rs, null, u);
 
     Trie3 t = Trie3.makeRoot();
     t.add(new Trigger(rule.lhs, 0));
@@ -96,8 +96,8 @@ public class RuleMatchingTests {
         + " => predicate2(t,frame)";
 //    String r1 = "foo(x,y) & bar(y) => baz(x)";
 //    String r2 = "bar(z) & baz(z) => quuz(z)";
-    Rule r1 = Rule.parseRule(rs1, u);
-    Rule r2 = Rule.parseRule(rs2, u);
+    Rule r1 = Rule.parseRule(rs1, null, u);
+    Rule r2 = Rule.parseRule(rs2, null, u);
     TypeInference ti = new TypeInference(u);
     ti.add(r1);
     ti.add(r2);

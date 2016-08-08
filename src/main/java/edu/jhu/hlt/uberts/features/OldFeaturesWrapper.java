@@ -10,6 +10,7 @@ import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -272,7 +273,9 @@ public class OldFeaturesWrapper {
 
     public static final boolean USE_SHA256 = false; // ExperimentProperties.getInstance().getBoolean("Int3.SHA256", false);
 
-    public static Ints3 build(BasicFeatureTemplates bft, Relation r, boolean fixed, boolean learnDebug, ExperimentProperties config) {
+    public static Ints3 build(String name, BasicFeatureTemplates bft, Relation r, boolean fixed, boolean learnDebug, ExperimentProperties config) {
+      if (name == null)
+        throw new IllegalArgumentException("name is null");
       // Old way: take a map of <relationName>:<featureFile>
 //      String key = "rel2feat";
 //      Map<String, String> rel2featFile = config.getMapping(key);
@@ -290,26 +293,30 @@ public class OldFeaturesWrapper {
       int dim = 1 << config.getInt(r.getName() + ".hashBits", 25);
       Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
       boolean cacheArg4 = !learnDebug && r.getName().equals("argument4");  // && ff.getPath().contains("by-hand");
-      Ints3 i3 = new Ints3(bft, r, ff, dim, fixed, cacheArg4, learnDebug);
+      Ints3 i3 = new Ints3(name, bft, r, ff, dim, fixed, cacheArg4, learnDebug);
       i3.inner.onlyUseTS = cacheArg4;
       i3.useBaseFeatures(false);
 
       if ("argument4".equals(r.getName())) {
         Log.info("[main] refining with (f,k) and (k,)");
-        i3.refine((ToIntFunction<HypEdge> & Serializable) e -> {
+//        i3.refine((ToIntFunction<HypEdge> & Serializable) e -> {
+        i3.refine((Function<HypEdge, String> & Serializable) e -> {
           assert e.getRelation().getName().equals("argument4");
           String frame = (String) e.getTail(1).getValue();
           String role = (String) e.getTail(3).getValue();
-          if (USE_SHA256)
-            return (int) Hash.sha256(frame + "/" + role);
-          return Hash.mix(Hash.hash(frame), Hash.hash(role));
+//          if (USE_SHA256)
+//            return (int) Hash.sha256(frame + "/" + role);
+//          return Hash.mix(Hash.hash(frame), Hash.hash(role));
+          return frame + "-" + role;
         }, "fk");
-        i3.refine((ToIntFunction<HypEdge> & Serializable) e -> {
+//        i3.refine((ToIntFunction<HypEdge> & Serializable) e -> {
+        i3.refine((Function<HypEdge, String> & Serializable) e -> {
           assert e.getRelation().getName().equals("argument4");
           String role = (String) e.getTail(3).getValue();
-          if (USE_SHA256)
-            return (int) Hash.sha256(role);
-          return Hash.hash(role);
+//          if (USE_SHA256)
+//            return (int) Hash.sha256(role);
+//          return Hash.hash(role);
+          return role;
         }, "k");
       } else {
         throw new RuntimeException("how to handle: " + r);
@@ -334,7 +341,8 @@ public class OldFeaturesWrapper {
         useBaseFeatures = dis.readBoolean();
 //        System.out.println("after:  dim=" + dimension + " useAvg=" + useAvg);
         theta = (AveragedPerceptronWeights) ois.readObject();
-        theta2 = (List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>>) ois.readObject();
+//        theta2 = (List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>>) ois.readObject();
+        theta2 = (List<Pair<Function<HypEdge, String>, AveragedPerceptronWeights>>) ois.readObject();
         this.fixed = fixed;
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -367,6 +375,45 @@ public class OldFeaturesWrapper {
       Log.info("nnz=" + nnz + " dim=" + dimension + " percentNonzero=" + (100d*nnz)/dimension);
     }
 
+    public void dbgShowWeights(String prefix) {
+      int nnz = 0;
+      for (int i = 0; i < dimension; i++) {
+        double w = theta.getWeight(i);
+        if (w != 0) {
+
+          String feat;
+          if (UbertsLearnPipeline.FEATURE_DEBUG == null)
+            feat = "" + i;
+          else
+            feat = UbertsLearnPipeline.FEATURE_DEBUG.lookupObject(i);
+
+          nnz++;
+          System.out.printf("%s theta[%s][noRef][%s]=%+.4f\n", prefix, name, feat, w);
+        }
+      }
+      System.out.printf("%s %s %s nnz=%d\n", prefix, name, "noRef", nnz);
+      for (int j = 0; j < theta2.size(); j++) {
+        String ref = theta2RefName.get(j);
+        nnz = 0;
+        for (int i = 0; i < dimension; i++) {
+          double w = theta2.get(j).get2().getWeight(i);
+          if (w != 0) {
+
+            String feat;
+            if (UbertsLearnPipeline.FEATURE_DEBUG == null)
+              feat = "" + i;
+            else
+              feat = UbertsLearnPipeline.FEATURE_DEBUG.lookupObject(i);
+
+            nnz++;
+            System.out.printf("%s theta[%s][%s][%s]=%+.4f\n", prefix, name, ref, feat, w);
+          }
+        }
+        System.out.printf("%s %s %s nnz=%d\n", prefix, name, ref, nnz);
+      }
+    }
+
+    public final String name;
     public OldFeaturesWrapper inner;
     private Relation rel;
     private AveragedPerceptronWeights theta;
@@ -382,7 +429,8 @@ public class OldFeaturesWrapper {
     private boolean fixed;
 
     // For refinements
-    private List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>> theta2;
+//    private List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>> theta2;
+    private List<Pair<Function<HypEdge, String>, AveragedPerceptronWeights>> theta2;
     private List<String> theta2RefName;
 
     // For writing out features to a file
@@ -406,10 +454,12 @@ public class OldFeaturesWrapper {
       return "(Int3 " + rel.getName() + " dim=" + dimension + " intercept=" + intercept + " fixed=" + fixed + ")";
     }
 
-    public void refine(ToIntFunction<HypEdge> f, String name) {
+//    public void refine(ToIntFunction<HypEdge> f, String name) {
+    public void refine(Function<HypEdge, String> f, String name) {
 
       // By default lambdas aren't Serializable...
-      f = (ToIntFunction<HypEdge> & Serializable) f;
+//      f = (ToIntFunction<HypEdge> & Serializable) f;
+      f = (Function<HypEdge, String> & Serializable) f;
 
       if (!rel.getName().equals("argument4"))
         throw new IllegalStateException("refinements are only setup to work with argument4(t,f,s,k) edges");
@@ -445,14 +495,16 @@ public class OldFeaturesWrapper {
       }
     }
 
-    public Ints3(BasicFeatureTemplates bft, Relation r, File featureSet, int dimension, boolean fixed, boolean cacheArg4, boolean learnDebug) {
-      Log.info("r=" + r.getName()
+    public Ints3(String name, BasicFeatureTemplates bft, Relation r, File featureSet, int dimension, boolean fixed, boolean cacheArg4, boolean learnDebug) {
+      Log.info("name=" + name
+          + "r=" + r.getName()
           + " featureSet=" + featureSet.getPath()
           + " dimension=" + dimension
           + " fixed=" + fixed
           + " cacheArg4=" + cacheArg4
           + " learnDebug=" + learnDebug);
       if (cacheArg4) assert !learnDebug : "if you want learnDebug=true, you should set cacheArg4=false";
+      this.name = name;
       this.inner = new OldFeaturesWrapper(bft, featureSet);
       this.rel = r;
       int numIntercept = 0;
@@ -495,7 +547,7 @@ public class OldFeaturesWrapper {
       if (intercept != null)
         intercept.completedObservation();
       if (theta2 != null) {
-        for (Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights> x : theta2)
+        for (Pair<?, AveragedPerceptronWeights> x : theta2)
           x.get2().completedObservation();
       }
     }
@@ -560,13 +612,19 @@ public class OldFeaturesWrapper {
           int t = fyxi.get1().index;
           fx.add(fyxi.get2());
           assert t >= 0 && t < T;
-          if (USE_SHA256) {
+          if (UbertsLearnPipeline.FEATURE_DEBUG != null) {
+            features[i] = UbertsLearnPipeline.FEATURE_DEBUG.lookupIndex(fyxi.get1().name + "/" + fyxi.get2());
+          } else if (USE_SHA256) {
             long f = Hash.sha256(fyxi.get2());
             features[i] = (int) (f * T + t);
           } else {
             int f = Hash.hash(fyxi.get2());
             features[i] = f * T + t;
           }
+        }
+
+        if (UbertsLearnPipeline.EXACTLY_ONE_ITER) {
+          Log.info("something uniq " + key + "\t" + Arrays.toString(features));
         }
 
         // Save to cache
@@ -607,17 +665,35 @@ public class OldFeaturesWrapper {
       // If there are refinements, take the product of those with appropriate weights
       if (theta2 != null) {
         for (int i = 0; i < theta2.size(); i++) {
-          Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights> ref = theta2.get(i);
-          int r = ref.get1().applyAsInt(y);
-          fy.add(theta2RefName.get(i) + "=" + r);
+
+//          Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights> ref = theta2.get(i);
+//          int r = ref.get1().applyAsInt(y);
+          Pair<Function<HypEdge, String>, AveragedPerceptronWeights> ref = theta2.get(i);
+          String rr = ref.get1().apply(y);
+
+          fy.add(theta2RefName.get(i) + "=" + rr);
           int[] fr = new int[features.length];
-          for (int j = 0; j < fr.length; j++)
-            fr[j] = Hash.mix(r, features[j]);
+
+          // Mix in the VALUE of the refinement, not the refinement NAME
+          if (UbertsLearnPipeline.FEATURE_DEBUG != null) {
+            for (int j = 0; j < fr.length; j++) {
+              fr[j] = UbertsLearnPipeline.FEATURE_DEBUG.lookupIndex(
+                  "ref/" + theta2RefName.get(i) + "=" + rr + "/"
+                  + UbertsLearnPipeline.FEATURE_DEBUG.lookupObject(features[j]));
+            }
+          } else {
+            int r = Hash.hash(rr);
+            for (int j = 0; j < fr.length; j++)
+              fr[j] = Hash.mix(r, features[j]);
+          }
+
           Adjoints a2;
           if (useAvg) {
             a2 = ref.get2().averageView().score(fr, reindex);
+//            a2 = ref.get2().averageView().score(features, reindex);
           } else {
             a2 = ref.get2().score(fr, reindex);
+//            a2 = ref.get2().score(features, reindex);
           }
           a = Adjoints.sum(a2, a);
         }
