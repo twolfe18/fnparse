@@ -22,7 +22,7 @@ AC=`grep -m 1 agendaComparator $LOG | key-values agendaComparator`
 if [[ "$AP" == "" ]]; then AP="noPriority"; fi
 if [[ "$AC" == "" ]]; then AP="noComparator"; fi
 
-REORDER=`grep -m 1 hackyTFKReorderMethod $LOG | key-values hackyTFKReorderMethod`
+REORDER=`grep -m 1 '\[main\].*hackyTFKReorderMethod' $LOG | key-values hackyTFKReorderMethod`
 if [[ "$REORDER" == "" ]]; then REORDER="noReorder"; fi
 
 PERF=`mktemp`

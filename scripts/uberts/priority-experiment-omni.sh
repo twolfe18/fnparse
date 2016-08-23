@@ -52,7 +52,10 @@ fi
 #PRIORITY=$4
 # Comparators defined in edu.jhu.hlt.uberts.AgendaComparators separated by commas,
 # e.g. "BY_RELATION,BY_TARGET,BY_FRAME,BY_ROLE,BY_SCORE"
-AGENDA_COMPARATOR=$4
+#AGENDA_COMPARATOR=$4
+# Should be a "<key> <value>" string where the key is either
+# agendaComparator or hackyTFKReorderMethod
+REORDER=$4
 
 # Comma-separated list of relations which should be predicted correctly
 # by the oracle, at train and test time.
@@ -110,6 +113,7 @@ if [[ -z ${FNPARSE_DATA+x} ]]; then
   echo "setting FNPARSE_DATA=$FNPARSE_DATA"
 fi
 
+echo "Using REORDER=$REORDER"
 
 BY_GROUP_DECODER="EXACTLY_ONE:predicate2(t,f):t"
 BY_GROUP_DECODER="$BY_GROUP_DECODER EXACTLY_ONE:argument4(t,f,s,k):t:k"
@@ -138,10 +142,10 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     dev.facts $RD/srl.dev.shuf.facts.gz \
     test.facts $RD/srl.test.facts.gz \
     grammar $GRAMMAR \
-    agendaComparator $AGENDA_COMPARATOR \
     trainMethod $TRAIN_METHOD \
     relations $RD/relations.def \
     schema "$SCHEMA" \
+    $REORDER \
     oracleRelations "$ORACLE_RELATIONS" \
     oracleFeatures "$ORACLE_RELATIONS" \
     byGroupDecoder "$BY_GROUP_DECODER" \
@@ -149,7 +153,12 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     parameterIO "$PARAM_IO" \
     featureSetDir $FEATURE_SET_DIR \
     learnDebug true \
+    hackyImplementation true \
+    agendaComparator 'BY_RELATION,BY_SCORE' \
     predictions.outputDir $PREDICTIONS_DIR
+
+#agendaComparator $AGENDA_COMPARATOR
+#hackyTFKReorderMethod
 
 echo "done at `date`, ret code $?"
 

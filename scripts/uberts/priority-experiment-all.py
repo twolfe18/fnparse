@@ -188,7 +188,7 @@ if __name__ == '__main__':
            wd, \
            pred2_grammar, \
            os.path.join(predictions_dir, name), \
-           agenda_priority, \
+           "agendaComparator '%s'" % (agenda_priority,), \
            oracle_relations, \
            param_io, \
            fs_stable, \
@@ -213,10 +213,14 @@ if __name__ == '__main__':
   if 'arg4fine' not in exp_names:
     print 'skipping arg4fine'
   else:
-    for agenda_comparator in agenda_comparators():
+    for hacky_reorder in reorder_methods():
+      reorder = 'hackyTFKReorderMethod ' + hacky_reorder
+    #for agenda_comparator in agenda_comparators():
+      #reorder = 'agendaComparator ' + agenda_comparator
       for gf_str in arg4t_global_feature_configs():
         name = 'a4fine'
         name += '.' + gf_str.replace('/', '_')
+        name += '.' + hacky_reorder
         name = name.replace('@', '-AT-')
         name = name.replace('+', '-PLUS-')
 
@@ -230,7 +234,7 @@ if __name__ == '__main__':
            wd, \
            arg4_grammar, \
            os.path.join(predictions_dir, name), \
-           agenda_comparator, \
+           reorder, \
            oracle_relations, \
            param_io, \
            fs_stable, \
@@ -269,7 +273,7 @@ if __name__ == '__main__':
              wd, \
              arg4_grammar, \
              os.path.join(predictions_dir, name), \
-             wformat(agenda_priority), \
+             "agendaComparator '%s'" % (wformat(agenda_priority),), \
              oracle_relations, \
              param_io, \
              fs_stable, \
