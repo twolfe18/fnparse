@@ -243,6 +243,9 @@ public class HypEdge {
     public int hashCode() {
       return (int) hc;
     }
+    public long hashCode64() {
+      return hc;
+    }
 
     @Override
     public boolean equals(Object other) {

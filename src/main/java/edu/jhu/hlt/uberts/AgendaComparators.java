@@ -5,16 +5,37 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
 import edu.jhu.hlt.uberts.srl.EdgeUtils;
 
 public class AgendaComparators {
 
+  public static Comparator<AgendaItem> wrapPriority(AgendaPriority p) {
+    return new Comparator<AgendaItem>() {
+      @Override
+      public int compare(AgendaItem o1, AgendaItem o2) {
+        double p1 = p.priority(o1.edge, o1.score);
+        double p2 = p.priority(o2.edge, o2.score);
+        if (p1 > p2)
+          return -1;
+        if (p1 < p2)
+          return +1;
+        return 0;
+      }
+    };
+  }
+
+  /**
+   * Accepts strings like BY_RELATION, separated by commas.
+   * Uses the {@link ExperimentProperties} key "agendaComparator".
+   */
   public static Comparator<AgendaItem> getPriority(ExperimentProperties config) {
     String[] toks = config.getStrings("agendaComparator");
     Log.info("[main] agendaComparator=" + StringUtils.join(",", toks));
@@ -36,8 +57,26 @@ public class AgendaComparators {
     return c;
   }
 
+  public static Comparator<AgendaItem> tryParseWrappedPriority(String name) {
+    String prefix = "p2c:";
+    if (name.startsWith(prefix)) {
+      String suf = name.substring(prefix.length());
+      Log.info("suf=" + suf);
+      Supplier<Uberts> fu = null;
+      AgendaPriority p = AgendaPriority.byName(suf, fu);
+      return wrapPriority(p);
+    }
+    return null;
+  }
+
   @SuppressWarnings("unchecked")
   public static Comparator<AgendaItem> parse(String name) {
+    Log.info("name=" + name);
+
+    Comparator<AgendaItem> p2c = tryParseWrappedPriority(name);
+    if (p2c != null)
+      return p2c;
+
     for (Field f : AgendaComparators.class.getDeclaredFields()) {
       if (name.equals(f.getName())) {
         try {
@@ -124,4 +163,38 @@ public class AgendaComparators {
     }
   };
 
+
+  public static final Comparator<AgendaItem> BY_ROLE_FREQ = tryParseWrappedPriority("p2c:Arg4ByRoleFrequency");
+
+  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_DYNAMIC = tryParseWrappedPriority("p2c:EasyFirstLinear");
+
+  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_STATIC = new Comparator<AgendaItem>() {
+    @Override
+    public int compare(AgendaItem o1, AgendaItem o2) {
+      throw new RuntimeException("implement me");
+    }
+  };
+
+  public static final Comparator<AgendaItem> BY_RAND_STATIC = new Comparator<AgendaItem>() {
+    private int seed = 9001;
+    @Override
+    public int compare(AgendaItem o1, AgendaItem o2) {
+      long i1 = o1.getHashableEdge().hashCode64();
+      long i2 = o2.getHashableEdge().hashCode64();
+      i1 = Hash.mix64(seed, i1);
+      i2 = Hash.mix64(seed, i2);
+      if (i1 < i2)
+        return -1;
+      if (i1 > i2)
+        return +1;
+      return 0;
+    }
+  };
+
+  public static final Comparator<AgendaItem> BY_RAND_DYNAMIC = new Comparator<AgendaItem>() {
+    @Override
+    public int compare(AgendaItem o1, AgendaItem o2) {
+      throw new RuntimeException("implement me");
+    }
+  };
 }

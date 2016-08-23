@@ -88,6 +88,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static enum TrainMethod {
     EARLY_UPDATE,
     MAX_VIOLATION,
+    LATEST_UPDATE,    // TODO implement me!
     DAGGER,
     DAGGER1,  // Only updates w.r.t. top item on the agenda at every state
     LASO2,
@@ -230,6 +231,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // NOTE: This is now done through trainMethod
 //  private boolean laso2 = true;
 
+  // How to backprop error signal to the score of all the facts within a bucket.
+  private CostMode costMode = CostMode.HINGE;
+
+  enum CostMode {
+    HAMMING,
+    HINGE,
+  }
+
   enum TfkRerorder {
     NONE,               // leave order as T.then(F).then(K)
     CONF_ABS,           // score(bucket) = max_{f in bucket} score(f)
@@ -328,6 +337,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //    u.setAgendaPriority(agendaPriority);
     Log.warn("IGNORING agendaPriority!");
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
+
+    pipe.costMode = CostMode.valueOf(config.getString("costMode", pipe.costMode.name()));
+    Log.info("[main] costMode=" + pipe.costMode);
 
     pipe.hackyImplementation = config.getBoolean("hackyImplementation", pipe.hackyImplementation);
     Log.info("[main] hackyImplementation=" + pipe.hackyImplementation);
@@ -655,8 +667,18 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     LocalFactor f = LocalFactor.Constant.ZERO;
 
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    String softOracleKey = r.rhs.relName + ".softLocalOracle";
+    double softOracle = config.getDouble(softOracleKey, 0);
+    if (softOracle > 0) {
+      if (softOracle >= 1)
+        throw new IllegalArgumentException(softOracleKey + " should be in (0,1): " + softOracle);
+      double pFlip = 1d - softOracle;
+      Log.info(softOracleKey + "=" + softOracle + " pFlip=" + pFlip);
+      f = new LocalFactor.Sum(new LocalFactor.NoisyOracle(pFlip, u.getRandom()), f);
+    }
+
     if (templateFeats) {
-      ExperimentProperties config = ExperimentProperties.getInstance();
       if (localFactorHelper == null)
         localFactorHelper = new BasicFeatureTemplates();
 
@@ -1070,6 +1092,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         && trainMethod != TrainMethod.LASO2) {
       throw new IllegalStateException("this method cannot mimic: " + trainMethod);
     }
+
+    assert costMode == CostMode.HINGE : "implement costMode: " + costMode;
 
     boolean local = false;
     if (HACKY_DEBUG) {
@@ -1850,6 +1874,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private void train(RelDoc doc) {
     if (DEBUG > 1)
       Log.info("starting on " + doc.getId());
+
+    assert costMode == CostMode.HINGE : "implement costMode: " + costMode;
 
     int verbose = 0;
     switch (trainMethod) {

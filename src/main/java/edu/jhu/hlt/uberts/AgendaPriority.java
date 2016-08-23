@@ -66,12 +66,20 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
   }
 
   public static AgendaPriority byName(String name, Supplier<Uberts> fu) {
+    Log.info("name=" + name);
     switch (name.toLowerCase()) {
     case "leftright":
     case "left2right":
     case "left-right":
     case "l2r":
       return new LeftRight();
+    case "rand-static":
+      throw new RuntimeException("implement me");
+    case "rand-dynamic":
+      throw new RuntimeException("implement me");
+    case "easyfirst-static":
+      throw new RuntimeException("implement me");
+    case "easyfirst-dynamic":
     case "easyfirst":
     case "easy-first":
     case "bestfirst":
@@ -90,6 +98,7 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     case "role2":
       return new ByRole2(fu);
     case "frequency":
+    case "frequency-role":
       ExperimentProperties config = ExperimentProperties.getInstance();
       List<File> train = config.getExistingFiles("train.facts");
       return new Arg4ByRoleFrequency(train.get(0));
@@ -130,6 +139,13 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     @Override
     public double priority(HypEdge edge, Adjoints score) {
       return Math.tanh(score.forwards() / scale);
+    }
+  }
+
+  public static class EasyFirstLinear implements AgendaPriority {
+    @Override
+    public double priority(HypEdge edge, Adjoints score) {
+      return score.forwards();
     }
   }
 
