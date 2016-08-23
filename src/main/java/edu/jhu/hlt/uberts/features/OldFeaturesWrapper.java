@@ -1025,7 +1025,11 @@ public class OldFeaturesWrapper {
 
   // NEW
   public static Sentence readSentenceFromState(Uberts u) {
-    String id = getSentenceId(u);
+    return readSentenceFromState(u, null);
+  }
+  public static Sentence readSentenceFromState(Uberts u, String id) {
+    if (id == null)
+      id = getSentenceId(u);
 
     // See FNParseToRelations for these definitions
     NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);

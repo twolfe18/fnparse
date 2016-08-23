@@ -332,9 +332,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     pipe.hackyImplementation = config.getBoolean("hackyImplementation", pipe.hackyImplementation);
     Log.info("[main] hackyImplementation=" + pipe.hackyImplementation);
 
-//    pipe.laso2 = config.getBoolean("laso2", pipe.laso2);
-//    Log.info("[main] laso2=" + pipe.laso2);
-
     pipe.includeClassificationObjectiveTerm = config.getBoolean("includeClassificationObjectiveTerm", pipe.includeClassificationObjectiveTerm);
     Log.info("[main] includeClassificationObjectiveTerm=" + pipe.includeClassificationObjectiveTerm);
 
@@ -1216,7 +1213,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           int numArgsOracle = tfNumArgGold.getCount(tf);
           int numArgsPred = tfNumArgPred.getCount(tf);
 
-//          if (laso2) {
           if (trainMethod == TrainMethod.LASO2) {
             // NOTE: The "oracle" trajectory could in principle have loss in this
             // case, but I think won't for this argument4 grammar, since decisions
@@ -1262,7 +1258,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       // Do book-keeping for MV and classification updates
       if (mode == Mode.TRAIN) {
         if (includeClassificationObjectiveTerm) {
-//          if (laso2) {
           if (trainMethod == TrainMethod.LASO2){
 //            Log.warn("not adding classification term since laso2 covers this");
           } else {
@@ -1290,7 +1285,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
         sCumOracle += g.get2().forwards();
         sCumPred += p.get2().forwards();
-//        if (laso2) {
         if (trainMethod == TrainMethod.LASO2) {
           // For laso2, we are not concerned with the max violator, and take
           // the entire sequence. If pred didn't get anything wrong, then all
@@ -1383,7 +1377,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         }
 
         if (includeClassificationObjectiveTerm) {
-//          if (laso2) {
           if (trainMethod == TrainMethod.LASO2) {
             // no-op
           } else {

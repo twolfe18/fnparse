@@ -43,9 +43,11 @@ import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoCloseable {
 
   public static class RelDoc {
+
     public final RelLine def; // aka startdoc
     public List<RelLine> items;
     public List<HypEdge.WithProps> facts;
+
     public RelDoc(RelLine def) {
       if (!def.tokens[0].equals("startdoc"))
         throw new IllegalArgumentException("ManyDocRelation files must start with startdoc, not: " + def.toLine());
@@ -53,8 +55,25 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
       this.items = new ArrayList<>();
       this.facts = new ArrayList<>();
     }
+
     public String getId() {
       return def.tokens[1];
+    }
+
+    public List<RelLine> findLinesOfRelation(String relationName) {
+      List<RelLine> r = new ArrayList<>();
+      for (RelLine l : items)
+        if (relationName.equals(l.tokens[0]))
+          r.add(l);
+      return r;
+    }
+
+    public List<HypEdge.WithProps> findFactsOfRelation(String relationName) {
+      List<HypEdge.WithProps> r = new ArrayList<>();
+      for (HypEdge.WithProps l : facts)
+        if (relationName.equals(l.getRelation().getName()))
+          r.add(l);
+      return r;
     }
 
     public void internCommandStrings() {

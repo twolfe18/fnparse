@@ -208,7 +208,8 @@ public class TypeInference {
     lhsTerm:
     for (int i = 0; i < lhst; i++) {
       Relation lrel = r.lhs[i].rel;
-      assert lrel != null;
+      if (lrel == null)
+        throw new RuntimeException("term " + i + " on the LHS is untyped: " + r.lhs[i]);
       int lrelNA = lrel.getNumArgs();
       HypNode[] tail = new HypNode[lrelNA];
       for (int j = 0; j < lrelNA; j++) {
