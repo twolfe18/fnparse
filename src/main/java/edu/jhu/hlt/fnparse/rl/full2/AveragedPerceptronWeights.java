@@ -11,7 +11,11 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
+import edu.jhu.prim.Primitives.MutableDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleHashVector;
 import edu.jhu.prim.vector.IntDoubleVector;
 import edu.jhu.util.Alphabet;
 
@@ -48,6 +52,13 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   private double c;
   private int dimension;
 
+  // Calls to backwards() should add to this buffer. Only when completedObservation()
+  // is called do we compute the L2 norm of the net update and then scale the
+  // step accordingly.
+  // NOTE: The values in this map are dErr_dForwards values (and update is weights -= dErr_dForwards)
+  private IntDoubleHashVector updateBuffer;
+  public static boolean UPDATE_BUFFER_FIX = false;
+
   // TODO I'm such an idiot, I haven't added this to forwards()!
   // Nor have I specified how/when you specify which intercept features fire.
   // I believe originally I had been doing some monkey-hacking into the w/u fields to make this happen.
@@ -55,16 +66,19 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   // Reserves the first K indices in w and u for special "intercept" features
   // which are not given out when score() is called. Calls to dimension() will
   // include these intercept indices.
-  private int numInterceptFeatures;
+//  private int numInterceptFeatures;
 
   public boolean passiveAgressive;
 
   public AveragedPerceptronWeights(int dimension, int numIntercept) {
+    if (numIntercept != 0)
+      throw new IllegalArgumentException("figoure out another way to do this");
     this.w = new IntDoubleDenseVector(dimension);
     this.u = new IntDoubleDenseVector(dimension);
     this.c = 0;
     this.dimension = dimension;
-    this.numInterceptFeatures = numIntercept;
+    this.updateBuffer = new IntDoubleHashVector();
+//    this.numInterceptFeatures = numIntercept;
     this.passiveAgressive =
         ExperimentProperties.getInstance().getBoolean("passiveAggressive", true);
     long b = (dimension * 2 * 8l) / (1l << 20);
@@ -73,8 +87,11 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   }
 
   private AveragedPerceptronWeights(int dimension, int numIntercept, double c, boolean pa) {
+    if (numIntercept != 0)
+      throw new IllegalArgumentException("figoure out another way to do this");
+    this.updateBuffer = new IntDoubleHashVector();
     this.dimension = dimension;
-    this.numInterceptFeatures = numIntercept;
+//    this.numInterceptFeatures = numIntercept;
     this.c = c;
     this.passiveAgressive = pa;
     if (DEBUG > 1) {
@@ -119,16 +136,18 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     }
   }
   public AverageView averageView() {
-    return new AverageView(dimension, numInterceptFeatures, c, passiveAgressive);
+//    return new AverageView(dimension, numInterceptFeatures, c, passiveAgressive);
+    return new AverageView(dimension, 0, c, passiveAgressive);
   }
 
   public Adjoints intercept(int i) {
-    assert i >= 0;
-    if (i >= numInterceptFeatures) {
-      throw new IllegalArgumentException("you didn't reserve enough intercepts: "
-          + " i=" + i + " numIntercept=" + numInterceptFeatures);
-    }
-    return new Intercept(i);
+//    assert i >= 0;
+//    if (i >= numInterceptFeatures) {
+//      throw new IllegalArgumentException("you didn't reserve enough intercepts: "
+//          + " i=" + i + " numIntercept=" + numInterceptFeatures);
+//    }
+//    return new Intercept(i);
+    throw new RuntimeException("figure out feature-based way of doing this");
   }
 
   public void zeroWeights() {
@@ -237,7 +256,8 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   /** Returns a new instance with the weights set to the average */
   public AveragedPerceptronWeights computeAverageWeights() {
     assert c > 0;
-    AveragedPerceptronWeights a = new AveragedPerceptronWeights(dimension, numInterceptFeatures);
+//    AveragedPerceptronWeights a = new AveragedPerceptronWeights(dimension, numInterceptFeatures);
+    AveragedPerceptronWeights a = new AveragedPerceptronWeights(dimension, 0);
     for (int i = 0; i < dimension; i++) {
       double wi = getAveragedWeight(i);
       a.w.set(i, wi);
@@ -247,34 +267,85 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     return a;
   }
 
-  public void completedObservation() {
-    c += 1;
-  }
   public double numObervations() {
     return c;
   }
 
-  public class Intercept implements Adjoints {
-    private int index;
-    public Intercept(int index) {
-      this.index = index;
+  public void completedObservation() {
+    // Apply update
+    if (UPDATE_BUFFER_FIX) {
+
+      final double scale;
+      if (passiveAgressive) {
+        // updateBuffer contains (featureIndex, count(appearsInPred) - count(appearsInOracle))
+        // The loss is the difference in score plus a margin (assuming oracle!=pred)
+        MutableDouble deltaScore = new MutableDouble(0);
+        MutableDouble deltaSqL2 = new MutableDouble(0);
+        updateBuffer.forEach(ide -> {
+          double w = getWeight(ide.index());
+          double sign = ide.get();
+          deltaScore.v += sign * w;
+          deltaSqL2.v += sign * sign;
+        });
+        double C = 0.01;
+        double loss = deltaScore.v + 1;
+        scale = Math.min(C,  loss / deltaSqL2.v);
+        assert scale > 0 : "dont call this if no violation?";
+      } else {
+        scale = 1;
+      }
+      updateBuffer.forEach(ide -> {
+        int i = ide.index();
+        double dErr_dForwards = ide.get();
+        dErr_dForwards *= scale;
+        w.add(i, -dErr_dForwards);
+        u.add(i, c * -dErr_dForwards);
+      });
+      updateBuffer.clear();
     }
-    @Override
-    public double forwards() {
-      return getWeight(index);
-    }
-    @Override
-    public void backwards(double dErr_dForwards) {
-      bwh(index, dErr_dForwards);
-    }
+    c += 1;
   }
 
   // bwh = "backwards helper"
   public void bwh(int i, double dErr_dForwards) {
     assert !(this instanceof AverageView) : "don't call backwards on average views!";
-    w.add(i, -dErr_dForwards);
-    u.add(i, c * -dErr_dForwards);
+
+//    if (UbertsLearnPipeline.FEATURE_DEBUG != null) {
+//      Log.info(String.format("i=%d/%d dErr=%+.2f feature=%s",
+//          i,
+//          UbertsLearnPipeline.FEATURE_DEBUG.size(),
+//          dErr_dForwards,
+//          UbertsLearnPipeline.FEATURE_DEBUG.lookupObject(i)));
+//    }
+
+    if (UPDATE_BUFFER_FIX) {
+      double d0 = updateBuffer.getWithDefault(i, 0);
+      double d1 = d0 + dErr_dForwards;
+      if (d1 == 0) {
+        updateBuffer.remove(i);
+      } else {
+        updateBuffer.put(i, d1);
+      }
+    } else {
+      w.add(i, -dErr_dForwards);
+      u.add(i, c * -dErr_dForwards);
+    }
   }
+
+//  public class Intercept implements Adjoints {
+//    private int index;
+//    public Intercept(int index) {
+//      this.index = index;
+//    }
+//    @Override
+//    public double forwards() {
+//      return getWeight(index);
+//    }
+//    @Override
+//    public void backwards(double dErr_dForwards) {
+//      bwh(index, dErr_dForwards);
+//    }
+//  }
 
   public static String hexToString(int[] x, int maxCharsPerElem) {
     StringBuilder sb = new StringBuilder();
@@ -387,8 +458,8 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
      * @param reindex says whether features should be taken mod dimension.
      */
     public Adj(int[] features, boolean reindex) {
-      assert reindex || numInterceptFeatures == 0
-          : "did you account for intercept features in your indexing (in addition to mod dimension)?";
+//      assert reindex || numInterceptFeatures == 0
+//          : "did you account for intercept features in your indexing (in addition to mod dimension)?";
       this.features = features;
       if (reindex) {
         for (int i = 0; i < features.length; i++)
@@ -400,8 +471,9 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
       if (rawIndex < 0)
         rawIndex = -rawIndex;
       assert rawIndex >= 0;
-      long d = dimension - numInterceptFeatures;
-      long x = ((long) numInterceptFeatures) + rawIndex % d;
+      long d = dimension;// - numInterceptFeatures;
+//      long x = ((long) numInterceptFeatures) + rawIndex % d;
+      long x = 0L + rawIndex % d;
       assert x <= ((long) dimension) && x >= 0;
       return (int) x;
     }
@@ -439,8 +511,20 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
 
     @Override
     public void backwards(double dErr_dForwards) {
-      if (passiveAgressive)
-        dErr_dForwards /= featL2Norm();
+      if (passiveAgressive) {
+        if (UPDATE_BUFFER_FIX) {
+          // No-op
+          // The reason is that we use the update buffer to accumulate dErr_dForwards
+          // across many calls to backwards, and the L2 norm of the net update
+          // is only computed once completedObservation() is called.
+          // Here we do nothing
+          assert dErr_dForwards == -1 || dErr_dForwards == +1
+              : "for passive-agressive you don't need a learning rate (at least"
+              + " via backwards). dErr_dForwards needs to be +/-1 so that updates cancel properly.";
+        } else {
+          dErr_dForwards /= featL2Norm();
+        }
+      }
       if (features3 != null) {
         for (LL<ProductIndex> pi = features3; pi != null; pi = pi.cdr())
           bwh(reindex(pi.car().getProdFeature()), dErr_dForwards);

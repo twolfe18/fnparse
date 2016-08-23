@@ -137,6 +137,19 @@ public class Rule {
       assert t.factArgName == null || factArgNames.add(t.factArgName);
   }
 
+  public String tryToParseNameFromComment() {
+    if (comment == null)
+      return null;
+    String k = "name=";
+    int i = comment.indexOf(k);
+    if (i < 0)
+      return null;
+    int start = i + k.length();
+    int end = comment.indexOf(' ', i+1);
+    if (end < 0) end = comment.length();
+    return comment.substring(start, end);
+  }
+
   /**
    * For every {@link Term}, looks at the Relation name and arg {@link
    * NodeType}s to create a new {@link Relation} which is set as this.rel and
@@ -176,12 +189,12 @@ public class Rule {
     return sb.toString();
   }
 
-  /**
-   * @param u if null, will produce a Rule with rel==null.
-   */
-  public static Rule parseRule(String rule, Uberts u) {
-    return parseRule(rule, null, u);
-  }
+//  /**
+//   * @param u if null, will produce a Rule with rel==null.
+//   */
+//  public static Rule parseRule(String rule, Uberts u) {
+//    return parseRule(rule, null, u);
+//  }
   public static Rule parseRule(String rule, String comment, Uberts u) {
     String[] lr = rule.split("=>");
     assert lr.length == 2 : "rule must contain one instance of '=>': " + rule;

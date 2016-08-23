@@ -3,14 +3,18 @@ package edu.jhu.hlt.uberts.features;
 import java.util.Arrays;
 import java.util.List;
 
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
-/*
- * The problem is that I use AveragedPerceptronWeights.adj
+/**
+ * Wraps another {@link Adjoints} but maintains lists of label (fy) and
+ * data (fx) features which are shown when backwards is called.
+ *
+ * @author travis
  */
 public class DebugFeatureAdj implements Adjoints {
 
-  public static boolean SHOW_CURRENT_FORWARDS_VALUE = false;
+  public static boolean SHOW_CURRENT_FORWARDS_VALUE = true;
 
   private boolean showWrapped = false;
   private Adjoints wrapped;
@@ -43,10 +47,17 @@ public class DebugFeatureAdj implements Adjoints {
     if (showWrapped) {
       sb.append(" " + wrapped);
     } else {
-      if (SHOW_CURRENT_FORWARDS_VALUE)
+      if (SHOW_CURRENT_FORWARDS_VALUE) {
+
+//        if (ancillaryInfo != null && "argument4(2-3, framenet/Omen, 0-1, Outcome)".equals(ancillaryInfo.toString()) && wrapped.forwards() == 0) {
+//          Log.info("maybe interesting?");
+//          wrapped.forwards();
+//        }
+
         sb.append(String.format(" s0=%+.2f sN=%+.2f", origScore, wrapped.forwards()));
-      else
+      } else {
         sb.append(String.format(" s0=%+.2f", origScore));
+      }
     }
     sb.append(')');
     return sb.toString();

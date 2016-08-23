@@ -1,5 +1,7 @@
 package edu.jhu.hlt.uberts.factor;
 
+import java.util.Random;
+
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.Uberts;
@@ -53,6 +55,24 @@ public interface LocalFactor {
     @Override
     public String toString() {
       return "(OracleLocalFactor)";
+    }
+  }
+
+  public static class NoisyOracle implements LocalFactor {
+    private double pFlip;
+    private Random rand;
+    public NoisyOracle(double pFlip, Random rand) {
+      this.pFlip = pFlip;
+      this.rand = rand;
+    }
+    @Override
+    public Adjoints score(HypEdge f, Uberts x) {
+      boolean flip = rand.nextDouble() < pFlip;
+      boolean y = x.getLabel(f);
+      if (y ^ flip)
+        return Adjoints.Constant.ONE;
+      else
+        return Adjoints.Constant.NEGATIVE_ONE;
     }
   }
 

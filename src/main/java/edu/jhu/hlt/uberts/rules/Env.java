@@ -507,7 +507,7 @@ public class Env {
   /**
    * (R,i,a) = Ri and an argument position in the relation
    */
-  static class Arg {
+  public static class Arg {
     Relation r;
     int rOccurrence;
     int argPos;
@@ -548,7 +548,7 @@ public class Env {
    * explicitly: (R,i) -> HypEdge
    * implicitly: (R,i,a) -> HypNode because you can look up HypNodes from a HypEdge
    */
-  static class Bindings {
+  public static class Bindings {
     private State s;
     private LinkedMap<Ri, HypEdge> ri2edge;
     private Counts<Relation> rCounts;

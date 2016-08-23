@@ -556,9 +556,17 @@ public interface DecisionFunction {
       return m;
     }
 
+    public Pair<HypEdge, Adjoints> getFirstPredInBucket(List<Object> key) {
+      return firstPredInBucket.get(key);
+    }
+
     public LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> getFirstGoldInBucket() {
       LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> m = new LinkedHashMap<>(firstGoldInBucket);
       return m;
+    }
+
+    public Pair<HypEdge, Adjoints> getFirstGoldInBucket(List<Object> key) {
+      return firstGoldInBucket.get(key);
     }
 
     @Override

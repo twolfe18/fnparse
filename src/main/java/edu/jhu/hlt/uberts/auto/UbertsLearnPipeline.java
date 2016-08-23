@@ -88,8 +88,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static enum TrainMethod {
     EARLY_UPDATE,
     MAX_VIOLATION,
+    LATEST_UPDATE,    // TODO implement me!
     DAGGER,
     DAGGER1,  // Only updates w.r.t. top item on the agenda at every state
+    LASO2,
   }
 
   static boolean performTest = false;
@@ -122,7 +124,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   // LOCAL FACTORS
   // These are saved with e.g. "predicate2:rw:/foo/bar.jser.gz"
-  private Map<String, OldFeaturesWrapper.Ints3> rel2localFactor;
+  private Map<String, OldFeaturesWrapper.Ints3> name2localFactor;
   private BasicFeatureTemplates localFactorHelper;
 
   // GLOBAL FACTORS
@@ -226,7 +228,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // the description given in Algorithm 1 of http://nlp.stanford.edu/pubs/clark2016improving.pdf
   // TODO: Check that this implementation is exactly what it should be.
   // TODO: Check original LaSO paper to see if this is what they where calling for, and if so s/laso2/laso/
-  private boolean laso2 = true;
+  // NOTE: This is now done through trainMethod
+//  private boolean laso2 = true;
+
+  // How to backprop error signal to the score of all the facts within a bucket.
+  private CostMode costMode = CostMode.HINGE;
+
+  enum CostMode {
+    HAMMING,
+    HINGE,
+  }
 
   enum TfkRerorder {
     NONE,               // leave order as T.then(F).then(K)
@@ -237,8 +248,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
   public TfkRerorder hackyTFKReorderMethod = TfkRerorder.NONE;
 
+  public static boolean EXACTLY_ONE_ITER = false;
 
   private static boolean HACKY_DEBUG = true;
+
+  public static final Alphabet<String> FEATURE_DEBUG = null;  //new Alphabet<>();
 
   public static void turnOnDebug() {
     Log.info("");
@@ -258,6 +272,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static void main(String[] args) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
+
+    EXACTLY_ONE_ITER = config.getBoolean("exactlyOneConsume", false);
+
+    Log.info("[main] AveragedPerceptronWeights.UPDATE_BUFFER_FIX=" + AveragedPerceptronWeights.UPDATE_BUFFER_FIX);
 
     if (config.getBoolean("learnDebug", false))
       turnOnDebug();
@@ -320,11 +338,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.warn("IGNORING agendaPriority!");
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
+    pipe.costMode = CostMode.valueOf(config.getString("costMode", pipe.costMode.name()));
+    Log.info("[main] costMode=" + pipe.costMode);
+
     pipe.hackyImplementation = config.getBoolean("hackyImplementation", pipe.hackyImplementation);
     Log.info("[main] hackyImplementation=" + pipe.hackyImplementation);
-
-    pipe.laso2 = config.getBoolean("laso2", pipe.laso2);
-    Log.info("[main] laso2=" + pipe.laso2);
 
     pipe.includeClassificationObjectiveTerm = config.getBoolean("includeClassificationObjectiveTerm", pipe.includeClassificationObjectiveTerm);
     Log.info("[main] includeClassificationObjectiveTerm=" + pipe.includeClassificationObjectiveTerm);
@@ -336,7 +354,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (pipe.addNullSpanFacts) {
       pipe.u.readRelData("def nullSpan <span>");
       pipe.u.readRelData("schema nullSpan 0-0");
-      Rule r = Rule.parseRule("predicate2(t,f) & coarsenFrame2(f,fc) & role2(fc,k) & nullSpan(s) => argument4(t,f,s,k)", pipe.u);
+      Rule r = Rule.parseRule(
+          "predicate2(t,f) & coarsenFrame2(f,fc) & role2(fc,k) & nullSpan(s) => argument4(t,f,s,k)",
+          "name=argument4NilSpan",
+          pipe.u);
       pipe.addRule(r);
     }
 
@@ -482,7 +503,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
 
   public void useAvgWeights(boolean useAvg) {
-    for (OldFeaturesWrapper.Ints3 w : rel2localFactor.values()) {
+    for (OldFeaturesWrapper.Ints3 w : name2localFactor.values()) {
       w.useAverageWeights(useAvg);
     }
     for (GlobalFactor gf : name2globalFactor.values()) {
@@ -493,7 +514,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
 
   public void completedObservation() {
-    for (OldFeaturesWrapper.Ints3 w : rel2localFactor.values())
+    for (OldFeaturesWrapper.Ints3 w : name2localFactor.values())
       w.completedObservation();
     for (GlobalFactor gf : name2globalFactor.values()) {
       if (gf instanceof NumArgsRoleCoocArgLoc) {
@@ -619,8 +640,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       return new LocalFactor.Constant(0.5);
     }
 
-    if (rel2localFactor != null) {
-      LocalFactor phi = rel2localFactor.get(r.rhs.rel);
+    if (name2localFactor != null) {
+      LocalFactor phi = name2localFactor.get(r.rhs.rel);
       if (phi != null) {
         Log.info("[main] re-using " + r.rhs.relName + " parameters for " + r);
         return phi;
@@ -646,18 +667,35 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     LocalFactor f = LocalFactor.Constant.ZERO;
 
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    String softOracleKey = r.rhs.relName + ".softLocalOracle";
+    double softOracle = config.getDouble(softOracleKey, 0);
+    if (softOracle > 0) {
+      if (softOracle >= 1)
+        throw new IllegalArgumentException(softOracleKey + " should be in (0,1): " + softOracle);
+      double pFlip = 1d - softOracle;
+      Log.info(softOracleKey + "=" + softOracle + " pFlip=" + pFlip);
+      f = new LocalFactor.Sum(new LocalFactor.NoisyOracle(pFlip, u.getRandom()), f);
+    }
+
     if (templateFeats) {
-      ExperimentProperties config = ExperimentProperties.getInstance();
       if (localFactorHelper == null)
         localFactorHelper = new BasicFeatureTemplates();
 
       Instance2 conf = getParameterIO().getOrAddDefault(r.rhs.relName);
       boolean learnDebug = config.getBoolean("learnDebug", false);
-      OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(localFactorHelper, r.rhs.rel, !conf.learn, learnDebug, config);
 
-      if (rel2localFactor == null)
-        rel2localFactor = new HashMap<>();
-      rel2localFactor.put(r.rhs.relName, fe3);
+      // Find a name which will be uniq for this Rule's parameters
+      String name = r.tryToParseNameFromComment();
+      if (name == null)
+        name = r.rhs.relName;
+      OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(name, localFactorHelper, r.rhs.rel, !conf.learn, learnDebug, config);
+
+      if (name2localFactor == null)
+        name2localFactor = new HashMap<>();
+      Object old = name2localFactor.put(name, fe3);
+      if (old != null)
+        throw new RuntimeException("rel2localFactor fail, factors are not uniq by name: " + name);
       f = new LocalFactor.Sum(fe3, f);
 
       // Maybe read in some features
@@ -665,7 +703,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         fe3.readWeightsFrom(conf.read, !conf.learn);
 
       // Setup write-features-to-disk
-      String key = r.rhs.relName + ".outputFeatures";
+      String key = name + ".outputFeatures";
       if (config.containsKey(key)) {
         File outputFeatures = config.getFile(key);
         fe3.writeFeaturesToDisk(outputFeatures);
@@ -762,7 +800,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     // Maybe save some local factors.
     if (!mini && mode == Mode.DEV) {
-      for (Entry<String, Ints3> x : rel2localFactor.entrySet()) {
+      for (Entry<String, Ints3> x : name2localFactor.entrySet()) {
         File saveModel = getParameterIO().write(x.getKey());
         if (saveModel != null && perfTracker.shouldSaveParameters(x.getKey())) {
           x.getValue().writeWeightsTo(saveModel);
@@ -1050,6 +1088,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
    * Home of all things hacky.
    */
   private void adHocSrlTrain(RelDoc doc, boolean learn) {
+    if (trainMethod != TrainMethod.MAX_VIOLATION
+        && trainMethod != TrainMethod.LASO2) {
+      throw new IllegalStateException("this method cannot mimic: " + trainMethod);
+    }
+
+    assert costMode == CostMode.HINGE : "implement costMode: " + costMode;
+
     boolean local = false;
     if (HACKY_DEBUG) {
       System.out.println("starting on " + doc.getId());
@@ -1069,7 +1114,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // And again, since we have a deterministic transition system, we can do a "line search" of sorts over z[1:i]
     boolean travisMargins = false;
 
-    OldFeaturesWrapper.Ints3 localFeats = rel2localFactor.get("argument4");
+    OldFeaturesWrapper.Ints3 localFeatsNil = name2localFactor.get("argument4NilSpan");
+    OldFeaturesWrapper.Ints3 localFeatsNonNil = name2localFactor.get("argument4");
+    if (localFeatsNil == null || localFeatsNonNil == null)
+      throw new RuntimeException();
 
     Relation p2 = u.getEdgeType("predicate2");
     Relation xp = u.getEdgeType("xue-palmer-otf-args2");
@@ -1106,7 +1154,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           Span s = EdgeUtils.arg(es);
           String k = EdgeUtils.role(ek);
           HypEdge a4 = u.dbgMakeEdge("argument4(" + t.shortString() + ", " + f + ", " + s.shortString() + ", " + k + ")", false);
-          Adjoints sL = Adjoints.cacheIfNeeded(localFeats.score(a4, u));
+          Ints3 phi = isNilFact(a4) ? localFeatsNil : localFeatsNonNil;
+          Adjoints sL = Adjoints.cacheIfNeeded(phi.score(a4, u));
           tfk2LocalScore.add(t, f, k, a4, sL);
         }
       }
@@ -1188,7 +1237,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           int numArgsOracle = tfNumArgGold.getCount(tf);
           int numArgsPred = tfNumArgPred.getCount(tf);
 
-          if (laso2) {
+          if (trainMethod == TrainMethod.LASO2) {
             // NOTE: The "oracle" trajectory could in principle have loss in this
             // case, but I think won't for this argument4 grammar, since decisions
             // can inform each other but can't rule out the right answer to each other.
@@ -1233,7 +1282,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       // Do book-keeping for MV and classification updates
       if (mode == Mode.TRAIN) {
         if (includeClassificationObjectiveTerm) {
-          if (laso2) {
+          if (trainMethod == TrainMethod.LASO2){
 //            Log.warn("not adding classification term since laso2 covers this");
           } else {
             Pair<HypEdge, Adjoints> pLocal = pArgmaxSLocal.get();
@@ -1260,7 +1309,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
         sCumOracle += g.get2().forwards();
         sCumPred += p.get2().forwards();
-        if (laso2) {
+        if (trainMethod == TrainMethod.LASO2) {
           // For laso2, we are not concerned with the max violator, and take
           // the entire sequence. If pred didn't get anything wrong, then all
           // updates will cancel and we're done. Otherwise, we update every
@@ -1290,6 +1339,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     } // END FOR BUCKETS
 
+
+
+    /* *** APPLY UPDATE *******************************************************/
     if (learn) {
 
       double violation;
@@ -1312,21 +1364,44 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           System.out.println("maxViolation=" + violation
               + " mvIdx=" + mvIdx
               + " trajLength=" + index
-              + " discreteLogViolation=" + discreteLogViolation(violation));
+              + " discreteLogViolation=" + discreteLogViolation(violation)
+              + " trainMethod=" + trainMethod);
         }
         if (violation > 0) {
-          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
-            System.out.println("starting ORACLE update...\t" + u.dbgSentenceCache.getId());
-          for (int j = 0; j <= mvIdx; j++)
+          if (HACKY_DEBUG || Uberts.LEARN_DEBUG) {
+            System.out.printf("starting %s ORACLE update...\t%s\n",
+                trainMethod == TrainMethod.LASO2 ? "laso2" : "mv", u.dbgSentenceCache.getId());
+          }
+          for (int j = 0; j <= mvIdx; j++) {
             tOracle.get(j).get2().backwards(-1);
-          if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
-            System.out.println("starting LOSS_AUGMENTED update...\t" + u.dbgSentenceCache.getId());
+
+//            if (Uberts.LEARN_DEBUG) {
+//              // Show the local factor weights
+//              for (String name : name2localFactor.keySet()) {
+//                Ints3 theta = name2localFactor.get(name);
+//                theta.dbgShowWeights("regular/" + name + "/" + trainMethod + " after applying oracle step=" + j + " on " + tOracle.get(j).get1());
+//              }
+//            }
+          }
+
+//          if (Uberts.LEARN_DEBUG) {
+//            // Show the local factor weights
+//            for (String name : name2localFactor.keySet()) {
+//              Ints3 theta = name2localFactor.get(name);
+//              theta.dbgShowWeights("regular/" + name + "/" + trainMethod + " after oracle");
+//            }
+//          }
+
+          if (HACKY_DEBUG || Uberts.LEARN_DEBUG) {
+            System.out.printf("starting %s LOSS_AUGMENTED update...\t%s\n",
+                trainMethod == TrainMethod.LASO2 ? "laso2" : "mv", u.dbgSentenceCache.getId());
+          }
           for (int j = 0; j <= mvIdx; j++)
             tPred.get(j).get2().backwards(+1);
         }
 
         if (includeClassificationObjectiveTerm) {
-          if (laso2) {
+          if (trainMethod == TrainMethod.LASO2) {
             // no-op
           } else {
             if (HACKY_DEBUG || Uberts.LEARN_DEBUG)
@@ -1393,6 +1468,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     PairFeat f = null;
 
     // Figure out what features to call
+    // TODO Support argument4/s features!
     GlobalParams gp = globalParamConfig.getOrAddDefault("argument4/t");
     if (gp.numArgs != null) {
       assert f == null;
@@ -1405,11 +1481,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
     if (gp.argLocPairwise != null) {
       assert f == null;
-      f = NumArgsRoleCoocArgLoc.argLocPairwiseFeat(gp.argLocPairwise);
+      boolean allowDiffTargets = false;
+      f = NumArgsRoleCoocArgLoc.argLocPairwiseFeat(gp.argLocPairwise, allowDiffTargets);
     }
     if (gp.argLocRoleCooc != null) {
       assert f == null;
-      f = NumArgsRoleCoocArgLoc.argLocPairwiseFeat(gp.argLocRoleCooc);
+      boolean allowDiffTargets = false;
+      f = NumArgsRoleCoocArgLoc.argLocPairwiseFeat(gp.argLocRoleCooc, allowDiffTargets);
     }
     assert gp.argLocGlobal == null : "can't do this the hacky way";
     if (f == null && !useOnlyNumArgs) {
@@ -1765,6 +1843,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     u.clearAgenda();
     u.getState().clearNonSchema();
     u.getThresh().clear();
+
+
+    if (EXACTLY_ONE_ITER) {
+      Log.info("exiting eary because of exactlyOneConsume=true");
+      System.exit(0);
+    }
   }
 
   public Map<Relation, Double> getCostFP() {
@@ -1791,6 +1875,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (DEBUG > 1)
       Log.info("starting on " + doc.getId());
 
+    assert costMode == CostMode.HINGE : "implement costMode: " + costMode;
+
     int verbose = 0;
     switch (trainMethod) {
     case EARLY_UPDATE:
@@ -1808,6 +1894,42 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         }
       });
       timer.stop("train/earlyUpdate");
+      break;
+    case LASO2:
+      List<ClassEx> updates = u.getLaso2Update();
+      assert batchSize == 1;
+
+      if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
+        System.out.println("starting laso2 ORACLE update...\t" + u.dbgSentenceCache.getId());
+//      int ci = 0;
+      for (ClassEx c : updates) {
+        c.goldScore.backwards(-1);
+
+//        if (Uberts.LEARN_DEBUG) {
+//          // Show the local factor weights
+//          for (String name : name2localFactor.keySet()) {
+//            Ints3 theta = name2localFactor.get(name);
+//            theta.dbgShowWeights("regular/" + name + "/" + trainMethod + " after applying oracle step=" + ci + " on " + c.goldEdge);
+//          }
+//          ci++;
+//        }
+      }
+
+//      if (Uberts.LEARN_DEBUG) {
+//        // Show the local factor weights
+//        for (String name : name2localFactor.keySet()) {
+//          Ints3 theta = name2localFactor.get(name);
+//          theta.dbgShowWeights("regular/" + name + "/" + trainMethod + " after oracle");
+//        }
+//      }
+
+      if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
+        System.out.println("starting laso2 LOSS_AUGMENTED update...\t" + u.dbgSentenceCache.getId());
+      for (ClassEx c : updates)
+        c.predScore.backwards(+1);
+
+      completedObservation();
+
       break;
     case MAX_VIOLATION:
       timer.start("train/maxViolation");

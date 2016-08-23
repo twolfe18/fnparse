@@ -82,6 +82,19 @@ JAR_STABLE=`readlink -f ${10}`
 #JAR_STABLE=$9
 
 
+
+
+# Extra arguments to be passed 
+EXTRA_ARGS=""
+if [[ $# == 11 ]]; then
+  EXTRA_ARGS=${11}
+fi
+
+
+
+
+
+
 if [[ ! -d $FEATURE_SET_DIR ]]; then
   echo "FEATURE_SET_DIR=$FEATURE_SET_DIR is not a directory"
   exit 2
@@ -155,7 +168,8 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     learnDebug true \
     hackyImplementation true \
     agendaComparator 'BY_RELATION,BY_SCORE' \
-    predictions.outputDir $PREDICTIONS_DIR
+    predictions.outputDir $PREDICTIONS_DIR \
+    $EXTRA_ARGS
 
 #agendaComparator $AGENDA_COMPARATOR
 #hackyTFKReorderMethod
