@@ -894,7 +894,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             double beta = 1.25;
             double phat = BetaBinomial.map(x.getTP(), x.getTP() + x.getFP(), alpha, beta);
             double rhat = BetaBinomial.map(x.getTP(), x.getTP() + x.getFN(), alpha, beta);
-            double fhat = 2 * phat * rhat / (phat + rhat);
+            double fhat = 0;
+            if (phat > 0 && rhat > 0)
+              fhat = 2 * phat * rhat / (phat + rhat);
 
             w.write(String.format("%s %s %f %f %f %d %d %d",
                 pf.get1().get1(),
@@ -2019,8 +2021,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       timer.stop("train/earlyUpdate");
       break;
     case LASO2:
-      List<ClassEx> updates = u.getLaso2Update();
+      boolean classificationLoss = costMode == CostMode.HAMMING;
+      assert classificationLoss || costMode == CostMode.HINGE;
+      List<ClassEx> updates = u.getLaso2Update(classificationLoss);
       assert batchSize == 1;
+
+      assert !includeClassificationObjectiveTerm : "LaSO/LOLS does should not have a classification term added";
+//      if (includeClassificationObjectiveTerm) {
+//        updates.addAll(u.getClassificationUpdate());
+//      }
 
       if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
         System.out.println("starting laso2 ORACLE update...\t" + u.dbgSentenceCache.getId());
@@ -2054,14 +2063,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       completedObservation();
 
       break;
+    case LATEST_UPDATE:
     case MAX_VIOLATION:
-      timer.start("train/maxViolation");
+      timer.start("train/" + trainMethod);
 
       // This classification update code modifies and restores the state to how
       // it is now. The maxViolation method is destructive, put second.
       final List<ClassEx> classEx = includeClassificationObjectiveTerm ? u.getClassificationUpdate() : null;
 
-      Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP(), mvLasoHack);
+      boolean latest = trainMethod == TrainMethod.LATEST_UPDATE;
+      Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP(), mvLasoHack, latest);
       batch.add(lr -> {
         if (maxViolation == null) {
           eventCounts.increment("good/noViolation");

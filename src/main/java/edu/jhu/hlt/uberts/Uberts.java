@@ -440,7 +440,7 @@ public class Uberts {
    *
    * See http://www.aclweb.org/anthology/N12-1015
    */
-  public Pair<Traj, Traj> maxViolationPerceptron(Map<Relation, Double> costFP, boolean lasoHack) {
+  public Pair<Traj, Traj> maxViolationPerceptron(Map<Relation, Double> costFP, boolean lasoHack, boolean latestUpdate) {
     assert agenda.getRescoreMode() == RescoreMode.NONE;
 
     timer.start("duplicate-state");
@@ -455,6 +455,7 @@ public class Uberts {
     if (debug && DEBUG > 1) {
       Log.info("at the start of MV:");
       Log.info("lasoHack=" + lasoHack);
+      Log.info("latestUpdate=" + latestUpdate);
       Log.info(getStateFactCounts());
       int i = 0;
       for (AgendaItem ai : a0.getContentsInNoParticularOrder())
@@ -582,6 +583,8 @@ public class Uberts {
       Log.info("WARNING: t1r.size=" + t1r.size() + " t2r.size=" + t2r.size());
       assert false;
     }
+
+    // Compute either MAX_VIOLATION or LATEST_UPDATE
     double sCumOracle = 0;
     double sCumPred = 0;
     int bestIndex = -1, index = 0;
@@ -598,8 +601,18 @@ public class Uberts {
 //      assert sP.getStep().score.forwards() == sP.getStep().scoreV;
       sCumOracle += sG.getStep().score.forwards();
       sCumPred += sP.getStep().score.forwards();
-      if (m.offer(new Pair<>(sG, sP), sCumPred - sCumOracle))
-        bestIndex = index;
+      double violation = sCumPred - sCumOracle;
+      if (latestUpdate) {
+        // LATEST_UPDATE
+        if (violation > 0) {
+          m.offer(new Pair<>(sG, sP), index+1);
+          bestIndex = index;
+        }
+      } else {
+        // MAX_VIOLATION
+        if (m.offer(new Pair<>(sG, sP), violation))
+          bestIndex = index;
+      }
       index++;
     }
     Pair<Traj, Traj> best = m.get();
@@ -712,7 +725,7 @@ public class Uberts {
    * global features fire on oracle trajectories may not be informative as to
    * what action should be taken from states that the model will put inself in.
    */
-  public List<ClassEx> getLaso2Update() {
+  public List<ClassEx> getLaso2Update(boolean classificationLoss) {
 
     // LOSS AUGMENTED INFERENCE
     List<Step> traj = new ArrayList<>();
@@ -737,13 +750,21 @@ public class Uberts {
       DecisionFunction.ByGroup t = (ByGroup) thresh.get(s.edge.getRelation().getName());
       List<Object> key = t.getKey(s.edge);
       Pair<HypEdge, Adjoints> g = t.getFirstGoldInBucket(key);
-      // compare edges
       HashableHypEdge gg = new HashableHypEdge(g.get1());
       HashableHypEdge pp = new HashableHypEdge(s.edge);
-      boolean debug = true;   // adHoc doesn't cancel updates
-      if (!gg.equals(pp) || debug) {
-        // add to updates
-        updates.add(new ClassEx(g, new Pair<>(s.edge, s.score), -1));
+      if (!gg.equals(pp)) {
+        // Mistake!
+        if (classificationLoss) {
+          // Create a negative example for every wrong action/edge in this bucket
+          for (Pair<HypEdge, Adjoints> wrong : t.getAllInBucket(key)) {
+            if (!gg.equals(new HashableHypEdge(wrong.get1()))) {
+              updates.add(new ClassEx(g, wrong, -1));
+            }
+          }
+        } else {
+          // Only maybe this step as a negative example
+          updates.add(new ClassEx(g, new Pair<>(s.edge, s.score), -1));
+        }
       }
     }
     return updates;

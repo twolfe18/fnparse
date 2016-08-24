@@ -432,6 +432,7 @@ public interface DecisionFunction {
     private Set<List<Object>> observedKeys;
     private LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> firstGoldInBucket;
     private LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> firstPredInBucket;
+    private LinkedHashMap<List<Object>, List<Pair<HypEdge, Adjoints>>> allInBucket;
 
     private Map<List<Object>, Pair<HypEdge, Adjoints>> lastPredInGroup;
 
@@ -465,6 +466,7 @@ public interface DecisionFunction {
       this.observedKeys = new HashSet<>();
       this.firstPredInBucket = new LinkedHashMap<>();
       this.firstGoldInBucket = new LinkedHashMap<>();
+      this.allInBucket = new LinkedHashMap<>();
       this.lastPredInGroup = new HashMap<>();
       this.dbgScoresInBucket = new HashMap<>();
       String[] parts = description.split(":");
@@ -506,6 +508,7 @@ public interface DecisionFunction {
       this.observedKeys = new HashSet<>();
       this.firstPredInBucket = new LinkedHashMap<>();
       this.firstGoldInBucket = new LinkedHashMap<>();
+      this.allInBucket = new LinkedHashMap<>();
       this.dbgScoresInBucket = new HashMap<>();
     }
 
@@ -547,8 +550,13 @@ public interface DecisionFunction {
       observedKeys.clear();
       firstPredInBucket.clear();
       firstGoldInBucket.clear();
+      allInBucket.clear();
       lastPredInGroup.clear();
       dbgScoresInBucket.clear();
+    }
+
+    public List<Pair<HypEdge, Adjoints>> getAllInBucket(List<Object> key) {
+      return allInBucket.get(key);
     }
 
     public LinkedHashMap<List<Object>, Pair<HypEdge, Adjoints>> getFirstPredInBucket() {
@@ -628,6 +636,14 @@ public interface DecisionFunction {
         firstPredInBucket.put(key, p);
       if (y && !firstGoldInBucket.containsKey(key))
         firstGoldInBucket.put(key, p);
+
+      List<Pair<HypEdge, Adjoints>> all = allInBucket.get(key);
+      if (all == null) {
+        all = new ArrayList<>();
+        allInBucket.put(key, all);
+      }
+      all.add(p);
+
       Adjoints updateable = (y || yhat) ? s : new Adjoints.WithLearningRate(0, s);
       return new Pair<>(yhat, updateable);
     }
