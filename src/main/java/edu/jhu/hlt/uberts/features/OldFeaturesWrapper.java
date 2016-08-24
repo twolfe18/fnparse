@@ -459,15 +459,9 @@ public class OldFeaturesWrapper {
       return "(Int3 " + rel.getName() + " dim=" + dimension + " intercept=" + intercept + " fixed=" + fixed + ")";
     }
 
-//    public void refine(ToIntFunction<HypEdge> f, String name) {
     public void refine(Function<HypEdge, String> f, String name) {
-
       // By default lambdas aren't Serializable...
-//      f = (ToIntFunction<HypEdge> & Serializable) f;
       f = (Function<HypEdge, String> & Serializable) f;
-
-      if (!rel.getName().equals("argument4"))
-        throw new IllegalStateException("refinements are only setup to work with argument4(t,f,s,k) edges");
       if (theta2 == null) {
         theta2 = new ArrayList<>();
         theta2RefName = new ArrayList<>();

@@ -124,8 +124,8 @@ def naacl_workshop_action_orderings(only_default=False, easy_first=False):
   order_prefix = 'BY_RELATION,BY_TARGET,BY_FRAME'
   order_suffixes = [ \
     'BY_ROLE_FREQ', \
-    'BY_EASYFIRST_STATIC', \
-    'BY_EASYFIRST_DYNAMIC', \
+    'BY_ROLE_EASYFIRST_STATIC', \
+    'BY_ROLE_EASYFIRST_DYNAMIC', \
     'BY_RAND_STATIC', \
     'BY_RAND_DYNAMIC', \
   ]
@@ -135,7 +135,7 @@ def naacl_workshop_action_orderings(only_default=False, easy_first=False):
     order_suffixes = [order_suffixes[0]]
   if easy_first:
     order_suffixes = [order_suffixes[2]]
-  return [order_prefix + ',' + x + ',BY_SCORE' for x in order_suffixes]
+  return ['agendaComparator ' + order_prefix + ',' + x + ',BY_SCORE' for x in order_suffixes]
 
 def naacl_workshop(wd, fs_stable, predictions_parent_dir, omni_script, log_dir, jar_stable, engine='qsub'):
   print '[naacle_workshop] starting...'
@@ -182,6 +182,8 @@ def naacl_workshop(wd, fs_stable, predictions_parent_dir, omni_script, log_dir, 
               train_method, \
               jar_stable]
             print ' '.join(args)
+            if not mock:
+              subprocess.check_call(args)
 
   # Figure 3: ~24 jobs
   # [VFP]       x [freq]            x [gold f]          x [roleCooc]      x [pb, fn]  x local_cheat_probs()
@@ -209,6 +211,8 @@ def naacl_workshop(wd, fs_stable, predictions_parent_dir, omni_script, log_dir, 
           jar_stable, \
           "argument4.softLocalOracle %f" % (p_local_cheat,)]
         print ' '.join(args)
+        if not mock:
+          subprocess.check_call(args)
 
   # Figure 4: ~10 jobs
   # [LOLS]      x reorder_methods() x [gold f]          x [roleCooc]      x [pb, fn] oracle_relations = 'event1,predicate2'
@@ -233,6 +237,8 @@ def naacl_workshop(wd, fs_stable, predictions_parent_dir, omni_script, log_dir, 
         train_method, \
         jar_stable]
       print ' '.join(args)
+      if not mock:
+        subprocess.check_call(args)
 
   # Figure 5: 4 jobs
   # [VFP]       x [easyfirst]       x [gold f, auto f]  x [roleCooc]      x [pb, fn]
@@ -262,6 +268,8 @@ def naacl_workshop(wd, fs_stable, predictions_parent_dir, omni_script, log_dir, 
               jar_stable, \
               "includeClassificationObjectiveTerm %s" % (add_class_obj_term,)]
             print ' '.join(args)
+            if not mock:
+              subprocess.check_call(args)
 
   # Figure 6: 8 jobs
   # [LOLS]      x [easyfirst]       x [gold f, auto f]  x [roleCooc]      x [pb, fn]  x [hammingCost, svmCost]
@@ -289,6 +297,8 @@ def naacl_workshop(wd, fs_stable, predictions_parent_dir, omni_script, log_dir, 
              jar_stable,
              "costMode %s" % (cost,)]
           print ' '.join(args)
+          if not mock:
+            subprocess.check_call(args)
 
   print 'job counts:', jc
   print 'total', sum(jc.values())
@@ -309,7 +319,7 @@ if __name__ == '__main__':
 
   exp_names = set(x.strip().lower() for x in exp_names.split(','))
 
-  mock = True
+  mock = False
 
   engine = 'qsub'
 

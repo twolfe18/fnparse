@@ -92,8 +92,10 @@ fi
 
 
 
-
-
+if [[ `echo "$REORDER" | tr ' ' '\n' | wc -l` != 2 ]]; then
+  echo "REORDER must be a \"key value\" pair, with key probably equal to agendaComparator"
+  exit 3
+fi
 
 if [[ ! -d $FEATURE_SET_DIR ]]; then
   echo "FEATURE_SET_DIR=$FEATURE_SET_DIR is not a directory"
@@ -150,7 +152,7 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     trainSegSize $MINI_TRAIN_SIZE \
     passes 3 \
     easyfirst.static.role $FNPARSE_DATA/srl-easyfirst/pbfn-role-perf.txt \
-    trainTimeLimitMinutes 0 \
+    trainTimeLimitMinutes 10 \
     skipSrlFilterStages true \
     train.facts $TF \
     dev.facts $RD/srl.dev.shuf.facts.gz \
@@ -167,14 +169,9 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     parameterIO "$PARAM_IO" \
     featureSetDir $FEATURE_SET_DIR \
     learnDebug true \
-    hackyImplementation true \
-    agendaComparator 'BY_RELATION,BY_SCORE' \
+    hackyImplementation false \
     predictions.outputDir $PREDICTIONS_DIR \
     $EXTRA_ARGS
 
-#agendaComparator $AGENDA_COMPARATOR
-#hackyTFKReorderMethod
-
 echo "done at `date`, ret code $?"
-
 

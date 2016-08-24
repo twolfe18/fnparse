@@ -292,7 +292,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // NOTE: If there are no global features then arguably MV is NOT APPROPRIATE,
   // since it can cleave off the [i:n] suffix which could contain individual
   // (t,f,k) violations which do not increase the global/max violation.
-  private boolean includeClassificationObjectiveTerm = true;
+  private boolean includeClassificationObjectiveTerm = false;
 
   // Normally, the update phi(y_{gold},x) - phi(y_{pred},x) uses the oracle
   // history in computing phi(y_{gold},x). I have reason to believe that is a
@@ -2139,7 +2139,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             c.predScore.backwards(+1);
         }
       });
-      timer.stop("train/maxViolation");
+      timer.stop("train/" + trainMethod);
       break;
     case DAGGER:
       timer.start("train/dagger");
