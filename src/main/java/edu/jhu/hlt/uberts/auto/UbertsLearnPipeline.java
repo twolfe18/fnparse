@@ -1811,6 +1811,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (Uberts.DEBUG > 1)
       System.out.println("[consume] " + doc.getId());
 
+    // Re-seed so that rand order is different every time inference runs.
+    AgendaComparators.BY_RAND_DYNAMIC.setSeed(u.getRandom().nextInt());
+
     if (skipDocsWithoutPredicate2) {
       assert doc.items.isEmpty();
       boolean foundPred2 = false;

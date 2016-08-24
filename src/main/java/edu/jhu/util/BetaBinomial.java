@@ -3,7 +3,6 @@ package edu.jhu.util;
 public class BetaBinomial {
 
   /**
-   * 
    * @param k number of successes
    * @param n number of trials
    * @param alpha pseudo count (prior) of successes
@@ -12,7 +11,9 @@ public class BetaBinomial {
    * https://people.csail.mit.edu/regina/6864/mlvsmap.pdf
    * https://en.wikipedia.org/wiki/Beta_distribution
    *
-   * @return
+   * View the alpha/beta curves in R with:
+   *  x = seq(0, 1, by=0.01)
+   *  plot(x, dbeta(x, alpha, beta), type="l")
    */
   public static double map(double k, double n, double alpha, double beta) {
     assert alpha >= 0;

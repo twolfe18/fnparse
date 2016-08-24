@@ -257,8 +257,16 @@ public class AgendaComparators {
     }
   }
 
-  public static final Comparator<AgendaItem> BY_RAND_STATIC = new Comparator<AgendaItem>() {
+  public static final Comparator<AgendaItem> BY_RAND_STATIC = new Rand();
+
+  // Re-set the seed of this every time inference is run.
+  public static final Rand BY_RAND_DYNAMIC = new Rand();
+
+  public static class Rand implements Comparator<AgendaItem> {
     private int seed = 9001;
+    public void setSeed(int i) {
+      seed = i;
+    }
     @Override
     public int compare(AgendaItem o1, AgendaItem o2) {
       long i1 = o1.getHashableEdge().hashCode64();
@@ -270,13 +278,6 @@ public class AgendaComparators {
       if (i1 > i2)
         return +1;
       return 0;
-    }
-  };
-
-  public static final Comparator<AgendaItem> BY_RAND_DYNAMIC = new Comparator<AgendaItem>() {
-    @Override
-    public int compare(AgendaItem o1, AgendaItem o2) {
-      throw new RuntimeException("implement me");
     }
   };
 }
