@@ -56,6 +56,7 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
 import edu.jhu.hlt.uberts.auto.UbertsPipeline;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
+import edu.jhu.hlt.uberts.srl.EdgeUtils;
 import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
@@ -301,20 +302,27 @@ public class OldFeaturesWrapper {
         Log.info("[main] refining with (f,k) and (k,)");
         i3.refine((Function<HypEdge, String> & Serializable) e -> {
           assert e.getRelation().getName().equals("argument4");
-          String frame = (String) e.getTail(1).getValue();
-          String role = (String) e.getTail(3).getValue();
+          String frame = EdgeUtils.frame(e);
+          String role = EdgeUtils.role(e);
           return frame + "-" + role;
         }, "fk");
 //        i3.refine((Function<HypEdge, String> & Serializable) e -> {
 //          assert e.getRelation().getName().equals("argument4");
-//          String frame = (String) e.getTail(1).getValue();
+//          String frame = EdgeUtils.frame(e);
 //          return frame;
 //        }, "f");
         i3.refine((Function<HypEdge, String> & Serializable) e -> {
           assert e.getRelation().getName().equals("argument4");
-          String role = (String) e.getTail(3).getValue();
+          String role = EdgeUtils.role(e);
           return role;
         }, "k");
+      } else if ("predicate2".equals(r.getName())) {
+        // We don't need any refinements
+        i3.useBaseFeatures(false);
+        i3.refine((Function<HypEdge, String> & Serializable) e -> {
+          String frame = EdgeUtils.frame(e);
+          return frame;
+        }, "f");
       } else {
         throw new RuntimeException("how to handle: " + r);
       }
