@@ -1,19 +1,26 @@
 package edu.jhu.hlt.uberts;
 
+import java.io.BufferedReader;
+import java.io.File;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Supplier;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.Agenda.AgendaItem;
+import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
 import edu.jhu.hlt.uberts.srl.EdgeUtils;
+import edu.jhu.prim.tuple.Pair;
 
 public class AgendaComparators {
 
@@ -164,16 +171,91 @@ public class AgendaComparators {
   };
 
 
-  public static final Comparator<AgendaItem> BY_ROLE_FREQ = tryParseWrappedPriority("p2c:Arg4ByRoleFrequency");
+  public static final Comparator<AgendaItem> BY_ROLE_FREQ = tryParseWrappedPriority("p2c:frequency-role");
 
-  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_DYNAMIC = tryParseWrappedPriority("p2c:EasyFirstLinear");
+  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_DYNAMIC = tryParseWrappedPriority("p2c:easyfirst-dynamic");
 
-  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_STATIC = new Comparator<AgendaItem>() {
+  /**
+   * Sorts roles by the dev-F1 of the local model.
+   * This reads in those values which can be created using the
+   * output.perfByRoleDir option in {@link UbertsLearnPipeline}.
+   *
+   * Produce a file for PB and FN (they won't overlap in (f,k) because of f prefixes),
+   * cat them together, and provide that last file with the key "easyfirst.static.role".
+   */
+  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_STATIC = new ByScoreOnFile("easyfirst.static.role");
+
+  /**
+   * Expects a file with the format:
+   * <frame> <role> <score> <rest>?
+   * where score must be >= 0
+   *
+   * The default score for (frame, role) pairs which do not appear in the
+   * file is 0.
+   */
+  private static class ByScoreOnFile implements Comparator<AgendaItem> {
+    private Map<Pair<String, String>, Double> fk2score;
+    private String configKey;
+
+    public ByScoreOnFile(String configKey) {
+      this.configKey = configKey;
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      File f = config.getFile(configKey, null);
+      if (f != null) {
+        fk2score = new HashMap<>();
+        add(f);
+      }
+    }
+
+    public void add(File file) {
+      Log.info(file.getPath());
+      if (!file.isFile())
+        throw new IllegalArgumentException();
+      try (BufferedReader r = FileUtil.getReader(file)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          String[] toks = line.split("\\s+");
+          assert toks.length >= 3;
+          String f = toks[0];
+          String k = toks[1];
+          double score = Double.parseDouble(toks[2]);
+          assert score >= 0;
+          Object old = fk2score.put(new Pair<>(f, k), score);
+          assert old == null;
+        }
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    public double getScore(HypEdge e) {
+      if (fk2score == null) {
+        throw new IllegalStateException("not intialized, "
+            + "did you provide file of performance by role with "
+            + this.configKey + "?");
+      }
+      String f = EdgeUtils.frame(e);
+      String k = EdgeUtils.role(e);
+      Double s = fk2score.get(new Pair<>(f, k));
+      if (s == null)
+        s = 0d;
+      return s;
+    }
+
     @Override
     public int compare(AgendaItem o1, AgendaItem o2) {
-      throw new RuntimeException("implement me");
+      if (o1.edge.getRelation() == o2.edge.getRelation()) {
+        assert false;
+        return 0;
+      }
+      double s1 = getScore(o1.edge);
+      double s2 = getScore(o2.edge);
+      if (s1 > s2)
+        return -1;
+      if (s1 < s2)
+        return +1;
+      return 0;
     }
-  };
+  }
 
   public static final Comparator<AgendaItem> BY_RAND_STATIC = new Comparator<AgendaItem>() {
     private int seed = 9001;

@@ -89,7 +89,21 @@
       <!-- <version>4.5.2</version> -->
       <!-- <version>4.6.3</version> -->
       <version>4.8.1</version>
+      <!-- <version>4.10.2-SNAPSHOT</version> -->
+
+      <!-- This EXCLUDES the stanford models as a dependency.
+        IF they are needed, then build the concrete-stanford JAR
+        separately and include it on the classpath manually.
+      <exclusions>
+        <exclusion>
+          <groupId>edu.stanford.nlp</groupId>
+          <artifactId>stanford-corenlp</artifactId>
+          <classifier>models</classifier>
+        </exclusion>
+      </exclusions>
+        -->
     </dependency>
+
     <dependency>
       <groupId>dk.ange.octave</groupId>
       <artifactId>javaoctave</artifactId>

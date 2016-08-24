@@ -135,7 +135,7 @@ def naacl_workshop_action_orderings(only_default=False, easy_first=False):
     order_suffixes = [order_suffixes[0]]
   if easy_first:
     order_suffixes = [order_suffixes[2]]
-  return [order_prefix + ',' + x for x in order_suffixes]
+  return [order_prefix + ',' + x + ',BY_SCORE' for x in order_suffixes]
 
 def naacl_workshop(wd, fs_stable, predictions_parent_dir, omni_script, log_dir, jar_stable, engine='qsub'):
   print '[naacle_workshop] starting...'

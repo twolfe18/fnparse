@@ -258,6 +258,7 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
   public static class Arg4ByRoleFrequency implements AgendaPriority {
     private Counts<String> roleCounts;
     private File providence;
+    public boolean pedantic = false;
 
     private static File cacheFor(File containsArgument4Facts) {
       ExperimentProperties config = ExperimentProperties.getInstance();
@@ -325,11 +326,12 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
       }
       String k = (String) edge.getTail(3).getValue();
       int c = roleCounts.getCount(k);
-      if (c == 0)
+      if (pedantic && c == 0)
         Log.info("WARNING: unseen role: " + k);
       double p = ((double) c) / roleCounts.getTotalCount();
 //      if (Agenda.DEBUG)
 //        Log.info("p=" + p + " " + edge);
+      assert p >= 0;
       return p;
     }
   }

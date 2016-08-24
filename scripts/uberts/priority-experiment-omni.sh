@@ -149,6 +149,7 @@ java -cp $JAR_STABLE -ea -server -Xmx10G \
     miniDevSize $MINI_DEV_SIZE \
     trainSegSize $MINI_TRAIN_SIZE \
     passes 3 \
+    easyfirst.static.role $FNPARSE_DATA/srl-easyfirst/pbfn-role-perf.txt \
     trainTimeLimitMinutes 0 \
     skipSrlFilterStages true \
     train.facts $TF \

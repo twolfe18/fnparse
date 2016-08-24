@@ -299,23 +299,20 @@ public class OldFeaturesWrapper {
 
       if ("argument4".equals(r.getName())) {
         Log.info("[main] refining with (f,k) and (k,)");
-//        i3.refine((ToIntFunction<HypEdge> & Serializable) e -> {
         i3.refine((Function<HypEdge, String> & Serializable) e -> {
           assert e.getRelation().getName().equals("argument4");
           String frame = (String) e.getTail(1).getValue();
           String role = (String) e.getTail(3).getValue();
-//          if (USE_SHA256)
-//            return (int) Hash.sha256(frame + "/" + role);
-//          return Hash.mix(Hash.hash(frame), Hash.hash(role));
           return frame + "-" + role;
         }, "fk");
-//        i3.refine((ToIntFunction<HypEdge> & Serializable) e -> {
+//        i3.refine((Function<HypEdge, String> & Serializable) e -> {
+//          assert e.getRelation().getName().equals("argument4");
+//          String frame = (String) e.getTail(1).getValue();
+//          return frame;
+//        }, "f");
         i3.refine((Function<HypEdge, String> & Serializable) e -> {
           assert e.getRelation().getName().equals("argument4");
           String role = (String) e.getTail(3).getValue();
-//          if (USE_SHA256)
-//            return (int) Hash.sha256(role);
-//          return Hash.hash(role);
           return role;
         }, "k");
       } else {

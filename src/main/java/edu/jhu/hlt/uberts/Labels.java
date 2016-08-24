@@ -13,6 +13,7 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * Holds a set of labels. Has some extra functionality like the inner Perf class
@@ -167,6 +168,18 @@ public class Labels {
       tpInstances = new ArrayList<>();
       tpByRel = new Counts<>();
       fpByRel = new Counts<>();
+    }
+
+    /**
+     * Does not include nil facts.
+     * Returns new sets rather than pointers to internal sets.
+     */
+    public Pair<Set<HashableHypEdge>, Set<HashableHypEdge>> getGoldAndPred() {
+      Set<HashableHypEdge> g = new HashSet<>();
+      g.addAll(edges);
+      Set<HashableHypEdge> p = new HashSet<>();
+      p.addAll(seen);
+      return new Pair<>(g, p);
     }
 
     public void add(HypEdge e) {

@@ -81,6 +81,7 @@ import edu.jhu.hlt.uberts.srl.EdgeUtils;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
+import edu.jhu.util.BetaBinomial;
 
 public class UbertsLearnPipeline extends UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
@@ -163,6 +164,81 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   // For now these store all performances for the last data segment
   private List<Map<String, FPR>> perfByRel = new ArrayList<>();
+  private PerfByRole perfByRole = new PerfByRole();
+  static class PerfByRole {
+    private Counts<Pair<String, String>> tp, fp, fn;
+    private Set<Pair<String, String>> roles;
+
+    public PerfByRole() {
+      tp = new Counts<>();
+      fp = new Counts<>();
+      fn = new Counts<>();
+      roles = new HashSet<>();
+    }
+
+    public int numRoles() {
+      return roles.size();
+    }
+
+    public void clear() {
+      tp.clear();
+      fp.clear();
+      fn.clear();
+      roles.clear();
+    }
+
+    public List<Pair<Pair<String, String>, FPR>> getValues() {
+      List<Pair<Pair<String, String>, FPR>> v = new ArrayList<>();
+      for (Pair<String, String> role : roles) {
+        int tp = this.tp.getCount(role);
+        int fp = this.fp.getCount(role);
+        int fn = this.fn.getCount(role);
+        FPR f = new FPR();
+        f.accum(tp, fp, fn);
+        v.add(new Pair<>(role, f));
+      }
+      return v;
+    }
+
+    boolean relevant(HashableHypEdge e) {
+      return e.getEdge().getRelation().getName().equals("argument4");
+    }
+
+    Pair<String, String> getKey(HashableHypEdge he) {
+      assert relevant(he);
+      HypEdge e = he.getEdge();
+      String f = (String) e.getTail(1).getValue();
+      String k = (String) e.getTail(3).getValue();
+      return new Pair<>(f, k);
+    }
+
+    public void add(Labels.Perf perf) {
+      Pair<Set<HashableHypEdge>, Set<HashableHypEdge>> gp = perf.getGoldAndPred();
+      add(gp.get1(), gp.get2());
+    }
+
+    public void add(Set<HashableHypEdge> gold, Set<HashableHypEdge> pred) {
+      for (HashableHypEdge g : gold) {
+        if (!relevant(g))
+          continue;
+        Pair<String, String> k = getKey(g);
+        roles.add(k);
+        if (pred.contains(g))
+          tp.increment(k);
+        else
+          fn.increment(k);
+      }
+      for (HashableHypEdge p : pred) {
+        if (!relevant(p))
+          continue;
+        if (!gold.contains(p)) {
+          Pair<String, String> k = getKey(p);
+          roles.add(k);
+          fp.increment(k);
+        }
+      }
+    }
+  }
 
   // For writing out predictions for dev/test data
   private File predictionsDir;
@@ -190,7 +266,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private boolean skipDocsWithoutPredicate2 = true;
 
   // Re-implementation which doesn't use any fancy machinery and does use nullSpans
-  private boolean hackyImplementation = true;
+  private boolean hackyImplementation = false;
 
   // Attempts to make MAX_VIOLATION mimic a LaSO update where if a violation
   // occurs, the predictor is re-set to the gold history.
@@ -380,8 +456,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] includeGoldArgsAtTrain=" + pipe.includeGoldArgsAtTrain);
 
     pipe.predictionsDir = config.getFile("predictions.outputDir", null);
-    if (pipe.predictionsDir.getName().equalsIgnoreCase("none"))
+    if (pipe.predictionsDir == null) {
+      Log.info("predictions.outputDir not set");
+    } else if (pipe.predictionsDir.getName().equalsIgnoreCase("none")) {
       pipe.predictionsDir = null;
+    }
     if (pipe.predictionsDir != null) {
       if (!pipe.predictionsDir.isDirectory())
         pipe.predictionsDir.mkdirs();
@@ -389,6 +468,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           "predictions.includeNegativePredictions", pipe.includeNegativePredictions);
       Log.info("[main] writing predictions to " + pipe.predictionsDir.getPath()
           + " includeNegativePredictions=" + pipe.includeNegativePredictions);
+    } else {
+      Log.info("[main] not writing out predictions.");
     }
 
     // Train and dev should be shuffled. Test doesn't need to be.
@@ -797,6 +878,44 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Tell PerformanceTracker about the performance on this iteration
     if (!mini)
       perfTracker.observe(mode, perf);
+
+    // Record the performance by relation
+    if (/*!mini &&*/ mode == Mode.DEV) {
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      File d = config.getFile("output.perfByRoleDir", null);
+      if (d != null) {
+        File f = new File(d, "perf-by-role." + dataName + ".txt");
+        Log.info("writing perfByRole to " + f.getPath());
+        try (BufferedWriter w = FileUtil.getWriter(f)) {
+          for (Pair<Pair<String, String>, FPR> pf : perfByRole.getValues()) {
+            FPR x = pf.get2();
+
+            double alpha = 1;
+            double beta = 1.25;
+            double phat = BetaBinomial.map(x.getTP(), x.getTP() + x.getFP(), alpha, beta);
+            double rhat = BetaBinomial.map(x.getTP(), x.getTP() + x.getFN(), alpha, beta);
+            double fhat = 2 * phat * rhat / (phat + rhat);
+
+            w.write(String.format("%s %s %f %f %f %d %d %d",
+                pf.get1().get1(),
+                pf.get1().get2(),
+                fhat,
+                phat,
+                rhat,
+//                x.f1(),
+//                x.precision(),
+//                x.recall(),
+                (int) x.getTP(),
+                (int) x.getFP(),
+                (int) x.getFN()));
+            w.newLine();
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+      }
+    }
+    perfByRole.clear();
 
     // Maybe save some local factors.
     if (!mini && mode == Mode.DEV) {
@@ -1437,6 +1556,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         }
       }
       perfByRel.add(perf.perfByRel());
+      perfByRole.add(perf);
     }
 
   }
@@ -1709,11 +1829,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     if (addNullSpanFacts) {
       AddNullSpanArgs ans = new AddNullSpanArgs(u);
       List<HypEdge.WithProps> ns = ans.goldNullSpanFacts(doc);
-//      doc.facts.addAll(ns);
       for (HypEdge.WithProps y : ns) {
         assert y.hasProperty(HypEdge.IS_Y);
-//        if (hackyDebug)
-//          System.out.println("[addNullSpanFacts] " + y);
         u.addLabel(y);
       }
     }
@@ -1746,7 +1863,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       case DEV:
       case TEST:
         if (DEBUG > 0 && perfByRel.size() % 50 == 0) {
-          System.out.println("mode=" + mode + " doc=" + doc.getId() + " [memLeak] perfByRel.size=" + perfByRel.size());
+          System.out.println("mode=" + mode + " doc=" + doc.getId()
+            + " [memLeak] perfByRel.size=" + perfByRel.size()
+            + " perfByRole.numRoles=" + perfByRole.numRoles());
         }
         boolean oracle = false;
         boolean ignoreDecoder = false;
@@ -1754,6 +1873,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, ignoreDecoder);
         timer.stop("inf/" + mode);
         perfByRel.add(p.get1().perfByRel());
+        perfByRole.add(p.get1());
 
         // Write out predictions to a file in (many doc) fact file format with
         // comments which say gold, pred, score.
@@ -1797,7 +1917,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         }
 
         ExperimentProperties config = ExperimentProperties.getInstance();
-        if (DEBUG > 0 && config.getBoolean("showDevTestDetails", true)) {// && perfByRel.size() % 50 == 0) {
+        if (DEBUG > 0 && config.getBoolean("showDevTestDetails", false)) {// && perfByRel.size() % 50 == 0) {
 
           // Show some stats about this example
           System.out.println("trajLength=" + p.get2().size());
