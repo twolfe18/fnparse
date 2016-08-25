@@ -1798,7 +1798,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
   public static boolean isNullSpan(HypEdge srl4Edge) {
     assert "argument4".equals(srl4Edge.getRelation().getName());
-    return "0-0".equals(srl4Edge.getTail(2).getValue());
+//    return "0-0".equals(srl4Edge.getTail(2).getValue());
+    return Span.nullSpan == EdgeUtils.arg(srl4Edge);
   }
 
   public static boolean isNilFact(HypEdge f) {

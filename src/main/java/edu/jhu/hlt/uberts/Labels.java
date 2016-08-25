@@ -127,7 +127,10 @@ public class Labels {
     Set<HashableHypEdge> goldSameBucket = edgesByBucket.get(key);
     boolean nf = UbertsLearnPipeline.isNilFact(e.getEdge());
     // If this is a nilFact and there are no gold facts in the same bucket, then it is correct.
-    return (goldSameBucket == null || goldSameBucket.isEmpty()) == nf;
+    boolean gold = (goldSameBucket == null || goldSameBucket.isEmpty()) && nf;
+    if (gold)
+      assert "argument4".equals(e.getEdge().getRelation().getName());
+    return gold;
   }
 
   public void clear() {

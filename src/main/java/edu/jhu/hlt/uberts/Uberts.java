@@ -17,6 +17,7 @@ import java.util.Random;
 import java.util.function.BiFunction;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
@@ -456,6 +457,7 @@ public class Uberts {
     }
 
     // Oracle
+    Labels.Perf oPerf = goldEdges.new Perf();
     Traj t1 = null;
     {
       if (Agenda.DEBUG || DEBUG > 1)
@@ -471,6 +473,7 @@ public class Uberts {
           System.out.println("[maxViolationPerceptron] step=oracle gold=" + y + " pred=" + yhat + " addToState=" + y + " popped=" + ai);
 
         if (y) {
+          oPerf.add(ai.edge);
           Step s = new Step(ai, y, yhat);
           t1 = new Traj(s, t1);
           addEdgeToState(ai);
@@ -482,6 +485,15 @@ public class Uberts {
       // frame. This can happen if you build role2 (observed) from training
       // facts and there is a predicate2 frame which has no argument4s.
       stats.increment("maxViolation/emptyTraj");
+    }
+    Map<String, FPR> oPerfVals = oPerf.perfByRel();
+    if (oPerfVals.get("predicate2").recall() < 1) {
+      stats.increment("maxViolation/NO_UPDATE/lowRecall/predicate2");
+      return null;
+    }
+    if (oPerfVals.get("argument4") != null && oPerfVals.get("argument4").recall() < 1) {
+      stats.increment("maxViolation/NO_UPDATE/lowRecall/argument4");
+      return null;
     }
 
     // Loss Augmented Inference
@@ -574,6 +586,22 @@ public class Uberts {
       for (HypEdge e : EdgeDiff.duplicates(e2))
         System.out.println("e2 duplicate: " + e);
 
+      System.out.println();
+      for (HypEdge e : getLabels().getGoldEdges(false))
+        System.out.println("gold: " + e);
+      System.out.println();
+
+      if (t1r.size() < 50 && t2r.size() < 50) {
+        for (int i = 0; !t1r.isEmpty(); i++)
+          System.out.println("oracle[" + i + "]: " + t1r.removeFirst());
+        for (int i = 0; !t2r.isEmpty(); i++)
+          System.out.println("mv[" + i + "]:     " + t2r.removeFirst());
+      }
+
+      System.out.println("@1-2: " + dbgSentenceCache.getLU(1));
+      System.out.println(dbgSentenceCache.getId());
+      System.out.println(Describe.sentenceWithDeps(dbgSentenceCache, dbgSentenceCache.getParseyDeps()));
+
       Log.info("WARNING: t1r.size=" + t1r.size() + " t2r.size=" + t2r.size());
       assert false;
     }
@@ -589,7 +617,8 @@ public class Uberts {
       assert sG.getStep().gold;
       assert sP.getStep().pred;
       assert EdgeUtils.target(sG.getStep().edge) == EdgeUtils.target(sP.getStep().edge);
-      assert EdgeUtils.frame(sG.getStep().edge).equals(EdgeUtils.frame(sP.getStep().edge));
+      if ("argument4".equals(sG.getStep().edge.getRelation().getName()))
+        assert EdgeUtils.frame(sG.getStep().edge).equals(EdgeUtils.frame(sP.getStep().edge));
 //      assert EdgeUtils.role(sG.getStep().edge).equals(EdgeUtils.role(sP.getStep().edge));
       assert getLabel(sG.getStep().edge);
 //      assert sP.getStep().score.forwards() == sP.getStep().scoreV;
