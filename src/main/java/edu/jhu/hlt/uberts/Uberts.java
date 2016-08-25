@@ -167,7 +167,7 @@ public class Uberts {
     if (DEBUG > 1)
       System.out.println("Uberts addLabel: " + e);
     if (goldEdges == null)
-      goldEdges = new Labels(this);
+      goldEdges = new Labels(this, thresh::getBucket);
     goldEdges.add(e);;
   }
   public boolean getLabel(HypEdge e) {
@@ -183,7 +183,7 @@ public class Uberts {
    * Sets the set of gold edges to the empty set.
    */
   public void initLabels() {
-    goldEdges = new Labels(this);
+    goldEdges = new Labels(this, thresh::getBucket);
   }
 
   /**
@@ -742,14 +742,24 @@ public class Uberts {
     for (Step s : traj) {
       assert s.pred;
       DecisionFunction.ByGroup t = (ByGroup) thresh.get(s.edge.getRelation().getName());
+      if (t == null) {
+        for (HypEdge f : goldEdges.getGoldEdges(false))
+          System.out.println("gold: " + f);
+        throw new RuntimeException("no group? " + s.edge);
+      }
       List<Object> key = t.getKey(s.edge);
       Pair<HypEdge, Adjoints> g = t.getFirstGoldInBucket(key);
+
       if (g == null) {
-        for (HypEdge f : goldEdges.getGoldEdges(false)) {
+        // This can happen if you get the frame wrong, then all subsequent arg4 facts are wrong.
+        // By the book, LOLS says that these should all receive negative update...
+        // WAIT. What about nullSpans?
+        // At the very least there should be a nullSpan which is the correct answer in every bucket.
+        for (HypEdge f : goldEdges.getGoldEdges(false))
           System.out.println("gold: " + f);
-        }
         throw new RuntimeException("why is there no correct fact in this bucket: " + s.edge);
       }
+
       HashableHypEdge gg = new HashableHypEdge(g.get1());
       HashableHypEdge pp = new HashableHypEdge(s.edge);
       if (!gg.equals(pp)) {

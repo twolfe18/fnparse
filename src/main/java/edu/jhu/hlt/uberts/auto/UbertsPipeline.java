@@ -179,16 +179,14 @@ public abstract class UbertsPipeline {
     }
 
     // E.g. "EXACTLY_ONE:argument4(t,f,s,k):t:k"
-    String dfs = config.getString("byGroupDecoder", "");
+//    String dfs = config.getString("byGroupDecoder", "");
+    String dfs = config.getString("byGroupDecoder");
     if (dfs.isEmpty()) {
-      u.setThresh(new DecisionFunction.DispatchByRelation());
+//      u.setThresh(new DecisionFunction.DispatchByRelation());
+      throw new RuntimeException("specify some sort of decision function");
     } else {
       u.setThresh(DecisionFunction.DispatchByRelation.parseMany(dfs, u));
     }
-//    if (!dfs.isEmpty()) {
-//      DecisionFunction df = DecisionFunction.ByGroup.parseMany(dfs, u);
-//      u.prependDecisionFunction(df);
-//    }
 
     // Thresholds for each each relation
     // E.g. "srl2=-3 srl3=-3"

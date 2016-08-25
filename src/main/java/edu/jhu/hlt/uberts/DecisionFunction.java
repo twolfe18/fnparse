@@ -187,7 +187,21 @@ public interface DecisionFunction {
       return df;
     }
 
+    // TODO Switch to Relation as key, it has better and faster hash/eq
     private Map<String, DecisionFunction> rel2df = new HashMap<>();
+
+    public List<Object> getBucket(HypEdge e) {
+      List<Object> key = new ArrayList<>();
+      key.add(e.getRelation());
+      DecisionFunction df = rel2df.get(e.getRelation().getName());
+      if (df != null) {
+        // There will be some facts like startDoc(docId) which do not really have
+        // a bucketing and wont be in rel2df. For those, just use the relation as
+        // the bucket.
+        key.addAll(((ByGroup) df).getKey(e));
+      }
+      return key;
+    }
 
     /** Returns the number of relation this explicitly tracks */
     public int size() {

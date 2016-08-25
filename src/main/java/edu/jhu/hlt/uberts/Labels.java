@@ -8,11 +8,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
+import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -53,14 +55,21 @@ public class Labels {
   private Set<HashableHypEdge> edgesNil;  // gold facts which are "nil facts", e.g. argument4(t,f,0-0,k)
 
   // Stratify by relation
-  private Map<Relation, Set<HashableHypEdge>> edges2;
-  private Map<Relation, Set<HashableHypEdge>> edgesNil2;
+  private Map<Relation, Set<HashableHypEdge>> edgesByRelation;
+  private Map<Relation, Set<HashableHypEdge>> edgesNilByRelation;
 
-  public Labels(Uberts u) {
+  // TODO Stratify by bucket
+  private Map<List<Object>, Set<HashableHypEdge>> edgesByBucket;
+  private Function<HypEdge, List<Object>> bucketing;
+
+  public Labels(Uberts u, Function<HypEdge, List<Object>> bucketing) {
     edges = new HashSet<>();
     edgesNil = new HashSet<>();
-    edges2 = new HashMap<>();
-    edgesNil2 = new HashMap<>();
+    edgesByRelation = new HashMap<>();
+    edgesNilByRelation = new HashMap<>();
+
+    this.edgesByBucket = new HashMap<>();
+    this.bucketing = bucketing;
   }
 
   public void add(HypEdge e) {
@@ -71,10 +80,10 @@ public class Labels {
     Map<Relation, Set<HashableHypEdge>> em;
     if (isNilFact(e.getEdge())) {
       es = edgesNil;
-      em = edgesNil2;
+      em = edgesNilByRelation;
     } else {
       es = edges;
-      em = edges2;
+      em = edgesByRelation;
     }
 
     boolean added = es.add(e);
@@ -87,6 +96,14 @@ public class Labels {
       em.put(key, s);
     }
     s.add(e);
+
+    List<Object> k = bucketing.apply(e.getEdge());
+    Set<HashableHypEdge> ss = edgesByBucket.get(k);
+    if (ss == null) {
+      ss = new HashSet<>();
+      edgesByBucket.put(k, ss);
+    }
+    ss.add(e);
   }
 
   public boolean getLabel(HypEdge e) {
@@ -99,16 +116,26 @@ public class Labels {
    * non-NIL-value-containing gold edge.
    */
   public boolean getLabel(HashableHypEdge e) {
-    if (isNilFact(e.getEdge()))
-      return edgesNil.contains(e);
-    return edges.contains(e);
+//    if (isNilFact(e.getEdge()))
+//      return edgesNil.contains(e);
+//    return edges.contains(e);
+
+    if (edges.contains(e) || edgesNil.contains(e))
+      return true;
+
+    List<Object> key = bucketing.apply(e.getEdge());
+    Set<HashableHypEdge> goldSameBucket = edgesByBucket.get(key);
+    boolean nf = UbertsLearnPipeline.isNilFact(e.getEdge());
+    // If this is a nilFact and there are no gold facts in the same bucket, then it is correct.
+    return (goldSameBucket == null || goldSameBucket.isEmpty()) == nf;
   }
 
   public void clear() {
     edges.clear();
     edgesNil.clear();
-    edges2.clear();
-    edgesNil2.clear();
+    edgesByRelation.clear();
+    edgesNilByRelation.clear();
+    edgesByBucket.clear();
   }
 
   public List<HypEdge> getGoldEdges(boolean includeNilFacts) {
@@ -125,9 +152,9 @@ public class Labels {
 
   public Collection<HashableHypEdge> getGoldEdges(Relation r, boolean includeNilFacts) {
     Collection<HashableHypEdge> c = new ArrayList<>();
-    c.addAll(edges2.getOrDefault(r, Collections.emptySet()));
+    c.addAll(edgesByRelation.getOrDefault(r, Collections.emptySet()));
     if (includeNilFacts)
-      c.addAll(edgesNil2.getOrDefault(r, Collections.emptySet()));
+      c.addAll(edgesNilByRelation.getOrDefault(r, Collections.emptySet()));
     return c;
   }
 
@@ -203,12 +230,12 @@ public class Labels {
       if (edges.size() == 0)
         return Collections.emptyMap();
       Map<String, FPR> m = new HashMap<>();
-      for (Relation rel : edges2.keySet()) {
+      for (Relation rel : edgesByRelation.keySet()) {
 
         // Measure w.r.t. non-null-span prediction and gold edges
         int tp = tpByRel.getCount(rel);
         int fp = fpByRel.getCount(rel);
-        int fn = edges2.get(rel).size() - tp;
+        int fn = edgesByRelation.get(rel).size() - tp;
 
         FPR perf = new FPR();
         perf.accum(tp, fp, fn);
@@ -282,7 +309,7 @@ public class Labels {
 
     public List<HypEdge> getFalseNegatives(Relation rel) {
       List<HypEdge> fn = new ArrayList<>();
-      Set<HashableHypEdge> s = edges2.get(rel);
+      Set<HashableHypEdge> s = edgesByRelation.get(rel);
       if (s != null) {
         for (HashableHypEdge he : s) {
           if (!seen.contains(he))
@@ -294,7 +321,7 @@ public class Labels {
 
     public List<HypEdge> getFalseNegatives() {
       List<HypEdge> fn = new ArrayList<>();
-      List<Relation> rels = new ArrayList<>(edges2.keySet());
+      List<Relation> rels = new ArrayList<>(edgesByRelation.keySet());
       Collections.sort(rels, Relation.BY_NAME);
       for (Relation rel : rels)
         fn.addAll(getFalseNegatives(rel));

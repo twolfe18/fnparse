@@ -34,6 +34,8 @@ public class Env {
    * more {@link Term}s to {@link HypEdge}s.
    */
   public static interface Edge3 {
+    public static final boolean BENCHMARK_VIA_LOGGING = false;
+
     /** Facts which satisfy this edge (constraint) witnessed by the binding b */
     List<HypEdge> satisfy(Bindings b);
 
@@ -56,6 +58,15 @@ public class Env {
         this.cons1 = shortCircuitFirst;
         this.cons2 = lessSelective;
       }
+      /*
+       * TODO I need to figure out how to benchmark this so that I can start optimizing.
+       * At least for local models it is upwards of 75% of compute in visualvm.
+       *
+       * Ah, to get a sense of what is causing so much computation,
+       * I think I can count the number of calls w.r.t. (cons1,cons2).
+       * Both of them are probably ArgEquality constraints, or (Arg,Arg).
+       * Use toString(), grep and count in log file.
+       */
       @Override
       public List<HypEdge> satisfy(Bindings b) {
         // Take the intersection of cons1.satisfy(b) and cons2.satisfy(b)
@@ -65,6 +76,17 @@ public class Env {
         List<HypEdge> s2 = cons2.satisfy(b);
         if (s2.isEmpty())
           return s2;
+
+        if (BENCHMARK_VIA_LOGGING) {
+          // TODO Do some query optimization or figure out what is stupid here.
+          // grep satisfy /tmp/UbertsLearnPipeline.txt | perl -pe 's/^\d+ .*?satisfy //' | head -n 500000 | sort | uniq -c | sort -rn
+          // 495791  cons1=(ArgEq (Arg R=coarsenFrame2 i=0 a=1) (Arg R=role2 i=0 a=0)) cons2=(ArgEq (Arg R=tackstrom-args4 i=0 a=3) (Arg R=role2 i=0 a=1))
+          //   4209  cons1=(ArgEq (Arg R=lemma2 i=0 a=1) (Arg R=frameTriage4 i=0 a=0)) cons2=(ArgEq (Arg R=coarsenPos2 i=0 a=1) (Arg R=frameTriage4 i=0 a=1))
+          // grep coarsenFrame2 data/srl-reldata/grammar/srl-grammar-propbank.trans 
+          // predicate2(t,f) & tackstrom-args4(t,s,sHead,k) & coarsenFrame2(f,fc) & role2(fc,k) => argument4(t,f,s,k)
+          Log.info("cons1=" + cons1 + " cons2=" + cons2);
+        }
+
         Set<HashableHypEdge> s = new HashSet<>();
         List<HypEdge> intersect = new ArrayList<>();
         for (HypEdge e : s1)
@@ -111,6 +133,10 @@ public class Env {
       if (sat == null)
         return Collections.emptyList();
       return sat.toList();
+    }
+    @Override
+    public String toString() {
+      return "(ArgEq " + from + " " + to + ")";
     }
   }
 
