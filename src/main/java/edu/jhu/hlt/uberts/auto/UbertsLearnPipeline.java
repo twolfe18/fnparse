@@ -268,12 +268,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // Re-implementation which doesn't use any fancy machinery and does use nullSpans
   private boolean hackyImplementation = false;
 
-  // Attempts to make MAX_VIOLATION mimic a LaSO update where if a violation
-  // occurs, the predictor is re-set to the gold history.
-  // This is implemented by using if(y)addEdgeToState(...) in the MV/pred
-  // inference loop instead of if(yhat)addEdgeToState(...).
-  private boolean mvLasoHack = false;
-
   // Does two things if true:
   // 1) adds the rule: "predicate2(t,f) & role2(f,k) & nullSpan(s) => argument4(t,f,s,k)
   // 2) runs AddNullSpanArgs on incoming RelDocs to add gold nullSpan arg4 facts
@@ -292,6 +286,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // NOTE: If there are no global features then arguably MV is NOT APPROPRIATE,
   // since it can cleave off the [i:n] suffix which could contain individual
   // (t,f,k) violations which do not increase the global/max violation.
+  // NOTE: Do not use for LOLS/LaSO, not necessary.
   private boolean includeClassificationObjectiveTerm = false;
 
   // Normally, the update phi(y_{gold},x) - phi(y_{pred},x) uses the oracle
@@ -315,6 +310,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     HINGE,
   }
 
+  /**
+   * @deprecated Align these reordering methods with the {@link AgendaComparators}
+   * so that the hacky can mimic proper implementation
+   */
   enum TfkRerorder {
     NONE,               // leave order as T.then(F).then(K)
     CONF_ABS,           // score(bucket) = max_{f in bucket} score(f)
@@ -324,7 +323,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   }
   public TfkRerorder hackyTFKReorderMethod = TfkRerorder.NONE;
 
-  public static boolean EXACTLY_ONE_ITER = false;
+  // A much stricter version than the time constraint, just do one call to consume()
+  public static boolean EXACTLY_ONE_CONSUME = false;
 
   private static boolean HACKY_DEBUG = true;
 
@@ -349,7 +349,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] starting at " + new java.util.Date().toString());
     ExperimentProperties config = ExperimentProperties.init(args);
 
-    EXACTLY_ONE_ITER = config.getBoolean("exactlyOneConsume", false);
+    EXACTLY_ONE_CONSUME = config.getBoolean("exactlyOneConsume", false);
 
     Log.info("[main] AveragedPerceptronWeights.UPDATE_BUFFER_FIX=" + AveragedPerceptronWeights.UPDATE_BUFFER_FIX);
 
@@ -437,8 +437,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       pipe.addRule(r);
     }
 
-    pipe.mvLasoHack = config.getBoolean("mvLasoHack", pipe.mvLasoHack);
-    Log.info("[main] mvLasoHack=" + pipe.mvLasoHack);
+//    pipe.mvLasoHack = config.getBoolean("mvLasoHack", pipe.mvLasoHack);
+//    Log.info("[main] mvLasoHack=" + pipe.mvLasoHack);
 
     pipe.skipDocsWithoutPredicate2 = config.getBoolean("skipDocsWithoutPredicate2", pipe.skipDocsWithoutPredicate2);
     Log.info("[main] skipDocsWithoutPredicate2=" + pipe.skipDocsWithoutPredicate2);
@@ -1970,7 +1970,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     u.getThresh().clear();
 
 
-    if (EXACTLY_ONE_ITER) {
+    if (EXACTLY_ONE_CONSUME) {
       Log.info("exiting eary because of exactlyOneConsume=true");
       System.exit(0);
     }
@@ -2072,7 +2072,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       final List<ClassEx> classEx = includeClassificationObjectiveTerm ? u.getClassificationUpdate() : null;
 
       boolean latest = trainMethod == TrainMethod.LATEST_UPDATE;
-      Pair<Traj, Traj> maxViolation = u.maxViolationPerceptron(getCostFP(), mvLasoHack, latest);
+      boolean useGoldPredicate2InMV = !oracleRelations.contains("predicate2");
+      Pair<Traj, Traj> maxViolation = u.violationFixingPerceptron(getCostFP(), latest, useGoldPredicate2InMV);
       batch.add(lr -> {
         if (maxViolation == null) {
           eventCounts.increment("good/noViolation");

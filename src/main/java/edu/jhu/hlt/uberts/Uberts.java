@@ -419,29 +419,23 @@ public class Uberts {
   /**
    * Returns (gold trajectory, predicted trajectory).
    *
-   * This is sort of a pun on the real max-violation algorithm. The original
-   * version assumes a transition system where states can be said to fall into
-   * a statically known (depending only on x, not actions) indexable sequence.
-   * Meaning you can talk about "the i^th action" and mean something comparable
-   * on any trajectory. This is fine if you are doing something like tagging
-   * tokens from left to right ("i^th action" means "tag of token i"), but it is
-   * not fine if some actions are pruning actions which affect the space of
-   * future actions.
-   *
-   * The pun that we use is to count up from i=0. The first actions are
-   * comparable (they add some fact starting from the initial state). After that
-   * they may not be comparable. E.g. At i=10, the oracle might be applying
-   * foo(x) & bar(y) => baz(z), but the predictor may have never built foo(x) or
-   * bar(y) based on earlier choices/mistakes, so asking the predictor to apply
-   * the baz(z) rule may be a bad idea.
-   *
-   * If the oracle produces a length N trajectory, and the predictor length M,
-   * we take the max-violator over length min(N,M) prefixes.
-   *
    * See http://www.aclweb.org/anthology/N12-1015
+   *
+   * @param latestUpdate when false, use max violation.
+   *
+   * @param useGoldPredicate2InMV if true, then addEdgeToState depends on the gold label for predicate2 facts,
+   * as opposed to pred as for all other actions and all actions when this flag is false. You want to do this
+   * when you are training both a predicate2 and argument4 model, as VFP can't really handle sequences that
+   * diverge on frames (e.g. since the number of actions in the sequence changes depending on frame.numRoles).
+   * This is equivalent to treading predicate2 and argument4 prediction as two separate tasks and training with VFP.
    */
-  public Pair<Traj, Traj> maxViolationPerceptron(Map<Relation, Double> costFP, boolean lasoHack, boolean latestUpdate) {
+  public Pair<Traj, Traj> violationFixingPerceptron(Map<Relation, Double> costFP, boolean latestUpdate, boolean useGoldPredicate2InMV) {
     assert agenda.getRescoreMode() == RescoreMode.NONE;
+
+//    assert !lasoHack : "this is no longer supported through MV, actually use the getLaso2Update."
+//        + " lasoHack here just lets the pred (mv) trajectory use gold arg4 actions, which is not the"
+//        + " same as a proper per-state LOLS/LaSO update (the problem that does exist with VFP that I"
+//        + " was trying to solve has to do with the use of oracle features).";
 
     timer.start("duplicate-state");
     State s0 = state.duplicate();
@@ -454,7 +448,6 @@ public class Uberts {
     boolean debug = true;
     if (debug && DEBUG > 1) {
       Log.info("at the start of MV:");
-      Log.info("lasoHack=" + lasoHack);
       Log.info("latestUpdate=" + latestUpdate);
       Log.info(getStateFactCounts());
       int i = 0;
@@ -504,10 +497,7 @@ public class Uberts {
       // RescoreMode.LOSS_AUGMENTED doesn't apply to those edges.
       // This is not a problem since we are not learning event1 parameters.
 //      agenda.setRescoreMode(RescoreMode.LOSS_AUGMENTED, goldEdges);
-      // I think the reason this doesn't work is that the arg4 edges are already on the agenda!
-      // I can just heapify to add that score to the items which are already on the agenda.
       agenda.oneTimeRescore(RescoreMode.LOSS_AUGMENTED, goldEdges);
-//      agenda.setRescoreMode(RescoreMode.NONE, null);
 
       statsAgendaSizePerStep.clear();
       while (agenda.size() > 0) {
@@ -522,8 +512,12 @@ public class Uberts {
           t2 = new Traj(s, t2);
         }
 
-        boolean h = lasoHack && "argument4".equals(ai.getHashableEdge().getEdge().getRelation().getName());
-        boolean addToState = (h && y) || (!h && yhat);
+//        boolean h = lasoHack && "argument4".equals(ai.getHashableEdge().getEdge().getRelation().getName());
+//        boolean addToState = (h && y) || (!h && yhat);
+        boolean pred2 = "predicate2".equals(ai.edge.getRelation().getName());
+        boolean arg4 = "argument4".equals(ai.edge.getRelation().getName());
+        assert pred2 || arg4 : "training is almost certainly broken";
+        boolean addToState = (useGoldPredicate2InMV && pred2) ? y : yhat;
         if (DEBUG > 1)
           System.out.println("[maxViolationPerceptron] step=lossAugmented gold=" + y + " pred=" + yhat + " addToState=" + addToState + " popped=" + ai);
         if (addToState)

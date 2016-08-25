@@ -622,7 +622,7 @@ public class OldFeaturesWrapper {
           }
         }
 
-        if (UbertsLearnPipeline.EXACTLY_ONE_ITER) {
+        if (UbertsLearnPipeline.EXACTLY_ONE_CONSUME) {
           Log.info("something uniq " + key + "\t" + Arrays.toString(features));
         }
 

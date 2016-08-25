@@ -93,6 +93,7 @@ public class AgendaComparators {
         }
       }
     }
+    Log.info("problem, cannot parse: " + name);
     return null;
   }
 
