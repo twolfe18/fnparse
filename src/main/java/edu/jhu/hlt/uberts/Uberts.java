@@ -744,6 +744,12 @@ public class Uberts {
       DecisionFunction.ByGroup t = (ByGroup) thresh.get(s.edge.getRelation().getName());
       List<Object> key = t.getKey(s.edge);
       Pair<HypEdge, Adjoints> g = t.getFirstGoldInBucket(key);
+      if (g == null) {
+        for (HypEdge f : goldEdges.getGoldEdges(false)) {
+          System.out.println("gold: " + f);
+        }
+        throw new RuntimeException("why is there no correct fact in this bucket: " + s.edge);
+      }
       HashableHypEdge gg = new HashableHypEdge(g.get1());
       HashableHypEdge pp = new HashableHypEdge(s.edge);
       if (!gg.equals(pp)) {

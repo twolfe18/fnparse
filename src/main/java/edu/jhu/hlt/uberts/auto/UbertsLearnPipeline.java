@@ -1613,7 +1613,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
     assert gp.argLocGlobal == null : "can't do this the hacky way";
     if (f == null && !useOnlyNumArgs) {
-      // No global features
+      // No global features and at this point I'm sure things are booked and I don't want to but in on your plans last minute.
       return Adjoints.Constant.ZERO;
     }
 
@@ -1999,8 +1999,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private void train(RelDoc doc) {
     if (DEBUG > 1)
       Log.info("starting on " + doc.getId());
-
-    assert costMode == CostMode.HINGE : "implement costMode: " + costMode;
 
     int verbose = 0;
     switch (trainMethod) {
