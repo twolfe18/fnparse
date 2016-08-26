@@ -262,7 +262,7 @@ public class AgendaComparators {
 
     @Override
     public int compare(AgendaItem o1, AgendaItem o2) {
-      if (o1.edge.getRelation() == o2.edge.getRelation()) {
+      if (o1.edge.getRelation() != o2.edge.getRelation()) {
         assert false : "e1=" + o1.edge + " e2=" + o2.edge;
         return 0;
       }
