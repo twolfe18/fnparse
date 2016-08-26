@@ -388,7 +388,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] passes=" + passes);
 
 //    Comparator<AgendaItem> comparator = AgendaComparators.getPriority(config);
-    Comparator<AgendaItem> comparator = AgendaComparators.naaclWorkshopHack(config.getString("agendaComparator"));
+    String ac = config.getString("agendaComparator");
+    Log.info("[main] agendaComparator=" + ac);
+    Comparator<AgendaItem> comparator = AgendaComparators.naaclWorkshopHack(ac);
     final Uberts u = new Uberts(new Random(9001), null, comparator);
     Log.warn("IGNORING agendaPriority!");
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
@@ -599,6 +601,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     Log.info("[main] pOracleRollIn=" + pOracleRollIn);
     Log.info("[main] batchSize=" + batchSize);
 
+    // This is where globalFeats is read
     globalParamConfig = new MultiGlobalParams();
     globalParamConfig.configure(config);
 
