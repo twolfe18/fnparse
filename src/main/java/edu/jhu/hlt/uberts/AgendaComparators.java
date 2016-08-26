@@ -24,8 +24,10 @@ import edu.jhu.prim.tuple.Pair;
 
 public class AgendaComparators {
 
-  public static Comparator<AgendaItem> wrapPriority(AgendaPriority p) {
+  public static Comparator<AgendaItem> wrapPriority(AgendaPriority p, String nameForDbg) {
     return new Comparator<AgendaItem>() {
+      @SuppressWarnings("unused")
+      private String name = nameForDbg;
       @Override
       public int compare(AgendaItem o1, AgendaItem o2) {
         double p1 = p.priority(o1.edge, o1.score);
@@ -41,18 +43,108 @@ public class AgendaComparators {
     };
   }
 
-  public static Comparator<AgendaItem> restrictToRelation(Comparator<AgendaItem> wrapped, String relationName) {
-    return new Comparator<AgendaItem>() {
-      @Override
-      public int compare(AgendaItem o1, AgendaItem o2) {
-        if (!relationName.equals(o1.edge.getRelation().getName()))
-          return 0;
-        if (!relationName.equals(o2.edge.getRelation().getName()))
-          return 0;
-        return wrapped.compare(o1, o2);
+//  /**
+//   * @deprecated This is incapable of doing what it should (this should be a
+//   * safety CHECK that there was e.g. a BY_RELATION comparator which fired
+//   * before the wrapped Comparator). Additionally, it does the WRONG thing,
+//   * namely returning 0 and blocking BY_SCORE (must fire at the end) in the case
+//   * that it sees relations equal to the restricted value. What you really want
+//   * is something like {@link CaseAnalyze}.
+//   */
+//  public static Comparator<AgendaItem> restrictToRelation(Comparator<AgendaItem> wrapped, String relationName) {
+//    return new Comparator<AgendaItem>() {
+//      @Override
+//      public int compare(AgendaItem o1, AgendaItem o2) {
+//        if (!relationName.equals(o1.edge.getRelation().getName()))
+//          return 0;
+//        if (!relationName.equals(o2.edge.getRelation().getName()))
+//          return 0;
+//        return wrapped.compare(o1, o2);
+//      }
+//    };
+//  }
+
+  /**
+   * Syntax: Case(:relationName:Comparator)+
+   *
+   * TODO Doesn't work as is, need a way to parse a string like Comparator.then,
+   * which leads me to a CFG... too much work.
+   */
+  public static class CaseAnalyze implements Comparator<AgendaItem> {
+    // prefix can always be BY_RELATION then BY_TARGET
+    // then case predicate2: return BY_SCORE
+    //      case argument4:  return BY_ROLE then BY_SCORE
+
+    private Map<String, Comparator<AgendaItem>> cases;
+
+    @SafeVarargs
+    public CaseAnalyze(Pair<String, Comparator<AgendaItem>>... cases) {
+      this.cases = new HashMap<>();
+      for (Pair<String, Comparator<AgendaItem>> c : cases) {
+        Object old = this.cases.put(c.get1(), c.get2());
+        assert old == null : "double definition of " + c.get1() + ", " + old + " and " + c.get2();
       }
-    };
+    }
+
+    public CaseAnalyze(String description) {
+      String[] terms = description.split(":");
+      if (terms.length < 3 || terms.length % 2 != 1)
+        throw new IllegalArgumentException("must match \"Case(:<relationName>:<Comparator>)+\"");
+      cases = new HashMap<>();
+      for (int i = 1; i < terms.length; i += 2) {
+        String relation = terms[i];
+        Comparator<AgendaItem> cmp = parse(terms[i+1]);
+        Object old = cases.put(relation, cmp);
+        assert old == null : "double definition of " + relation + ", " + old + " and " + cmp;
+      }
+    }
+
+    @Override
+    public int compare(AgendaItem o1, AgendaItem o2) {
+      Relation r1 = o1.edge.getRelation();
+      Relation r2 = o2.edge.getRelation();
+      if (r1 != r2)
+        throw new RuntimeException("relations don't match, can't case analyze: " + o1.edge + " and " + o2.edge);
+      Comparator<AgendaItem> cmp = cases.get(r1.getName());
+      if (cmp == null)
+        throw new RuntimeException("no case which matches " + r1.getName());
+      return cmp.compare(o1, o2);
+    }
   }
+
+
+  /**
+   * Only accepts FREQ, EASYFIRST_STATIC, EASYFIRST_DYNAMIC, RAND_STATIC, and RAND_DYNAMIC.
+   * Always does (BY_RELATION then BY_TARGET) prefix and BY_SCORE suffix.
+   * In the middle does case analysis for predicate2|argument4
+   */
+  public static Comparator<AgendaItem> naaclWorkshopHack(String name) {
+    Comparator<AgendaItem> byRole;
+    switch (name.toUpperCase()) {
+    case "FREQ":
+      byRole = BY_ROLE_FREQ;
+      break;
+    case "EASYFIRST_STATIC":
+      byRole = BY_ROLE_EASYFIRST_STATIC;
+      break;
+    case "EASYFIRST_DYNAMIC":
+      byRole = BY_ROLE_EASYFIRST_DYNAMIC;
+      break;
+    case "RAND_STATIC":
+      byRole = BY_RAND_STATIC;
+      break;
+    case "RAND_DYNAMIC":
+      byRole = BY_RAND_DYNAMIC;
+      break;
+    default:
+      throw new IllegalArgumentException("unknown value: " + name);
+    }
+    CaseAnalyze c = new CaseAnalyze(
+        new Pair<>("predicate2", BY_SCORE),
+        new Pair<>("argument4", byRole.thenComparing(BY_SCORE)));
+    return BY_RELATION.thenComparing(BY_TARGET).thenComparing(c);
+  }
+
 
   /**
    * Accepts strings like BY_RELATION, separated by commas.
@@ -86,7 +178,7 @@ public class AgendaComparators {
       Log.info("suf=" + suf);
       Supplier<Uberts> fu = null;
       AgendaPriority p = AgendaPriority.byName(suf, fu);
-      return wrapPriority(p);
+      return wrapPriority(p, suf);
     }
     return null;
   }
@@ -115,10 +207,12 @@ public class AgendaComparators {
   public static final Comparator<AgendaItem> BY_RELATION = new Comparator<AgendaItem>() {
     private int rank(String relation) {
       switch (relation) {
-      case "predicate2":
+      case "event1":
         return 0;
-      case "argument4":
+      case "predicate2":
         return 1;
+      case "argument4":
+        return 2;
       default:
         throw new RuntimeException("unknown: " + relation);
       }
@@ -187,11 +281,9 @@ public class AgendaComparators {
   };
 
 
-  public static final Comparator<AgendaItem> BY_ROLE_FREQ =
-      restrictToRelation(tryParseWrappedPriority("p2c:frequency-role"), "argument4");
+  public static final Comparator<AgendaItem> BY_ROLE_FREQ = tryParseWrappedPriority("p2c:frequency-role");
 
-  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_DYNAMIC =
-      restrictToRelation(tryParseWrappedPriority("p2c:easyfirst-dynamic"), "argument4");
+  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_DYNAMIC = tryParseWrappedPriority("p2c:easyfirst-linear");
 
   /**
    * Sorts roles by the dev-F1 of the local model.
@@ -201,8 +293,7 @@ public class AgendaComparators {
    * Produce a file for PB and FN (they won't overlap in (f,k) because of f prefixes),
    * cat them together, and provide that last file with the key "easyfirst.static.role".
    */
-  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_STATIC =
-      restrictToRelation(new ByScoreOnFile("easyfirst.static.role"), "argument4");
+  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_STATIC = new ByScoreOnFile("easyfirst.static.role");
 
   /**
    * Expects a file with the format:

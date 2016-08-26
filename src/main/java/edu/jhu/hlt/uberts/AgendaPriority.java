@@ -73,12 +73,10 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     case "left-right":
     case "l2r":
       return new LeftRight();
-    case "rand-static":
-      throw new RuntimeException("implement me");
-    case "rand-dynamic":
-      throw new RuntimeException("implement me");
     case "easyfirst-static":
       throw new RuntimeException("implement me");
+    case "easyfirst-linear":
+      return new EasyFirstLinear();
     case "easyfirst-dynamic":
     case "easyfirst":
     case "easy-first":
