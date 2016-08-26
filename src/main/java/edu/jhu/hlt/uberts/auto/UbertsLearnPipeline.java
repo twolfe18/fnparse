@@ -732,21 +732,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     LocalFactor f = LocalFactor.Constant.ZERO;
 
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    String softOracleKey = r.rhs.relName + ".softLocalOracle";
-    double softOracle = config.getDouble(softOracleKey, 0);
-    if (softOracle > 0) {
-      if (softOracle >= 1)
-        throw new IllegalArgumentException(softOracleKey + " should be in (0,1): " + softOracle);
-      double pFlip = 1d - softOracle;
-      Log.info(softOracleKey + "=" + softOracle + " pFlip=" + pFlip);
-      f = new LocalFactor.Sum(new LocalFactor.NoisyOracle(pFlip, u.getRandom()), f);
-    }
 
     if (templateFeats) {
       if (localFactorHelper == null)
         localFactorHelper = new BasicFeatureTemplates();
 
+      ExperimentProperties config = ExperimentProperties.getInstance();
       Instance2 conf = getParameterIO().getOrAddDefault(r.rhs.relName);
       boolean learnDebug = config.getBoolean("learnDebug", false);
 
@@ -754,7 +745,20 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       String name = r.tryToParseNameFromComment();
       if (name == null)
         name = r.rhs.relName;
-      OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(name, localFactorHelper, r.rhs.rel, !conf.learn, learnDebug, config);
+      OldFeaturesWrapper.Ints3 fe3 = OldFeaturesWrapper.Ints3.build(
+          name, localFactorHelper, r.rhs.rel, !conf.learn, learnDebug, config);
+
+      // Oracle feature (cheating)
+      String softOracleKey = r.rhs.relName + ".softLocalOracle";
+      double softOracle = config.getDouble(softOracleKey, 0);
+      if (softOracle > 0) {
+        if (softOracle >= 1)
+          throw new IllegalArgumentException(softOracleKey + " should be in (0,1): " + softOracle);
+        double pFlip = 1d - softOracle;
+        Log.info(softOracleKey + "=" + softOracle + " pFlip=" + pFlip);
+//        f = new LocalFactor.Sum(new LocalFactor.NoisyOracle(pFlip, u.getRandom()), f);
+        fe3.includeOracleFeature(pFlip, u.getRandom());
+      }
 
       if (name2localFactor == null)
         name2localFactor = new HashMap<>();
@@ -1837,7 +1841,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //    buildDepDecompArgs();
 
     eventCounts.increment("consume/" + mode.toString());
-    if (eventCounts.getTotalCount() % 1000 == 0) {
+    if (eventCounts.getTotalCount() % 5000 == 0) {
       System.out.println("pipeline counts: " + eventCounts.toStringWithEq());
       System.out.println("uberts counts: " + u.stats.toStringWithEq());
       System.out.println("[memLeak] " + u.getState());

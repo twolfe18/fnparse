@@ -459,7 +459,7 @@ public abstract class UbertsPipeline {
       cleanupUbertsForDoc(u, doc);
       tCleanup.stop();
 
-      if (tm.enoughTimePassed(15)) {
+      if (tm.enoughTimePassed(60)) {
         Log.info("[main] dataName=" + dataName
             + " docsProcessed=" + docs
             + " time=" + tm.secondsSinceFirstMark());

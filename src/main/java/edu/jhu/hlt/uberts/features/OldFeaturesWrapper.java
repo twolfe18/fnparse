@@ -457,9 +457,29 @@ public class OldFeaturesWrapper {
 
     public boolean learnDebug;
 
+    private Double pOracleFeatureFlip = null;
+    private Random rand = null;
+    public void includeOracleFeature(double pOracleFeatureFlip, Random rand) {
+      Log.info("pOracleFeatureFlip=" + pOracleFeatureFlip + " relation=" + rel.getName() + " name=" + name);
+      assert pOracleFeatureFlip >= 0 && pOracleFeatureFlip < 1 : "pOracleFeature=" + pOracleFeatureFlip;
+      assert pOracleFeatureFlip == 0 || rand != null;
+      this.pOracleFeatureFlip = pOracleFeatureFlip;
+      this.rand = rand;
+    }
+    public void dontIncludeOracleFeature() {
+      Log.info("");
+      this.pOracleFeatureFlip = null;
+      this.rand = null;
+    }
+
     @Override
     public String toString() {
-      return "(Int3 " + rel.getName() + " refs=" + theta2RefName + " dim=" + dimension + " intercept=" + intercept + " fixed=" + fixed + ")";
+      return "(Int3 " + rel.getName()
+          + " refs=" + theta2RefName
+          + " pOracleFeat=" + pOracleFeatureFlip
+          + " dim=" + dimension
+          + " intercept=" + intercept
+          + " fixed=" + fixed + ")";
     }
 
     public void refine(Function<HypEdge, String> f, String name) {
@@ -654,6 +674,14 @@ public class OldFeaturesWrapper {
         }
       }
 
+      // Maybe add on one oracle feature in fx
+      if (pOracleFeatureFlip != null) {
+        // re-allocate as not to include this feature in the cache
+        boolean flip = rand.nextDouble() < pOracleFeatureFlip;
+        features = Arrays.copyOf(features, features.length + 1);
+        features[features.length - 1] = Hash.hash("y=" + (flip ^ x.getLabel(y)));
+      }
+
       boolean reindex = true;
       List<String> fy = new ArrayList<>();
       Adjoints a = Adjoints.Constant.ZERO;
@@ -804,6 +832,7 @@ public class OldFeaturesWrapper {
   public Function<HypEdge, int[]> customRefinements = null;
 
   public boolean onlyUseTS = false;
+
 
   public int getNumTemplates() {
     return features.size();

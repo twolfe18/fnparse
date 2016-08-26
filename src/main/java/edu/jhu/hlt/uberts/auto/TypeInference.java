@@ -105,7 +105,7 @@ public class TypeInference {
         }
       }
       counts.update("facts-output", d.facts.size());
-      if (tm.enoughTimePassed(60)) {
+      if (tm.enoughTimePassed(120)) {
         Log.info("[TypeInference.Expander] " + counts + " in "
             + tm.secondsSinceFirstMark() + " seconds");
       }
