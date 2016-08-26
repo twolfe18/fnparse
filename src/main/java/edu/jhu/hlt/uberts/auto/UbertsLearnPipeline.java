@@ -101,10 +101,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // which may not allow you to get 100% recall.
   static boolean showDevFN = false;
 
-  // DEPRECATED: This works by implementing a LocalFactor which will vote up
-  // or down any edge it sees based on its label. The problem with this is that
-  // the transition system may force some FNs which means that you can't train
-  // on them. SEE UbertsPipeline.oracleRelations for another option which
+  // This works by implementing a LocalFactor which will vote up or down any
+  // edge it sees based on its label. The problem with this is that the
+  // transition system may force some FNs which means that you can't train on
+  // them. SEE UbertsPipeline.oracleRelations for another option which
   // immediately adds all facts to the state before calling consume.
   static String[] oracleFeats = new String[] {};
 
@@ -387,19 +387,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     int passes = config.getInt("passes", 10);
     Log.info("[main] passes=" + passes);
 
-//    Comparator<AgendaItem> comparator = AgendaComparators.BY_RELATION
-//        .thenComparing(AgendaComparators.BY_TARGET)
-//        .thenComparing(AgendaComparators.BY_FRAME)
-//        .thenComparing(AgendaComparators.BY_ROLE)
-//        .thenComparing(AgendaComparators.BY_SCORE)
-//        .thenComparing(AgendaComparators.BY_ARG);
-    Comparator<AgendaItem> comparator = AgendaComparators.getPriority(config);
+//    Comparator<AgendaItem> comparator = AgendaComparators.getPriority(config);
+    Comparator<AgendaItem> comparator = AgendaComparators.naaclWorkshopHack(config.getString("agendaComparator"));
     final Uberts u = new Uberts(new Random(9001), null, comparator);
-//    String ap = config.getString("agendaPriority");
-//    BiFunction<HypEdge, Adjoints, Double> agendaPriority =
-//        AgendaPriority.parse(ap, () -> u);
-//    Log.info("[main] agendaPriority=" + ap.replaceAll("\\s+", "_"));
-//    u.setAgendaPriority(agendaPriority);
     Log.warn("IGNORING agendaPriority!");
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 

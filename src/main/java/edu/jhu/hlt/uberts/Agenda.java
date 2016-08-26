@@ -370,6 +370,8 @@ public class Agenda {
       if (!parentInvariantSatisfied(i)) {
         int parent = (i - 1) >>> 1;
         Log.warn("parent=" + heap[parent] + " child=" + heap[i] + " i=" + i + " iparent=" + parent + " top=" + top);
+        // Allows you to trace this function call in a debugger.
+        parentInvariantSatisfied(i);
         return false;
       }
     }

@@ -10,6 +10,7 @@ public class EdgeUtils {
   public static Span target(HypEdge e) {
     String r = e.getRelation().getName();
     switch (r) {
+    case "event1":
     case "predicate2":
       return Span.inverseShortString((String) e.getTail(0).getValue());
     case "argument4":
@@ -17,7 +18,7 @@ public class EdgeUtils {
     default:
       if (r.startsWith("xue-palmer") && e.getRelation().getNumArgs() == 2)
         return Span.inverseShortString((String) e.getTail(1).getValue());
-      throw new RuntimeException("implement me");
+      throw new RuntimeException("implement me: " + e);
     }
   }
 
