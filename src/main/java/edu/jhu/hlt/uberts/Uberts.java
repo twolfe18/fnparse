@@ -496,6 +496,7 @@ public class Uberts {
       stats.increment("maxViolation/NO_UPDATE/lowRecall/argument4");
       return null;
     }
+    stats.increment("maxViolation/UPDATE");
 
     // Loss Augmented Inference
     state = s0;

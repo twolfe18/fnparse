@@ -195,6 +195,11 @@ public abstract class FeaturePrecomputation {
       this.index = index;
       this.alph = new edu.jhu.util.Alphabet<>();
     }
+
+    @Override
+    public String toString() {
+      return "(TemplateAlphabet " + name + " index=" + index + ")";
+    }
   }
 
   public static class AlphabetLine {

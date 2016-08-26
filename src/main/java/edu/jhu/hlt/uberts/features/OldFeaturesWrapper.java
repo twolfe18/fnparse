@@ -295,11 +295,11 @@ public class OldFeaturesWrapper {
       Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
       boolean cacheArg4 = !learnDebug && r.getName().equals("argument4");  // && ff.getPath().contains("by-hand");
       Ints3 i3 = new Ints3(name, bft, r, ff, dim, fixed, cacheArg4, learnDebug);
-      i3.inner.onlyUseTS = cacheArg4;
-      i3.useBaseFeatures(false);
 
       if ("argument4".equals(r.getName())) {
         Log.info("[main] refining with (f,k) and (k,)");
+        i3.inner.onlyUseTS = cacheArg4;
+        i3.useBaseFeatures(false);
         i3.refine((Function<HypEdge, String> & Serializable) e -> {
           assert e.getRelation().getName().equals("argument4");
           String frame = EdgeUtils.frame(e);
@@ -317,12 +317,15 @@ public class OldFeaturesWrapper {
           return role;
         }, "k");
       } else if ("predicate2".equals(r.getName())) {
-        // We don't need any refinements
-        i3.useBaseFeatures(false);
-        i3.refine((Function<HypEdge, String> & Serializable) e -> {
-          String frame = EdgeUtils.frame(e);
-          return frame;
-        }, "f");
+
+        // We don't need any refinements because the semafor frameid features include them (not good?)
+        
+//        i3.useBaseFeatures(false);
+//        i3.refine((Function<HypEdge, String> & Serializable) e -> {
+//          String frame = EdgeUtils.frame(e);
+//          return frame;
+//        }, "f");
+
       } else {
         throw new RuntimeException("how to handle: " + r);
       }
@@ -396,8 +399,8 @@ public class OldFeaturesWrapper {
           System.out.printf("%s theta[%s][noRef][%s]=%+.4f\n", prefix, name, feat, w);
         }
       }
-      System.out.printf("%s %s %s nnz=%d\n", prefix, name, "noRef", nnz);
-      for (int j = 0; j < theta2.size(); j++) {
+      System.out.printf("%s %s %s nnz=%d fixed=%s useAvg=%s\n", prefix, name, "noRef", nnz, fixed, useAvg);
+      for (int j = 0; theta2 != null && j < theta2.size(); j++) {
         String ref = theta2RefName.get(j);
         nnz = 0;
         for (int i = 0; i < dimension; i++) {
@@ -414,7 +417,7 @@ public class OldFeaturesWrapper {
             System.out.printf("%s theta[%s][%s][%s]=%+.4f\n", prefix, name, ref, feat, w);
           }
         }
-        System.out.printf("%s %s %s nnz=%d\n", prefix, name, ref, nnz);
+        System.out.printf("%s %s %s nnz=%d fixed=%s useAvg=%s\n", prefix, name, ref, nnz, fixed, useAvg);
       }
     }
 
@@ -456,7 +459,7 @@ public class OldFeaturesWrapper {
 
     @Override
     public String toString() {
-      return "(Int3 " + rel.getName() + " dim=" + dimension + " intercept=" + intercept + " fixed=" + fixed + ")";
+      return "(Int3 " + rel.getName() + " refs=" + theta2RefName + " dim=" + dimension + " intercept=" + intercept + " fixed=" + fixed + ")";
     }
 
     public void refine(Function<HypEdge, String> f, String name) {
@@ -558,6 +561,10 @@ public class OldFeaturesWrapper {
       assert y.getRelation() == rel;
       cnt.increment("score/" + y.getRelation().getName());
 
+//      if (rel.getName().equals("predicate2")) {
+//        Log.info("check me out");
+//      }
+
       if (AUTO_LEARN_DEBUG && scoreCalls == 5000) {
         learnDebug = false;
         UbertsLearnPipeline.turnOffDebug();
@@ -585,9 +592,11 @@ public class OldFeaturesWrapper {
       List<String> fx;
       if (features != null) {
         fx = null;
-        cacheCounts.increment("arg4CacheHit");
+        if (arg4)
+          cacheCounts.increment("arg4CacheHit");
       } else {
-        cacheCounts.increment("arg4CacheMiss");
+        if (arg4)
+          cacheCounts.increment("arg4CacheMiss");
         if (key != null && cacheCounts.getTotalCount() % 10000 == 0)
           Log.info(cacheCounts);
 
@@ -707,6 +716,10 @@ public class OldFeaturesWrapper {
       // Create a wrapper which knows how to show features
       if (learnDebug)
         a = new DebugFeatureAdj(a, fy, fx, y);
+
+      if (learnDebug && "predicate2".equals(rel.getName())) {
+        Log.info("edge=" + y + " score=" + a.forwards());
+      }
 
       return a;
     }

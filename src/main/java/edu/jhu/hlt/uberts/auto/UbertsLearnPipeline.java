@@ -289,18 +289,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // NOTE: Do not use for LOLS/LaSO, not necessary.
   private boolean includeClassificationObjectiveTerm = false;
 
-  // Normally, the update phi(y_{gold},x) - phi(y_{pred},x) uses the oracle
-  // history in computing phi(y_{gold},x). I have reason to believe that is a
-  // bad idea, and that the model must learn to use global features GIVEN that
-  // it will make mistakes (i.e. compute phi(y_{gold},x) using predHistory, not
-  // goldHistory). If this is set to true, then the oracle will only be used to
-  // determine what action to take in a state reached purely by the pred model.
-  // NOTE: This implementation is trickier than it needs to be, see
-  // the description given in Algorithm 1 of http://nlp.stanford.edu/pubs/clark2016improving.pdf
-  // TODO: Check that this implementation is exactly what it should be.
-  // TODO: Check original LaSO paper to see if this is what they where calling for, and if so s/laso2/laso/
-  // NOTE: This is now done through trainMethod
-//  private boolean laso2 = true;
+  private boolean showParamStatsAfterEveryConsume = false;
 
   // How to backprop error signal to the score of all the facts within a bucket.
   private CostMode costMode = CostMode.HINGE;
@@ -413,6 +402,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 //    u.setAgendaPriority(agendaPriority);
     Log.warn("IGNORING agendaPriority!");
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
+
+    pipe.showParamStatsAfterEveryConsume = config.getBoolean("showParamStatsAfterEveryConsume", false);
 
     pipe.costMode = CostMode.valueOf(config.getString("costMode", pipe.costMode.name()));
     Log.info("[main] costMode=" + pipe.costMode);
@@ -1970,6 +1961,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     u.getState().clearNonSchema();
     u.getThresh().clear();
 
+    // Show some stats
+    if (showParamStatsAfterEveryConsume) {
+      for (Entry<String, Ints3> lf : name2localFactor.entrySet()) {
+        if (lf.getKey().contains("predicate2")) {
+          lf.getValue().dbgShowWeights(lf.getKey());
+          System.out.println();
+        }
+      }
+    }
 
     if (EXACTLY_ONE_CONSUME) {
       Log.info("exiting eary because of exactlyOneConsume=true");
@@ -2059,7 +2059,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       for (ClassEx c : updates)
         c.predScore.backwards(+1);
 
-      completedObservation();
+      if (updates.size() > 0)
+        completedObservation();
 
       break;
     case LATEST_UPDATE:

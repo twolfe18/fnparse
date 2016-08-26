@@ -30,11 +30,26 @@ public class AgendaComparators {
       public int compare(AgendaItem o1, AgendaItem o2) {
         double p1 = p.priority(o1.edge, o1.score);
         double p2 = p.priority(o2.edge, o2.score);
+        assert !Double.isNaN(p1) && !Double.isInfinite(p1);
+        assert !Double.isNaN(p2) && !Double.isInfinite(p2);
         if (p1 > p2)
           return -1;
         if (p1 < p2)
           return +1;
         return 0;
+      }
+    };
+  }
+
+  public static Comparator<AgendaItem> restrictToRelation(Comparator<AgendaItem> wrapped, String relationName) {
+    return new Comparator<AgendaItem>() {
+      @Override
+      public int compare(AgendaItem o1, AgendaItem o2) {
+        if (!relationName.equals(o1.edge.getRelation().getName()))
+          return 0;
+        if (!relationName.equals(o2.edge.getRelation().getName()))
+          return 0;
+        return wrapped.compare(o1, o2);
       }
     };
   }
@@ -172,9 +187,11 @@ public class AgendaComparators {
   };
 
 
-  public static final Comparator<AgendaItem> BY_ROLE_FREQ = tryParseWrappedPriority("p2c:frequency-role");
+  public static final Comparator<AgendaItem> BY_ROLE_FREQ =
+      restrictToRelation(tryParseWrappedPriority("p2c:frequency-role"), "argument4");
 
-  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_DYNAMIC = tryParseWrappedPriority("p2c:easyfirst-dynamic");
+  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_DYNAMIC =
+      restrictToRelation(tryParseWrappedPriority("p2c:easyfirst-dynamic"), "argument4");
 
   /**
    * Sorts roles by the dev-F1 of the local model.
@@ -184,7 +201,8 @@ public class AgendaComparators {
    * Produce a file for PB and FN (they won't overlap in (f,k) because of f prefixes),
    * cat them together, and provide that last file with the key "easyfirst.static.role".
    */
-  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_STATIC = new ByScoreOnFile("easyfirst.static.role");
+  public static final Comparator<AgendaItem> BY_ROLE_EASYFIRST_STATIC =
+      restrictToRelation(new ByScoreOnFile("easyfirst.static.role"), "argument4");
 
   /**
    * Expects a file with the format:
