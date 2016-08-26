@@ -476,7 +476,7 @@ public class OldFeaturesWrapper {
     public String toString() {
       return "(Int3 " + rel.getName()
           + " refs=" + theta2RefName
-          + " pOracleFeat=" + pOracleFeatureFlip
+          + " pOracleFeatFlip=" + pOracleFeatureFlip
           + " dim=" + dimension
           + " intercept=" + intercept
           + " fixed=" + fixed + ")";
@@ -678,8 +678,15 @@ public class OldFeaturesWrapper {
       if (pOracleFeatureFlip != null) {
         // re-allocate as not to include this feature in the cache
         boolean flip = rand.nextDouble() < pOracleFeatureFlip;
-        features = Arrays.copyOf(features, features.length + 1);
-        features[features.length - 1] = Hash.hash("y=" + (flip ^ x.getLabel(y)));
+        int n = 20;
+        features = Arrays.copyOf(features, features.length + n);
+        boolean show = flip ^ x.getLabel(y);
+        // Also show whether this is a nil span, tin foil measure.
+        boolean nil = UbertsLearnPipeline.isNilFact(y);
+        // In the rare event of a hash collision, have two
+        for (int i = 1; i <= n; i++) {
+          features[features.length - i] = Hash.hash("y=" + show + ",nil=" + nil + ",seed=" + i);
+        }
       }
 
       boolean reindex = true;

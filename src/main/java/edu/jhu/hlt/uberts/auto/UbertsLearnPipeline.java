@@ -752,7 +752,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       String softOracleKey = r.rhs.relName + ".softLocalOracle";
       double softOracle = config.getDouble(softOracleKey, 0);
       if (softOracle > 0) {
-        if (softOracle >= 1)
+        if (softOracle > 1)
           throw new IllegalArgumentException(softOracleKey + " should be in (0,1): " + softOracle);
         double pFlip = 1d - softOracle;
         Log.info(softOracleKey + "=" + softOracle + " pFlip=" + pFlip);
