@@ -136,6 +136,8 @@ public class Agenda {
    *
    * TODO The correct way to implement this is to add a "search bias" term in
    * either AgendaItem, or as an argument to priority.
+   * You might be able to do this as a local feature too... but I know in earlier
+   * implementations the search bias worked out nicely.
    */
 //  public void setRescoreMode(RescoreMode m, Labels y) {
 //    if (m != RescoreMode.NONE && y == null)
