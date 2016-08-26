@@ -131,10 +131,10 @@ public class AgendaComparators {
       byRole = BY_ROLE_EASYFIRST_DYNAMIC;
       break;
     case "RAND_STATIC":
-      byRole = BY_RAND_STATIC;
+      byRole = BY_ROLE_RAND_STATIC;
       break;
     case "RAND_DYNAMIC":
-      byRole = BY_RAND_DYNAMIC;
+      byRole = BY_ROLE_RAND_DYNAMIC;
       break;
     default:
       throw new IllegalArgumentException("unknown value: " + name);
@@ -367,20 +367,20 @@ public class AgendaComparators {
     }
   }
 
-  public static final Comparator<AgendaItem> BY_RAND_STATIC = new Rand();
+  public static final Comparator<AgendaItem> BY_ROLE_RAND_STATIC = new RandRole();
 
   // Re-set the seed of this every time inference is run.
-  public static final Rand BY_RAND_DYNAMIC = new Rand();
+  public static final RandRole BY_ROLE_RAND_DYNAMIC = new RandRole();
 
-  public static class Rand implements Comparator<AgendaItem> {
+  public static class RandRole implements Comparator<AgendaItem> {
     private int seed = 9001;
     public void setSeed(int i) {
       seed = i;
     }
     @Override
     public int compare(AgendaItem o1, AgendaItem o2) {
-      long i1 = o1.getHashableEdge().hashCode64();
-      long i2 = o2.getHashableEdge().hashCode64();
+      long i1 = Hash.hash(EdgeUtils.role(o1.edge));
+      long i2 = Hash.hash(EdgeUtils.role(o2.edge));
       i1 = Hash.mix64(seed, i1);
       i2 = Hash.mix64(seed, i2);
       if (i1 < i2)
