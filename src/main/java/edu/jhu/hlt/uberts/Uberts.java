@@ -695,10 +695,23 @@ public class Uberts {
     agenda.oneTimeRescore(RescoreMode.LOSS_AUGMENTED, goldEdges);
     while (agenda.size() > 0) {
       AgendaItem ai = agenda.popBoth2();
+      @SuppressWarnings("unused")
       Pair<Boolean, Adjoints> p = thresh.decide2(ai);
-      boolean yhat = p.get1();
-      if (yhat)
+
+      // This is the same issue as useGoldPredicate2InMV in VFP. If we
+      // mis-predict a predicate2, there will be no correct argument4 facts We
+      // still want LA inference to pick out the wrong answer within any given
+      // bucket, but we can't allow that mistake to change the argument4
+      // buckets.
+      // NOTE: Since the classification update doesn't use global features,
+      // there is no inconsistency problem with using gold information (eg via
+      // global features) during training.
+      boolean y = getLabel(ai);
+      if (y)
         addEdgeToState(ai);
+//      boolean yhat = p.get1();
+//      if (yhat)
+//        addEdgeToState(ai);
     }
 
     // These are the facts that LA inference chose for each decoder group
@@ -715,7 +728,14 @@ public class Uberts {
     for (String rel : rel2firstGoldByGroup.keySet()) {
       Map<List<Object>, Pair<HypEdge, Adjoints>> firstGoldByGroup = rel2firstGoldByGroup.get(rel);
       Map<List<Object>, Pair<HypEdge, Adjoints>> firstPredByGroup = rel2firstPredByGroup.get(rel);
-      assert firstGoldByGroup.size() == firstPredByGroup.size();
+
+      // There may be cases where the transition grammar cannot generate eg the
+      // correct predicate2 fact. When this happens, the set of gold predicate2
+      // buckets will be different from the predicted set. Here we just skip the
+      // buckets where there is no gold prediction.
+//      assert firstGoldByGroup.size() == firstPredByGroup.size()
+//          : "firstGold=" + firstGoldByGroup.size() + " firstPred=" + firstPredByGroup.size();
+
       for (List<Object> key : firstGoldByGroup.keySet()) {
         Pair<HypEdge, Adjoints> a = firstGoldByGroup.get(key);
         Pair<HypEdge, Adjoints> b = firstPredByGroup.get(key);
