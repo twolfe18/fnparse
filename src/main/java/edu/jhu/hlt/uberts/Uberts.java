@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
@@ -780,6 +781,12 @@ public class Uberts {
       Pair<HypEdge, Adjoints> g = t.getFirstGoldInBucket(key);
 
       if (g == null) {
+        // This can also happen if frameTriage is missing some LU needed to recall the correct frame.
+        if (g == null) {
+          stats.increment("laso2/NO_UPDATE/lowRecall/" + s.edge.getRelation().getName());
+          return Collections.emptyList();
+        }
+
         // This can happen if you get the frame wrong, then all subsequent arg4 facts are wrong.
         // By the book, LOLS says that these should all receive negative update...
         // WAIT. What about nullSpans?
