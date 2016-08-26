@@ -202,6 +202,15 @@ public class HypEdge {
    * Uses == to check {@link Relation} and {@link HypNode} equality.
    */
   public static class HashableHypEdge {
+
+    public static boolean equals(HypEdge a, HypEdge b) {
+      if (a == null || b == null)
+        return a == b;
+      HashableHypEdge aa = new HashableHypEdge(a);
+      HashableHypEdge bb = new HashableHypEdge(b);
+      return aa.equals(bb);
+    }
+
     private HypEdge edge;
     public final long hc;
 

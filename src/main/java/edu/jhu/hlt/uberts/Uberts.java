@@ -78,6 +78,11 @@ public class Uberts {
   private State state;
   private Agenda agenda;
 
+  // When true, every time addEdgeToAgenda is called, a loss term
+  // is added to the item's score.
+  private boolean lossAugmentation = false;
+  // TODO Have a flag for oracle which just does a no-op when addEdgeToAgenda and gold=false?
+
   // Index of Triggers which cause TransGens and GlobalFactors to fire.
   private Trie3 trie3;
 
@@ -458,12 +463,12 @@ public class Uberts {
     }
 
     // Oracle
+    assert !lossAugmentation;
     Labels.Perf oPerf = goldEdges.new Perf();
     Traj t1 = null;
     {
       if (Agenda.DEBUG || DEBUG > 1)
         Log.info("starting ORACLE inference, agenda=" + agenda + " thresh=" + thresh);
-//      agenda.setRescoreMode(RescoreMode.ORACLE, goldEdges);
       while (agenda.size() > 0) {
         AgendaItem ai = agenda.popBoth2();
         boolean y = getLabel(ai);
@@ -510,8 +515,8 @@ public class Uberts {
       // NOTE: Since the event1 facts are already on the agenda,
       // RescoreMode.LOSS_AUGMENTED doesn't apply to those edges.
       // This is not a problem since we are not learning event1 parameters.
-//      agenda.setRescoreMode(RescoreMode.LOSS_AUGMENTED, goldEdges);
       agenda.oneTimeRescore(RescoreMode.LOSS_AUGMENTED, goldEdges);
+      lossAugmentation = true;  // add loss to score when adding to agenda
 
       statsAgendaSizePerStep.clear();
       while (agenda.size() > 0) {
@@ -537,8 +542,8 @@ public class Uberts {
         if (addToState)
           addEdgeToState(ai);
       }
+      lossAugmentation = false;
     }
-//    agenda.setRescoreMode(RescoreMode.NONE, null);
 
     // Compute the violation
     assert (t1 == null) == (t2 == null);
@@ -618,15 +623,27 @@ public class Uberts {
       Traj sP = t2r.removeFirst();
       assert sG.getStep().gold;
       assert sP.getStep().pred;
+
       assert EdgeUtils.target(sG.getStep().edge) == EdgeUtils.target(sP.getStep().edge);
-      if ("argument4".equals(sG.getStep().edge.getRelation().getName()))
+      if ("argument4".equals(sG.getStep().edge.getRelation().getName())) {
         assert EdgeUtils.frame(sG.getStep().edge).equals(EdgeUtils.frame(sP.getStep().edge));
-//      assert EdgeUtils.role(sG.getStep().edge).equals(EdgeUtils.role(sP.getStep().edge));
+        // This will not be true with dynamic orders
+//        assert EdgeUtils.role(sG.getStep().edge).equals(EdgeUtils.role(sP.getStep().edge));
+      }
       assert getLabel(sG.getStep().edge);
 //      assert sP.getStep().score.forwards() == sP.getStep().scoreV;
-      sCumOracle += sG.getStep().score.forwards();
-      sCumPred += sP.getStep().score.forwards();
+
+      // NOTE: Loss should be baked into sP scores already!
+      double sg, sp;
+      sCumOracle += (sg = sG.getStep().score.forwards());
+      sCumPred += (sp = sP.getStep().score.forwards());
       double violation = sCumPred - sCumOracle;
+
+      if (Uberts.LEARN_DEBUG) {
+        System.out.printf("[VFP compute violation] gold=%s\thyp=%s\tgoldScore=%+.2f\thypScore=%+.2f\tvio=%+.2f\tsumVio=%+.2f\n",
+            sG.getStep().edge, sP.getStep().edge, sg, sp, sp-sg, violation);
+      }
+
       if (latestUpdate) {
         // LATEST_UPDATE
         if (violation > 0) {
@@ -643,10 +660,18 @@ public class Uberts {
     Pair<Traj, Traj> best = m.get();
     double violation = m.getBestScore();
     if (Uberts.LEARN_DEBUG) {
+      Counts<String> gr = new Counts<>();
+      for (Traj t = best.get1(); t != null; t = t.prev)
+        gr.increment(t.getStep().edge.getRelation().getName());
+      Counts<String> pr = new Counts<>();
+      for (Traj t = best.get2(); t != null; t = t.prev)
+        pr.increment(t.getStep().edge.getRelation().getName());
       System.out.println("maxViolation=" + violation
           + " mvIdx=" + bestIndex
           + " trajLength=" + index
-          + " discreteLogViolation=" + UbertsLearnPipeline.discreteLogViolation(m.getBestScore()));
+          + " discreteLogViolation=" + UbertsLearnPipeline.discreteLogViolation(m.getBestScore())
+          + " goldUpdateByRelation=" + gr
+          + " predUpdateByRelation=" + pr);
     }
 
     if (violation <= 0)
@@ -1411,11 +1436,12 @@ public class Uberts {
   }
   public void addEdgeToAgenda(HypEdge e, Adjoints score) {
     HashableHypEdge hhe = new HashableHypEdge(e);
+    boolean y = getLabel(hhe);
     if (DEBUG > 2) {
       if (DEBUG > 3)
-        System.out.println("Uberts addEdgeToAgenda: " + e.toString() + "\t" + score.forwards() + "\t" + score);
+        System.out.println("[Uberts addEdgeToAgenda] y=" + y + "\t" + e.toString() + "\t" + score.forwards() + "\t" + score);
       else
-        System.out.println("Uberts addEdgeToAgenda: " + e.toString());
+        System.out.println("[Uberts addEdgeToAgenda] y=" + y + "\t" + e.toString());
     }
     if (stats != null) {
       stats.increment("agenda");
@@ -1429,6 +1455,8 @@ public class Uberts {
       stats.increment("agenda/dup/state");
       stats.increment("agenda/dup/state/" + e.getRelation().getName());
     } else {
+      if (lossAugmentation && !y)
+        score = Adjoints.sum(score, Adjoints.Constant.ONE);
       agenda.add(hhe, score);
     }
   }
