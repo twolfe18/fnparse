@@ -289,6 +289,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // NOTE: Do not use for LOLS/LaSO, not necessary.
   private boolean includeClassificationObjectiveTerm = false;
 
+  // LOLS calls for model roll in, which would dictate that if the model
+  // predicts the wrong frame, training for the resultant arg4 facts should
+  // be supervised towards choosing nullSpan. If this flag is true, the model
+  // is not allowed to make pred2 mistakes, and all arg4 training data will be
+  // conditioned on gold pred2 facts.
+  // TRUE works better, but FALSE is more true to LOLS.
+  private boolean laso2CorrectPred2Mistakes = true;
+
   private boolean showParamStatsAfterEveryConsume = false;
 
   // How to backprop error signal to the score of all the facts within a bucket.
@@ -396,6 +404,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     UbertsLearnPipeline pipe = new UbertsLearnPipeline(u, grammarFile, schemaFiles, relationDefs);
 
     pipe.showParamStatsAfterEveryConsume = config.getBoolean("showParamStatsAfterEveryConsume", false);
+
+    pipe.laso2CorrectPred2Mistakes = config.getBoolean("laso2CorrectPred2Mistakes", pipe.laso2CorrectPred2Mistakes);
+    Log.info("[main] laso2CorrectPred2Mistakes=" + pipe.laso2CorrectPred2Mistakes);
 
     pipe.costMode = CostMode.valueOf(config.getString("costMode", pipe.costMode.name()));
     Log.info("[main] costMode=" + pipe.costMode);
@@ -2019,7 +2030,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     case LASO2:
       boolean classificationLoss = costMode == CostMode.HAMMING;
       assert classificationLoss || costMode == CostMode.HINGE;
-      List<ClassEx> updates = u.getLaso2Update(classificationLoss);
+      List<ClassEx> updates = u.getLaso2Update(classificationLoss, laso2CorrectPred2Mistakes);
       assert batchSize == 1;
 
       assert !includeClassificationObjectiveTerm : "LaSO/LOLS does should not have a classification term added";

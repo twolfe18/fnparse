@@ -173,7 +173,7 @@ public class Labels {
       l += String.format("tp(%s)=%d\tfp(%s)=%d\tfn(%s)=%d",
           rel, (int) p.getTP(), rel, (int) p.getFP(), rel, (int) p.getFN());
       l += "\t";
-      l += String.format("R(%s)=%.1f\tP(%s)=%.1f\tF(%s)=%.1f",
+      l += String.format("R(%s)=%.3f\tP(%s)=%.3f\tF(%s)=%.3f",
           rel, p.recall()*100d, rel, p.precision()*100d, rel, p.f1()*100d);
       lines.add(l);
     }

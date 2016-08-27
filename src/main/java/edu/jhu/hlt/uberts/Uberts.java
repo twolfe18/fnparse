@@ -795,12 +795,14 @@ public class Uberts {
    * global features fire on oracle trajectories may not be informative as to
    * what action should be taken from states that the model will put inself in.
    */
-  public List<ClassEx> getLaso2Update(boolean classificationLoss) {
+  public List<ClassEx> getLaso2Update(boolean classificationLoss, boolean correctPred2Mistakes) {
 
     // LOSS AUGMENTED INFERENCE
     List<Step> traj = new ArrayList<>();
     assert agenda.getRescoreMode() == RescoreMode.NONE;
+    assert !lossAugmentation;
     agenda.oneTimeRescore(RescoreMode.LOSS_AUGMENTED, goldEdges);
+    lossAugmentation = true;
     while (agenda.size() > 0) {
       AgendaItem ai = agenda.popBoth2();
       Pair<Boolean, Adjoints> p = thresh.decide2(ai);
@@ -808,12 +810,18 @@ public class Uberts {
       boolean yhat = p.get1();
       boolean y = getLabel(ai);
 
-      if (yhat) {
+      if (yhat)
         traj.add(new Step(ai, y, yhat));
-        addEdgeToState(ai);
-      }
-    }
 
+      boolean addToState = (correctPred2Mistakes && "predicate2".equals(ai.edge.getRelation().getName()))
+          ? y : yhat;
+      if (addToState)
+        addEdgeToState(ai);
+    }
+    lossAugmentation = false;
+
+
+    // Go collect the gold fact in every bucket that LA visited.
     List<ClassEx> updates = new ArrayList<>();
     for (Step s : traj) {
       assert s.pred;
