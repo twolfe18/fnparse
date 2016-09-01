@@ -20,13 +20,12 @@ typedef Id Feature
 
 struct Node {
   1: Id id,
+  2: list<Feature> features,
 
   // I think mentions are better encoded as either features
   // or as other edges. A Node can represent a mention, where the
   // id is something like {type=MENTION, name="ecb+/t3/d11/m5"}
-  //2: list<Id> mentions,
-
-  3: list<Feature> features,
+  //3: list<Id> mentions,
 }
 
 /* If you want to refer to an Edge in another edge, then you should create an
@@ -39,6 +38,7 @@ struct Edge {
   3: double score,
 }
 
+/* A pocket KB */
 struct PKB {
   1: list<Node> nodes,  // Entities and Situations
   2: list<Edge> edges,  // coreference, srl, etc.
@@ -62,7 +62,7 @@ struct Response {
   2: double score,
   3: PKB delta,   // Contains matching between one extra document and the Query PKB.
   // Edges with type="matching", args = [query enttity, other entities in in this document matching]
-  // Every Edge must refer only to Nodes already in the Query's PKB or the kb_delta
+  // Every Edge must refer only to Nodes already in the Query's PKB or the delta
   4: Id center,   // Node id of the most relevant node (corresponding to the query's subject) in the delta
 }
 
