@@ -3,9 +3,11 @@ package edu.jhu.hlt.ikbp;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import edu.jhu.hlt.ikbp.Constants.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
@@ -23,15 +25,6 @@ import edu.jhu.hlt.tutils.Log;
  */
 public class EcbPlusSearch implements Search {
   
-  /* A query highlights a node.
-   * A node has at least one mention.
-   * Return one Response for every document in that topic that
-   * 1) isn't already in the query's KB
-   * 2) has a keyword match with the query's subject
-   * 
-   * For now I'll just have a delta:PKB which only contains one edge.
-   */
-  
   static class Topic {
 
     class Mention {
@@ -44,35 +37,35 @@ public class EcbPlusSearch implements Search {
       }
       
       public String getSourceDocId() {
-        throw new RuntimeException("implement me");
+        return source.getId();
       }
     }
 
     class Document {
       File source;
+      String id;
       String[] tokens;
       List<Node> nodes;
       Map<String, int[]> m_id2t_id;
 
       public Document(File xml) {
         source = xml;
+        id = xml.getName().replace(".xml", "");
         EcbPlusXmlWrapper x = new EcbPlusXmlWrapper(source);
-        List<String> ts = x.getTokens();
-        tokens = new String[ts.size()];
-        for (int i = 0; i < tokens.length; i++)
-          tokens[i] = ts.get(i);
+        tokens = x.getTokensArray();
         
         nodes = new ArrayList<>();
+        m_id2t_id = new HashMap<>();
         for (EcbPlusXmlWrapper.Node n : x.getNodes()) {
-          Node node = EcbPlusAnnotator.createNode(n);
+          Node node = EcbPlusUtil.createNode(n, tokens);
           nodes.add(node);
-          
-          int[] t_id = new int[n.t_id.size()];
-          for (int i = 0; i < t_id.length; i++)
-            t_id[i] = Integer.parseInt(n.t_id.get(i));
-          Object old = m_id2t_id.put(n.m_id, t_id);
+          Object old = m_id2t_id.put(n.m_id, n.t_id);
           assert old == null;
         }
+      }
+      
+      public String getId() {
+        return id;
       }
 
       public List<String> getMentionWords(String m_id) {
@@ -113,11 +106,13 @@ public class EcbPlusSearch implements Search {
     public Topic(File root) {
       this.root = root;
       this.id = root.getName();
-      
+      this.documents = new HashMap<>();
       for (File f : root.listFiles()) {
         if (!f.getName().endsWith(".xml"))
           continue;
-        Log.info("id=" + id + " f=" + f.getPath());
+//        Log.info("id=" + id + " f=" + f.getPath());
+        Document d = new Document(f);
+        documents.put(d.getId(), d);
       }
     }
     
@@ -126,11 +121,15 @@ public class EcbPlusSearch implements Search {
     }
     
     public List<Mention> keywordSearch(String keyword) {
-      throw new RuntimeException("implement me");
+      List<Mention> m = new ArrayList<>();
+      for (Document d : documents.values())
+        m.addAll(d.keywordSearch(keyword));
+      return m;
     }
     
     public List<String> getMentionWords(String m_id) {
-      String doc = getDocument(m_id);
+      String doc = EcbPlusUtil.getDocumentId(m_id);
+//      Log.info("doc=" + doc);
       Document d = documents.get(doc);
       return d.getMentionWords(m_id);
     }
@@ -159,19 +158,19 @@ public class EcbPlusSearch implements Search {
 
   @Override
   public Iterable<Response> search(Query q) {
-    Log.info("q.subject=" + q.getSubject());
+//    Log.info("q.subject=" + q.getSubject());
 
     // Pull the topic out of the query
-    String tId = getTopic(q.getSubject().getId());
+    String tId = EcbPlusUtil.getTopic(q.getSubject().getId().getName());
     Topic t = topics.get(tId);
     if (t == null)
       throw new RuntimeException("couldn't find topic " + tId);
     
     // Find the headword of the subject mention
     String m_id = findCanonicalMentionId(q.getSubject());
-    Log.info("m_id=" + m_id);
     List<String> keywords = getMentionWords(m_id);
-    Log.info("keywords=" + keywords);
+    
+    Set<String> queryKbDocs = new HashSet<>(q.getContext().getDocumentIds());
 
     // Find all keyword mention in the same topic as the query subject
     List<Response> results = new ArrayList<>();
@@ -180,7 +179,10 @@ public class EcbPlusSearch implements Search {
       String docId = m.getSourceDocId();
       
       // Filter out mentions which are already in the KB
-      // TODO
+      if (queryKbDocs.contains(docId)) {
+//        System.out.println("skipping since its already in the query: " + docId);
+        continue;
+      }
       
       Response r = new Response();
       r.setId(q.getId());
@@ -208,37 +210,55 @@ public class EcbPlusSearch implements Search {
   }
   
   public List<String> getMentionWords(String m_id) {
-    String t = getTopic(m_id);
+    String t = EcbPlusUtil.getTopic(m_id);
     Topic topic = topics.get(t);
     return topic.getMentionWords(m_id);
   }
   
-  public static String getTopic(Id nodeId) {
-    return getTopic(nodeId.getName());
-  }
-  /** Accepts strings like "12_3ecb/26" and return "12" */
-  public static String getTopic(String id) {
-    String[] toks = id.split("_");
-    assert toks.length == 2;
-    return toks[0];
-  }
-
-  /** Accepts strings like "12_3ecb/26" and return "12_3ecb" */
-  public static String getDocument(String id) {
-    String[] toks = id.split("/");
-    assert toks.length == 2;
-    return toks[0];
+  public String show(Node n) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Node id=" + n.getId().getName());
+    for (String m_id : EcbPlusUtil.getMentionIds(n))
+      sb.append(" " + getMentionWords(m_id));
+    return sb.toString();
   }
 
   public static void main(String[] args) {
     File root = new File("data/parma/ecbplus/ECB+_LREC2014/ECB+");
     Random rand = new Random(9001);
     EcbPlusAnnotator anno = new EcbPlusAnnotator(root, rand);
-    Query q = anno.nextQuery();
-    
     EcbPlusSearch search = new EcbPlusSearch(root);
-    for (Response r : search.search(q))
-      System.out.println(r);
+    for (Query q = anno.nextQuery(); q != null; q = anno.nextQuery()) {
+
+      for (int i = 0; i < 100; i++) System.out.print('#');
+      System.out.println("\nquery: " + q.getId() + "\t" + EcbPlusUtil.getType(q.getSubject()));
+      System.out.println("\tpkb.docs: " + q.getContext().getDocumentIds());
+      
+      // Show mentions of the query
+      List<String> queryMentions = EcbPlusUtil.getMentionIds(q.getSubject());
+      for (String m_id : queryMentions) {
+        List<String> words = search.getMentionWords(m_id);
+        System.out.println("\tmention " + m_id + "\t" + words);
+      }
+      System.out.println();
+
+      // Show each response and their mentions
+      int i = 0;
+      for (Response r : search.search(q)) {
+        Node n = EcbPlusUtil.lookup(r.getCenter(), r.getDelta().getNodes());
+        System.out.printf("result[%d]: %s\n", i, n.getId());
+        List<String> mentions = EcbPlusUtil.getMentionIds(n);
+        for (String m_id : mentions) {
+          List<String> words = search.getMentionWords(m_id);
+          System.out.println("\tmention " + m_id + "\t" + words);
+        }
+        i++;
+      }
+      
+      System.out.println();
+      System.out.println();
+    }
+
   }
 
 }

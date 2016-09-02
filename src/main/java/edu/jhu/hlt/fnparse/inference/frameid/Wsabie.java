@@ -623,7 +623,7 @@ public class Wsabie implements Serializable {
 //      data.addAll(w.readFile(new File("/tmp/frame-id-features/features.txt.gz")));
       File f = new File("data/frameid/feb15a/coherent-shards/features/shard" + i + ".txt.gz");
       if (!f.isFile()) {
-        Log.info("skpping: " + f.getPath());
+        Log.info("skipping: " + f.getPath());
         continue;
       }
       data.addAll(w.readFile(f, confusionSet));

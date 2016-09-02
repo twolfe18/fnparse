@@ -17,5 +17,6 @@ public class Constants {
   public enum FeatureType {
     REGULAR,  // just interpret as a regular string-indexed feature
     MENTION,  // names of the form "<doc>/<m_id>" e.g. "12_6ecb/11"
+    NODE_TYPE,     // values are things like Entity vs Situation or EcbPlusMentionType values
   }
 }

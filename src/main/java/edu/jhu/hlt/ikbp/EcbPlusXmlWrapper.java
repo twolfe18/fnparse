@@ -11,6 +11,13 @@ import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.NodeList;
 
+/**
+ * NOTE: This class makes a few conversions when it reads in the XML fields, namely
+ * 1) token ids (t_id) are converted from 1-indexed to 0-indexed
+ * 2) mention ids (m_id) are prefixed with the document name (e.g. 33_6ecbplus)
+ *
+ * @author travis
+ */
 public class EcbPlusXmlWrapper {
   public static final boolean VERBOSE = false;
   
@@ -46,11 +53,20 @@ public class EcbPlusXmlWrapper {
     }
     return toks;
   }
+  
+  public String[] getTokensArray() {
+    List<String> ts = getTokens();
+    String[] tokens = new String[ts.size()];
+    for (int i = 0; i < tokens.length; i++)
+      tokens[i] = ts.get(i);
+    return tokens;
+  }
 
   /** Union of grounded mentions and abstract entities/situations which are used for xdoc annotations */
   static class Node {
     String m_id;
-    List<String> t_id;  // may be empty
+    List<String> t_id_orig;   // may be empty, 1-indexed
+    int[] t_id;               // may be empty, 0-indexed
     String type;        // tag type, e.g. HUMAN_PART_PER or TIME_DURATION
     String descriptor;  // only filled out for un-grounded nodes, e.g. t3b_judge_gave_life_sentence
     String instance_id; // only filled out for un-grounded nodes, e.g. ACT16364140299507831
@@ -60,12 +76,21 @@ public class EcbPlusXmlWrapper {
     }
     
     public boolean isGrounded() {
-      return !t_id.isEmpty();
+      return !t_id_orig.isEmpty();
     }
     
     @Override
     public String toString() {
       return "(Node m_id=" + m_id + " type=" + type + " t_id=" + t_id + " descriptor=" + descriptor + " instance_id=" + instance_id + ")";
+    }
+    
+    public String showMention(String[] tokens) {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < t_id.length; i++) {
+        if (i > 0) sb.append(" ");
+        sb.append(tokens[t_id[i]]);
+      }
+      return sb.toString();
     }
   }
   
@@ -83,9 +108,10 @@ public class EcbPlusXmlWrapper {
       Node node = new Node(
           prefix + "/" + attr.getNamedItem("m_id").getTextContent());
       node.type = n.getNodeName();
-      node.t_id = extractTokensFromMarkable(n);
+      node.t_id_orig = extractTokensFromMarkable(n);
+      node.t_id = convertOneIndexedStringsToZeroIndexedInts(node.t_id_orig);
 //      System.out.println("working on: " + node);
-      if (node.t_id.isEmpty()) {
+      if (node.t_id_orig.isEmpty()) {
         node.descriptor = attr.getNamedItem("TAG_DESCRIPTOR").getTextContent();
         if (attr.getNamedItem("instance_id") != null) {
           node.instance_id = attr.getNamedItem("instance_id").getTextContent();
@@ -97,8 +123,17 @@ public class EcbPlusXmlWrapper {
     }
     return l;
   }
+  
+  public static int[] convertOneIndexedStringsToZeroIndexedInts(List<String> t_id_orig) {
+    int[] t_id = new int[t_id_orig.size()];
+    for (int i = 0; i < t_id.length; i++) {
+      t_id[i] = Integer.parseInt(t_id_orig.get(i)) - 1;
+      assert t_id[i] >= 0;
+    }
+    return t_id;
+  }
 
-  public List<String> extractTokensFromMarkable(org.w3c.dom.Node n) {
+  public static List<String> extractTokensFromMarkable(org.w3c.dom.Node n) {
     NodeList children = n.getChildNodes();
     List<String> l = new ArrayList<>();
     for (int i = 0; i < children.getLength(); i++) {

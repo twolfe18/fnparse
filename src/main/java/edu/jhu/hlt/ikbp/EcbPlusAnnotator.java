@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
-import edu.jhu.hlt.ikbp.Constants.FeatureType;
 import edu.jhu.hlt.ikbp.data.Edge;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
@@ -34,52 +33,12 @@ import edu.jhu.hlt.tutils.hash.Hash;
  * @author travis
  */
 public class EcbPlusAnnotator implements Annotator {
-  public static final boolean VERBOSE = true;
+  public static final boolean VERBOSE = false;
 
   /*
    * How do we maintain consistent IDs between the Annotator and Search?
    * Have to use hashing of a stable identifier, e.g. "ecb+/t4/d12/m4" for topic, doc, mention
-   * 
-   * What needs ids?
-   * - Node: Entities and Situations
-   *   Entity id: description of the first mention? define mention format as above, first is lexicographically first?
-   *   Situation id:  
    */
-  enum EcbPlusMentionType {
-    NON_HUMAN_PART,
-    NON_HUMAN_PART_GENERIC,
-    HUMAN_PART,
-    HUMAN_PART_MET,
-    HUMAN_PART_PER,
-    HUMAN_PART_VEH,
-    HUMAN_PART_ORG,
-    HUMAN_PART_GPE,
-    HUMAN_PART_FAC,
-    HUMAN_PART_GENERIC,
-    ACTION_CAUSATIVE,
-    ACTION_OCCURRENCE,
-    ACTION_REPORTING,
-    ACTION_PERCEPTION,
-    ACTION_ASPECTUAL,
-    ACTION_STATE,
-    ACTION_GENERIC,
-    NEG_ACTION_CAUSATIVE,
-    NEG_ACTION_OCCURRENCE,
-    NEG_ACTION_REPORTING,
-    NEG_ACTION_PERCEPTION,
-    NEG_ACTION_ASPECTUAL,
-    NEG_ACTION_STATE,
-    NEG_ACTION_GENERIC,
-    LOC_GEO,
-    LOC_FAC,
-    LOC_OTHER,
-    TIME_DATE,
-    TIME_OF_THE_DAY,
-    TIME_DURATION,
-    TIME_REPETITION,
-    UNKNOWN_INSTANCE_TAG,
-  }
-  
 
   // A list of topic directories like /home/travis/code/fnparse/data/parma/ecbplus/ECB+_LREC2014/ECB+/3
   private Deque<File> topicDirs;
@@ -94,7 +53,6 @@ public class EcbPlusAnnotator implements Annotator {
   
   private Random rand;
 
-  
   /**
    * @param topicParent e.g. data/parma/ecbplus/ECB+_LREC2014/ECB+
    */
@@ -114,34 +72,6 @@ public class EcbPlusAnnotator implements Annotator {
     }
   }
   
-  /** Before calling, you should ensure that the given node's m_id has the document prefix */
-  public static Node createNode(EcbPlusXmlWrapper.Node n) {
-    EcbPlusMentionType t;
-    try {
-      t = EcbPlusMentionType.valueOf(n.type);
-    } catch (IllegalArgumentException e) {
-      if (VERBOSE)
-        System.out.println("ERROR: TODO add this enum instance: " + n.type);
-      t = EcbPlusMentionType.ACTION_OCCURRENCE;
-    }
-
-    // Add this mention to the PKB as a Node
-    Id id = new Id();
-    id.setType(t.ordinal());
-    id.setName(n.m_id);
-    id.setId((int) Hash.sha256(n.type + "/" + n.m_id));
-    Node kbNode = new Node();
-    kbNode.setId(id);
-    kbNode.addToFeatures(s2f("type=" + n.type));
-    kbNode.addToFeatures(s2f("ground=" + n.isGrounded()));
-    if (n.isGrounded()) {
-      kbNode.addToFeatures(s2f(n.m_id, FeatureType.MENTION));
-    } else {
-      //          kbNode.addToFeatures(s2f("desc=" + n.descriptor));
-    }
-    return kbNode;
-  }
-
   @Override
   public Query nextQuery() {
     if (topicDirs.isEmpty())
@@ -156,17 +86,28 @@ public class EcbPlusAnnotator implements Annotator {
     mention2Node = new HashMap<>();
     PKB kb = new PKB();
     
-    // Loop over documents/stories in the topic
+    // Choose two documents which will serve as the seed KB which is being searched upon
+    List<File> xmlFiles = new ArrayList<>();
     for (File f : topic.listFiles()) {
       if (!f.getPath().endsWith(".xml"))
         continue;
+      xmlFiles.add(f);
+    }
+    Collections.shuffle(xmlFiles, rand);
+    while (xmlFiles.size() > 2)
+      xmlFiles.remove(xmlFiles.size()-1);
+    
+    // Loop over documents/stories in the topic
+    for (File f : xmlFiles) {
       if (VERBOSE)
         System.out.println("f=" + f.getPath());
       EcbPlusXmlWrapper xml = new EcbPlusXmlWrapper(f);
+      String[] tokens = xml.getTokensArray();
+      
+      kb.addToDocumentIds(f.getName().replaceAll(".xml", ""));
       
       // Loop over mentions in the document/story
       for (EcbPlusXmlWrapper.Node n : xml.getNodes()) {
-        
         if (n.isGrounded()) {
 //          Object old = mention2Cluster.put(n.m_id, null);
 //          assert old == null : "1) double add, m_id=" + n.m_id + " old=" + old;
@@ -179,17 +120,17 @@ public class EcbPlusAnnotator implements Annotator {
         assert old == null || n.type.equals(old) : "old=" + old + " n=" + n;
         
         // Add this mention to the PKB as a Node
-        Node kbNode = createNode(n);
+        Node kbNode = EcbPlusUtil.createNode(n, tokens);
         kb.addToNodes(kbNode);
         old = mention2Node.put(n.m_id, kbNode);
         assert old == null;
 //        System.out.println("adding to pkb: " + kbNode);
+        if (VERBOSE)
+          System.out.printf("adding to pkb: %-16s %-20s %-28s %s\n", n.m_id, n.type, n.descriptor, n.showMention(tokens));
       }
       
       // Add cluster labels for all (grounded) mentions.
       for (EcbPlusXmlWrapper.Edge e : xml.getEdges()) {
-//        System.out.println("adding to pkb: " + e);
-//        assert mention2Type.get(e.m_id_source).equals(mention2Type.get(e.m_id_target));
         String desc = mention2Cluster.get(e.m_id_target);
         assert null == mention2Cluster.get(e.m_id_source);
         Object old = mention2Cluster.put(e.m_id_source, desc);
@@ -207,7 +148,10 @@ public class EcbPlusAnnotator implements Annotator {
     
     // Build the query
     Query q = new Query();
-    q.setId(new Id().setId(rand.nextInt()));
+    Id qid = new Id();
+    qid.setName("query" + rand.nextInt());
+    qid.setId((int) Hash.sha256(qid.getName()));
+    q.setId(qid);
     q.setContext(kb);
     q.setSubject(chooseRandomSubject(kb, rand));
     return q;
@@ -264,7 +208,7 @@ public class EcbPlusAnnotator implements Annotator {
       throw new IllegalArgumentException();
     List<Node> nodes = new ArrayList<>();
     for (Node n : kb.getNodes())
-      if (n.getId().getType() == EcbPlusMentionType.HUMAN_PART_PER.ordinal())
+      if (n.getId().getType() == EcbPlusUtil.EcbPlusMentionType.HUMAN_PART_PER.ordinal())
         nodes.add(n);
     if (nodes.isEmpty()) {
       // Backoff to any random node
