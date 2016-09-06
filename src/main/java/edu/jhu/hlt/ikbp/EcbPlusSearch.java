@@ -9,13 +9,17 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
+import edu.jhu.hlt.ikbp.Constants.EdgeRelationType;
 import edu.jhu.hlt.ikbp.Constants.FeatureType;
+import edu.jhu.hlt.ikbp.data.Edge;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
 import edu.jhu.hlt.ikbp.data.PKB;
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
  * Returns results from ECB+. These will serve as the positive results, the
@@ -23,7 +27,7 @@ import edu.jhu.hlt.tutils.Log;
  *
  * @author travis
  */
-public class EcbPlusSearch implements Search {
+public class EcbPlusSearch implements IkbpSearch {
   
   static class Topic {
 
@@ -141,6 +145,8 @@ public class EcbPlusSearch implements Search {
    * @param topicParent e.g. data/parma/ecbplus/ECB+_LREC2014/ECB+
    */
   public EcbPlusSearch(File topicParent) {
+    if (!topicParent.isDirectory())
+      throw new IllegalArgumentException("not a dir: " + topicParent.getPath());
     // Read in all of the topics and Nodes, index Nodes by word.
     topics = new HashMap<>();
     for (String f : topicParent.list()) {
@@ -184,12 +190,24 @@ public class EcbPlusSearch implements Search {
         continue;
       }
       
+      Edge e = new Edge();
+      Id eid = new Id()
+          .setType(EdgeRelationType.COREF_SIT.ordinal())
+          .setName(EdgeRelationType.COREF_SIT + "("
+              + q.getSubject().getId().getName()
+              + "," + relevant.getId().getName() + ")");
+      eid.setId((int) Hash.sha256(eid.getName()));
+      e.setRelation(eid);
+      e.addToArguments(q.getSubject().getId());
+      e.addToArguments(relevant.getId());
+      
       Response r = new Response();
       r.setId(q.getId());
       r.setScore(1);
       PKB delta = new PKB();
       delta.addToDocumentIds(docId);
       delta.addToNodes(relevant);
+      delta.addToEdges(e);
       r.setDelta(delta);
       r.setCenter(relevant.getId());
       results.add(r);
@@ -206,7 +224,7 @@ public class EcbPlusSearch implements Search {
     for (Id f : n.getFeatures())
       if (f.getType() == FeatureType.MENTION.ordinal())
         return f.getName();
-    throw new RuntimeException();
+    throw new RuntimeException("no mention features: " + n);
   }
   
   public List<String> getMentionWords(String m_id) {
@@ -222,17 +240,19 @@ public class EcbPlusSearch implements Search {
       sb.append(" " + getMentionWords(m_id));
     return sb.toString();
   }
-
+  
+  public static EcbPlusSearch build(ExperimentProperties config) {
+    File root = config.getExistingDir("data.ecbplus", new File("data/parma/ecbplus/ECB+_LREC2014/ECB+"));
+    return new EcbPlusSearch(root);
+  }
+  
   public static void main(String[] args) {
     File root = new File("data/parma/ecbplus/ECB+_LREC2014/ECB+");
     Random rand = new Random(9001);
     EcbPlusAnnotator anno = new EcbPlusAnnotator(root, rand);
     EcbPlusSearch search = new EcbPlusSearch(root);
     for (Query q = anno.nextQuery(); q != null; q = anno.nextQuery()) {
-
-      for (int i = 0; i < 100; i++) System.out.print('#');
-      System.out.println("\nquery: " + q.getId() + "\t" + EcbPlusUtil.getType(q.getSubject()));
-      System.out.println("\tpkb.docs: " + q.getContext().getDocumentIds());
+      DataUtil.showQuery(q);
       
       // Show mentions of the query
       List<String> queryMentions = EcbPlusUtil.getMentionIds(q.getSubject());
@@ -245,7 +265,7 @@ public class EcbPlusSearch implements Search {
       // Show each response and their mentions
       int i = 0;
       for (Response r : search.search(q)) {
-        Node n = EcbPlusUtil.lookup(r.getCenter(), r.getDelta().getNodes());
+        Node n = DataUtil.lookup(r.getCenter(), r.getDelta().getNodes());
         System.out.printf("result[%d]: %s\n", i, n.getId());
         List<String> mentions = EcbPlusUtil.getMentionIds(n);
         for (String m_id : mentions) {

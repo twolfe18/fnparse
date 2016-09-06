@@ -3,13 +3,21 @@ package edu.jhu.hlt.ikbp;
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
 
-public interface Annotator {
+/**
+ * An annotator provides queries and feedback on their quality. Implementations
+ * include a human in the loop doing IKBP and dataset-specific annotators which
+ * serve up queries and responses solely for the purpose of training and evaluating models.
+ *
+ * @author travis
+ */
+public interface IkbpAnnotator {
   
   public Query nextQuery();
 
   /**
    * Returned Response should have the same id as the corresponding argument,
-   * but where the score now reflects whether this was a good response.
+   * but where the score now reflects whether the nodes and edges in the
+   * {@link Response}'s delta are good.
    *
    * Can have many implementations like
    * 1) if r has one extra document, is this response a relevant document to the query

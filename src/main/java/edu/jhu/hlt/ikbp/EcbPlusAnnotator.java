@@ -3,6 +3,7 @@ package edu.jhu.hlt.ikbp;
 import java.io.File;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -16,101 +17,194 @@ import edu.jhu.hlt.ikbp.data.Node;
 import edu.jhu.hlt.ikbp.data.PKB;
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
  * Provides supervision for {@link Response}s which are consistent with
  * the ECB+ data.
- * 
- * One Query per topic.
- * nextQuery can do all the work of loading in a topic.
+ *
+ * Assumes that every {@link Response} will have exactly one edge representing
+ * coreference with the {@link Query}'s subject.
+ *
+ * Creates one query for every mention. There are various options below which let
+ * you skip certain mentions or topics. Query generation is done document by document
+ * where the context:KB accumulates Nodes according to the pseudo-code below:
+ * foreach topic t:
+ *   permute the documents in t (default to the order given by file name)
+ *   kb = {}
+ *   for document d in t:
+ *     if d is not the first document:
+ *       for mention m in d:
+ *         emit Query(subj=m, context=kb)
+ *     kb += {nodes and edges required to cover the mentions in d}
  *
  * This class creates a lot of {@link Node}s and {@link Edge}s, but this is not
- * typical for {@link Annotator}s. Normally a {@link Search} service would create
- * them and provide them to the {@link Annotator} via {@link Response}s.
+ * typical for {@link IkbpAnnotator}s. Normally a {@link IkbpSearch} service would create
+ * them and provide them to the {@link IkbpAnnotator} via {@link Response}s.
  *
  * @author travis
  */
-public class EcbPlusAnnotator implements Annotator {
-  public static final boolean VERBOSE = false;
+public class EcbPlusAnnotator implements IkbpAnnotator {
+  public static boolean VERBOSE = false;
+  
+  public static final String NIL_CLUSTER = "nil";
 
   /*
    * How do we maintain consistent IDs between the Annotator and Search?
    * Have to use hashing of a stable identifier, e.g. "ecb+/t4/d12/m4" for topic, doc, mention
+   * NOTE: The format we are currently using is closer to "33_12ecbplus/15" for the 15th mention in doc 33_12ecbplus
    */
 
   // A list of topic directories like /home/travis/code/fnparse/data/parma/ecbplus/ECB+_LREC2014/ECB+/3
-  private Deque<File> topicDirs;
+  // The directory at the head of the queue is the "current" topic.
+  private Deque<File> topics;
   
+  // The documents in the current topic.
+  private Deque<EcbPlusXmlWrapper> docs;
+
+  // PKB nodes and edges for the current document. This is added to context when
+  // the document is no longer being used to generate queries.
+  private PKB delta;
+  
+  // Index of the current node in delta.nodes
+  private int curDeltaNodeIndex;
+  
+  // Represents context for the current query. Grows every time a document is processed.
+  private PKB context;
+  
+
+  // NOTE: These maps are all ACCUMULATIVE, cleared once the topic changes.
   // Keys are m_id and values are the cluster they belong to.
   private Map<String, String> mention2Cluster;
-
   // Keys are m_id and values are a mention type like HUMAN_PART_PER or ACTION_OCCURRENCE
   private Map<String, String> mention2Type;
-  
   private Map<String, Node> mention2Node;
   
   private Random rand;
+
 
   /**
    * @param topicParent e.g. data/parma/ecbplus/ECB+_LREC2014/ECB+
    */
   public EcbPlusAnnotator(File topicParent, Random rand) {
-    Log.info("topicParent=" + topicParent.getPath());
     if (!topicParent.isDirectory())
-      throw new IllegalArgumentException();
+      throw new IllegalArgumentException("not a dir: " + topicParent.getPath());
+    this.context = newPKB();
+    this.delta = newPKB();
+    this.docs = new ArrayDeque<>();
+    this.topics = new ArrayDeque<>();
+    this.curDeltaNodeIndex = -1;
+
+    this.mention2Cluster = new HashMap<>();
+    this.mention2Type = new HashMap<>();
+    this.mention2Node = new HashMap<>();
+
     this.rand = rand;
-    this.topicDirs = new ArrayDeque<>();
+    this.topics = new ArrayDeque<>();
     for (String f : topicParent.list()) {
       File ff = new File(topicParent, f);
       if (ff.getName().matches("\\d+")) {
-        topicDirs.push(ff);
+        topics.push(ff);
       } else if (VERBOSE) {
         System.out.println("skipping: " + ff.getPath());
       }
     }
   }
   
-  @Override
-  public Query nextQuery() {
-    if (topicDirs.isEmpty())
-      return null;
+  /** Performs a += b on nodes, edge, and docs */
+  public static void kbAdd(PKB a, PKB b) {
+    for (String docId : b.getDocumentIds())
+      a.addToDocumentIds(docId);
+    assert DataUtil.uniq(a.getDocumentIds());
+    for (Node n : b.getNodes())
+      a.addToNodes(n);
+    for (Edge e : b.getEdges())
+      a.addToEdges(e);
+  }
+  
+  public static PKB newPKB() {
+    return new PKB()
+        .setDocumentIds(new ArrayList<>())
+        .setEdges(new ArrayList<>())
+        .setNodes(new ArrayList<>());
+  }
+  
+  private boolean nextDocument() {
+    // context += delta
+    kbAdd(context, delta);
     
+    // Populate delta:PKB from the mentions in the current document
+    if (docs.isEmpty()) {
+      boolean nt = nextTopic();
+      if (!nt)
+        return false;
+    }
+    curDeltaNodeIndex = 0;
+    EcbPlusXmlWrapper xml = docs.pop();
+    File f = xml.getXmlFile();
+
+    if (VERBOSE)
+      Log.info("just popped: " + f.getPath());
+
+    delta = newPKB();
+    context.addToDocumentIds(f.getName().replaceAll(".xml", ""));
+
+    String[] tokens = xml.getTokensArray();
+    for (EcbPlusXmlWrapper.Node n : xml.getNodes()) {
+      if (n.isGrounded()) {
+//        Node kbNode = EcbPlusUtil.createNode(n, tokens);
+        Node kbNode = mention2Node.get(n.m_id);
+        assert kbNode != null;
+        assert DataUtil.isGround(kbNode) : "m_id=" + kbNode.getId().getName() + " feats: " + kbNode.getFeatures();
+        delta.addToNodes(kbNode);
+        if (VERBOSE)
+          System.out.printf("adding to pkb: %-16s %-20s %-28s %s\n", n.m_id, n.type, n.descriptor, n.showMention(tokens));
+      }
+    }
+    
+    return true;
+  }
+  
+  private boolean nextTopic() {
     // Read in the relevant data from the topic XML files
-    File topic = topicDirs.pop();
+    if (topics.isEmpty())
+      return false;
+    File topic = topics.pop();
     if (VERBOSE)
       System.out.println("topic=" + topic);
-    mention2Cluster = new HashMap<>();
-    mention2Type = new HashMap<>();
-    mention2Node = new HashMap<>();
-    PKB kb = new PKB();
     
-    // Choose two documents which will serve as the seed KB which is being searched upon
+    context = newPKB();
+
+    mention2Cluster.clear();
+    mention2Type.clear();
+    mention2Node.clear();
+    
     List<File> xmlFiles = new ArrayList<>();
-    for (File f : topic.listFiles()) {
-      if (!f.getPath().endsWith(".xml"))
-        continue;
-      xmlFiles.add(f);
-    }
+    for (File f : topic.listFiles())
+      if (f.getPath().endsWith(".xml"))
+        xmlFiles.add(f);
     Collections.shuffle(xmlFiles, rand);
-    while (xmlFiles.size() > 2)
-      xmlFiles.remove(xmlFiles.size()-1);
+
+    docs.clear();
+    for (File f : xmlFiles)
+      docs.push(new EcbPlusXmlWrapper(f));
     
-    // Loop over documents/stories in the topic
-    for (File f : xmlFiles) {
-      if (VERBOSE)
-        System.out.println("f=" + f.getPath());
-      EcbPlusXmlWrapper xml = new EcbPlusXmlWrapper(f);
+    addTopicLabels();
+
+    return true;
+  }
+  
+  private void addTopicLabels() {
+    // Loop over mentions in the document/story
+    for (EcbPlusXmlWrapper xml : new ArrayList<>(docs)) {
       String[] tokens = xml.getTokensArray();
-      
-      kb.addToDocumentIds(f.getName().replaceAll(".xml", ""));
-      
-      // Loop over mentions in the document/story
+
       for (EcbPlusXmlWrapper.Node n : xml.getNodes()) {
         if (n.isGrounded()) {
-//          Object old = mention2Cluster.put(n.m_id, null);
-//          assert old == null : "1) double add, m_id=" + n.m_id + " old=" + old;
+          Object old = mention2Cluster.put(n.m_id, NIL_CLUSTER);
+          assert old == null : "1) double add, m_id=" + n.m_id + " old=" + old;
         } else {
           assert n.descriptor != null;
           Object old = mention2Cluster.put(n.m_id, n.descriptor);
@@ -118,24 +212,21 @@ public class EcbPlusAnnotator implements Annotator {
         }
         Object old = mention2Type.put(n.m_id, n.type);
         assert old == null || n.type.equals(old) : "old=" + old + " n=" + n;
-        
+
         // Add this mention to the PKB as a Node
         Node kbNode = EcbPlusUtil.createNode(n, tokens);
-        kb.addToNodes(kbNode);
         old = mention2Node.put(n.m_id, kbNode);
         assert old == null;
-//        System.out.println("adding to pkb: " + kbNode);
-        if (VERBOSE)
-          System.out.printf("adding to pkb: %-16s %-20s %-28s %s\n", n.m_id, n.type, n.descriptor, n.showMention(tokens));
       }
-      
+
       // Add cluster labels for all (grounded) mentions.
       for (EcbPlusXmlWrapper.Edge e : xml.getEdges()) {
+
         String desc = mention2Cluster.get(e.m_id_target);
-        assert null == mention2Cluster.get(e.m_id_source);
+        assert desc != null;
         Object old = mention2Cluster.put(e.m_id_source, desc);
-        assert old == null;
-        
+        assert old == NIL_CLUSTER || old == null : "old=" + old + " desc=" + desc + " source=" + e.m_id_source;
+
         // Copy features from grounded -> abstract
         Node grounded = mention2Node.get(e.m_id_source);
         Node abs = mention2Node.get(e.m_id_target);
@@ -145,42 +236,79 @@ public class EcbPlusAnnotator implements Annotator {
           abs.addToFeatures(feat);
       }
     }
+  }
+  
+  @Override
+  public Query nextQuery() {
+    if (curDeltaNodeIndex < 0 || curDeltaNodeIndex >= delta.getNodesSize()) {
+      boolean nd;
+      
+      // This adds the first document to the context:PKB
+      nd = nextDocument();
+      if (!nd) return null;
+
+      // This uses the second document for delta:PKB
+      nd = nextDocument();
+      if (!nd) return null;
+    }
+    Node subj = delta.getNodes().get(curDeltaNodeIndex++);
     
-    // Build the query
     Query q = new Query();
     Id qid = new Id();
-    qid.setName("query" + rand.nextInt());
+    qid.setName("q" + Integer.toHexString(rand.nextInt()).toUpperCase());
     qid.setId((int) Hash.sha256(qid.getName()));
     q.setId(qid);
-    q.setContext(kb);
-    q.setSubject(chooseRandomSubject(kb, rand));
+    q.setContext(context);
+    q.setSubject(subj);
+    assert DataUtil.isGround(q.getSubject());
     return q;
+  }
+  
+  public boolean annotateHelper(Query q, Response r) {
+    if (r.getDelta().getEdgesSize() != 1)
+      throw new IllegalArgumentException();
+    return annotateHelper(q, r, 0);
+  }
+  public boolean annotateHelper(Query q, Response r, int kbDeltaIndex) {
+    Edge kbDeltaEdge = r.getDelta().getEdges().get(kbDeltaIndex);
+    Node subj = q.getSubject();
+    return annotateHelper(subj, kbDeltaEdge);
+  }
+  public boolean annotateHelper(Node subj, Edge kbDeltaEdge) {
+    String subjClust = mention2Cluster.get(subj.getId().getName());
+    if (subjClust == null) {
+      throw new RuntimeException("could not find"
+          + " m_id=" + subj.getId().getName()
+          + " m2c.size=" + mention2Cluster.size());
+    }
+    if (subjClust == NIL_CLUSTER)
+      return false;
+
+    // Assume this is a coref edge
+    assert kbDeltaEdge.getArgumentsSize() == 2;
+    assert kbDeltaEdge.getArguments().get(0).equals(subj.getId()) : "First argument should be the subject of the query";
+
+    Id corefWithSubjId = kbDeltaEdge.getArguments().get(1);
+    String corefWithSubjClust = mention2Cluster.get(corefWithSubjId.getName());
+    if (corefWithSubjClust == null) {
+      throw new RuntimeException("could not find"
+          + " m_id=" + corefWithSubjId.getName()
+          + " m2c.size=" + mention2Cluster.size());
+    }
+
+    return subjClust.equals(corefWithSubjClust);
   }
 
   @Override
   public Response annotate(Query q, Response r) {
-    
     Node subj = q.getSubject();
-    String subjClust = mention2Cluster.get(subj.getId().getName());
-    assert subjClust != null;
     PKB delta = r.getDelta();
-
     double dcg = 0;
     for (int i = 0; i < delta.getEdgesSize(); i++) {
       Edge e = delta.getEdges().get(i);
-
-      // Assume this is a coref edge
-      assert e.getArgumentsSize() == 2;
-      assert e.getArguments().get(0).equals(subj.getId()) : "First argument should be the subject of the query";
-      
-      Id corefWithSubjId = e.getArguments().get(1);
-      String corefWithSubjClust = mention2Cluster.get(corefWithSubjId.getName());
-      assert corefWithSubjClust != null;
-      
-      if (subjClust.equals(corefWithSubjClust))
+      if (annotateHelper(subj, e))
         dcg += 1 / dcgZ(i);
     }
-
     Response y = new Response(r);
     y.setScore(dcg);
     return y;
@@ -218,10 +346,17 @@ public class EcbPlusAnnotator implements Annotator {
     return nodes.get(0);
   }
   
-  public static void main(String[] args) {
-    File root = new File("data/parma/ecbplus/ECB+_LREC2014/ECB+");
-    Random r = new Random(9001);
+  public static EcbPlusAnnotator build(ExperimentProperties config) {
+    File root = config.getExistingDir("data.ecbplus", new File("data/parma/ecbplus/ECB+_LREC2014/ECB+"));
+    Random r = config.getRandom();
     EcbPlusAnnotator anno = new EcbPlusAnnotator(root, r);
+    return anno;
+  }
+  
+  public static void main(String[] args) {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    VERBOSE = config.getBoolean("verbose", true);
+    EcbPlusAnnotator anno = build(config);
     
     for (Query q = anno.nextQuery(); q != null; q = anno.nextQuery()) {
       
