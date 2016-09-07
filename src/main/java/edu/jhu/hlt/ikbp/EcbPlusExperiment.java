@@ -4,8 +4,8 @@ import java.util.List;
 
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
+import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.ExperimentProperties;
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
 
@@ -26,7 +26,7 @@ public class EcbPlusExperiment {
       this.search = search;
     }
     
-    public boolean epoch() {
+    public double epoch(boolean learn) {
 //      if (verbose) {
 //      for (int i = 0; i < 120; i++) System.out.print('$');
 //      System.out.println();
@@ -35,7 +35,7 @@ public class EcbPlusExperiment {
       // Get query
       Query q = anno.nextQuery();
       if (q == null)
-        return false;
+        return -1;
       if (verbose)
         DataUtil.showQuery(q);
 
@@ -59,14 +59,19 @@ public class EcbPlusExperiment {
       
       // Perform the update
       // Currently: minimize squared error
+      double totalResid = 0;
       for (int i = 0; i < y.length; i++) {
         double resid = y[i].getScore() - yhat[i].getScore();
-        s[i].backwards(-2 * resid);
+        totalResid += resid * resid;
+        if (learn)
+          s[i].backwards(-2 * resid);
       }
 
       if (verbose)
         System.out.println();
-      return true;
+      if (y.length == 0)
+        return 1;
+      return totalResid / y.length;
     }
   }
 
@@ -75,12 +80,25 @@ public class EcbPlusExperiment {
     EcbPlusAnnotator anno = EcbPlusAnnotator.build(config);
     EcbPlusSearch search = EcbPlusSearch.build(config);
 
-    IkbpSearch.DummyTrainable t0 = new IkbpSearch.DummyTrainable("ECB+/NoTrain", search);
-    t0.verbose = false;
+//    IkbpSearch.Trainable t0 = new IkbpSearch.DummyTrainable("ECB+/NoTrain", search);
+//    t0.verbose = false;
+    IkbpSearch.Trainable t0 = new IkbpSearch.FeatureBased(search);
     Trainer t = new Trainer(anno, t0);
 
-    Log.info("starting");
-    while (t.epoch());
-    Log.info("done");
+    // Progressive validation
+    double totalLoss = 0;
+    Average avgLoss = new Average.Exponential(0.9);
+    for (int i = 0; i < 600; i++) {
+      double l = t.epoch(true);
+      assert !Double.isNaN(l) && Double.isFinite(l);
+      totalLoss += l;
+      avgLoss.add(l);
+      if (i % 10 == 0) {
+        System.out.println("i=" + i
+            + "\tloss=" + l
+            + "\tavgLoss=" + (totalLoss / (i+1))
+            + "\tlocalAvgLoss=" + avgLoss.getAverage());
+      }
+    }
   }
 }

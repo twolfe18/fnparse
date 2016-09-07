@@ -92,6 +92,7 @@ public class EcbPlusUtil {
     kbNode.addToFeatures(EcbPlusAnnotator.s2f("ground=" + n.isGrounded()));
     if (n.isGrounded()) {
       kbNode.addToFeatures(EcbPlusAnnotator.s2f(n.m_id, FeatureType.MENTION));
+//      kbNode.addToFeatures(EcbPlusAnnotator.s2f("not-the-headword", FeatureType.HEADWORD));
     } else {
       //          kbNode.addToFeatures(s2f("desc=" + n.descriptor));
     }
