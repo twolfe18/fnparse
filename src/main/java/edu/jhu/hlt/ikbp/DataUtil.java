@@ -4,8 +4,8 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 
-import edu.jhu.hlt.ikbp.Constants.FeatureType;
 import edu.jhu.hlt.ikbp.data.Edge;
+import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
 import edu.jhu.hlt.ikbp.data.Query;
@@ -13,12 +13,26 @@ import edu.jhu.hlt.ikbp.data.Response;
 
 public class DataUtil {
   
-  public static boolean uniq(List<String> items) {
-    HashSet<String> s = new HashSet<>();
-    for (String i : items)
+  /**
+   * T must have hashCode/equals implemented.
+   */
+  public static <T> boolean uniq(List<T> items) {
+    HashSet<T> s = new HashSet<>();
+    for (T i : items)
       if (!s.add(i))
         return false;
     return true;
+  }
+
+  public static String showNames(List<Id> ids) {
+    StringBuilder sb = new StringBuilder();
+    sb.append('[');
+    for (int i = 0; i < ids.size(); i++) {
+      if (i > 0) sb.append(", ");
+      sb.append(ids.get(i).getName());
+    }
+    sb.append(']');
+    return sb.toString();
   }
   
   public static String showEdges(List<Edge> edges) {
@@ -26,7 +40,7 @@ public class DataUtil {
     sb.append('[');
     for (int i = 0; i < edges.size(); i++) {
       if (i > 0) sb.append(", ");
-      sb.append(edges.get(i).getRelation().getName());
+      sb.append(edges.get(i).getId().getName());
     }
     sb.append(']');
     return sb.toString();
@@ -38,7 +52,7 @@ public class DataUtil {
     System.out.println("\ttype:          " + getType(q.getSubject()));
     System.out.println("\tmentions:      " + getMentions(q.getSubject()));
     System.out.println("\tfeatures:      " + showFeatures(q.getSubject()));
-    System.out.println("\tcontext.docs:  " + q.getContext().getDocumentIds());
+    System.out.println("\tcontext.docs:  " + showNames(q.getContext().getDocuments()));
     System.out.println("\tcontext.nodes: " + q.getContext().getNodes());
     System.out.println("\tcontext.edges: " + showEdges(q.getContext().getEdges()));
   }
@@ -82,16 +96,17 @@ public class DataUtil {
   public static List<String> getMentions(Node n) {
     List<String> m_id = new ArrayList<>();
     for (Id f : n.getFeatures())
-      if (f.getType() == FeatureType.MENTION.ordinal())
+      if (f.getType() == FeatureType.MENTION_ID.ordinal())
         m_id.add(f.getName());
     return m_id;
   }
 
   public static String getType(Node n) {
-    for (Id feature : n.getFeatures())
-      if (feature.getType() == FeatureType.NODE_TYPE.ordinal())
-        return feature.getName();
-    return null;
+    return n.getId().getName();
+//    for (Id feature : n.getFeatures())
+//      if (feature.getType() == FeatureType.NODE_TYPE.ordinal())
+//        return feature.getName();
+//    return null;
   }
 
   @SafeVarargs

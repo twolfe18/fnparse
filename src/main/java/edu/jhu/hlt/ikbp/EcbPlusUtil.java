@@ -3,7 +3,7 @@ package edu.jhu.hlt.ikbp;
 import java.util.ArrayList;
 import java.util.List;
 
-import edu.jhu.hlt.ikbp.Constants.FeatureType;
+import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
 import edu.jhu.hlt.tutils.hash.Hash;
@@ -48,7 +48,7 @@ public class EcbPlusUtil {
   public static List<String> getMentionIds(Node n) {
     List<String> m = new ArrayList<>();
     for (Id f : n.getFeatures()) {
-      if (f.getType() == Constants.FeatureType.MENTION.ordinal()) {
+      if (f.getType() == FeatureType.MENTION_ID.ordinal()) {
         assert f.getName() != null;
         m.add(f.getName());
       }
@@ -88,10 +88,10 @@ public class EcbPlusUtil {
     id.setId((int) Hash.sha256(n.type + "/" + n.m_id));
     Node kbNode = new Node();
     kbNode.setId(id);
-    kbNode.addToFeatures(EcbPlusAnnotator.s2f(n.type, FeatureType.NODE_TYPE));
+//    kbNode.addToFeatures(EcbPlusAnnotator.s2f(n.type, FeatureType.NODE_TYPE));
     kbNode.addToFeatures(EcbPlusAnnotator.s2f("ground=" + n.isGrounded()));
     if (n.isGrounded()) {
-      kbNode.addToFeatures(EcbPlusAnnotator.s2f(n.m_id, FeatureType.MENTION));
+      kbNode.addToFeatures(EcbPlusAnnotator.s2f(n.m_id, FeatureType.MENTION_ID));
 //      kbNode.addToFeatures(EcbPlusAnnotator.s2f("not-the-headword", FeatureType.HEADWORD));
     } else {
       //          kbNode.addToFeatures(s2f("desc=" + n.descriptor));

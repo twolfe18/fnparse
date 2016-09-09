@@ -9,9 +9,9 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-import edu.jhu.hlt.ikbp.Constants.EdgeRelationType;
-import edu.jhu.hlt.ikbp.Constants.FeatureType;
 import edu.jhu.hlt.ikbp.data.Edge;
+import edu.jhu.hlt.ikbp.data.EdgeType;
+import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
 import edu.jhu.hlt.ikbp.data.PKB;
@@ -176,28 +176,32 @@ public class EcbPlusSearch implements IkbpSearch {
     String m_id = findCanonicalMentionId(q.getSubject());
     List<String> keywords = getMentionWords(m_id);
     
-    Set<String> queryKbDocs = new HashSet<>(q.getContext().getDocumentIds());
+    Set<String> queryKbDocs = new HashSet<>();
+    for (Id id : q.getContext().getDocuments())
+      queryKbDocs.add(id.getName());
 
     // Find all keyword mention in the same topic as the query subject
     List<Response> results = new ArrayList<>();
     for (Topic.Mention m : t.keywordSearch(keywords.get(0))) {
       Node relevant = m.location;
-      String docId = m.getSourceDocId();
+      String docIdName = m.getSourceDocId();
+      Id docId = new Id();
+      docId.setName(docIdName);
       
       // Filter out mentions which are already in the KB
-      if (queryKbDocs.contains(docId)) {
+      if (queryKbDocs.contains(docIdName)) {
 //        System.out.println("skipping since its already in the query: " + docId);
         continue;
       }
       
       Edge e = new Edge();
       Id eid = new Id()
-          .setType(EdgeRelationType.COREF_SIT.ordinal())
-          .setName(EdgeRelationType.COREF_SIT + "("
+          .setType(EdgeType.COREFERENCE.ordinal())
+          .setName(EdgeType.COREFERENCE + "("
               + q.getSubject().getId().getName()
               + "," + relevant.getId().getName() + ")");
       eid.setId((int) Hash.sha256(eid.getName()));
-      e.setRelation(eid);
+      e.setId(eid);
       e.addToArguments(q.getSubject().getId());
       e.addToArguments(relevant.getId());
       
@@ -205,11 +209,11 @@ public class EcbPlusSearch implements IkbpSearch {
       r.setId(q.getId());
       r.setScore(1);
       PKB delta = new PKB();
-      delta.addToDocumentIds(docId);
+      delta.addToDocuments(docId);
       delta.addToNodes(relevant);
       delta.addToEdges(e);
       r.setDelta(delta);
-      r.setCenter(relevant.getId());
+      r.setAnchor(relevant.getId());
       results.add(r);
     }
     
@@ -222,7 +226,7 @@ public class EcbPlusSearch implements IkbpSearch {
   public static String findCanonicalMentionId(Node n) {
     // TODO Better way to choose other than "the only mention"
     for (Id f : n.getFeatures())
-      if (f.getType() == FeatureType.MENTION.ordinal())
+      if (f.getType() == FeatureType.MENTION_ID.ordinal())
         return f.getName();
     throw new RuntimeException("no mention features: " + n);
   }
@@ -265,7 +269,7 @@ public class EcbPlusSearch implements IkbpSearch {
       // Show each response and their mentions
       int i = 0;
       for (Response r : search.search(q)) {
-        Node n = DataUtil.lookup(r.getCenter(), r.getDelta().getNodes());
+        Node n = DataUtil.lookup(r.getAnchor(), r.getDelta().getNodes());
         System.out.printf("result[%d]: %s\n", i, n.getId());
         List<String> mentions = EcbPlusUtil.getMentionIds(n);
         for (String m_id : mentions) {

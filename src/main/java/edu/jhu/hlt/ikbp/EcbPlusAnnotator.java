@@ -3,7 +3,6 @@ package edu.jhu.hlt.ikbp;
 import java.io.File;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
@@ -12,6 +11,7 @@ import java.util.Map;
 import java.util.Random;
 
 import edu.jhu.hlt.ikbp.data.Edge;
+import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
 import edu.jhu.hlt.ikbp.data.PKB;
@@ -115,9 +115,9 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
   
   /** Performs a += b on nodes, edge, and docs */
   public static void kbAdd(PKB a, PKB b) {
-    for (String docId : b.getDocumentIds())
-      a.addToDocumentIds(docId);
-    assert DataUtil.uniq(a.getDocumentIds());
+    for (Id docId : b.getDocuments())
+      a.addToDocuments(docId);
+    assert DataUtil.uniq(a.getDocuments());
     for (Node n : b.getNodes())
       a.addToNodes(n);
     for (Edge e : b.getEdges())
@@ -126,7 +126,7 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
   
   public static PKB newPKB() {
     return new PKB()
-        .setDocumentIds(new ArrayList<>())
+        .setDocuments(new ArrayList<>())
         .setEdges(new ArrayList<>())
         .setNodes(new ArrayList<>());
   }
@@ -149,7 +149,9 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
       Log.info("just popped: " + f.getPath());
 
     delta = newPKB();
-    context.addToDocumentIds(f.getName().replaceAll(".xml", ""));
+    Id ndid = new Id();
+    ndid.setName(f.getName().replaceAll(".xml", ""));
+    context.addToDocuments(ndid);
 
     String[] tokens = xml.getTokensArray();
     for (EcbPlusXmlWrapper.Node n : xml.getNodes()) {
@@ -321,9 +323,9 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
   }
   
   public static Id s2f(String featureName) {
-    return s2f(featureName, Constants.FeatureType.REGULAR);
+    return s2f(featureName, FeatureType.REGULAR);
   }
-  public static Id s2f(String featureName, Constants.FeatureType type) {
+  public static Id s2f(String featureName, FeatureType type) {
     Id f = new Id();
     f.setType(type.ordinal());
     f.setName(featureName);

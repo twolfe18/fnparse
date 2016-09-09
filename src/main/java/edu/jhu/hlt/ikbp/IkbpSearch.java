@@ -3,12 +3,13 @@ package edu.jhu.hlt.ikbp;
 import java.util.ArrayList;
 import java.util.List;
 
-import edu.jhu.hlt.ikbp.Constants.FeatureType;
+import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
 import edu.jhu.hlt.ikbp.data.PKB;
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
+import edu.jhu.hlt.ikbp.features.MentionFeatureExtractor;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.tutils.scoring.BilinearModel;
@@ -87,10 +88,14 @@ public interface IkbpSearch {
     private IkbpSearch wrapped;
     private Alphabet<String> alph;  // TODO
     private BilinearModel model;
+    private MentionFeatureExtractor mfe;
     
-    public FeatureBased(IkbpSearch wrapped) {
+    public FeatureBased(IkbpSearch wrapped, MentionFeatureExtractor features) {
+      if (wrapped == null || features == null)
+        throw new IllegalArgumentException();
       this.wrapped = wrapped;
       this.alph = new Alphabet<>();
+      this.mfe = features;
 
       int numTypes = FeatureType.values().length;
       this.model = new BilinearModel(numTypes);
@@ -99,15 +104,15 @@ public interface IkbpSearch {
       int K = 128;
       this.model.addFeature(FeatureType.INTERCEPT.ordinal(), D, K);
       this.model.addFeature(FeatureType.HEADWORD.ordinal(), D, K);
-      this.model.addFeature(FeatureType.NODE_TYPE.ordinal(), D, K);
+//      this.model.addFeature(FeatureType.NODE_TYPE.ordinal(), D, K);
       this.model.addInteraction(
           FeatureType.HEADWORD.ordinal(),
           FeatureType.HEADWORD.ordinal(),
           BilinearModel.Mode.SCALAR);
-      this.model.addInteraction(
-          FeatureType.NODE_TYPE.ordinal(),
-          FeatureType.NODE_TYPE.ordinal(),
-          BilinearModel.Mode.SCALAR);
+//      this.model.addInteraction(
+//          FeatureType.NODE_TYPE.ordinal(),
+//          FeatureType.NODE_TYPE.ordinal(),
+//          BilinearModel.Mode.SCALAR);
       this.model.addInteraction(
           FeatureType.HEADWORD.ordinal(),
           FeatureType.INTERCEPT.ordinal(),
@@ -119,17 +124,17 @@ public interface IkbpSearch {
     }
     
     public List<BilinearModel.ProjFeats> encode(Node n) {
-      
-//      List<String> m_id = DataUtil.getMentions(n);
-      // How can I possibly get access to the mention from here?
-      // Should I have access? Or just use the features given to me?
-      // Lets assume that the features are given for now.
+
+      // Extract features on this mention
+      List<String> m_id = DataUtil.getMentions(n);
+      for (String m : m_id)
+        mfe.extract(m, n.getFeatures());
       
       boolean reindex = true;
       List<BilinearModel.ProjFeats> f = new ArrayList<>();
       f.add(model.score(FeatureType.INTERCEPT.ordinal(), new int[] {0}, reindex));
       for (Id feature : n.getFeatures()) {
-        if (feature.getType() == FeatureType.MENTION.ordinal()) {
+        if (feature.getType() == FeatureType.MENTION_ID.ordinal()) {
           // these features have values which are pointers, tell you no information you can generalize on.
           continue;
         }
@@ -161,7 +166,7 @@ public interface IkbpSearch {
         
         // Assumption 0: The score of a response only depends on the center (thing aligned with the subject).
         // We will relax this by looking at the full alignment between PKB and new doc later.
-        Node center = DataUtil.lookup(r.getCenter(), r.getDelta().getNodes());
+        Node center = DataUtil.lookup(r.getAnchor(), r.getDelta().getNodes());
         List<BilinearModel.ProjFeats> fx = encode(center);
         try {
           Adjoints a = model.score(fy, fx);

@@ -42,6 +42,33 @@ public class EcbPlusXmlWrapper {
   public File getXmlFile() {
     return xml;
   }
+
+  /**
+   * Outer list is by sentence, inner by token.
+   */
+  public List<List<String>> getTokens2() {
+    NodeList nl = root.getElementsByTagName("token");
+    List<List<String>> sent = new ArrayList<>();
+    List<String> toks = null;
+    String prevSent = null;
+    for (int i = 0; i < nl.getLength(); i++) {
+      org.w3c.dom.Node node = nl.item(i);
+      String w = node.getTextContent();
+      String s = node.getAttributes().getNamedItem("sentence").getNodeValue();
+      
+      if (prevSent == null || !s.equals(prevSent)) {
+        if (toks != null)
+          sent.add(toks);
+        toks = new ArrayList<>();
+        prevSent = s;
+      }
+      
+      toks.add(w);
+    }
+    assert toks != null;
+    sent.add(toks);
+    return sent;
+  }
   
   public List<String> getTokens() {
     NodeList nl = root.getElementsByTagName("token");

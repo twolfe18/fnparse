@@ -4,6 +4,7 @@ import java.util.List;
 
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
+import edu.jhu.hlt.ikbp.features.MentionFeatureExtractor;
 import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -80,9 +81,15 @@ public class EcbPlusExperiment {
     EcbPlusAnnotator anno = EcbPlusAnnotator.build(config);
     EcbPlusSearch search = EcbPlusSearch.build(config);
 
-//    IkbpSearch.Trainable t0 = new IkbpSearch.DummyTrainable("ECB+/NoTrain", search);
-//    t0.verbose = false;
-    IkbpSearch.Trainable t0 = new IkbpSearch.FeatureBased(search);
+    boolean train = config.getBoolean("train", false);
+    IkbpSearch.Trainable t0;
+    if (!train) {
+      t0 = new IkbpSearch.DummyTrainable("ECB+/NoTrain", search);
+      ((IkbpSearch.DummyTrainable) t0).verbose = false;
+    } else {
+      MentionFeatureExtractor mfe = new MentionFeatureExtractor.Dummy();
+      t0 = new IkbpSearch.FeatureBased(search, mfe);
+    }
     Trainer t = new Trainer(anno, t0);
 
     // Progressive validation
