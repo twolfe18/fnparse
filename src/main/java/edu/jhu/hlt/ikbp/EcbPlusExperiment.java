@@ -1,9 +1,12 @@
 package edu.jhu.hlt.ikbp;
 
+import java.io.File;
 import java.util.List;
+import java.util.Random;
 
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
+import edu.jhu.hlt.ikbp.features.EcbPlusMentionFeatureExtractor;
 import edu.jhu.hlt.ikbp.features.MentionFeatureExtractor;
 import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -78,16 +81,22 @@ public class EcbPlusExperiment {
 
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
-    EcbPlusAnnotator anno = EcbPlusAnnotator.build(config);
-    EcbPlusSearch search = EcbPlusSearch.build(config);
+//    EcbPlusAnnotator anno = EcbPlusAnnotator.build(config);
+//    EcbPlusSearch search = EcbPlusSearch.build(config);
+    EcbPlusXmlStore xmlDocs = new EcbPlusXmlStore(config);
+    Random rand = config.getRandom();
+    EcbPlusAnnotator anno = new EcbPlusAnnotator(xmlDocs, rand);
+    EcbPlusSearch search = new EcbPlusSearch(xmlDocs);
 
-    boolean train = config.getBoolean("train", false);
+    boolean train = config.getBoolean("train", true);
     IkbpSearch.Trainable t0;
     if (!train) {
       t0 = new IkbpSearch.DummyTrainable("ECB+/NoTrain", search);
       ((IkbpSearch.DummyTrainable) t0).verbose = false;
     } else {
-      MentionFeatureExtractor mfe = new MentionFeatureExtractor.Dummy();
+      File parseyEcbPlus = config.getExistingDir("data.ecbplus.parsey",
+          new File("data/parma/ecbplus/ECB+_LREC2014/ECB+_pmp_conll"));
+      MentionFeatureExtractor mfe = new EcbPlusMentionFeatureExtractor(parseyEcbPlus, xmlDocs);
       t0 = new IkbpSearch.FeatureBased(search, mfe);
     }
     Trainer t = new Trainer(anno, t0);

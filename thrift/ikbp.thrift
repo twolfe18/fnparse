@@ -2,7 +2,6 @@ namespace java edu.jhu.hlt.ikbp.data
 
 struct Id {
   1: i32 type,
-
   /* In general, either id or name should be used, or if both are used, there
    * should be a correspondence between them, e.g. an alphabet mapping them
    * together is maintained on the side, or id = hash(name). */
@@ -23,7 +22,6 @@ enum FeatureType {
 struct Node {
   /* Contains the type and a name or id which jointly serve as a unique identifier */
   1: Id id,
-
   /* Edges can serve as features, but these are features which are probably not:
    * a) predicted by some system (with parameters) or
    * b) informative to Nodes other than this one
@@ -38,7 +36,6 @@ struct Node {
 enum NodeType {
   ENTITY,
   SITUATION,
-
   // The last argument of FRAME, ROLE, and NER edges will
   // be replaced by node ids pointing to nodes of these types.
   // FRAME_TYPE,
@@ -57,6 +54,7 @@ struct Edge {
 }
 
 enum EdgeType {
+  // Edges' argument patterns are listed to the right
   COREFERENCE,  // (node id 1, node id 2)
   FRAME,        // (situation node id, frame node id or name)
   ROLE,         // (situation node id, argument/filler node id, role node id or name)
@@ -66,13 +64,8 @@ enum EdgeType {
 /* A pocket KB */
 struct PKB {
   1: list<Node> nodes,  // Entities and Situations
-  2: list<Edge> edges,  // coreference, srl, etc.
-
-  /* Some Nodes' features will be mention ids which appear in one of these two
-   * documents. I want these to be ids rather than the communications themselves
-   * firstly so there is no concrete dependency and secondly so that a PKB can
-   * be fairly efficiently sent over the wire.
-   */
+  2: list<Edge> edges,  // facts about nodes
+  /* Some Nodes will ground out in mentions appearing in these documents */
   3: list<Id> documents,
 }
 

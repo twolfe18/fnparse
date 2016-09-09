@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
+import org.apache.xerces.impl.XMLScanner;
+
 import edu.jhu.hlt.ikbp.data.Edge;
 import edu.jhu.hlt.ikbp.data.EdgeType;
 import edu.jhu.hlt.ikbp.data.FeatureType;
@@ -52,10 +54,9 @@ public class EcbPlusSearch implements IkbpSearch {
       List<Node> nodes;
       Map<String, int[]> m_id2t_id;
 
-      public Document(File xml) {
-        source = xml;
-        id = xml.getName().replace(".xml", "");
-        EcbPlusXmlWrapper x = new EcbPlusXmlWrapper(source);
+      public Document(EcbPlusXmlWrapper x) {
+        source = x.getXmlFile();
+        id = source.getName().replace(".xml", "");
         tokens = x.getTokensArray();
         
         nodes = new ArrayList<>();
@@ -107,15 +108,16 @@ public class EcbPlusSearch implements IkbpSearch {
     /**
      * Reads in all of the documents in this topic and builds a small index.
      */
-    public Topic(File root) {
+    public Topic(File root, EcbPlusXmlStore xmlStore) {
       this.root = root;
       this.id = root.getName();
       this.documents = new HashMap<>();
       for (File f : root.listFiles()) {
         if (!f.getName().endsWith(".xml"))
           continue;
-//        Log.info("id=" + id + " f=" + f.getPath());
-        Document d = new Document(f);
+        String docId = f.getName().replaceAll(".xml", "");
+        EcbPlusXmlWrapper xml = xmlStore.get(docId);
+        Document d = new Document(xml);
         documents.put(d.getId(), d);
       }
     }
@@ -144,15 +146,14 @@ public class EcbPlusSearch implements IkbpSearch {
   /**
    * @param topicParent e.g. data/parma/ecbplus/ECB+_LREC2014/ECB+
    */
-  public EcbPlusSearch(File topicParent) {
-    if (!topicParent.isDirectory())
-      throw new IllegalArgumentException("not a dir: " + topicParent.getPath());
+  public EcbPlusSearch(EcbPlusXmlStore xmlStore) {
     // Read in all of the topics and Nodes, index Nodes by word.
     topics = new HashMap<>();
+    File topicParent = xmlStore.getTopicParent();
     for (String f : topicParent.list()) {
       File ff = new File(topicParent, f);
       if (ff.getName().matches("\\d+")) {
-        Topic t = new Topic(ff);
+        Topic t = new Topic(ff, xmlStore);
         Log.info("adding topic: " + t.getId());
         Object old = topics.put(t.getId(), t);
         assert old == null;
@@ -245,16 +246,17 @@ public class EcbPlusSearch implements IkbpSearch {
     return sb.toString();
   }
   
-  public static EcbPlusSearch build(ExperimentProperties config) {
-    File root = config.getExistingDir("data.ecbplus", new File("data/parma/ecbplus/ECB+_LREC2014/ECB+"));
-    return new EcbPlusSearch(root);
-  }
+//  public static EcbPlusSearch build(ExperimentProperties config) {
+//    File root = config.getExistingDir("data.ecbplus", new File("data/parma/ecbplus/ECB+_LREC2014/ECB+"));
+//    return new EcbPlusSearch(root);
+//  }
   
   public static void main(String[] args) {
-    File root = new File("data/parma/ecbplus/ECB+_LREC2014/ECB+");
-    Random rand = new Random(9001);
-    EcbPlusAnnotator anno = new EcbPlusAnnotator(root, rand);
-    EcbPlusSearch search = new EcbPlusSearch(root);
+    ExperimentProperties config = ExperimentProperties.init(args);
+    EcbPlusXmlStore xmlDocs = new EcbPlusXmlStore(config);
+    Random rand = config.getRandom();
+    EcbPlusAnnotator anno = new EcbPlusAnnotator(xmlDocs, rand);
+    EcbPlusSearch search = new EcbPlusSearch(xmlDocs);
     for (Query q = anno.nextQuery(); q != null; q = anno.nextQuery()) {
       DataUtil.showQuery(q);
       

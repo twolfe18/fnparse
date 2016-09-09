@@ -56,6 +56,7 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
    * Have to use hashing of a stable identifier, e.g. "ecb+/t4/d12/m4" for topic, doc, mention
    * NOTE: The format we are currently using is closer to "33_12ecbplus/15" for the 15th mention in doc 33_12ecbplus
    */
+  private EcbPlusXmlStore xmlDocs;
 
   // A list of topic directories like /home/travis/code/fnparse/data/parma/ecbplus/ECB+_LREC2014/ECB+/3
   // The directory at the head of the queue is the "current" topic.
@@ -88,9 +89,8 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
   /**
    * @param topicParent e.g. data/parma/ecbplus/ECB+_LREC2014/ECB+
    */
-  public EcbPlusAnnotator(File topicParent, Random rand) {
-    if (!topicParent.isDirectory())
-      throw new IllegalArgumentException("not a dir: " + topicParent.getPath());
+  public EcbPlusAnnotator(EcbPlusXmlStore xmlDocs, Random rand) {
+    this.xmlDocs = xmlDocs;
     this.context = newPKB();
     this.delta = newPKB();
     this.docs = new ArrayDeque<>();
@@ -103,14 +103,8 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
 
     this.rand = rand;
     this.topics = new ArrayDeque<>();
-    for (String f : topicParent.list()) {
-      File ff = new File(topicParent, f);
-      if (ff.getName().matches("\\d+")) {
-        topics.push(ff);
-      } else if (VERBOSE) {
-        System.out.println("skipping: " + ff.getPath());
-      }
-    }
+    for (File f : xmlDocs.getTopicDirs())
+      topics.push(f);
   }
   
   /** Performs a += b on nodes, edge, and docs */
@@ -183,15 +177,12 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
     mention2Type.clear();
     mention2Node.clear();
     
-    List<File> xmlFiles = new ArrayList<>();
-    for (File f : topic.listFiles())
-      if (f.getPath().endsWith(".xml"))
-        xmlFiles.add(f);
+    List<File> xmlFiles = xmlDocs.getDocs(topic);
     Collections.shuffle(xmlFiles, rand);
 
     docs.clear();
     for (File f : xmlFiles)
-      docs.push(new EcbPlusXmlWrapper(f));
+      docs.push(xmlDocs.get(f));
     
     addTopicLabels();
 
@@ -348,17 +339,20 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
     return nodes.get(0);
   }
   
-  public static EcbPlusAnnotator build(ExperimentProperties config) {
-    File root = config.getExistingDir("data.ecbplus", new File("data/parma/ecbplus/ECB+_LREC2014/ECB+"));
-    Random r = config.getRandom();
-    EcbPlusAnnotator anno = new EcbPlusAnnotator(root, r);
-    return anno;
-  }
+//  public static EcbPlusAnnotator build(ExperimentProperties config) {
+//    File root = config.getExistingDir("data.ecbplus", new File("data/parma/ecbplus/ECB+_LREC2014/ECB+"));
+//    Random r = config.getRandom();
+//    EcbPlusAnnotator anno = new EcbPlusAnnotator(root, r);
+//    return anno;
+//  }
   
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
     VERBOSE = config.getBoolean("verbose", true);
-    EcbPlusAnnotator anno = build(config);
+//    EcbPlusAnnotator anno = build(config);
+    Random r = config.getRandom();
+    EcbPlusXmlStore xmlDocs = new EcbPlusXmlStore(config);
+    EcbPlusAnnotator anno = new EcbPlusAnnotator(xmlDocs, r);
     
     for (Query q = anno.nextQuery(); q != null; q = anno.nextQuery()) {
       

@@ -90,13 +90,13 @@ public class EcbPlusXmlWrapper {
   }
 
   /** Union of grounded mentions and abstract entities/situations which are used for xdoc annotations */
-  static class Node {
-    String m_id;
-    List<String> t_id_orig;   // may be empty, 1-indexed
-    int[] t_id;               // may be empty, 0-indexed
-    String type;        // tag type, e.g. HUMAN_PART_PER or TIME_DURATION
-    String descriptor;  // only filled out for un-grounded nodes, e.g. t3b_judge_gave_life_sentence
-    String instance_id; // only filled out for un-grounded nodes, e.g. ACT16364140299507831
+  public static class Node {
+    public String m_id;
+    public List<String> t_id_orig;   // may be empty, 1-indexed
+    public int[] t_id;               // may be empty, 0-indexed
+    public String type;        // tag type, e.g. HUMAN_PART_PER or TIME_DURATION
+    public String descriptor;  // only filled out for un-grounded nodes, e.g. t3b_judge_gave_life_sentence
+    public String instance_id; // only filled out for un-grounded nodes, e.g. ACT16364140299507831
     
     public Node(String m_id) {
       this.m_id = m_id;
