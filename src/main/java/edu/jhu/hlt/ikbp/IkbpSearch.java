@@ -1,7 +1,11 @@
 package edu.jhu.hlt.ikbp;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Random;
 
 import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
@@ -90,7 +94,9 @@ public interface IkbpSearch {
     private BilinearModel model;
     private MentionFeatureExtractor mfe;
     
-    public FeatureBased(IkbpSearch wrapped, MentionFeatureExtractor features) {
+    public boolean debug = true;
+    
+    public FeatureBased(IkbpSearch wrapped, MentionFeatureExtractor features, Random rand) {
       if (wrapped == null || features == null)
         throw new IllegalArgumentException();
       this.wrapped = wrapped;
@@ -99,20 +105,29 @@ public interface IkbpSearch {
 
       int numTypes = FeatureType.values().length;
       this.model = new BilinearModel(numTypes);
+      this.model.randInitEmbWeights(rand, 0.01);
       
       int D = 50_000;
-      int K = 128;
+      int K = 64;
       this.model.addFeature(FeatureType.INTERCEPT.ordinal(), D, K);
       this.model.addFeature(FeatureType.HEADWORD.ordinal(), D, K);
-//      this.model.addFeature(FeatureType.NODE_TYPE.ordinal(), D, K);
+      this.model.addFeature(FeatureType.REGULAR.ordinal(), D, K);
       this.model.addInteraction(
           FeatureType.HEADWORD.ordinal(),
           FeatureType.HEADWORD.ordinal(),
           BilinearModel.Mode.SCALAR);
-//      this.model.addInteraction(
-//          FeatureType.NODE_TYPE.ordinal(),
-//          FeatureType.NODE_TYPE.ordinal(),
-//          BilinearModel.Mode.SCALAR);
+      this.model.addInteraction(
+          FeatureType.REGULAR.ordinal(),
+          FeatureType.REGULAR.ordinal(),
+          BilinearModel.Mode.SCALAR);
+      this.model.addInteraction(
+          FeatureType.REGULAR.ordinal(),
+          FeatureType.INTERCEPT.ordinal(),
+          BilinearModel.Mode.SCALAR);
+      this.model.addInteraction(
+          FeatureType.INTERCEPT.ordinal(),
+          FeatureType.REGULAR.ordinal(),
+          BilinearModel.Mode.SCALAR);
       this.model.addInteraction(
           FeatureType.HEADWORD.ordinal(),
           FeatureType.INTERCEPT.ordinal(),
@@ -125,6 +140,9 @@ public interface IkbpSearch {
     
     public List<BilinearModel.ProjFeats> encode(Node n) {
 
+      if (debug)
+        System.out.println("in:  " + DataUtil.showFeatures(n.getFeatures()));
+
       // Extract features on this mention
       List<String> m_id = DataUtil.getMentions(n);
       for (String m : m_id)
@@ -133,18 +151,65 @@ public interface IkbpSearch {
       boolean reindex = true;
       List<BilinearModel.ProjFeats> f = new ArrayList<>();
       f.add(model.score(FeatureType.INTERCEPT.ordinal(), new int[] {0}, reindex));
-      for (Id feature : n.getFeatures()) {
-        if (feature.getType() == FeatureType.MENTION_ID.ordinal()) {
-          // these features have values which are pointers, tell you no information you can generalize on.
-          continue;
+      
+      // Sort feature by type
+      Collections.sort(n.getFeatures(), new Comparator<Id>() {
+        @Override
+        public int compare(Id o1, Id o2) {
+          return o1.getType() - o2.getType();
         }
-        // Use the feature hash for now
-        int[] fx = new int[] { feature.getId() };
-        BilinearModel.ProjFeats pf = model.score(feature.getType(), fx, reindex);
-        if (pf != null)
+      });
+      
+      // Group features by type
+      int end;
+      int s = n.getFeaturesSize();
+      for (int cur = 0; cur < s; ) {
+        
+        // Find the features that have the same type as cur
+        int t = n.getFeatures().get(cur).getType();
+        for (end = cur + 1; end < s; end++) {
+          int tt = n.getFeatures().get(end).getType();
+          if (t != tt)
+            break;
+        }
+
+        // New (type:int, fx:int[])
+        int w = end - cur;
+        int[] fx = new int[w];
+        for (int i = 0; i < w; i++)
+          fx[i] = n.getFeatures().get(cur + i).getId();
+        if (debug)
+          Log.info("type=" + FeatureType.findByValue(t) + " fx=" + Arrays.toString(fx));
+        BilinearModel.ProjFeats pf = model.score(t, fx, reindex);
+        if (pf != null) {
           f.add(pf);
+        } else if (debug) {
+          Log.info("skipping " + FeatureType.findByValue(t));
+        }
+
+        cur = end;
       }
-      Log.info("numFeats=" + f.size());
+
+//      for (Id feature : n.getFeatures()) {
+//        if (feature.getType() == FeatureType.MENTION_ID.ordinal()) {
+//          // these features have values which are pointers, tell you no information you can generalize on.
+//          continue;
+//        }
+//
+//        System.out.println("out: " + DataUtil.showFeatures(Arrays.asList(feature)));
+//        if (seenTypes.get(feature.getType()))
+//          System.out.println("skipping: " + feature);
+//        seenTypes.set(feature.getType());
+//
+//        // Use the feature hash for now
+//        int[] fx = new int[] { feature.getId() };
+//        BilinearModel.ProjFeats pf = model.score(feature.getType(), fx, reindex);
+//        if (pf != null)
+//          f.add(pf);
+//      }
+
+      if (debug)
+        Log.info("numFeats=" + f.size());
       return f;
     }
 

@@ -3,6 +3,7 @@ package edu.jhu.hlt.ikbp;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import edu.jhu.hlt.ikbp.data.Edge;
 import edu.jhu.hlt.ikbp.data.FeatureType;
@@ -22,6 +23,20 @@ public class DataUtil {
       if (!s.add(i))
         return false;
     return true;
+  }
+  
+  public static String showFeatures(List<Id> feats) {
+    StringBuilder sb = new StringBuilder();
+    sb.append('[');
+    for (int i = 0; i < feats.size(); i++) {
+      if (i > 0) sb.append(", ");
+      Id f = feats.get(i);
+      sb.append(FeatureType.findByValue(f.getType()));
+      sb.append(':');
+      sb.append(f.getName());
+    }
+    sb.append(']');
+    return sb.toString();
   }
 
   public static String showNames(List<Id> ids) {
@@ -94,10 +109,14 @@ public class DataUtil {
   }
   
   public static List<String> getMentions(Node n) {
+    Set<String> uniq = new HashSet<>();
     List<String> m_id = new ArrayList<>();
-    for (Id f : n.getFeatures())
-      if (f.getType() == FeatureType.MENTION_ID.ordinal())
+    for (Id f : n.getFeatures()) {
+      if (f.getType() == FeatureType.MENTION_ID.ordinal()) {
+        assert uniq.add(f.getName());
         m_id.add(f.getName());
+      }
+    }
     return m_id;
   }
 

@@ -339,17 +339,9 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
     return nodes.get(0);
   }
   
-//  public static EcbPlusAnnotator build(ExperimentProperties config) {
-//    File root = config.getExistingDir("data.ecbplus", new File("data/parma/ecbplus/ECB+_LREC2014/ECB+"));
-//    Random r = config.getRandom();
-//    EcbPlusAnnotator anno = new EcbPlusAnnotator(root, r);
-//    return anno;
-//  }
-  
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
     VERBOSE = config.getBoolean("verbose", true);
-//    EcbPlusAnnotator anno = build(config);
     Random r = config.getRandom();
     EcbPlusXmlStore xmlDocs = new EcbPlusXmlStore(config);
     EcbPlusAnnotator anno = new EcbPlusAnnotator(xmlDocs, r);

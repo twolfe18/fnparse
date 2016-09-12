@@ -9,8 +9,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.xerces.impl.XMLScanner;
-
 import edu.jhu.hlt.ikbp.data.Edge;
 import edu.jhu.hlt.ikbp.data.EdgeType;
 import edu.jhu.hlt.ikbp.data.FeatureType;

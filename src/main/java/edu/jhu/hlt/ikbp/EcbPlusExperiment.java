@@ -81,8 +81,6 @@ public class EcbPlusExperiment {
 
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
-//    EcbPlusAnnotator anno = EcbPlusAnnotator.build(config);
-//    EcbPlusSearch search = EcbPlusSearch.build(config);
     EcbPlusXmlStore xmlDocs = new EcbPlusXmlStore(config);
     Random rand = config.getRandom();
     EcbPlusAnnotator anno = new EcbPlusAnnotator(xmlDocs, rand);
@@ -97,7 +95,7 @@ public class EcbPlusExperiment {
       File parseyEcbPlus = config.getExistingDir("data.ecbplus.parsey",
           new File("data/parma/ecbplus/ECB+_LREC2014/ECB+_pmp_conll"));
       MentionFeatureExtractor mfe = new EcbPlusMentionFeatureExtractor(parseyEcbPlus, xmlDocs);
-      t0 = new IkbpSearch.FeatureBased(search, mfe);
+      t0 = new IkbpSearch.FeatureBased(search, mfe, rand);
     }
     Trainer t = new Trainer(anno, t0);
 
