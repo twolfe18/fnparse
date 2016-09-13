@@ -8,6 +8,12 @@ import edu.jhu.hlt.ikbp.data.Response;
  * include a human in the loop doing IKBP and dataset-specific annotators which
  * serve up queries and responses solely for the purpose of training and evaluating models.
  *
+ * {@link IkbpAnnotator}  {@link IkbpSearch}
+ *  0: Query ->
+ *  1:                     <- Response+
+ *  2: Response* ->                        score field is used for label, kb_delta can be omitted/empty
+ *  3: goto 0 or exit
+ *
  * @author travis
  */
 public interface IkbpAnnotator {

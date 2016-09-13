@@ -43,7 +43,10 @@ enum NodeType {
   // ENTITY_TYPE,
 }
 
-/* Something which can be true or false about a Node */
+/* Something which can be true or false about a Node.
+ * Equivalent to a hyperedge in a hypergraph representation
+ * (graph edge would only have source and sink, less expressive).
+ */
 struct Edge {
   /* Contains the type and a name or id which jointly serve as a unique identifier */
   1: Id id,
@@ -61,7 +64,7 @@ enum EdgeType {
   NER,          // (entity node id, entity type node id or name)
 }
 
-/* A pocket KB */
+/* A pocket KB (can be viewed as a weighted hypergraph). */
 struct PKB {
   1: list<Node> nodes,  // Entities and Situations
   2: list<Edge> edges,  // facts about nodes
