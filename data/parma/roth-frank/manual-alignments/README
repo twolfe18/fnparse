@@ -1,0 +1,22 @@
+This archive contains gold standard predicate alignments for 70 comparable text pairs extracted from the English Gigaword Fifth Edition (Parker et al., 2011)*. We provide these alignments in two seperate ways:
+
+ * The most simple way to view the annotations is to run the provided script (run.sh), which extracts the documents from the Gigaword corpus in XML format and automatically inserts all alignments. To run the script, simply call 'sh run.sh [LOCATION_OF_THE_GIGAWORD_DATA_DIRECTORY]'. The script will create a directory XML/, which will contain two sub-directories dev/ and test/ for the development and testing documents, respectively.
+
+Note that the alignments will be inserted into the XML files in form of ALIGNED tags, each of which contains two attributes: _type_ and _set_. The type attribute refers to whether the alignment has been marked as 'sure' or 'possible'. The set attribute serves as a unique identifier for each alignment pair. Note that if a predicate has not been aligned, there will be an ALIGNED element with the alignment type 'none'; if a predicate has been aligned multiple times, it will be marked by multiple tags.
+
+ * If you do not own a license of Gigaword or if you just want to see what the aligned predicates are, you will also be able to view the file stand_off_annotations.txt (or stand_off_annotations.no_unaligned.txt) manually. Note that some lines refer to a single document ID or a directory handle for pairs of documents. The actual alignments are stored in a space-seperated line format. Each annotation has the following form: 
+
+  [paragraph number] [occurrence number] [predicate] [alignment_id] [alignment_type]
+
+   You can manually investigate what the aligned predicate forms are by comparing the alignment_id columns of each pair of documents under the same directory handle.
+
+If you want to use the data for your own work, please cite Roth and Frank (2012). In case of questions, please do not hesitate to get in touch with the first author at mroth@cl.uni-heidelberg.de.
+
+
+--
+NOTE: The script also works with some older versions of Gigaword (and AQUAINT-2). However, not all gold aligned documents are part of these corpora, so only a sub-set of document pairs will be extracted.
+
+
+Michael Roth and Anette Frank (2012). Aligning predicate argument structures in monolingual comparable texts: A new corpus for a new task. Proceedings of the First Joint Conference on Lexical and Computational Semantics (*SEM), Montreal, Canada.
+
+Robert Parker, David Graff, Junbo Kong, Ke Chen and Kazuaki Maeda (2011). English Gigaword Fifth Edition. Linguistic Data Consortium, Philadelphia.

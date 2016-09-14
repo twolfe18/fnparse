@@ -1,0 +1,1977 @@
+XML/dev/pair_5/
+AFP_ENG_20100516.0537
+1 1 wounded 4 possible
+1 1 attacked 5 possible
+1 1 patrol 6 sure
+1 1 said 7 sure
+1 1 said 8 possible
+2 1 base 9 sure
+2 1 damaged 0 possible
+3 1 lives 1 possible
+4 1 has 2 sure
+4 1 troops 3 sure
+APW_ENG_20100516.0297
+1 1 says 7 sure
+1 1 hospitalized 4 possible
+1 1 patrol 6 sure
+1 1 came 5 possible
+2 1 said 8 possible
+2 1 life 1 possible
+3 1 came 0 possible
+3 1 base 9 sure
+4 1 has 2 sure
+4 1 troops 3 sure
+XML/dev/pair_2/
+AFP_ENG_20011228.0365
+1 1 confidence 2 sure
+1 1 rose 5 sure
+1 1 slumping 7 possible
+1 1 showed 8 possible
+2 1 closely-watched 9 possible
+2 1 index 10 possible
+2 1 rose 11 sure
+2 1 rose 12 possible
+2 1 revised 0 sure
+2 1 declining 1 possible
+3 1 forecast 3 sure
+3 1 drop 4 possible
+4 1 said 6 possible
+APW_ENG_20011228.0572
+1 1 confidence 2 sure
+1 1 confidence 10 possible
+1 1 rose 5 sure
+1 1 rose 12 possible
+1 1 decline 1 possible
+1 1 decline 7 possible
+2 1 said 6 possible
+2 1 said 8 possible
+2 1 rose 11 sure
+2 1 revised 0 sure
+2 1 expecting 3 sure
+2 1 reading 4 possible
+3 1 watched 9 possible
+XML/dev/pair_0/
+AFP_ENG_20101004.0367
+1 1 issued 0 sure
+1 1 living 9 sure
+1 1 travelling 11 sure
+1 1 warning 14 sure
+1 1 attacks 15 sure
+2 1 followed 16 sure
+2 1 alert 17 possible
+4 1 urges 1 possible
+4 1 urges 2 possible
+4 1 citizens 3 sure
+4 1 living 4 possible
+4 1 travelling 5 possible
+4 1 transport 6 possible
+4 1 systems 7 possible
+4 1 spots 8 sure
+5 1 attack 10 possible
+6 1 attack 12 possible
+6 1 said 13 possible
+APW_ENG_20101004.0207
+1 1 issued 0 sure
+1 1 living 4 possible
+1 1 living 9 sure
+1 1 traveling 5 possible
+1 1 traveling 11 sure
+1 1 warning 14 sure
+1 1 attack 10 possible
+1 1 attack 12 possible
+1 1 attack 15 sure
+2 1 follows 16 sure
+2 1 warnings 17 possible
+3 1 announcement 1 possible
+3 1 called 2 possible
+3 1 citizens 3 sure
+3 1 transportation 6 possible
+3 1 transportation 7 possible
+3 1 sites 8 sure
+5 1 spoke 13 possible
+XML/dev/pair_6/
+AFP_ENG_19950111.0161
+APW_ENG_19950111.0552
+XML/dev/pair_3/
+AFP_ENG_20030224.0199
+1 1 killed 2 sure
+1 1 said 3 possible
+3 1 recovered 0 sure
+3 1 border 1 possible
+APW_ENG_20030225.0214
+1 1 killed 2 sure
+1 1 bordering 1 possible
+1 1 said 3 possible
+4 1 found 0 sure
+XML/dev/pair_8/
+AFP_ENG_20031015.0353
+1 1 hold 0 sure
+1 1 elections 3 sure
+1 1 chairman 4 possible
+1 1 said 5 sure
+2 1 told 6 sure
+2 1 asked 7 sure
+3 1 draft 1 sure
+3 1 held 2 possible
+APW_ENG_20031015.0236
+1 1 president 4 possible
+1 1 said 5 sure
+1 1 hold 0 sure
+1 1 hold 2 possible
+1 1 elections 3 sure
+2 1 Asked 7 sure
+2 1 replied 6 sure
+3 1 drafting 1 sure
+XML/dev/pair_7/
+AFP_ENG_20041206.0452
+1 1 bound 2 possible
+1 1 made 4 sure
+1 1 landing 5 sure
+1 1 problem 6 sure
+2 1 landed 7 possible
+3 1 problem 0 possible
+3 1 problem 1 possible
+3 1 land 3 possible
+APW_ENG_20041206.0193
+1 1 traveling 2 possible
+1 1 made 4 sure
+1 1 landing 3 possible
+1 1 landing 5 sure
+1 1 landing 7 possible
+1 1 problem 0 possible
+1 1 problem 6 sure
+2 1 problems 1 possible
+XML/dev/pair_9/
+AFP_ENG_20090422.0141
+1 1 killed 3 sure
+1 1 said 6 sure
+2 1 died 7 sure
+2 1 said 8 possible
+2 1 giving 0 possible
+3 1 took 1 sure
+3 1 troops 2 possible
+3 1 killed 4 sure
+3 1 invasion 5 possible
+APW_ENG_20090422.1350
+1 1 says 6 sure
+1 1 killed 3 sure
+2 1 says 8 possible
+2 1 died 7 sure
+3 1 give 0 possible
+4 1 raises 1 sure
+4 1 members 2 possible
+4 1 died 4 sure
+4 1 war 5 possible
+XML/dev/pair_1/
+AFP_ENG_20050506.0114
+1 1 open 0 sure
+1 1 said 3 possible
+4 1 head 1 possible
+5 1 begin 2 possible
+APW_ENG_20050506.0884
+1 1 open 0 sure
+1 1 said 3 possible
+2 1 run 2 possible
+4 1 head 1 possible
+XML/dev/pair_4/
+AFP_ENG_20070410.0204
+1 1 killed 0 possible
+1 1 wounded 1 possible
+1 1 said 2 possible
+1 1 said 3 possible
+APW_ENG_20070410.0525
+1 1 killing 0 possible
+1 1 wounding 1 possible
+1 1 said 3 possible
+2 1 said 2 possible
+XML/test/pair_41/
+AFP_ENG_19950827.0150
+1 1 exploded 1 sure
+1 1 injuring 10 sure
+1 1 reported 12 sure
+2 1 went 13 sure
+2 1 went 14 possible
+2 1 said 15 sure
+2 1 injured 16 possible
+3 1 caused 0 sure
+3 1 damage 2 sure
+3 1 waiting 3 sure
+3 1 occurred 4 sure
+4 1 accused 5 sure
+4 1 group 6 sure
+4 1 based 7 sure
+5 1 blamed 8 possible
+5 1 explosions 9 possible
+5 1 borders 11 possible
+APW_ENG_19950828.0098
+1 1 exploded 1 sure
+1 1 wounding 10 sure
+1 1 wounding 16 possible
+1 1 reported 12 sure
+2 1 quoted 15 sure
+2 1 blast 13 sure
+2 1 caused 0 sure
+2 1 damage 2 sure
+3 1 waiting 3 sure
+3 1 exploded 4 sure
+3 1 exploded 14 possible
+4 1 alleged 5 sure
+4 1 alleged 8 possible
+4 1 bombings 9 possible
+4 1 movement 6 sure
+4 1 based 7 sure
+4 1 neighboring 11 possible
+XML/test/pair_5/
+AFP_ENG_20020125.0638
+1 1 given 2 sure
+1 1 defeat 6 sure
+1 1 transferred 9 sure
+2 1 sent 10 sure
+2 1 appearing 11 sure
+2 1 raise 12 sure
+2 1 hand 13 sure
+2 1 clash 0 sure
+3 1 coverage 1 sure
+3 1 showed 3 sure
+3 1 team-mate 4 sure
+4 1 transfer 5 possible
+5 1 start 7 sure
+5 1 suspension 8 sure
+APW_ENG_20020125.1079
+1 1 given 2 sure
+1 1 loss 6 sure
+1 1 transferred 5 possible
+1 1 transferred 9 sure
+1 1 teammate 4 sure
+2 1 sent 10 sure
+2 1 match 0 sure
+2 1 appearing 11 sure
+2 1 raise 12 sure
+2 1 hand 13 sure
+3 1 coverage 1 sure
+3 1 showed 3 sure
+3 1 start 7 sure
+3 1 suspension 8 sure
+XML/test/pair_36/
+AFP_ENG_20040303.0099
+1 1 trial 1 sure
+1 1 accused 6 possible
+1 1 accused 13 sure
+1 1 torturing 19 possible
+1 1 torturing 24 sure
+1 1 killing 28 sure
+1 1 convicted 29 sure
+1 1 offender 30 sure
+1 1 began 31 possible
+1 1 nation 32 possible
+2 1 criticism 0 possible
+3 1 serving 2 possible
+3 1 serving 3 possible
+3 1 term 4 possible
+4 1 face 5 possible
+4 1 allegations 7 sure
+4 1 allegations 8 possible
+4 1 tortured 9 sure
+4 1 tortured 10 possible
+4 1 offender 11 possible
+4 1 offender 12 possible
+5 1 security 14 sure
+5 1 imposed 15 possible
+5 1 held 16 possible
+6 1 death 17 possible
+6 1 death 18 possible
+6 1 died 20 possible
+6 1 spread 21 sure
+6 1 spread 22 possible
+6 1 spread 23 possible
+6 1 attacked 25 possible
+7 1 ruled 26 sure
+8 1 criticised 27 possible
+APW_ENG_20040303.0484
+1 1 charges 8 possible
+1 1 charges 13 sure
+1 1 torturing 10 possible
+1 1 torturing 24 sure
+1 1 death 28 sure
+1 1 led 23 possible
+1 1 unrest 25 possible
+2 1 accused 5 possible
+2 1 accused 6 possible
+2 1 accused 7 sure
+2 1 torturing 9 sure
+2 1 torturing 19 possible
+2 1 drug-related 11 possible
+2 1 drug-related 30 sure
+2 1 charges 12 possible
+2 1 charges 29 sure
+2 1 died 17 possible
+5 1 broke 21 sure
+5 1 killed 18 possible
+5 1 killed 20 possible
+5 1 took 22 possible
+5 1 country 32 possible
+6 1 trials 1 sure
+6 1 started 16 possible
+6 1 started 31 possible
+6 1 security 14 sure
+6 1 security 15 possible
+7 1 ruled 2 possible
+7 1 ruled 4 possible
+7 1 ruled 26 sure
+7 1 longest-serving 3 possible
+7 1 accused 0 possible
+7 1 accused 27 possible
+XML/test/pair_32/
+AFP_ENG_20070316.0320
+1 1 carrying 0 sure
+1 1 gone 5 sure
+1 1 missing 6 sure
+1 1 said 7 sure
+2 1 gone 8 possible
+2 1 missing 9 possible
+3 1 northeast 1 possible
+4 1 alerted 2 possible
+4 1 alerted 3 possible
+4 1 looking 4 possible
+APW_ENG_20070316.0868
+1 1 carrying 0 sure
+1 1 disappeared 5 sure
+1 1 disappeared 6 sure
+1 1 disappeared 8 possible
+1 1 disappeared 9 possible
+1 1 said 7 sure
+3 1 northeast 1 possible
+4 1 launched 3 possible
+4 1 checking 4 possible
+4 1 involved 2 possible
+XML/test/pair_18/
+AFP_ENG_20090625.0273
+1 1 members 4 sure
+1 1 arrested 11 sure
+1 1 said 12 sure
+2 1 arrested 13 sure
+2 1 suburb 14 sure
+2 1 search 0 sure
+2 1 home 1 sure
+2 1 source 2 possible
+2 1 said 3 sure
+6 1 search 5 possible
+6 1 home 6 possible
+6 1 said 7 possible
+8 1 deaths 8 sure
+8 1 campaign 9 sure
+8 1 homeland 10 sure
+APW_ENG_20090625.0368
+1 1 say 12 sure
+1 1 detained 11 sure
+1 1 members 4 sure
+2 1 official 2 possible
+3 1 says 3 sure
+3 1 says 7 possible
+3 1 detained 13 sure
+3 1 edge 14 sure
+3 1 apartment 1 sure
+3 1 apartment 6 possible
+3 1 searched 0 sure
+3 1 searched 5 possible
+4 1 killed 8 sure
+4 1 campaign 9 sure
+4 1 homeland 10 sure
+XML/test/pair_12/
+AFP_ENG_20070918.0125
+1 1 slashed 5 possible
+1 1 slashed 6 sure
+1 1 rate 7 possible
+1 1 rate 8 sure
+4 1 face 0 possible
+4 1 threatens 1 possible
+4 1 threatens 2 sure
+6 1 intended 3 possible
+6 1 intended 4 sure
+APW_ENG_20070919.0032
+1 1 jumped 0 possible
+1 1 rate 1 possible
+1 1 rate 3 possible
+1 1 rate 8 sure
+1 1 cut 6 sure
+2 1 cut 2 sure
+2 1 cut 5 possible
+2 1 rate 4 sure
+2 1 rate 7 possible
+XML/test/pair_29/
+AFP_ENG_20060505.0532
+1 1 head 1 sure
+1 1 head 3 possible
+1 1 released 5 sure
+1 1 treatment 6 sure
+1 1 said 7 sure
+2 1 said 8 possible
+3 1 hospitalised 0 sure
+4 1 spent 2 sure
+4 1 injury 4 sure
+APW_ENG_20060505.0569
+1 1 head 1 sure
+1 1 released 5 sure
+1 1 treatment 6 sure
+1 1 said 7 sure
+1 1 said 8 possible
+2 1 leader 3 possible
+3 1 hospitalized 0 sure
+4 1 hospitalized 2 sure
+4 1 injuring 4 sure
+XML/test/pair_16/
+AFP_ENG_20090912.0006
+1 1 wants 3 sure
+1 1 adopt 11 possible
+1 1 adopt 13 sure
+1 1 saying 15 sure
+1 1 saying 19 possible
+1 1 stolen 20 sure
+1 1 heart 22 sure
+1 1 meeting 23 sure
+2 1 visiting 24 possible
+2 1 visiting 25 sure
+2 1 foundation 26 possible
+3 1 partner 0 sure
+3 1 considered 1 sure
+3 1 adopting 2 sure
+3 1 said 4 possible
+3 1 said 5 sure
+3 1 wanted 6 possible
+3 2 adopt 7 possible
+5 1 love 8 possible
+5 1 adopt 9 possible
+5 1 said 10 possible
+6 1 stolen 12 possible
+6 1 heart 14 possible
+7 1 changed 16 sure
+7 1 mind 17 sure
+8 1 said 18 possible
+10 1 give 21 sure
+APW_ENG_20090913.0245
+1 1 adopted 11 possible
+2 1 says 5 sure
+2 1 says 10 possible
+2 1 says 19 possible
+2 1 wants 3 sure
+2 1 wants 6 possible
+2 1 wants 8 possible
+2 1 adopt 7 possible
+2 1 adopt 9 possible
+2 1 adopt 13 sure
+2 1 met 23 sure
+3 1 says 15 sure
+3 1 stole 12 possible
+3 1 stole 20 sure
+3 1 heart 14 possible
+3 1 heart 22 sure
+3 1 visit 24 possible
+4 1 said 4 possible
+4 1 partner 0 sure
+4 1 discussed 1 sure
+4 1 adopting 2 sure
+5 1 says 18 possible
+5 1 changed 16 sure
+5 1 mind 17 sure
+5 1 give 21 sure
+6 1 visiting 25 sure
+6 1 work 26 possible
+XML/test/pair_15/
+AFP_ENG_20100401.0500
+1 1 workers 2 sure
+1 1 staged 3 sure
+1 1 strike 4 sure
+3 1 complained 0 sure
+3 1 cuts 1 sure
+APW_ENG_20100401.0243
+1 1 workers 2 sure
+1 1 launched 3 sure
+1 1 strike 4 sure
+3 1 protesting 0 sure
+3 1 decreased 1 sure
+XML/test/pair_48/
+AFP_ENG_20031029.0129
+1 1 tested 1 sure
+1 1 developing 2 sure
+1 1 said 4 sure
+2 1 has 5 sure
+2 1 range 6 sure
+2 1 carry 7 sure
+3 1 test 0 possible
+6 1 developed 3 possible
+APW_ENG_20031029.0093
+1 1 test-fired 0 possible
+1 1 test-fired 1 sure
+1 1 developed 2 sure
+1 1 developed 3 possible
+1 1 said 4 sure
+2 1 has 5 sure
+2 1 range 6 sure
+2 1 carry 7 sure
+XML/test/pair_42/
+AFP_ENG_20050211.0605
+1 1 killed 6 sure
+1 1 accidents 7 sure
+1 1 announced 8 sure
+2 1 serving 9 sure
+2 1 killed 10 possible
+2 1 killed 11 sure
+2 1 operation 12 sure
+2 1 said 0 sure
+3 1 assigned 1 sure
+3 1 killed 2 sure
+3 1 accident 3 sure
+4 1 said 4 possible
+4 1 given 5 possible
+APW_ENG_20050211.1100
+1 1 killed 6 sure
+1 1 killed 10 possible
+1 1 accidents 7 sure
+1 1 said 8 sure
+2 1 assigned 9 sure
+2 1 died 11 sure
+2 1 operations 12 sure
+2 1 said 0 sure
+3 1 assigned 1 sure
+3 1 killed 2 sure
+3 1 accident 3 sure
+3 1 added 4 possible
+4 1 withheld 5 possible
+XML/test/pair_52/
+AFP_ENG_20080622.0265
+1 1 agreed 3 sure
+1 1 submit 4 sure
+1 1 dispute 7 sure
+1 1 said 8 sure
+2 1 Fighting 9 possible
+2 1 return 0 sure
+2 1 war 1 sure
+2 1 ended 2 sure
+8 1 body 5 possible
+8 1 dispute 6 possible
+APW_ENG_20080621.0594
+1 1 reported 8 sure
+1 1 agreed 3 sure
+1 1 use 4 sure
+1 1 conflicting 6 possible
+1 1 conflicting 7 sure
+2 1 council 5 possible
+4 1 clashes 9 possible
+5 1 reignite 0 sure
+5 1 war 1 sure
+5 1 ended 2 sure
+XML/test/pair_55/
+AFP_ENG_20070830.0475
+1 1 soldier 2 sure
+1 1 interpreter 11 sure
+1 1 killed 12 sure
+1 1 said 13 sure
+2 1 died 14 possible
+2 1 injuries 0 sure
+3 1 time 1 sure
+3 1 caught 3 sure
+3 1 said 4 possible
+3 1 said 5 sure
+3 1 statement 6 sure
+4 1 evacuated 7 sure
+5 1 pronounced 8 sure
+5 1 died 9 sure
+5 1 wounds 10 sure
+APW_ENG_20070830.0597
+1 1 soldier 2 sure
+1 1 interpreter 11 sure
+1 1 killed 12 sure
+1 1 killed 14 possible
+1 1 caught 3 sure
+1 1 said 4 possible
+1 1 said 13 sure
+2 2 time 1 sure
+2 1 said 5 sure
+2 1 statement 6 sure
+2 1 wounded 0 sure
+3 1 evacuated 7 sure
+3 1 pronounced 8 sure
+3 1 died 9 sure
+3 1 wounds 10 sure
+XML/test/pair_21/
+AFP_ENG_20100328.0460
+1 1 earned 1 possible
+2 1 won 0 sure
+3 1 saw 2 possible
+3 1 claimed 3 sure
+3 1 victory 4 sure
+4 1 sent 5 sure
+4 1 right 6 sure
+4 1 bounced 7 sure
+5 1 fought 8 sure
+APW_ENG_20100328.0082
+2 1 won 0 sure
+2 1 won 1 possible
+3 1 claimed 3 sure
+3 1 victory 4 sure
+3 1 won 2 possible
+4 1 fought 8 sure
+5 1 knocked 5 sure
+5 1 right 6 sure
+5 1 got 7 sure
+XML/test/pair_49/
+AFP_ENG_20060105.0025
+1 1 gifted 1 sure
+1 1 berth 4 sure
+1 1 final 5 sure
+1 1 tournament 6 sure
+2 1 treatment 0 possible
+2 1 clash 2 possible
+6 1 meet 3 sure
+APW_ENG_20060105.0206
+1 1 tournament 6 sure
+1 1 play 3 sure
+2 3 match 2 possible
+2 3 match 5 sure
+3 1 injury 0 possible
+3 1 handed 1 sure
+3 1 place 4 sure
+XML/test/pair_2/
+AFP_ENG_20100403.0360
+1 1 soldier 2 sure
+1 1 killed 11 sure
+1 1 killed 13 possible
+1 1 explosion 14 sure
+1 1 said 15 sure
+2 1 killed 16 possible
+2 1 killed 17 sure
+2 1 bomb 18 possible
+2 1 bomb 19 possible
+2 1 said 20 sure
+2 1 giving 21 sure
+2 1 details 0 sure
+3 1 member 1 possible
+3 1 died 3 possible
+3 1 died 4 possible
+3 1 result 5 sure
+3 1 improvised 6 possible
+3 1 improvised 7 sure
+3 1 strike 8 possible
+3 1 said 9 possible
+3 1 said 10 possible
+5 1 killed 12 sure
+APW_ENG_20100403.0077
+1 1 says 9 possible
+1 1 says 15 sure
+1 1 soldiers 1 possible
+1 1 soldiers 2 sure
+1 1 killed 3 possible
+1 1 killed 11 sure
+1 1 killed 16 possible
+1 1 bomb 6 possible
+1 1 bomb 8 possible
+1 1 bomb 14 sure
+1 1 bomb 18 possible
+2 1 says 10 possible
+2 1 says 20 sure
+2 1 died 4 possible
+2 1 died 13 possible
+2 1 died 17 sure
+2 1 result 5 sure
+2 1 improvised 7 sure
+2 1 improvised 19 possible
+2 1 gave 21 sure
+2 1 details 0 sure
+3 1 killed 12 sure
+XML/test/pair_23/
+AFP_ENG_20061030.0260
+1 1 wounded 1 possible
+1 1 wounded 4 sure
+1 1 attacked 7 possible
+1 1 attacked 8 sure
+1 1 said 9 sure
+2 1 release 10 possible
+2 1 nationalities 11 sure
+3 1 came 0 possible
+3 1 came 2 possible
+3 1 came 3 possible
+4 1 attack 5 possible
+4 1 attack 6 possible
+APW_ENG_20061030.0556
+1 1 clash 0 possible
+1 1 clash 6 possible
+1 1 clash 8 sure
+1 1 wounded 4 sure
+1 1 said 9 sure
+2 1 occurred 2 possible
+2 1 spokesman 3 possible
+2 1 disclose 10 possible
+2 1 nationalities 11 sure
+3 1 wounded 1 possible
+3 1 attacks 5 possible
+3 1 attacks 7 possible
+XML/test/pair_46/
+AFP_ENG_20090423.0026
+1 1 directed 0 possible
+1 1 directed 1 sure
+1 1 died 2 sure
+3 1 directed 3 possible
+3 1 directed 4 possible
+3 1 films 5 possible
+3 1 films 6 possible
+3 1 films 7 possible
+APW_ENG_20090423.1278
+1 1 director 0 possible
+1 1 died 2 sure
+2 1 directing 1 sure
+4 1 films 5 possible
+4 1 include 3 possible
+4 1 directed 4 possible
+4 1 adaptation 6 possible
+4 2 film 7 possible
+XML/test/pair_39/
+AFP_ENG_20080421.0035
+1 1 secretary 4 sure
+1 1 secretary 5 possible
+1 1 joined 7 sure
+1 1 pundit 8 sure
+1 1 battled 9 possible
+1 1 battled 10 possible
+1 1 battled 11 possible
+1 1 cancer 12 possible
+1 1 quit 13 sure
+1 1 quit 14 possible
+1 1 chief 0 possible
+1 1 chief 1 possible
+1 1 spokesman 2 possible
+1 1 spokesman 3 possible
+2 1 join 6 possible
+APW_ENG_20080422.0893
+1 1 secretary 0 possible
+1 1 secretary 2 possible
+1 1 secretary 4 sure
+1 1 joined 6 possible
+1 1 joined 7 sure
+1 1 commentator 8 sure
+6 1 underwent 9 possible
+6 2 underwent 10 possible
+6 1 surgery 11 possible
+6 2 cancer 12 possible
+7 1 resignation 13 sure
+7 1 secretary 1 possible
+7 1 secretary 3 possible
+7 1 secretary 5 possible
+7 1 departure 14 possible
+XML/test/pair_28/
+AFP_ENG_20051102.0447
+1 1 want 2 sure
+1 1 extend 9 sure
+1 1 contract 10 possible
+2 1 sustained 11 possible
+2 1 injury 12 sure
+2 1 injury 13 possible
+2 1 prepared 14 possible
+2 1 start 15 possible
+2 1 negotiations 16 possible
+2 1 contract 17 possible
+2 1 contract 18 possible
+3 1 sit 0 sure
+3 1 agent 1 sure
+3 1 sort 3 sure
+3 1 extension 4 sure
+3 1 injury 5 possible
+3 1 injury 6 possible
+3 1 explained 7 sure
+4 1 end 8 possible
+APW_ENG_20051102.0531
+1 1 plans 2 sure
+1 1 plans 14 possible
+1 1 offer 15 possible
+1 1 offer 16 possible
+1 1 extension 9 sure
+1 1 extension 18 possible
+1 1 injury 5 possible
+1 1 injury 12 sure
+2 1 tore 6 possible
+2 1 tore 11 possible
+2 1 tore 13 possible
+3 1 sit 0 sure
+3 1 agent 1 sure
+3 1 talk 3 sure
+3 1 extending 4 sure
+3 1 contract 10 possible
+3 1 contract 17 possible
+3 1 said 7 sure
+4 1 end 8 possible
+XML/test/pair_0/
+AFP_ENG_20070308.0038
+1 1 announced 3 sure
+1 1 confirmed 11 possible
+1 1 killed 15 possible
+2 1 confirmed 16 possible
+2 1 virus 0 possible
+2 1 virus 1 sure
+2 1 said 2 sure
+2 1 statement 4 possible
+3 1 died 5 sure
+3 1 died 6 possible
+3 1 neighbouring 7 sure
+3 1 treated 8 sure
+3 1 said 9 possible
+4 1 strain 10 possible
+APW_ENG_20070308.0343
+1 1 announced 3 sure
+1 1 announced 16 possible
+1 1 country's 11 possible
+1 1 victim 13 possible
+1 1 virus 1 sure
+1 1 virus 15 possible
+1 1 died 5 sure
+1 1 died 14 possible
+2 1 died 6 possible
+2 1 treatment 8 sure
+2 1 neighboring 7 sure
+2 1 said 2 sure
+2 1 said 9 possible
+2 1 said 12 possible
+2 1 statement 4 possible
+3 1 virus 0 possible
+3 1 virus 10 possible
+XML/test/pair_14/
+AFP_ENG_20051210.0122
+1 1 kidnapped 2 sure
+1 1 found 4 sure
+1 1 said 5 possible
+2 1 snatched 6 possible
+2 1 home 7 possible
+3 1 body 0 sure
+3 1 discovered 1 sure
+6 1 hostage 3 possible
+APW_ENG_20051210.0322
+1 1 found 4 sure
+1 1 kidnapped 2 sure
+1 1 kidnapped 6 possible
+1 1 said 5 possible
+2 1 body 0 sure
+2 1 found 1 sure
+3 1 living 7 possible
+3 1 working 3 possible
+XML/test/pair_6/
+AFP_ENG_19951229.0428
+1 1 named 2 sure
+1 1 squad 9 sure
+1 1 missed 10 sure
+1 1 series 11 sure
+2 1 included 12 sure
+2 1 announced 13 sure
+2 1 authority 14 possible
+3 1 team 15 sure
+3 1 announced 16 sure
+4 1 included 0 sure
+4 1 played 1 sure
+4 1 making 3 sure
+4 1 bid 4 sure
+4 1 resume 5 sure
+4 1 careers 6 sure
+4 1 opening 7 sure
+4 1 pace 8 possible
+APW_ENG_19951229.0939
+1 1 named 2 sure
+1 1 squad 9 sure
+1 1 missing 10 sure
+1 1 series 11 sure
+2 1 included 12 sure
+2 1 announced 13 sure
+2 1 Cricket 14 possible
+2 1 team 15 sure
+2 2 announced 16 sure
+4 1 included 0 sure
+4 1 played 1 sure
+4 2 making 3 sure
+4 1 bid 4 sure
+4 1 resume 5 sure
+4 1 careers 6 sure
+4 1 opening 7 sure
+4 1 bowler 8 possible
+XML/test/pair_3/
+AFP_ENG_20090806.0087
+1 1 announced 5 sure
+1 1 retirement 6 sure
+4 1 has 0 possible
+4 1 has 1 possible
+4 1 has 2 sure
+4 1 games 3 sure
+5 1 played 4 possible
+APW_ENG_20090806.1150
+1 1 announcing 5 sure
+1 1 retirement 6 sure
+2 2 scored 2 sure
+3 1 had 0 possible
+3 1 games 3 sure
+4 1 scored 1 possible
+4 1 went 4 possible
+XML/test/pair_51/
+AFP_ENG_20011211.0156
+1 1 said 1 sure
+1 1 said 5 possible
+1 1 form 7 sure
+1 1 alliance 10 possible
+1 1 alliance 11 possible
+1 1 alliance 12 sure
+1 1 consolidation 13 possible
+1 1 consolidation 14 possible
+2 1 cooperate 15 possible
+2 1 said 0 possible
+3 1 cut 2 possible
+3 1 cut 3 sure
+3 1 said 4 possible
+4 1 steelmaker 6 sure
+5 1 survive 8 sure
+5 1 competition 9 sure
+APW_ENG_20011211.1598
+1 1 form 7 sure
+1 1 tie-up 12 sure
+1 1 cutting 3 sure
+1 1 cutting 14 possible
+1 1 said 4 possible
+1 1 said 5 possible
+2 1 cooperate 15 possible
+2 1 said 0 possible
+4 1 alliance 10 possible
+4 1 manufacturer 6 sure
+4 1 cuts 2 possible
+4 1 maintain 8 sure
+4 1 maintain 13 possible
+4 1 competitiveness 9 sure
+5 1 told 1 sure
+5 1 alliance 11 possible
+XML/test/pair_47/
+AFP_ENG_20030514.0715
+2 1 cancelled 0 sure
+2 1 concert 1 sure
+2 1 reasons 2 sure
+2 1 assassination 3 possible
+2 1 assassination 4 sure
+5 1 part 5 possible
+5 1 tour 6 possible
+APW_ENG_20030513.0293
+1 1 canceled 0 sure
+1 1 concert 1 sure
+1 1 concerns 2 sure
+2 1 slaying 4 sure
+3 1 killed 3 possible
+6 1 part 5 possible
+6 1 tour 6 possible
+XML/test/pair_10/
+AFP_ENG_19950428.0217
+1 1 informed 2 sure
+1 1 informed 3 possible
+1 1 release 4 sure
+1 1 release 5 possible
+1 1 detained 6 possible
+1 1 detained 7 sure
+1 1 said 8 sure
+2 1 captain 9 sure
+2 2 captain 10 sure
+2 1 released 11 sure
+2 1 said 12 possible
+3 1 released 0 possible
+3 1 picked 1 sure
+APW_ENG_19950428.0189
+1 1 informed 2 sure
+1 1 release 4 sure
+1 1 detained 7 sure
+1 1 said 8 sure
+2 1 informed 3 possible
+2 1 informed 12 possible
+2 1 release 5 possible
+2 1 release 11 sure
+3 1 captain 9 sure
+3 2 captain 10 sure
+4 1 detained 0 possible
+4 1 detained 1 sure
+4 1 detained 6 possible
+XML/test/pair_8/
+AFP_ENG_20060714.0443
+1 1 rider 0 sure
+2 1 clocked 1 sure
+4 1 champion 2 sure
+APW_ENG_20060714.0725
+1 1 rider 0 sure
+2 1 clocked 1 sure
+4 1 champion 2 sure
+XML/test/pair_37/
+AFP_ENG_20020301.0041
+1 1 junta 2 sure
+1 1 said 9 possible
+1 1 freed 11 sure
+1 1 members 12 sure
+1 1 opposition 13 sure
+1 1 leader 14 sure
+2 1 identified 15 sure
+2 1 released 16 possible
+2 1 released 17 sure
+2 1 said 0 possible
+2 1 statement 1 sure
+4 1 released 3 possible
+4 1 released 4 sure
+4 1 prisoners 5 possible
+4 1 embarked 6 sure
+4 1 talks 7 sure
+5 1 released 8 possible
+6 1 freed 10 possible
+APW_ENG_20020301.0132
+1 1 junta 2 sure
+1 1 freed 11 sure
+1 1 freed 16 possible
+1 1 members 12 sure
+1 1 opposition 13 sure
+1 1 leader 14 sure
+2 1 said 9 possible
+3 1 releasing 3 possible
+3 1 members 5 possible
+3 1 began 6 sure
+3 1 talks 7 sure
+4 1 releases 8 possible
+4 1 freed 4 sure
+4 1 freed 10 possible
+7 1 released 17 sure
+7 1 identified 15 sure
+7 1 statement 1 sure
+7 1 say 0 possible
+XML/test/pair_7/
+AFP_ENG_20100408.0586
+1 1 host 1 sure
+1 1 conference 3 sure
+1 1 reforming 9 sure
+1 1 said 11 sure
+2 1 review 12 possible
+2 1 reform 0 possible
+3 1 joined 2 possible
+5 1 announced 4 possible
+5 1 tax 5 sure
+5 1 used 6 sure
+5 1 used 7 possible
+5 1 rescues 8 possible
+5 1 crisis 10 sure
+APW_ENG_20100408.0307
+1 1 says 11 sure
+1 1 host 1 sure
+1 1 conference 3 sure
+1 1 discuss 12 possible
+1 1 reform 0 possible
+1 1 reform 9 sure
+2 1 include 2 possible
+5 1 plans 4 possible
+5 1 levy 5 sure
+5 1 finance 6 sure
+5 1 defuse 7 possible
+5 1 defuse 8 possible
+5 1 crises 10 sure
+XML/test/pair_20/
+AFP_ENG_20080205.0230
+1 1 fleeing 0 possible
+1 1 fleeing 1 sure
+1 1 arrived 4 sure
+2 1 crossing 5 possible
+2 1 fighting 6 sure
+5 1 fled 2 possible
+5 1 fled 3 possible
+APW_ENG_20080206.0766
+1 1 fleeing 1 sure
+1 1 fleeing 3 possible
+1 1 fighting 6 sure
+1 1 crossed 4 sure
+1 1 crossed 5 possible
+3 1 fled 0 possible
+3 1 fled 2 possible
+XML/test/pair_22/
+AFP_ENG_20090328.0275
+1 1 forces 1 possible
+1 1 forces 2 sure
+1 1 killed 10 sure
+1 1 killed 11 possible
+1 1 operation 12 sure
+1 1 bordering 13 sure
+2 1 said 14 possible
+2 1 said 15 possible
+2 1 gunships 16 sure
+2 1 went 0 possible
+3 1 killed 3 possible
+3 1 killed 4 possible
+3 1 action 5 possible
+3 1 forces 6 sure
+3 1 forces 7 possible
+3 1 said 8 possible
+4 1 statement 9 possible
+APW_ENG_20090328.0476
+1 1 says 14 possible
+1 1 troops 2 sure
+1 1 troops 7 possible
+1 1 backed 0 possible
+1 1 gunships 16 sure
+1 1 killed 3 possible
+1 1 killed 10 sure
+1 1 border 13 sure
+2 1 said 8 possible
+2 1 said 15 possible
+2 1 killed 4 possible
+2 1 killed 11 possible
+2 1 operation 5 possible
+2 1 operation 12 sure
+2 1 forces 1 possible
+2 1 forces 6 sure
+3 1 statement 9 possible
+XML/test/pair_24/
+AFP_ENG_20100531.0027
+1 1 won 0 possible
+1 1 won 2 sure
+1 1 crossing 10 sure
+2 1 broke 11 sure
+2 1 entered 12 sure
+3 1 crowd 13 sure
+3 1 expecting 14 sure
+3 1 cheered 1 sure
+3 1 became 3 sure
+3 1 cross 4 sure
+4 1 won 5 sure
+4 1 won 6 possible
+6 1 claimed 7 possible
+6 1 title 8 sure
+6 1 defended 9 sure
+APW_ENG_20100531.0858
+1 1 won 2 sure
+1 1 won 6 possible
+1 1 crossing 10 sure
+2 1 broke 11 sure
+2 1 entered 12 sure
+2 1 Expecting 14 sure
+2 1 crowd 13 sure
+2 1 roared 1 sure
+2 1 became 3 sure
+2 1 cross 4 sure
+3 1 finished 0 possible
+3 1 finished 5 sure
+5 1 retained 7 possible
+5 1 retained 9 sure
+5 1 title 8 sure
+XML/test/pair_40/
+AFP_ENG_20040718.0235
+1 1 champions 0 sure
+2 1 played 1 possible
+APW_ENG_20040717.0096
+1 1 meet 1 possible
+2 1 winners 0 sure
+XML/test/pair_33/
+AFP_ENG_20020214.0493
+1 1 issued 0 possible
+1 1 request 4 possible
+1 1 alliance 5 sure
+1 1 obtaining 6 sure
+1 1 immunity 7 sure
+3 1 refused 1 possible
+4 1 withdraw 2 possible
+4 1 request 3 possible
+APW_ENG_20020214.1078
+1 1 abandoned 0 possible
+1 1 abandoned 2 possible
+1 1 effort 3 possible
+1 1 effort 4 possible
+1 1 work 5 sure
+2 1 blocked 1 possible
+2 1 granting 6 sure
+2 1 immunity 7 sure
+XML/test/pair_9/
+AFP_ENG_20090518.0502
+1 1 reported 0 sure
+1 1 case 10 sure
+1 1 flu 17 possible
+1 1 returned 22 sure
+1 1 returned 23 possible
+2 1 said 1 possible
+2 1 said 2 possible
+2 1 said 3 possible
+2 1 statement 4 sure
+3 1 confirm 5 possible
+3 1 upgrade 6 possible
+3 1 suspected 7 possible
+3 1 case 8 possible
+4 1 identified 9 sure
+4 1 travelled 11 sure
+4 1 returning 12 possible
+4 1 returning 13 possible
+4 1 said 14 possible
+4 1 said 15 possible
+4 1 said 16 possible
+5 1 fever 18 sure
+5 1 added 19 possible
+6 1 confirmed 20 sure
+6 1 cases 21 possible
+APW_ENG_20090518.0349
+1 1 says 0 sure
+1 1 says 2 possible
+1 1 says 15 possible
+1 1 returned 13 possible
+1 1 returned 22 sure
+1 1 case 10 sure
+2 1 said 3 possible
+2 1 said 16 possible
+2 1 said 19 possible
+2 1 statement 4 sure
+2 1 returned 11 sure
+2 1 returned 23 possible
+2 1 fever 18 sure
+3 1 says 1 possible
+3 1 says 14 possible
+3 1 identify 9 sure
+3 1 arrived 12 possible
+4 1 confirmed 5 possible
+4 1 confirmed 20 sure
+4 1 become 6 possible
+4 1 known 7 possible
+4 1 case 8 possible
+4 1 case 21 possible
+4 1 flu 17 possible
+XML/test/pair_1/
+AFP_ENG_20080806.0046
+1 1 deployed 7 sure
+1 1 coast 10 possible
+1 1 escort 11 sure
+1 1 carrying 12 possible
+2 1 dispatched 0 possible
+2 1 arrival 1 sure
+2 1 said 2 sure
+2 1 said 3 possible
+3 1 supplies 4 possible
+3 1 supplies 5 sure
+3 1 needed 6 possible
+3 1 said 8 sure
+3 1 stepping 9 sure
+APW_ENG_20080806.0892
+1 1 sending 7 sure
+1 1 Horn 10 possible
+1 1 shipments 5 sure
+1 1 shipments 12 possible
+2 1 said 3 possible
+2 1 diverted 0 possible
+3 1 says 2 sure
+3 1 escort 11 sure
+3 1 traveling 1 sure
+3 2 says 8 sure
+3 1 help 9 sure
+3 1 run 6 possible
+3 1 stocks 4 possible
+XML/test/pair_27/
+AFP_ENG_20090915.0396
+1 1 said 1 sure
+1 1 exclude 5 sure
+1 1 run 9 sure
+2 1 intend 10 sure
+2 1 stand 11 sure
+2 1 said 0 sure
+3 1 exclude 2 sure
+3 1 quoted 3 sure
+3 1 telling 4 possible
+3 1 group 6 sure
+4 1 speculation 7 possible
+4 1 shot 8 sure
+APW_ENG_20090915.0635
+1 1 says 1 sure
+1 1 ruled 5 sure
+1 1 running 9 sure
+2 1 Questions 7 possible
+2 1 running 8 sure
+4 1 told 0 sure
+4 1 told 4 possible
+4 1 gathering 6 sure
+4 1 intention 10 sure
+4 1 running 11 sure
+4 1 ruling 2 sure
+4 1 reported 3 sure
+XML/test/pair_50/
+AFP_ENG_20040802.0174
+1 1 chief 4 sure
+1 1 minister 13 sure
+1 1 condemned 20 possible
+1 1 criticising 21 sure
+1 1 years 22 sure
+1 1 rule 23 sure
+1 1 telling 24 sure
+1 1 business 25 sure
+2 1 arrive 0 sure
+2 1 join 1 possible
+2 1 capture 2 sure
+2 1 troops 3 sure
+3 1 drawn 5 sure
+3 1 maintains 6 sure
+3 1 claim 7 sure
+5 1 speaking 8 possible
+5 1 speaking 9 sure
+7 1 choose 10 sure
+7 1 celebrate 11 sure
+7 1 links 12 sure
+7 1 sovereignty 14 sure
+8 1 years 15 sure
+8 1 try 16 sure
+8 1 lecture 17 sure
+8 1 commemorate 18 sure
+8 1 business 19 sure
+APW_ENG_20040802.0060
+1 1 years 22 sure
+1 1 rule 23 sure
+1 1 drawn 5 sure
+1 1 protests 21 sure
+1 1 business 25 sure
+1 1 chief 4 sure
+1 1 minister 13 sure
+1 1 said 20 possible
+1 1 said 24 sure
+2 1 visit 0 sure
+2 1 visit 1 possible
+3 1 hope 6 sure
+3 1 reclaiming 7 sure
+4 1 said 8 possible
+4 1 capture 2 sure
+4 1 forces 3 sure
+6 1 choose 10 sure
+6 1 celebrate 11 sure
+6 1 links 12 sure
+6 1 sovereignty 14 sure
+7 1 years 15 sure
+7 1 try 16 sure
+7 1 lecture 17 sure
+7 1 commemorate 18 sure
+7 1 business 19 sure
+7 1 said 9 sure
+XML/test/pair_31/
+AFP_ENG_20071112.0235
+1 1 approved 8 sure
+1 1 bid 9 possible
+1 1 become 10 possible
+1 1 owner 11 sure
+1 1 operator 12 sure
+1 1 OMX 13 possible
+2 1 become 0 possible
+2 1 owner 1 possible
+3 1 offer 2 sure
+4 1 ruled 3 sure
+4 1 bid 4 possible
+4 1 bid 5 possible
+4 1 operates 6 sure
+4 1 exchanges 7 sure
+APW_ENG_20071112.0645
+1 1 approved 8 sure
+1 1 owner 11 sure
+1 1 takeover 0 possible
+1 1 takeover 10 possible
+1 1 offer 5 possible
+1 1 offer 9 possible
+1 1 operator 12 sure
+1 1 operator 13 possible
+2 1 approved 3 sure
+2 1 application 4 possible
+3 1 settled 1 possible
+3 1 offer 2 sure
+6 1 owns 6 sure
+6 1 exchanges 7 sure
+XML/test/pair_19/
+AFP_ENG_19960328.0050
+1 1 ban 0 possible
+1 1 products 1 possible
+1 1 disease 2 sure
+APW_ENG_19960329.0753
+1 1 banned 0 possible
+1 1 products 1 possible
+1 1 disease 2 sure
+XML/test/pair_45/
+AFP_ENG_20081010.0625
+1 1 champion 1 sure
+1 1 killed 4 sure
+1 1 killed 5 possible
+1 1 crash 6 sure
+1 1 reported 7 possible
+2 1 killed 8 possible
+2 1 killed 9 possible
+2 1 accident 10 possible
+2 1 told 11 possible
+2 1 died 12 possible
+2 1 died 13 possible
+2 1 hit 0 possible
+3 1 medal 2 possible
+3 1 career 3 possible
+APW_ENG_20081010.0403
+1 1 medalist 1 sure
+1 1 medalist 2 possible
+1 1 died 4 sure
+1 1 died 8 possible
+1 1 died 12 possible
+1 1 hit 0 possible
+1 1 hit 6 sure
+1 1 hit 10 possible
+1 1 said 7 possible
+1 1 said 11 possible
+2 1 died 5 possible
+2 1 died 9 possible
+2 1 died 13 possible
+6 1 services 3 possible
+XML/test/pair_54/
+AFP_ENG_20070316.0490
+1 1 hit 1 possible
+1 1 hit 3 sure
+1 1 match 6 possible
+1 1 match 7 sure
+2 1 feat 8 possible
+2 2 came 9 possible
+2 1 sailed 0 sure
+3 1 took 2 sure
+4 1 held 4 possible
+5 1 went 5 sure
+APW_ENG_20070316.1270
+1 1 hit 3 sure
+2 1 flight 0 sure
+2 1 match 7 sure
+4 1 finished 9 possible
+5 1 went 2 sure
+5 1 caught 4 possible
+5 1 bowling 5 sure
+6 1 hit 1 possible
+6 1 hit 8 possible
+6 1 match 6 possible
+XML/test/pair_13/
+AFP_ENG_20090224.0431
+1 1 ministers 1 sure
+1 1 held 6 sure
+1 1 talks 8 sure
+1 1 row 13 possible
+1 1 row 15 sure
+1 1 stalled 16 sure
+1 1 bid 17 sure
+2 1 discuss 18 possible
+2 1 dispute 19 possible
+2 1 dispute 20 possible
+2 1 dating 0 sure
+3 1 blocked 2 possible
+3 1 talks 3 possible
+3 1 postpone 4 possible
+3 1 entry 5 sure
+6 1 joined 7 sure
+6 1 blocked 9 possible
+6 1 talks 10 possible
+6 1 oppose 11 sure
+6 1 membership 12 possible
+8 1 offered 14 possible
+APW_ENG_20090224.0509
+1 1 premiers 1 sure
+1 1 meeting 6 sure
+1 1 meeting 8 sure
+1 1 meeting 18 possible
+1 1 dispute 15 sure
+1 1 dispute 20 possible
+1 1 block 2 possible
+1 1 block 9 possible
+1 1 block 16 sure
+1 1 talks 3 possible
+1 1 talks 10 possible
+1 1 talks 17 sure
+2 1 dates 0 sure
+3 2 member 7 sure
+3 1 threatening 4 possible
+3 1 threatening 11 sure
+3 1 accession 5 sure
+3 1 accession 12 possible
+5 1 dispute 13 possible
+5 1 dispute 19 possible
+6 1 asked 14 possible
+XML/test/pair_4/
+AFP_ENG_20030305.0378
+1 1 including 1 possible
+1 1 demonstrated 3 possible
+1 1 demonstrated 4 possible
+1 1 demonstrated 5 sure
+1 1 demonstrated 7 possible
+1 1 US-led 10 sure
+1 1 war 11 sure
+2 1 converged 0 possible
+6 1 joined 2 possible
+7 1 wants 6 sure
+7 1 solution 8 sure
+7 1 seen 9 possible
+APW_ENG_20030305.0460
+1 1 held 3 possible
+1 1 rallies 4 possible
+1 1 protest 5 sure
+1 1 led 10 sure
+1 1 war 11 sure
+2 1 rallying 0 possible
+2 1 rallying 7 possible
+2 1 included 1 possible
+2 1 included 2 possible
+5 1 become 9 possible
+6 1 wants 6 sure
+6 1 resolved 8 sure
+XML/test/pair_35/
+AFP_ENG_20070227.0163
+1 1 regulators 0 sure
+1 1 gave 10 sure
+1 1 light 19 sure
+1 1 merger 20 sure
+1 1 businesses 21 sure
+2 1 said 1 possible
+2 1 said 2 possible
+4 1 watchdog 3 possible
+4 1 said 4 sure
+4 1 said 5 possible
+4 1 operate 6 possible
+4 1 remain 7 sure
+4 1 number 8 sure
+4 1 pressure 9 sure
+5 1 found 11 sure
+5 1 indications 12 sure
+5 1 proposed 13 sure
+5 1 create 14 sure
+5 1 favour 15 sure
+5 1 conditions 16 sure
+5 1 co-ordinated 17 sure
+5 1 said 18 sure
+APW_ENG_20070227.0485
+1 1 regulators 0 sure
+1 1 regulators 3 possible
+1 1 cleared 10 sure
+1 1 cleared 19 sure
+1 1 combine 20 sure
+1 1 operations 6 possible
+1 1 operations 21 sure
+3 1 said 1 possible
+3 1 said 4 sure
+3 1 remain 7 sure
+3 1 number 8 sure
+3 1 pressure 9 sure
+4 1 found 11 sure
+4 1 indications 12 sure
+4 1 proposed 13 sure
+4 1 create 14 sure
+4 1 favor 15 sure
+4 1 conditions 16 sure
+4 1 coordinated 17 sure
+4 1 said 2 possible
+4 1 said 5 possible
+4 1 said 18 sure
+XML/test/pair_43/
+AFP_ENG_20021118.0701
+1 1 police 2 sure
+1 1 arrested 11 sure
+1 1 plot 27 sure
+1 1 lawyer 32 sure
+1 1 said 33 sure
+2 1 arrested 34 possible
+2 1 appear 35 sure
+2 1 face 36 sure
+2 1 charges 37 sure
+2 1 conspiracy 0 sure
+2 1 bomb 1 sure
+2 1 said 3 sure
+2 1 statement 4 sure
+3 1 details 5 possible
+3 1 lawyer 6 sure
+3 1 told 7 sure
+3 1 client 8 sure
+3 1 suspected 9 sure
+3 1 planning 10 sure
+3 1 bomb 12 sure
+3 1 targets 13 possible
+4 1 faces 14 possible
+4 1 charges 15 possible
+4 1 charges 16 possible
+4 1 conspiracy 17 possible
+4 1 planned 18 possible
+4 1 destroy 19 possible
+4 1 destroy 20 possible
+4 1 damage 21 possible
+4 1 damage 22 possible
+4 1 said 23 possible
+7 1 spokesman 24 sure
+7 1 said 25 possible
+7 1 said 26 sure
+7 1 arrest 28 sure
+7 1 connected 29 possible
+7 1 connected 30 sure
+7 1 bombings 31 possible
+APW_ENG_20021118.0614
+1 1 police 2 sure
+1 1 arrested 11 sure
+1 1 arrested 34 possible
+1 1 plan 27 sure
+1 1 attorney 32 sure
+1 1 said 33 sure
+2 1 identity 5 possible
+2 1 appear 35 sure
+2 1 statement 4 sure
+2 1 said 3 sure
+3 1 attorney 6 sure
+3 1 said 7 sure
+3 1 said 23 possible
+3 1 client 8 sure
+3 1 accused 9 sure
+3 1 accused 15 possible
+3 1 planning 10 sure
+3 1 planning 18 possible
+3 1 target 12 sure
+3 1 target 13 possible
+3 1 target 19 possible
+3 1 target 21 possible
+6 1 said 25 possible
+6 1 linked 29 possible
+6 1 attack 31 possible
+8 1 arrest 28 sure
+8 1 connected 30 sure
+8 1 said 26 sure
+8 1 manager 24 sure
+9 1 faces 14 possible
+9 1 faces 36 sure
+9 1 charge 16 possible
+9 1 charge 37 sure
+9 1 conspiracy 0 sure
+9 1 conspiracy 17 possible
+9 1 bomb 1 sure
+9 1 bomb 20 possible
+9 1 bomb 22 possible
+XML/test/pair_53/
+AFP_ENG_20011210.0147
+1 1 tutor 3 sure
+1 1 jailed 6 possible
+1 1 jailed 7 sure
+1 1 strokes 8 possible
+1 1 strokes 9 sure
+1 1 pleaded 10 sure
+1 1 charges 11 sure
+1 1 molesting 12 sure
+1 1 reported 13 possible
+1 1 reported 14 possible
+1 1 reported 15 sure
+2 1 father 0 sure
+2 1 residency 1 sure
+2 1 admitted 2 possible
+2 1 molested 4 sure
+2 1 times 5 sure
+APW_ENG_20011210.1398
+1 1 tutor 3 sure
+1 1 jailed 7 sure
+1 1 caned 9 sure
+1 1 charges 11 sure
+1 1 fondled 12 sure
+1 1 said 15 sure
+2 1 resident 1 sure
+2 1 father 0 sure
+2 1 advances 4 sure
+2 1 times 5 sure
+2 1 reported 13 possible
+3 1 pleaded 2 possible
+3 1 pleaded 10 sure
+3 1 sentenced 6 possible
+3 1 strokes 8 possible
+3 1 said 14 possible
+XML/test/pair_56/
+AFP_ENG_20060108.0206
+1 1 ploughed 2 sure
+1 1 group 4 sure
+1 1 killing 5 sure
+1 1 killing 6 possible
+1 1 injured 7 possible
+1 1 said 8 possible
+3 1 hurt 0 possible
+3 1 hurt 1 possible
+5 1 injured 3 sure
+APW_ENG_20060108.0579
+1 1 group 4 sure
+1 1 killed 5 sure
+1 1 injured 1 possible
+1 1 injured 3 sure
+1 1 injured 7 possible
+1 1 collided 2 sure
+3 1 killed 6 possible
+4 1 injured 0 possible
+4 1 said 8 possible
+XML/test/pair_57/
+AFP_ENG_20091112.0104
+1 1 regulator 1 sure
+1 1 imposed 8 possible
+1 1 fines 9 sure
+1 1 fines 10 possible
+1 1 insurance 11 sure
+1 1 price-fixing 12 sure
+1 1 price-fixing 13 sure
+2 1 received 0 sure
+2 1 fine 2 possible
+4 1 covering 3 possible
+4 1 covering 4 sure
+4 1 defects 5 sure
+4 1 construction 6 possible
+4 1 construction 7 possible
+APW_ENG_20091112.1092
+1 1 regulators 1 sure
+1 1 fined 9 sure
+1 1 insurance 11 sure
+1 1 fixing 12 sure
+1 1 prices 13 sure
+1 1 coverage 4 sure
+2 1 fine 2 possible
+2 1 fine 10 possible
+2 1 imposed 8 possible
+5 1 builders 6 possible
+5 1 cover 3 possible
+5 1 defects 5 sure
+5 1 problems 7 possible
+10 1 imposed 0 sure
+XML/test/pair_34/
+AFP_ENG_19960116.0175
+1 1 won 1 sure
+1 1 slalom 6 possible
+1 1 completing 7 possible
+2 1 clocked 8 sure
+2 1 seal 0 possible
+2 1 victory 2 possible
+3 1 finishing 3 sure
+4 1 holder 4 possible
+4 1 pulled 5 sure
+APW_ENG_19960116.0456
+1 1 won 0 possible
+1 1 won 1 sure
+1 1 won 2 possible
+1 1 title 6 possible
+1 1 finishing 7 possible
+2 1 completed 8 sure
+3 1 finished 3 sure
+3 1 star 4 possible
+3 1 skipped 5 sure
+XML/test/pair_58/
+AFP_ENG_20040303.0322
+1 1 pilot 4 sure
+1 1 killed 5 sure
+1 1 crashed 6 sure
+2 1 crashed 0 possible
+2 1 crashed 1 sure
+3 1 experts 2 possible
+3 1 inspecting 3 possible
+APW_ENG_20040303.0259
+1 1 crashed 0 possible
+1 1 crashed 6 sure
+1 1 killing 5 sure
+1 1 pilot 4 sure
+2 1 crashed 1 sure
+3 1 investigated 3 possible
+3 1 officials 2 possible
+XML/test/pair_25/
+AFP_ENG_20090113.0808
+1 1 poised 1 possible
+1 1 deal 3 sure
+1 1 deal 4 possible
+2 1 contract 5 possible
+2 1 contract 6 sure
+2 1 starred 7 possible
+3 1 take 0 sure
+4 1 known 2 possible
+APW_ENG_20090113.0671
+1 1 reached 1 possible
+1 1 agreement 3 sure
+1 1 agreement 5 possible
+1 1 contract 4 possible
+1 1 contract 6 sure
+4 1 regarded 2 possible
+4 1 regarded 7 possible
+5 1 given 0 sure
+XML/test/pair_11/
+AFP_ENG_19961018.0700
+1 1 house 7 possible
+1 1 shot 8 sure
+1 1 including 9 possible
+2 1 injured 10 possible
+2 1 village 0 sure
+2 1 police 1 possible
+2 1 said 2 possible
+2 1 said 3 sure
+2 1 dispute 4 possible
+3 1 living 5 sure
+4 1 injured 6 possible
+APW_ENG_19961019.0051
+1 1 including 9 possible
+1 1 machine-gunned 8 sure
+1 1 vengeance 4 possible
+2 1 injured 6 possible
+2 1 injured 10 possible
+2 1 hut 7 possible
+2 1 said 2 possible
+3 1 shared 5 sure
+3 1 village 0 sure
+4 1 chief 1 possible
+4 1 said 3 sure
+XML/test/pair_30/
+AFP_ENG_20050921.0321
+1 1 visit 3 sure
+1 1 mark 4 possible
+1 1 mark 5 sure
+1 1 centenary 6 possible
+1 1 centenary 7 sure
+1 1 independence 8 sure
+1 1 officials 9 possible
+1 1 said 10 sure
+2 1 visit 11 sure
+2 1 visit 12 possible
+3 1 stay 0 sure
+3 1 visit 1 possible
+3 1 visit 2 possible
+APW_ENG_20050921.0450
+1 1 visit 3 sure
+1 1 mark 5 sure
+1 1 centennial 7 sure
+1 1 independence 8 sure
+1 1 announced 9 possible
+1 1 announced 10 sure
+2 1 visit 11 sure
+2 1 stay 0 sure
+3 2 visit 2 possible
+3 2 visit 12 possible
+4 1 marking 4 possible
+4 1 centennial 6 possible
+6 2 visit 1 possible
+XML/test/pair_38/
+AFP_ENG_20100125.0668
+1 1 maker 4 sure
+1 1 said 6 sure
+1 1 making 9 sure
+1 1 counter-bid 10 sure
+1 1 takeover 11 possible
+2 1 confirms 12 possible
+2 1 confirms 13 possible
+2 1 make 0 sure
+2 1 make 1 possible
+2 1 offer 2 sure
+2 1 offer 3 possible
+3 1 ruled 5 sure
+4 1 agreed 7 possible
+4 1 offer 8 sure
+APW_ENG_20100125.0193
+1 1 confectioner 4 sure
+1 1 declared 6 sure
+1 1 declared 12 possible
+1 1 make 1 possible
+1 1 make 9 sure
+1 1 bid 3 possible
+1 1 bid 10 sure
+2 1 bid 8 sure
+2 1 bid 11 possible
+3 1 came 13 possible
+3 1 make 0 sure
+3 1 offer 2 sure
+4 1 ruled 5 sure
+5 1 accept 7 possible
+XML/test/pair_44/
+AFP_ENG_20040823.0374
+1 1 made 0 possible
+1 1 flight 3 sure
+1 1 flight 4 possible
+1 1 grounded 5 sure
+1 1 sanctions 6 possible
+1 1 sanctions 7 sure
+1 1 official 8 sure
+1 1 told 9 sure
+2 1 left 10 sure
+4 1 said 1 possible
+4 1 make 2 possible
+APW_ENG_20040823.0092
+1 1 sent 0 possible
+1 1 flight 3 sure
+1 2 flight 4 possible
+1 1 sanctions 7 sure
+1 1 director 8 sure
+1 1 said 9 sure
+3 1 added 2 possible
+3 1 said 1 possible
+5 1 left 10 sure
+6 1 grounded 5 sure
+6 1 sanctions 6 possible
+XML/test/pair_26/
+AFP_ENG_20090410.0528
+1 1 Hundreds 0 sure
+1 1 scuffled 5 sure
+1 1 leaders 8 possible
+1 1 leaders 9 sure
+1 1 holding 11 sure
+1 1 summit 12 sure
+2 1 gathered 1 possible
+3 1 police 2 possible
+3 1 police 3 sure
+3 1 pushing 4 possible
+3 1 leading 6 sure
+3 1 confrontation 7 sure
+6 1 damage 10 possible
+9 1 wearing 13 sure
+APW_ENG_20090410.0190
+1 1 Hundreds 0 sure
+1 1 facing 5 sure
+1 1 facing 7 sure
+1 1 police 3 sure
+1 1 summit 12 sure
+1 1 leaders 9 sure
+1 1 held 11 sure
+2 1 massing 1 possible
+2 1 massing 4 possible
+2 1 leading 6 sure
+2 1 leaders 8 possible
+2 1 violence 10 possible
+2 1 helmeted 13 sure
+2 2 police 2 possible
+XML/test/pair_17/
+AFP_ENG_20090209.0214
+1 1 parliament 0 sure
+1 1 ratified 9 possible
+1 1 ratified 10 sure
+1 1 ratified 11 possible
+1 1 accession 12 possible
+2 1 block 16 sure
+2 1 block 17 possible
+2 1 membership 1 possible
+3 1 urged 2 possible
+3 1 hold 3 possible
+3 1 accession 4 possible
+3 1 dispute 5 possible
+3 1 dispute 6 possible
+4 1 blocked 7 sure
+4 1 talks 8 sure
+6 1 back 13 possible
+8 1 dispute 14 possible
+8 1 dating 15 sure
+APW_ENG_20090209.0991
+1 1 parliament 0 sure
+1 1 given 10 sure
+1 1 light 11 possible
+1 1 join 4 possible
+1 1 join 12 possible
+1 1 tensions 6 possible
+1 1 sink 17 possible
+2 1 support 13 possible
+2 1 ratified 9 possible
+4 1 blocked 7 sure
+4 1 negotiations 8 sure
+4 1 dispute 5 possible
+4 1 dispute 14 possible
+5 1 stems 15 sure
+6 1 wanted 2 possible
+6 1 bid 1 possible
+6 1 blocked 3 possible
+6 1 blocked 16 sure
+XML/test/pair_59/
+AFP_ENG_20030528.0508
+1 1 close 4 sure
+1 1 carried 5 possible
+2 1 discovered 6 sure
+2 1 work 7 possible
+2 1 said 8 possible
+3 1 work 0 possible
+3 1 work 1 possible
+4 1 closed 2 possible
+4 1 houses 3 possible
+APW_ENG_20030528.0196
+1 1 include 3 possible
+1 1 close 2 possible
+1 1 close 4 sure
+3 1 checks 7 possible
+3 1 showed 6 sure
+3 1 work 5 possible
+3 1 said 8 possible
+7 1 restoration 0 possible
+7 1 revamp 1 possible
