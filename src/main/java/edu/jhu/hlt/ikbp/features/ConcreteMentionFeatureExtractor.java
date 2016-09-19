@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.function.Predicate;
 
 import edu.jhu.hlt.concrete.ClusterMember;
-import edu.jhu.hlt.concrete.Clustering;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.EntityMentionSet;
@@ -15,6 +14,7 @@ import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations;
+import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
 import edu.jhu.hlt.ikbp.DataUtil;
 import edu.jhu.hlt.ikbp.RfToConcreteClusterings;
 import edu.jhu.hlt.ikbp.RfToConcreteClusterings.Link;
@@ -31,7 +31,6 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.ling.Language;
-import edu.jhu.prim.tuple.Pair;
 
 /**
  * Indexes some {@link Communication}s which contain mentions which need to be featurized.
@@ -70,6 +69,10 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     cdocs = new ArrayList<>();
     mentionLocations = new HashMap<>();
     set(comms);
+  }
+  
+  public void setTopic(Topic t) {
+    set(t.comms);
   }
   
   public void set(Iterable<Communication> comms) {
@@ -183,11 +186,11 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     Predicate<Link> dev = l -> l.pair.contains("XML/dev");
     ConcreteIkbpAnnotations labels = new RfToConcreteClusterings("rothfrank", dev, config);
     
-    Pair<Clustering, List<Communication>> t0 = labels.next();
+    Topic t0 = labels.next();
 
-    ConcreteMentionFeatureExtractor fe = new ConcreteMentionFeatureExtractor(labels.getName(), t0.get2());
+    ConcreteMentionFeatureExtractor fe = new ConcreteMentionFeatureExtractor(labels.getName(), t0.comms);
     
-    for (ClusterMember cm : t0.get1().getClusterMemberList()) {
+    for (ClusterMember cm : t0.clustering.getClusterMemberList()) {
       UUID sitMentionId = cm.getElementId();
       Node n = new Node();
       n.setId(new Id().setName("this is a test"));

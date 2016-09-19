@@ -20,6 +20,8 @@ import edu.jhu.hlt.ikbp.data.Response;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * Returns results from ECB+. These will serve as the positive results, the
@@ -162,7 +164,7 @@ public class EcbPlusSearch implements IkbpSearch {
   }
 
   @Override
-  public Iterable<Response> search(Query q) {
+  public List<Pair<Response, Adjoints>> search(Query q) {
 //    Log.info("q.subject=" + q.getSubject());
 
     // Pull the topic out of the query
@@ -180,7 +182,7 @@ public class EcbPlusSearch implements IkbpSearch {
       queryKbDocs.add(id.getName());
 
     // Find all keyword mention in the same topic as the query subject
-    List<Response> results = new ArrayList<>();
+    List<Pair<Response, Adjoints>> results = new ArrayList<>();
     for (Topic.Mention m : t.keywordSearch(keywords.get(0))) {
       Node relevant = m.location;
       String docIdName = m.getSourceDocId();
@@ -213,7 +215,7 @@ public class EcbPlusSearch implements IkbpSearch {
       delta.addToEdges(e);
       r.setDelta(delta);
       r.setAnchor(relevant.getId());
-      results.add(r);
+      results.add(new Pair<>(r, Adjoints.Constant.ZERO));
     }
     
     return results;
@@ -268,7 +270,8 @@ public class EcbPlusSearch implements IkbpSearch {
 
       // Show each response and their mentions
       int i = 0;
-      for (Response r : search.search(q)) {
+      for (Pair<Response, Adjoints> p : search.search(q)) {
+        Response r = p.get1();
         Node n = DataUtil.lookup(r.getAnchor(), r.getDelta().getNodes());
         System.out.printf("result[%d]: %s\n", i, n.getId());
         List<String> mentions = EcbPlusUtil.getMentionIds(n);

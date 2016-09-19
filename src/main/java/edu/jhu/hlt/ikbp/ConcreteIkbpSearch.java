@@ -11,6 +11,7 @@ import edu.jhu.hlt.concrete.Clustering;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
+import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
 import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
@@ -18,6 +19,8 @@ import edu.jhu.hlt.ikbp.data.PKB;
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * For now, this just returns all mentions in the same topic.
@@ -34,27 +37,10 @@ public class ConcreteIkbpSearch implements IkbpSearch {
   private Map<String, String> s2t;
   private Map<String, List<Communication>> t2d;
   
-  public ConcreteIkbpSearch(Clustering c, Iterable<Communication> comms) {
-    s2t = new HashMap<>();
-    t2d = new HashMap<>();
-    String t = c.getUuid().getUuidString();
-    for (Communication d : comms) {
-      SituationMentionSet sms = d.getSituationMentionSetList().get(0);
-      for (SituationMention sm : sms.getMentionList()) {
-        Object old = s2t.put(sm.getUuid().getUuidString(), t);
-        assert old == null;
-      }
-      List<Communication> ds = t2d.get(t);
-      if (ds == null) {
-        ds = new ArrayList<>();
-        t2d.put(t, ds);
-      }
-      ds.add(d);
-    }
-  }
-  
   @Override
-  public Iterable<Response> search(Query q) {
+  public List<Pair<Response, Adjoints>> search(Query q) {
+    if (s2t == null)
+      throw new IllegalStateException("you have to set the topic first");
     
     // situation mention id
     // => communication id
@@ -75,7 +61,7 @@ public class ConcreteIkbpSearch implements IkbpSearch {
     for (Id i : q.getContext().getDocuments())
       seenDocs.add(i.getName());
     
-    List<Response> rs = new ArrayList<>();
+    List<Pair<Response, Adjoints>> rs = new ArrayList<>();
     for (Communication c : comms) {
       if (seenDocs.contains(c.getUuid().getUuidString()))
         continue;
@@ -102,11 +88,31 @@ public class ConcreteIkbpSearch implements IkbpSearch {
         r.setAnchor(anchor.getId());
         r.setDelta(d);
         r.setScore(1);
-        rs.add(r);
+        rs.add(new Pair<>(r, Adjoints.Constant.ZERO));
       }
     }
     
     return rs;
+  }
+
+  @Override
+  public void setTopic(Topic topic) {
+    s2t = new HashMap<>();
+    t2d = new HashMap<>();
+    String t = topic.clustering.getUuid().getUuidString();
+    for (Communication d : topic.comms) {
+      SituationMentionSet sms = d.getSituationMentionSetList().get(0);
+      for (SituationMention sm : sms.getMentionList()) {
+        Object old = s2t.put(sm.getUuid().getUuidString(), t);
+        assert old == null;
+      }
+      List<Communication> ds = t2d.get(t);
+      if (ds == null) {
+        ds = new ArrayList<>();
+        t2d.put(t, ds);
+      }
+      ds.add(d);
+    }
   }
 
 }

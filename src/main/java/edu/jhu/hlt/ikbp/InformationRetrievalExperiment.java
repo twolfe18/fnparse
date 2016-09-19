@@ -38,19 +38,29 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
   private QueryGenerationMode annoQMode;
 
   private ConcreteMentionFeatureExtractor searchFeats;
-  private ConcreteIkbpSearch search;
-  private IkbpSearch.FeatureBased searchParams; // wraps search
+  private IkbpSearch searchTriage;
+  private IkbpSearch searchParams;
 
   private boolean verbose = false;
   private Counts<String> events;
   
   private List<QueryResponseAnnotations> testEval = new ArrayList<>();
 
-  public InformationRetrievalExperiment(ConcreteIkbpAnnotations labels, QueryGenerationMode qmode, Random rand) {
+  public InformationRetrievalExperiment(ConcreteIkbpAnnotations labels, QueryGenerationMode qmode, Random rand, boolean randScoring) {
     Log.info("labels.toolName=" + labels.getName() + " queryGenerationMode=" + qmode.name());
     this.labels = labels;
+
     this.searchFeats = new ConcreteMentionFeatureExtractor(labels.getName(), Collections.emptyList());
-    this.searchParams = new IkbpSearch.FeatureBased(null, searchFeats, rand);
+
+    this.searchTriage = new ConcreteIkbpSearch();
+
+    if (randScoring) {
+      this.searchParams = new IkbpSearch.RandomScoring(searchTriage, rand);
+    } else {
+      this.searchParams = new IkbpSearch.BilinearScoring(searchTriage, searchFeats, rand);
+    }
+    Log.info("searchParams=" + this.searchParams);
+
     this.annoQMode = qmode;
     this.events = new Counts<>();
     nextTopic();
@@ -63,9 +73,9 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
   public void nextTopic() {
     curTopic = labels.next();
     anno = new ConcreteIkbpAnnotator.SingleTopicAnnotator(curTopic, annoQMode);
-    search = new ConcreteIkbpSearch(curTopic.clustering, curTopic.comms);
-    searchFeats.set(curTopic.comms);
-    searchParams.setWrapped(search);
+    searchTriage.setTopic(curTopic);
+    searchFeats.setTopic(curTopic);
+    searchParams.setTopic(curTopic);
   }
 
   @Override
@@ -83,10 +93,11 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
     Query q = anno.next();
     if (q == null)
       return null;
-    Iterable<Response> r = search.search(q);
+    List<Pair<Response, Adjoints>> r = searchParams.search(q);
     QueryResponseAnnotations yy = new QueryResponseAnnotations(q);
     double prevScore = Double.POSITIVE_INFINITY;
-    for (Response rr : r) {
+    for (Pair<Response, Adjoints> p : r) {
+      Response rr = p.get1();
       assert rr.getScore() <= prevScore;
       Response y = anno.annotate(q, rr);
       yy.add(rr, y);
@@ -110,7 +121,7 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
     boolean learn = Arrays.asList("train", "dev").contains(curTopic.part);
 
     // Search
-    List<Pair<Response, Adjoints>> r = searchParams.search2(q);
+    List<Pair<Response, Adjoints>> r = searchParams.search(q);
     
     QueryResponseAnnotations inst = new QueryResponseAnnotations(q);
 
@@ -154,7 +165,8 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
     File cdDefault = new File("data/parma/ecbplus/ECB+_LREC2014/concrete-parsey-and-stanford/");
     File concreteDocDir = config.getExistingDir("data.ecbplus.comms", cdDefault);
     ConcreteIkbpAnnotations labels = new EcbPlusConcreteClusterings("ecbplus", xmlDocs, concreteDocDir);
-    InformationRetrievalExperiment t = new InformationRetrievalExperiment(labels, getQmode(config), rand);
+    InformationRetrievalExperiment t = new InformationRetrievalExperiment(
+        labels, getQmode(config), rand, config.getBoolean("ikbp.search.randScore", false));
     
     return t;
   }
@@ -180,13 +192,15 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
     ConcreteIkbpAnnotations l = new RfToConcreteClusterings(tool, dev, config);
     labels = new ConcreteIkbpAnnotations.Chain(labels, l);
 
-    InformationRetrievalExperiment t = new InformationRetrievalExperiment(labels, getQmode(config), rand);
+    InformationRetrievalExperiment t = new InformationRetrievalExperiment(
+        labels, getQmode(config), rand, config.getBoolean("ikbp.search.randScore", false));
 
     return t;
   }
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
+    config.putIfAbsent("ikbp.search.randScore", "true");
     Random rand = config.getRandom();
 
 //    InformationRetrievalExperiment t = buildEcbTrainer(config, rand);

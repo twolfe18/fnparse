@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 
+import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
 import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
@@ -15,6 +16,7 @@ import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
 import edu.jhu.hlt.ikbp.features.MentionFeatureExtractor;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.tutils.scoring.BilinearModel;
 import edu.jhu.hlt.tutils.scoring.BilinearModel.MissingFeatureException;
@@ -28,54 +30,65 @@ import edu.jhu.util.Alphabet;
  */
 public interface IkbpSearch {
   
-  Iterable<Response> search(Query q);
-
-  /**
-   * For every {@link Response}, additionally returns {@link Adjoints} which can
-   * be used to update the score provided in the {@link Response}.
-   */
-  interface Trainable extends IkbpSearch {
-    List<Pair<Response, Adjoints>> search2(Query q);
-    
-    default Iterable<Response> search(Query q) {
-      List<Pair<Response, Adjoints>> s = search2(q);
-      List<Response> r = new ArrayList<>();
-      for (Pair<Response, Adjoints> x : s)
-        r.add(x.get1());
-      return r;
-    }
-  }
+  /** If you don't have a backprop-able score, just return {@link Adjoints.Constant} */
+  List<Pair<Response, Adjoints>> search(Query q);
   
-  public static class DummyTrainable implements Trainable {
-    private String name;
+  void setTopic(Topic t);
+  
+  
+  public static final Comparator<Pair<Response, Adjoints>> BY_SCORE = new Comparator<Pair<Response, Adjoints>>() {
+    @Override
+    public int compare(Pair<Response, Adjoints> o1, Pair<Response, Adjoints> o2) {
+      assert o1.get1().isSetScore();
+      assert o2.get1().isSetScore();
+      double s1 = o1.get1().getScore();
+      double s2 = o2.get1().getScore();
+      if (s1 > s2)
+        return -1;
+      if (s2 > s1)
+        return +1;
+      return 0;
+    }
+  };
+
+  public static class RandomScoring implements IkbpSearch {
     private IkbpSearch wrapped;
-    public boolean verbose = true;
-    
-    public DummyTrainable(String name, IkbpSearch wrapped) {
-      this.name = name;
+    private Random rand;
+    private boolean contentBasedRand = false;
+
+    public RandomScoring(IkbpSearch wrapped, Random rand) {
+      if (wrapped == null)
+        throw new IllegalArgumentException();
       this.wrapped = wrapped;
+      this.rand = rand;
+    }
+    
+    public int hash(Id id) {
+      assert id.isSetName();
+      return (int) Hash.sha256(id.getName());
+    }
+    
+    @Override
+    public void setTopic(Topic t) {
+      // no-op
     }
 
     @Override
-    public List<Pair<Response, Adjoints>> search2(Query q) {
-      List<Pair<Response, Adjoints>> r = new ArrayList<>();
-      for (Response rr : wrapped.search(q)) {
-        r.add(new Pair<>(rr, Adjoints.Constant.ONE));
-//        r.add(new Pair<>(rr, new Adjoints() {
-//          @Override
-//          public double forwards() {
-//            return 1;
-//          }
-//          @Override
-//          public void backwards(double dErr_dForwards) {
-//            if (verbose)
-//              Log.info("not applying update, name=" + name + " dErr_dForwards=" + dErr_dForwards);
-//          }
-//        }));
+    public List<Pair<Response, Adjoints>> search(Query q) {
+      List<Pair<Response, Adjoints>> rs = new ArrayList<>();
+      for (Pair<Response, Adjoints> x : wrapped.search(q)) {
+        Response r = x.get1();
+        if (contentBasedRand) {
+          int seed = hash(r.getAnchor());
+          rand.setSeed(seed);
+        }
+        double score = rand.nextDouble();
+        r.setScore(score);
+        rs.add(new Pair<>(r, new Adjoints.Constant(score)));
       }
-      return r;
+      Collections.sort(rs, BY_SCORE);
+      return rs;
     }
-    
   }
   
   /**
@@ -85,10 +98,10 @@ public interface IkbpSearch {
    * discriminative retrieval for IR), but that is the special case not the
    * general one.
    * 
-   * TODO This class assumes feature extraction is already done, and stored
-   * in the {@link Node}. Figure out where to do this extraction.
+   * This class assumes feature extraction is already done, and stored
+   * in the {@link Node}.
    */
-  public static class FeatureBased implements Trainable {
+  public static class BilinearScoring implements IkbpSearch {
     private IkbpSearch wrapped;
     private Alphabet<String> alph;  // TODO
     private BilinearModel model;
@@ -96,7 +109,7 @@ public interface IkbpSearch {
     
     public boolean debug = false;
     
-    public FeatureBased(IkbpSearch wrapped, MentionFeatureExtractor features, Random rand) {
+    public BilinearScoring(IkbpSearch wrapped, MentionFeatureExtractor features, Random rand) {
       if (features == null)
         throw new IllegalArgumentException();
       this.wrapped = wrapped;
@@ -138,6 +151,11 @@ public interface IkbpSearch {
           BilinearModel.Mode.SCALAR);
     }
     
+    @Override
+    public void setTopic(Topic t) {
+      wrapped.setTopic(t);
+    }
+    
     public void setWrapped(IkbpSearch search) {
       this.wrapped = search;
     }
@@ -149,12 +167,6 @@ public interface IkbpSearch {
       // Extract features on this mention
       if (!n.isSetFeatures())
         n.setFeatures(new ArrayList<>());
-//      List<String> m_id = DataUtil.getMentions(n);
-//      if (m_id.isEmpty()) {
-//        throw new RuntimeException("no mentions, and therefor no score, for node " + n.getId());
-//      }
-//      for (String m : m_id)
-//        mfe.extract(m, n.getFeatures());
       mfe.extract(n, n.getFeatures());
       
       boolean reindex = true;
@@ -205,9 +217,12 @@ public interface IkbpSearch {
     }
 
     @Override
-    public List<Pair<Response, Adjoints>> search2(Query q) {
+    public List<Pair<Response, Adjoints>> search(Query q) {
       List<Pair<Response, Adjoints>> b = new ArrayList<>();
-      Iterable<Response> base = wrapped.search(q);
+
+      List<Response> base = new ArrayList<>();
+      for (Pair<Response, Adjoints> x : wrapped.search(q))
+        base.add(x.get1());
       
       List<BilinearModel.ProjFeats> fy = encode(q.getSubject());
       
@@ -234,18 +249,7 @@ public interface IkbpSearch {
       }
       
       // Re-sort responses by new score
-      Collections.sort(b, new Comparator<Pair<Response, Adjoints>>() {
-        @Override
-        public int compare(Pair<Response, Adjoints> o1, Pair<Response, Adjoints> o2) {
-          double s1 = o1.get1().getScore();
-          double s2 = o2.get1().getScore();
-          if (s1 > s2)
-            return -1;
-          if (s2 > s2)
-            return +1;
-          return 0;
-        }
-      });
+      Collections.sort(b, BY_SCORE);
 
       return b;
     }
