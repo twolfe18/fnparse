@@ -232,7 +232,12 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
   }
   
   @Override
-  public Query nextQuery() {
+  public boolean hasNext() {
+    throw new RuntimeException("implement me");
+  }
+  
+  @Override
+  public Query next() {
     if (curDeltaNodeIndex < 0 || curDeltaNodeIndex >= delta.getNodesSize()) {
       boolean nd;
       
@@ -346,7 +351,7 @@ public class EcbPlusAnnotator implements IkbpAnnotator {
     EcbPlusXmlStore xmlDocs = new EcbPlusXmlStore(config);
     EcbPlusAnnotator anno = new EcbPlusAnnotator(xmlDocs, r);
     
-    for (Query q = anno.nextQuery(); q != null; q = anno.nextQuery()) {
+    for (Query q = anno.next(); q != null; q = anno.next()) {
       
     }
 //    System.out.println("subj: " + q.getSubject());

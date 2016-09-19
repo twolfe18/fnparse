@@ -1,5 +1,7 @@
 package edu.jhu.hlt.ikbp;
 
+import java.util.Iterator;
+
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
 
@@ -16,9 +18,7 @@ import edu.jhu.hlt.ikbp.data.Response;
  *
  * @author travis
  */
-public interface IkbpAnnotator {
-  
-  public Query nextQuery();
+public interface IkbpAnnotator extends Iterator<Query> {
 
   /**
    * Returned Response should have the same id as the corresponding argument,

@@ -39,6 +39,10 @@ public class EcbPlusXmlWrapper {
     }
   }
   
+  public String getId() {
+    return xml.getName().replaceAll(".xml", "");
+  }
+  
   public File getXmlFile() {
     return xml;
   }

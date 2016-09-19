@@ -9,8 +9,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Consumer;
 
-import org.apache.http.annotation.Experimental;
-import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.transport.TIOStreamTransport;
 
 import edu.jhu.hlt.concrete.Communication;
@@ -20,6 +19,17 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 
+/**
+ * This class loops over all of annotated gigaword to pull out the
+ * concrete-stanford annnotated communications.
+ * 
+ * Unused since I couldn't compile this on the COE (maven server down)
+ * and in the mean time Chandler did this for me in python.
+ * 
+ * @deprecated This is not used, see data/parma/roth-frank/manual-alignments/Makefile
+ * 
+ * @author travis
+ */
 public class RfToConcreteBruteForce {
 
   private Set<String> relevantDocIds;
@@ -49,8 +59,7 @@ public class RfToConcreteBruteForce {
       File out = new File(outputCommDir, comm.getId() + ".concrete");
       Log.info("writing to " + out.getPath());
       try (BufferedOutputStream b = new BufferedOutputStream(new FileOutputStream(out))) {
-        TBinaryProtocol t = new TBinaryProtocol(new TIOStreamTransport(b));
-        comm.write(t);
+        comm.write(new TCompactProtocol(new TIOStreamTransport(b)));
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

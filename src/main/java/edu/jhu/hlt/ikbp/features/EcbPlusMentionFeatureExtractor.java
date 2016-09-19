@@ -10,6 +10,7 @@ import edu.jhu.hlt.ikbp.EcbPlusXmlStore;
 import edu.jhu.hlt.ikbp.EcbPlusXmlWrapper;
 import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
+import edu.jhu.hlt.ikbp.data.Node;
 import edu.jhu.hlt.tutils.ConllxToDocument;
 import edu.jhu.hlt.tutils.Document;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
@@ -17,7 +18,7 @@ import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
- *
+ * @deprecated Use {@link ConcreteMentionFeatureExtractor} instead.
  *
  * @author travis
  */
@@ -64,7 +65,13 @@ public class EcbPlusMentionFeatureExtractor implements MentionFeatureExtractor {
   }
 
   @Override
-  public void extract(String m_id, List<Id> addTo) {
+//  public void extract(String m_id, List<Id> addTo) {
+  public void extract(Node node, List<Id> addTo) {
+    String m_id = null;
+    if (node != null) {
+      throw new RuntimeException("implement me");
+    }
+
     String docId = EcbPlusUtil.getDocumentId(m_id);
     Document doc = getDocument(docId);
     MultiAlphabet a = doc.getAlphabet();

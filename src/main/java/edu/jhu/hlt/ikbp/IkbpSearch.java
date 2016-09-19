@@ -94,10 +94,10 @@ public interface IkbpSearch {
     private BilinearModel model;
     private MentionFeatureExtractor mfe;
     
-    public boolean debug = true;
+    public boolean debug = false;
     
     public FeatureBased(IkbpSearch wrapped, MentionFeatureExtractor features, Random rand) {
-      if (wrapped == null || features == null)
+      if (features == null)
         throw new IllegalArgumentException();
       this.wrapped = wrapped;
       this.alph = new Alphabet<>();
@@ -138,15 +138,24 @@ public interface IkbpSearch {
           BilinearModel.Mode.SCALAR);
     }
     
+    public void setWrapped(IkbpSearch search) {
+      this.wrapped = search;
+    }
+    
     public List<BilinearModel.ProjFeats> encode(Node n) {
-
       if (debug)
         System.out.println("in:  " + DataUtil.showFeatures(n.getFeatures()));
 
       // Extract features on this mention
-      List<String> m_id = DataUtil.getMentions(n);
-      for (String m : m_id)
-        mfe.extract(m, n.getFeatures());
+      if (!n.isSetFeatures())
+        n.setFeatures(new ArrayList<>());
+//      List<String> m_id = DataUtil.getMentions(n);
+//      if (m_id.isEmpty()) {
+//        throw new RuntimeException("no mentions, and therefor no score, for node " + n.getId());
+//      }
+//      for (String m : m_id)
+//        mfe.extract(m, n.getFeatures());
+      mfe.extract(n, n.getFeatures());
       
       boolean reindex = true;
       List<BilinearModel.ProjFeats> f = new ArrayList<>();
@@ -190,24 +199,6 @@ public interface IkbpSearch {
         cur = end;
       }
 
-//      for (Id feature : n.getFeatures()) {
-//        if (feature.getType() == FeatureType.MENTION_ID.ordinal()) {
-//          // these features have values which are pointers, tell you no information you can generalize on.
-//          continue;
-//        }
-//
-//        System.out.println("out: " + DataUtil.showFeatures(Arrays.asList(feature)));
-//        if (seenTypes.get(feature.getType()))
-//          System.out.println("skipping: " + feature);
-//        seenTypes.set(feature.getType());
-//
-//        // Use the feature hash for now
-//        int[] fx = new int[] { feature.getId() };
-//        BilinearModel.ProjFeats pf = model.score(feature.getType(), fx, reindex);
-//        if (pf != null)
-//          f.add(pf);
-//      }
-
       if (debug)
         Log.info("numFeats=" + f.size());
       return f;
@@ -220,19 +211,19 @@ public interface IkbpSearch {
       
       List<BilinearModel.ProjFeats> fy = encode(q.getSubject());
       
+      // Re-score each response
       for (Response r : base) {
 
-//        List<String> f = score(q, r);
-//        int[] fi = new int[f.size()];
-//        for (int i = 0; i < fi.length; i++)
-//          fi[i] = alph.lookupIndex(f.get(i));
-//        boolean reindex = true;
-//        Adjoints a = theta.score(fi, reindex);
+        if (r.getDelta().getNodes().isEmpty())
+          throw new RuntimeException("delta has no nodes? must at least have the response's anchor.");
+        
+        if (debug)
+          Log.info("re-scoring " + r);
         
         // Assumption 0: The score of a response only depends on the center (thing aligned with the subject).
         // We will relax this by looking at the full alignment between PKB and new doc later.
-        Node center = DataUtil.lookup(r.getAnchor(), r.getDelta().getNodes());
-        List<BilinearModel.ProjFeats> fx = encode(center);
+        Node anchor = DataUtil.lookup(r.getAnchor(), r.getDelta().getNodes());
+        List<BilinearModel.ProjFeats> fx = encode(anchor);
         try {
           Adjoints a = model.score(fy, fx);
           r.setScore(a.forwards());
@@ -241,6 +232,21 @@ public interface IkbpSearch {
           throw new RuntimeException("couldn't find feature: " + FeatureType.values()[m.type]);
         }
       }
+      
+      // Re-sort responses by new score
+      Collections.sort(b, new Comparator<Pair<Response, Adjoints>>() {
+        @Override
+        public int compare(Pair<Response, Adjoints> o1, Pair<Response, Adjoints> o2) {
+          double s1 = o1.get1().getScore();
+          double s2 = o2.get1().getScore();
+          if (s1 > s2)
+            return -1;
+          if (s2 > s2)
+            return +1;
+          return 0;
+        }
+      });
+
       return b;
     }
   }

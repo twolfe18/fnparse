@@ -255,7 +255,7 @@ public class EcbPlusSearch implements IkbpSearch {
     Random rand = config.getRandom();
     EcbPlusAnnotator anno = new EcbPlusAnnotator(xmlDocs, rand);
     EcbPlusSearch search = new EcbPlusSearch(xmlDocs);
-    for (Query q = anno.nextQuery(); q != null; q = anno.nextQuery()) {
+    for (Query q = anno.next(); q != null; q = anno.next()) {
       DataUtil.showQuery(q);
       
       // Show mentions of the query
