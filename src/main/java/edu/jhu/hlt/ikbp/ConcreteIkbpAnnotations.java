@@ -8,6 +8,7 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.UUID;
+import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.tuple.Pair;
 
@@ -17,7 +18,21 @@ import edu.jhu.prim.tuple.Pair;
  *
  * @author travis
  */
-public interface ConcreteIkbpAnnotations extends Iterator<Pair<Clustering, List<Communication>>> {
+public interface ConcreteIkbpAnnotations
+//    extends Iterator<Pair<Clustering, List<Communication>>> {
+    extends Iterator<Topic> {
+  
+  public static class Topic {
+    public final Clustering clustering;
+    public final List<Communication> comms;
+    public final String part; // train|dev|test
+
+    public Topic(Clustering clustering, List<Communication> comms, String part) {
+      this.clustering = clustering;
+      this.comms = comms;
+      this.part = part;
+    }
+  }
   
   /**
    * This should match the tool names for any annotations created by this instance.
@@ -30,8 +45,40 @@ public interface ConcreteIkbpAnnotations extends Iterator<Pair<Clustering, List<
    * the clustering.
    */
   @Override
-  public Pair<Clustering, List<Communication>> next();
+//  public Pair<Clustering, List<Communication>> next();
+  public Topic next();
 
+  
+
+  public static class Chain implements ConcreteIkbpAnnotations {
+    private ConcreteIkbpAnnotations head;
+    private ConcreteIkbpAnnotations tail;
+    
+    public Chain(ConcreteIkbpAnnotations head, ConcreteIkbpAnnotations tail) {
+      if (!head.getName().equals(tail.getName()))
+        throw new IllegalArgumentException();
+      this.head = head;
+      this.tail = tail;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return head.hasNext() || tail.hasNext();
+    }
+
+    @Override
+    public String getName() {
+      return head.getName();
+    }
+
+    @Override
+    public Topic next() {
+      if (head.hasNext())
+        return head.next();
+      return tail.next();
+    }
+  }
+  
 
   public static Communication lookup(List<Communication> dict, UUID key) {
     for (Communication sms : dict) {

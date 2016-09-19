@@ -2,13 +2,16 @@ package edu.jhu.hlt.ikbp;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Predicate;
 
-import edu.jhu.hlt.concrete.Clustering;
-import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotator.QueryGenerationMode;
+import edu.jhu.hlt.ikbp.RfToConcreteClusterings.Link;
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
 import edu.jhu.hlt.ikbp.evaluation.QueryResponseAnnotations;
@@ -29,6 +32,7 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
   public static boolean VERBOSE = false;
   
   private ConcreteIkbpAnnotations labels;
+  private Topic curTopic;
 
   private ConcreteIkbpAnnotator.SingleTopicAnnotator anno;
   private QueryGenerationMode annoQMode;
@@ -39,6 +43,8 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
 
   private boolean verbose = false;
   private Counts<String> events;
+  
+  private List<QueryResponseAnnotations> testEval = new ArrayList<>();
 
   public InformationRetrievalExperiment(ConcreteIkbpAnnotations labels, QueryGenerationMode qmode, Random rand) {
     Log.info("labels.toolName=" + labels.getName() + " queryGenerationMode=" + qmode.name());
@@ -55,10 +61,10 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
   }
 
   public void nextTopic() {
-    Pair<Clustering, List<Communication>> t = labels.next();
-    anno = new ConcreteIkbpAnnotator.SingleTopicAnnotator(t, annoQMode);
-    search = new ConcreteIkbpSearch(t.get1(), t.get2());
-    searchFeats.set(t.get2());
+    curTopic = labels.next();
+    anno = new ConcreteIkbpAnnotator.SingleTopicAnnotator(curTopic, annoQMode);
+    search = new ConcreteIkbpSearch(curTopic.clustering, curTopic.comms);
+    searchFeats.set(curTopic.comms);
     searchParams.setWrapped(search);
   }
 
@@ -93,13 +99,15 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
    * like next() with side-effects (so don't call unless hasNext()).
    * @return progressive-validation loss
    */
-  public QueryResponseAnnotations epoch(boolean learn) {
+  public QueryResponseAnnotations epoch() {
     // Get query
     if (!anno.hasNext())
       nextTopic();
     Query q = anno.next();
     if (verbose)
       DataUtil.showQuery(q);
+    
+    boolean learn = Arrays.asList("train", "dev").contains(curTopic.part);
 
     // Search
     List<Pair<Response, Adjoints>> r = searchParams.search2(q);
@@ -132,14 +140,13 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
         events.increment("nTrain/response");
       }
       events.increment("nTrain/query");
+    } else {
+      testEval.add(inst);
     }
 
     if (verbose)
       System.out.println();
     return inst;
-//    if (y.length == 0)
-//      return 1;
-//    return totalResid / y.length;
   }
 
   public static InformationRetrievalExperiment buildEcbTrainer(ExperimentProperties config, Random rand) {
@@ -159,8 +166,22 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
   }
 
   public static InformationRetrievalExperiment buildRfConcreteTrainer(ExperimentProperties config, Random rand) throws IOException {
-    ConcreteIkbpAnnotations labels = new RfToConcreteClusterings("rothfrank", config);
+    
+    // 10x dev, 1x test
+    ConcreteIkbpAnnotations labels = null;
+    String tool = "rothfrank";
+    for (int i = 0; i < 10; i++) {
+      Predicate<Link> dev = l -> l.pair.contains("XML/dev");
+      ConcreteIkbpAnnotations l = new RfToConcreteClusterings(tool, dev, config);
+      if (i == 0) labels = l;
+      else labels = new ConcreteIkbpAnnotations.Chain(labels, l);
+    }
+    Predicate<Link> dev = l -> l.pair.contains("XML/test");
+    ConcreteIkbpAnnotations l = new RfToConcreteClusterings(tool, dev, config);
+    labels = new ConcreteIkbpAnnotations.Chain(labels, l);
+
     InformationRetrievalExperiment t = new InformationRetrievalExperiment(labels, getQmode(config), rand);
+
     return t;
   }
   
@@ -172,35 +193,50 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
     InformationRetrievalExperiment t = buildRfConcreteTrainer(config, rand);
 //    t.verbose = true;
     
-    int nTrain = 600;
-    int nTest = 100;
+    // Train/dev/test setup by data provider
+    while (t.hasNext()) {
+      t.epoch();
+    }
+    Average testLoss = new Average.Uniform();
+    for (QueryResponseAnnotations qr : t.testEval) {
+      Double ap = qr.averagePrecisionAssumingPerfectRecall();
+      if (ap == null)
+        Log.info("WARNING: no alignments in " + qr.getQuery().getId());
+      else
+        testLoss.add(ap);
+    }
+    System.out.println("map=" + testLoss.getAverage() + " n=" + testLoss.getNumObservations());
 
-    // Progressive validation
-    double totalLoss = 0;
-    Average avgLoss = new Average.Exponential(0.9);
-    for (int i = 0; i < nTrain && t.hasNext(); i++) {
-      QueryResponseAnnotations instance = t.epoch(true);
-      double l = instance.meanSquaredError();
-      assert !Double.isNaN(l) && Double.isFinite(l);
-      totalLoss += l;
-      avgLoss.add(l);
-      if (i % 10 == 0) {
-        System.out.println("i=" + i
-            + "\tloss=" + l
-            + "\tavgLoss=" + (totalLoss / (i+1))
-            + "\tlocalAvgLoss=" + avgLoss.getAverage()
-            + "\t" + t.toString());
-      }
-    }
-    
-    // IR evaluation metrics
-    Average map = new Average.Uniform();
-    for (int i = 0; i < nTest && t.hasNext(); i++) {
-      QueryResponseAnnotations yy = t.next();
-      Double ap = yy.averagePrecisionAssumingPerfectRecall();
-      if (ap != null)
-        map.add(ap);
-    }
-    System.out.println("map=" + map.getAverage() + " n=" + map.getNumObservations());
+
+//    int nTrain = 600;
+//    int nTest = 100;
+//
+//    // Progressive validation
+//    double totalLoss = 0;
+//    Average avgLoss = new Average.Exponential(0.9);
+//    for (int i = 0; i < nTrain && t.hasNext(); i++) {
+//      QueryResponseAnnotations instance = t.epoch();
+//      double l = instance.meanSquaredError();
+//      assert !Double.isNaN(l) && Double.isFinite(l);
+//      totalLoss += l;
+//      avgLoss.add(l);
+//      if (i % 10 == 0) {
+//        System.out.println("i=" + i
+//            + "\tloss=" + l
+//            + "\tavgLoss=" + (totalLoss / (i+1))
+//            + "\tlocalAvgLoss=" + avgLoss.getAverage()
+//            + "\t" + t.toString());
+//      }
+//    }
+//    
+//    // IR evaluation metrics
+//    Average map = new Average.Uniform();
+//    for (int i = 0; i < nTest && t.hasNext(); i++) {
+//      QueryResponseAnnotations yy = t.next();
+//      Double ap = yy.averagePrecisionAssumingPerfectRecall();
+//      if (ap != null)
+//        map.add(ap);
+//    }
+//    System.out.println("map=" + map.getAverage() + " n=" + map.getNumObservations());
   }
 }

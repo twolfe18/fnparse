@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 import edu.jhu.hlt.concrete.ClusterMember;
 import edu.jhu.hlt.concrete.Clustering;
@@ -16,6 +17,7 @@ import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations;
 import edu.jhu.hlt.ikbp.DataUtil;
 import edu.jhu.hlt.ikbp.RfToConcreteClusterings;
+import edu.jhu.hlt.ikbp.RfToConcreteClusterings.Link;
 import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.data.Node;
@@ -178,7 +180,8 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
 
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-    ConcreteIkbpAnnotations labels = new RfToConcreteClusterings("rothfrank", config);
+    Predicate<Link> dev = l -> l.pair.contains("XML/dev");
+    ConcreteIkbpAnnotations labels = new RfToConcreteClusterings("rothfrank", dev, config);
     
     Pair<Clustering, List<Communication>> t0 = labels.next();
 

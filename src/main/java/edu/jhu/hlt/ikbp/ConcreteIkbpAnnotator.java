@@ -7,6 +7,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 import edu.jhu.hlt.concrete.Cluster;
 import edu.jhu.hlt.concrete.ClusterMember;
@@ -15,6 +16,8 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.UUID;
+import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
+import edu.jhu.hlt.ikbp.RfToConcreteClusterings.Link;
 import edu.jhu.hlt.ikbp.data.Edge;
 import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
@@ -24,7 +27,6 @@ import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.prim.tuple.Pair;
 
 /**
  * Given {@link Clustering}s, produce IKBP queries and feedback on ({@link Query}, {@link Response}).
@@ -74,20 +76,20 @@ public class ConcreteIkbpAnnotator implements IkbpAnnotator {
     
     public boolean computeDebugFeatures = true;
     
-    public SingleTopicAnnotator(Pair<Clustering, List<Communication>> t, QueryGenerationMode qmode) {
-      this(t.get1(), t.get2(), qmode);
-    }
+//    public SingleTopicAnnotator(Pair<Clustering, List<Communication>> t, QueryGenerationMode qmode) {
+//      this(t.get1(), t.get2(), qmode);
+//    }
 
-    public SingleTopicAnnotator(Clustering topic, List<Communication> docs, QueryGenerationMode qmode) {
+    public SingleTopicAnnotator(Topic t, QueryGenerationMode qmode) {
       if (VERBOSE) {
         List<String> commIds = new ArrayList<>();
         for (Communication c : docs) commIds.add(c.getId());
         Log.info("loading topic containing docs: " + commIds);
       }
-      if (docs == null || docs.isEmpty())
+      if (t.comms == null || t.comms.isEmpty())
         throw new IllegalArgumentException();
-      this.topic = topic;
-      this.docs = new ArrayDeque<>(docs);
+      this.topic = t.clustering;
+      this.docs = new ArrayDeque<>(t.comms);
       this.context = newPKB();
       this.current = newPKB();
       this.mention2cluster = new HashMap<>();
@@ -262,7 +264,8 @@ public class ConcreteIkbpAnnotator implements IkbpAnnotator {
 
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-    ConcreteIkbpAnnotations labels = new RfToConcreteClusterings("rothfrank", config);
+    Predicate<Link> dev = l -> l.pair.contains("XML/dev");
+    ConcreteIkbpAnnotations labels = new RfToConcreteClusterings("rothfrank", dev, config);
     ConcreteIkbpAnnotator anno = new ConcreteIkbpAnnotator(labels, QueryGenerationMode.ADD_TARGETS);
     anno.computeDebugFeatures = true;
     Query q;

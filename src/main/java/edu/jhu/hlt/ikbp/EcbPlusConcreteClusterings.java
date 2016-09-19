@@ -30,21 +30,23 @@ import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory;
 import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory.AnalyticUUIDGenerator;
 import edu.jhu.hlt.tutils.ExperimentProperties;
-import edu.jhu.prim.tuple.Pair;
+import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
- * TODO Need to run the concrete-stanford, concrete-parsey pipeline on some raw documents
+ * Reads XML and {@link Communication}s (must generated these ahead of time with
+ * data/parma/ecbplus/Makefile) and generates {@link Clustering}.
  *
  * @author travis
  */
 public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
   
-  private File concreteDocDir;        // contains <communicationId>.comm files with parsey and stanford annotations
+  private File concreteDocDir;    // contains <communicationId>.comm files with parsey and stanford annotations
   private EcbPlusXmlStore docs;
   private Deque<File> topics;
   
   private Clustering curClust;
   private List<Communication> curDocs;
+  private String curPart; // train|dev|test
   
   private AnnotationMetadata meta;
   
@@ -65,6 +67,18 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
     Map<String, Communication> docsById = new HashMap<>();
     curDocs.clear();
     File t = topics.pop();
+    int partIdx = (int) (Hash.sha256(t.getPath()) % 8L);
+    switch (partIdx) {
+    case 0:
+      curPart = "test";
+      break;
+    case 1:
+      curPart = "dev";
+      break;
+    default:
+      curPart = "train";
+      break;
+    }
     for (File d : docs.getDocs(t)) {
       File commFile = new File(concreteDocDir, d.getName().replaceAll(".xml", ".comm"));
       if (!commFile.isFile())
@@ -204,8 +218,10 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
   }
 
   @Override
-  public Pair<Clustering, List<Communication>> next() {
-    return new Pair<>(curClust, curDocs);
+//  public Pair<Clustering, List<Communication>> next() {
+//    return new Pair<>(curClust, curDocs);
+  public Topic next() {
+    return new Topic(curClust, curDocs, curPart);
   }
 
 
