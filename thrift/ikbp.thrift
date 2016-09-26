@@ -15,6 +15,8 @@ enum FeatureType {
   CONCRETE_UUID,  // string value for pointing into a concrete Communication
   INTERCEPT,
   HEADWORD,
+  ENTITY_TYPE,
+  SITUATION_TYPE,
   // many more to come
 }
 

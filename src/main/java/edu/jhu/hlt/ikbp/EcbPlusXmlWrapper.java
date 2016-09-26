@@ -2,6 +2,7 @@ package edu.jhu.hlt.ikbp;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -112,7 +113,7 @@ public class EcbPlusXmlWrapper {
     
     @Override
     public String toString() {
-      return "(Node m_id=" + m_id + " type=" + type + " t_id=" + t_id + " descriptor=" + descriptor + " instance_id=" + instance_id + ")";
+      return "(Node m_id=" + m_id + " type=" + type + " t_id=" + Arrays.toString(t_id) + " descriptor=" + descriptor + " instance_id=" + instance_id + ")";
     }
     
     public String showMention(String[] tokens) {

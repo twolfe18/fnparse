@@ -5,8 +5,12 @@ import java.util.List;
 
 import edu.jhu.hlt.concrete.Clustering;
 import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.EntityMention;
+import edu.jhu.hlt.concrete.EntityMentionSet;
+import edu.jhu.hlt.concrete.Sentence;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
+import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
 import edu.jhu.hlt.tutils.Log;
@@ -31,6 +35,13 @@ public interface ConcreteIkbpAnnotations
       this.clustering = clustering;
       this.comms = comms;
       this.part = part;
+    }
+    
+    public Pair<Communication, SituationMention> findSitutionMention(UUID sitMentionId) {
+      throw new RuntimeException("implement me");
+    }
+    public Sentence find(Communication c, TokenRefSequence trs) {
+      throw new RuntimeException("implement me");
     }
   }
   
@@ -90,6 +101,17 @@ public interface ConcreteIkbpAnnotations
     return null;
   }
 
+  public static EntityMentionSet lookupEms(Communication dict, UUID key) {
+    for (EntityMentionSet sms : dict.getEntityMentionSetList()) {
+      if (sms.getUuid().equals(key))
+        return sms;
+    }
+    Log.info("WARNING: couldn't find EntityMentionSet with id "
+        + key.getUuidString() + " in Communication "
+        + dict.getId() + " aka " + dict.getUuid().getUuidString());
+    return null;
+  }
+
   public static SituationMentionSet lookupSms(Communication dict, UUID key) {
     for (SituationMentionSet sms : dict.getSituationMentionSetList()) {
       if (sms.getUuid().equals(key))
@@ -98,6 +120,17 @@ public interface ConcreteIkbpAnnotations
     Log.info("WARNING: couldn't find SituationMentionSet with id "
         + key.getUuidString() + " in Communication "
         + dict.getId() + " aka " + dict.getUuid().getUuidString());
+    return null;
+  }
+
+  public static EntityMention lookup(EntityMentionSet dict, UUID key) {
+    for (EntityMention sm : dict.getMentionList()) {
+      if (sm.getUuid().equals(key))
+        return sm;
+    }
+    Log.info("WARNING: couldn't find EntityMention with id "
+        + key.getUuidString() + " in EntityMentionSet "
+        + dict.getUuid().getUuidString());
     return null;
   }
 

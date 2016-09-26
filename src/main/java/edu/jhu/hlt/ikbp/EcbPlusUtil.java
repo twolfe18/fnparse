@@ -44,6 +44,20 @@ public class EcbPlusUtil {
     TIME_REPETITION,
     UNKNOWN_INSTANCE_TAG,
   }
+  
+  public static boolean isEntityMention(String ecbType) {
+    if (ecbType.startsWith("NON_HUMAN"))
+      return true;
+    if (ecbType.startsWith("HUMAN"))
+      return true;
+    if (ecbType.startsWith("LOC"))
+      return true;
+    return false;
+  }
+  
+  public static boolean isSituationMention(String ecbType) {
+    return !isEntityMention(ecbType);
+  }
 
   public static List<String> getMentionIds(Node n) {
     List<String> m = new ArrayList<>();

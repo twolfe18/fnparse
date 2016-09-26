@@ -164,6 +164,11 @@ public class EcbPlusSearch implements IkbpSearch {
   }
 
   @Override
+  public void setTopic(edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic t) {
+    // no-op (all data is loaded)
+  }
+
+  @Override
   public List<Pair<Response, Adjoints>> search(Query q) {
 //    Log.info("q.subject=" + q.getSubject());
 
