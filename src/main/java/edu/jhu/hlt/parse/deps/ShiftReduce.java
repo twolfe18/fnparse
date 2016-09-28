@@ -12,11 +12,13 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
@@ -1265,312 +1267,559 @@ public class ShiftReduce {
     }
 
     assert model.oracleHasPerfectRecall(heads, deprels, words, pos);
-    
-    /*
-     * Beam search as Variational Message Passing, aka
-     * SPARSE FORWARD-BACKWARD USING MINIMUM DIVERGENCE BEAMS FOR FAST TRAINING OF CONDITIONAL RANDOM FIELDS
-     * https://people.cs.umass.edu/~mccallum/papers/sparse-fb.pdf
-     * 
-     * The variational family is a sum of point masses.
-     * Key: they compute all items which might go on the beam and keep enough s.t. KL(pointwise||full) < epsilon
-     *   If there are N items generated at every step, you pay O(N log(N)) for sorting rather than O(N log(B)), but this isn't the expensive part.
-     *   The expensive part is computing the next factor (global features) on the top B rather than top N.
-     *   
-     * Variational family proposed by sparse-fb:
-     * q(y) = \sum_{i in Beam} q_i delta_i(y)
-     *
-     * The point I was trying to make was that including a "backoff to a uniform dist" might be useful.
-     * q_{alt}(y) = lambda * q(y) + (1-lambda) * Unif(y)
-     * The reason to do this is that optimizing over {Beam, lambda} is not much harder than {Beam} and might yield lower KL.
-     * More intuitively, lambda corresponds to global feature muting, which I think is essential if we are going to backoff to local learning.
-     * 
-     * Remember, I want to have a lambda per global feature, not a lambda per state.
-     * One lambda per state is the naive case which can work, but I would like to mute simple global features less than complex ones.
-     * 
-     * Lets do the 1st order HMM.
-     * local factor:            phi(y(t,i))
-     * 1st order global factor: phi(y(t,i), y(t-1,j))
-     * There are T tags and the beam is size B
-     * belief(y(t,i))
-     *   = lambda * I(y(t,i) is in beam(t))
-     *   + (1-lambda) * 1/T
-     *
-     * message(y(t,i) => y(t+1,j))
-     *   = belief(y(t,i)) * phi(y(t,i), y(t+1,j))
-     *   = lambda * I(y(t,i) is in beam(t)) * phi(y(t,i), y(t+1,j))   # beam message
-     *     + (1-lambda) * 1/T * phi(y(t,i), y(t+1,j))                 # off-beam message
-     * message(y(t,*) => y(t+1,j))
-     *   = sum_i message(y(t,i) => y(t+1,j))
-     * message(local => y(t+1,j))
-     *   = phi(y(t+1),j)
-     * 
-     * belief(y(t+1,*)) = argmin_{Beam,lambda} KL(q_{Beam,lambda} || (\sum_j message(y(t,*) => y(t+1,j)) * message(local => y(t+1,j))) )
-     * 
-     * Analysis:
-     * Does this scheme lead to decreasing lambda?
-     * Maybe, maybe not.
-     * Ex. Yes: local factor is uniform distribution; phi is a stochastic permutation matrix; and B << T*T
-     * Ex. No: local factor scale >> global factor scale; local factor message entropy is low ("fits in B").
-     * 
-     * This is actually sort of clear!
-     * 
-     * Difficulty: Computing off-beam messages!
-     * message_{off-beam}(y(t,*) => y(t+1,j))
-     *   = (1-lambda)/T \sum_i phi(y(t,i), y(t+1,j))
-     *   = (1-lambda)/T * columnSums(j)
-     * We could just store the columnSums(phi) as a separate vector, update it when phi is updated.
-     *
-     * 
-     * What are the messages for shift-reduce parsing features?
-     * Every y(t,i) is a configuration (State)
-     *
-     * message(f(y(t,i) => y(t+1,j)) = exp(theta * f(y(t,i), a, x))
-     *   s.t. y(t+1,j) = apply(a, y(t,i))
-     * 
-     * The hard part is the off-beam messages:
-     *   (1-lambda)/numActions \sum_i message(y(t,i), y(t+1,j))
-     *   (1-lambda)/numActions \sum_i exp(theta * f(y(t,i), a(t+1,j), x))
-     *   (1-lambda)/numActions Z(a(t+1,j), x)
-     * This is a loop over "all states which could lead up to taking action a(t+1,j) in sentence x"
-     * We know that this is too hard to do naively or with dynamic programming!
-     * We must use tricks like we did in the HMM case, something like pre-computing column sums.
-     * Perhaps we can estimate Z(a(t+1,j), x) with another function?
-     *   Something like computing the distribution of observed Z values conditioned on some features of a(t+1,j) and x, store means
-     *   Or use function approximator? Again, estimating the mean. Same idea as above but perhaps more compact than a table.
-     *   Remember that we can decompose this over features: compute a Z table for something like "a.type * S[0].word * N[0].word" rather than all of a(t+1,j)*x
-     *
-     *
-     * So, assuming I was willing to compute all this junk, this would give me a variational distribution over states (configurations).
-     * This leaves off the issue of training!
-     * ERMA is the natural option, but requires back-propping through message passing, including Z(a(t+1,j),x)!!!
-     * I could just do variational EM (E-step uses q instead of p).
-     */
-    
+  }
 
+  /*
+   * Beam search as Variational Message Passing, aka
+   * SPARSE FORWARD-BACKWARD USING MINIMUM DIVERGENCE BEAMS FOR FAST TRAINING OF CONDITIONAL RANDOM FIELDS
+   * https://people.cs.umass.edu/~mccallum/papers/sparse-fb.pdf
+   * 
+   * The variational family is a sum of point masses.
+   * Key: they compute all items which might go on the beam and keep enough s.t. KL(pointwise||full) < epsilon
+   *   If there are N items generated at every step, you pay O(N log(N)) for sorting rather than O(N log(B)), but this isn't the expensive part.
+   *   The expensive part is computing the next factor (global features) on the top B rather than top N.
+   *   
+   * Variational family proposed by sparse-fb:
+   * q(y) = \sum_{i in Beam} q_i delta_i(y)
+   *
+   * The point I was trying to make was that including a "backoff to a uniform dist" might be useful.
+   * q_{alt}(y) = lambda * q(y) + (1-lambda) * Unif(y)
+   * The reason to do this is that optimizing over {Beam, lambda} is not much harder than {Beam} and might yield lower KL.
+   * More intuitively, lambda corresponds to global feature muting, which I think is essential if we are going to backoff to local learning.
+   * 
+   * Remember, I want to have a lambda per global feature, not a lambda per state.
+   * One lambda per state is the naive case which can work, but I would like to mute simple global features less than complex ones.
+   * 
+   * Lets do the 1st order HMM.
+   * local factor:            phi(y(t,i))
+   * 1st order global factor: phi(y(t,i), y(t-1,j))
+   * There are T tags and the beam is size B
+   * belief(y(t,i))
+   *   = lambda * I(y(t,i) is in beam(t))
+   *   + (1-lambda) * 1/T
+   *
+   * message(y(t,i) => y(t+1,j))
+   *   = belief(y(t,i)) * phi(y(t,i), y(t+1,j))
+   *   = lambda * I(y(t,i) is in beam(t)) * phi(y(t,i), y(t+1,j))   # beam message
+   *     + (1-lambda) * 1/T * phi(y(t,i), y(t+1,j))                 # off-beam message
+   * message(y(t,*) => y(t+1,j))
+   *   = sum_i message(y(t,i) => y(t+1,j))
+   * message(local => y(t+1,j))
+   *   = phi(y(t+1),j)
+   * 
+   * belief(y(t+1,*)) = argmin_{Beam,lambda} KL(q_{Beam,lambda} || (\sum_j message(y(t,*) => y(t+1,j)) * message(local => y(t+1,j))) )
+   * 
+   * Analysis:
+   * Does this scheme lead to decreasing lambda?
+   * Maybe, maybe not.
+   * Ex. Yes: local factor is uniform distribution; phi is a stochastic permutation matrix; and B << T*T
+   * Ex. No: local factor scale >> global factor scale; local factor message entropy is low ("fits in B").
+   * 
+   * This is actually sort of clear!
+   * 
+   * Difficulty: Computing off-beam messages!
+   * message_{off-beam}(y(t,*) => y(t+1,j))
+   *   = (1-lambda)/T \sum_i phi(y(t,i), y(t+1,j))
+   *   = (1-lambda)/T * columnSums(j)
+   * We could just store the columnSums(phi) as a separate vector, update it when phi is updated.
+   *
+   * 
+   * What are the messages for shift-reduce parsing features?
+   * Every y(t,i) is a configuration (State)
+   *
+   * message(f(y(t,i) => y(t+1,j)) = exp(theta * f(y(t,i), a, x))
+   *   s.t. y(t+1,j) = apply(a, y(t,i))
+   * 
+   * The hard part is the off-beam messages:
+   *   (1-lambda)/numActions \sum_i message(y(t,i), y(t+1,j))
+   *   (1-lambda)/numActions \sum_i exp(theta * f(y(t,i), a(t+1,j), x))
+   *   (1-lambda)/numActions Z(a(t+1,j), x)
+   * This is a loop over "all states which could lead up to taking action a(t+1,j) in sentence x"
+   * We know that this is too hard to do naively or with dynamic programming!
+   * We must use tricks like we did in the HMM case, something like pre-computing column sums.
+   * Perhaps we can estimate Z(a(t+1,j), x) with another function?
+   *   Something like computing the distribution of observed Z values conditioned on some features of a(t+1,j) and x, store means
+   *   Or use function approximator? Again, estimating the mean. Same idea as above but perhaps more compact than a table.
+   *   Remember that we can decompose this over features: compute a Z table for something like "a.type * S[0].word * N[0].word" rather than all of a(t+1,j)*x
+   *
+   *
+   * So, assuming I was willing to compute all this junk, this would give me a variational distribution over states (configurations).
+   * This leaves off the issue of training!
+   * ERMA is the natural option, but requires back-propping through message passing, including Z(a(t+1,j),x)!!!
+   * I could just do variational EM (E-step uses q instead of p).
+   */
+
+
+  /*
+   * Before I write any more code, I need to have a clear idea of how to compute the off-beam messages for one feature.
+   * 
+   * First lets define variables:
+   * 
+   * f_i = a vector variable representing the features at state i
+   *       there is one index per feature, e.g. f_i[0] = "stack[0].leftmostModifier.word"
+   * a_i = a categorical variable over action i (domain is [AL,AR,RE,SH]
+   *
+   * We can exactly represent the distribution over a_i during EM.
+   * For f_i, we use the variational family
+   *  q(f_i) = 
+   *    alpha * 1/B * \sum_{i in B} I(state i on the beam has feature f_i)
+   *    + (1-alpha) * u_i
+   * What is u_i?
+   * It is a random variable of course. Same shape as f_i.
+   * We optimize u_i to minimize KL divergence from the true message.
+   * 
+   * Wait, why even use a beam if we can use f_i?
+   * Ah, I think the answer is in p(f_{i+1} | a_i, f_i)
+   * We don't have to specify this in normal beam search (variational distribution using states)
+   * p("stack[0].word"_{i+1} | SH, f_i) = ???
+   * Simple cases will be covered, e.g.
+   *   f_{i+1}="stack[0].word" | a_i=SH, f_i="buf[0].word"
+   *   f_{i+1}="stack[0].word" | a_i=RE, f_i="stack[1].word"
+   *   f_{i+1}="stack[0].word" | a_i=AL, f_i="stack[1].word"
+   *   f_{i+1}="stack[0].word" | a_i=AR, f_i="buf[0].word"
+   * Complex cases will use information which is not contained in f_i.
+   * Using the beam variational family lets you answer these questions, always.
+   * But, since this family is so size-constrained, q(f_i) is not perfect.
+   *
+   * What if we just learned a unary factor on f_i?
+   * q(f_i) ~ beam + resid
+   * p(a_i) = model(q(f_i))
+   * q(f_{i+1}) = apply(a_i, q(f_i).beam) + apply(a_i, q(f_i).resid)
+   * 
+   * To clarify this, I think I need to extend the definition of f_i to include all features used to compute actually parameterized features.
+   * e.g. "stack[0].leftmostModifier" | RE needs to know stack[1].leftmostModifier
+   * As Huang and Sagae (2010) http://www.aclweb.org/anthology/P10-1110
+   * point out: f_i only needs to be extended with extra facts for computing what happens on RE.
+   * There is not "state" on the buf, only the stack.
+   * Their DP alg is based on state merging based on kernel features. This is certainly a good thing to do.
+   * I don't think that work is "complete", in the sense that all possible sources of evidence are used to update q(f_{i+1})
+   * It is certainly more complete than regular beam search with no state merging.
+   * Since it is non-prob it is also using early update (I think this was pre-VFP)
+   * 
+   * 
+   * I am now a bit confused why we can't just do EP: compute expectations over the features.
+   * Likelihood factorizes over features, so the messages factorize over features.
+   * Need a table of (f_{i+1}, a_i, f_i) weights... or something like that.
+   * Lets say we want to add the feature "stack[0].lc" to the model ("lc" == "left child", aka "leftmost modifier")
+   * We need to specify how the feature is updated under all actions:
+   *    buf[0]=X & AR => stack[0].lc = min(prev(stack[0].lc), X)
+   * where prev(*) is a function of an index in f_i which returns that indices value at f_{i-1}
+   * 
+   * Once you have enumerated all rules, f_i^R are all of the RHSs of those rules
+   * and f_i^I is (all vars mention in a rule) \setminus f_i^R
+   * Ah!
+   * but f_i^I also need update rules!
+   * So when you add a rule, you really have to add its transitive dependencies.
+   * What is one such rule where we couldn't do this?
+   * idk, it doesn't seem that hard.
+   * 
+   * Going through Zhang and Nivre (2011) features, the hard ones seem to be:
+   * a) distance between stack[0] and buf[0]
+   * b) valency of stack[0] (number of left or right children)
+   * c) parent, lc, and rc of stack[0] and buf[0]
+   * 
+   * ###                    # expressions on the RHS of = are evaluated on f_i, so (probably) no need for prev(*)
+   * stack[0].distance | AR = 0   # the top of buf is pushed onto the stack
+   * stack[0].distance | AL = stack[1].distance
+   * stack[0].distance | RE = stack[1].distance
+   * stack[0].distance | SH = 0
+   * 
+   * stack[0].lValence | AR = stack[0].lValence
+   * stack[0].lValence | AL = stack[1].lValence   # head of stack is popped, f_{i+1}.buf[0].lValence = f_i.buf[0].lValence + 1
+   * stack[0].lValence | RE = stack[1].lValence   # head of stack is popped
+   * stack[0].lValence | SH = 0
+   * 
+   * stack[0].rValence | AR = 0   # head of buf is pushed onto stack, but f_{i+1}.stack[1].rValence = f_i.stack[0].rValence + 1
+   * stack[0].rValence | AL = stack[1].rValence
+   * stack[0].rValence | RE =
+   * stack[0].rValence | SH =
+   * 
+   * I think I need to reframe this so that I state updates to a block of f_i condition on each action:
+   * I'm going to use f_c = f_{i+1} and f_p = f_i which correspond to the "prev" and "cur" mnemonic
+   * 
+   * AR wrt valence {
+   *   f_c.stack[0].valence = f_p.buf[0].valence
+   *   f_c.stack[1].valence = f_p.stack[0].valence + 1
+   *   f_c.stack[i+1].valence = f_p.stack[i].valence        FORALL i >= 1
+   *   f_c.buf[i].valence = 0                               FORALL i
+   * }
+   * AL wrt valence {
+   *   f_c.stack[i+1].valence = f_p.stack[i].valence        FORALL i
+   *   f_c.buf[0].valence = f_p.buf[0].valence + 1
+   * }
+   * RE wrt valence {
+   *   f_c.stack[i].valence = f_p.stack[i+1].valence        FORALL i
+   * }
+   * SH wrt valence {
+   *   f_c.stack[0].valence = 0
+   *   f_c.stack[i+1].valence = f_p.stack[i].valence        FORALL i
+   * }
+   * 
+   * AR wrt distance {
+   *   f_c.stack[0].distance = 1
+   *   f_c.stack[i+1].distance = f_p.stack[i].distance      FORALL i
+   * }
+   * AL wrt distance {
+   *   f_c.stack[i].distance = f_p.stack[i+1].distance      FORALL i
+   * }
+   * RE wrt distance {
+   *   f_c.stack[i].distance = f_p.stack[i+1].distance      FORALL i
+   * }
+   * SH wrt distance {
+   *   f_c.stack[0].distance = 1
+   *   f_c.stack[i+1].distance = f_p.stack[i].distance + 1  FORALL i
+   * }
+   * 
+   * 
+   * So this makes it seem like we can really do exact dynamic programming.
+   * What about conjoining, say valency, with the word.
+   * Can we do the joint table?
+   * Doesn't seem that hard...
+   * AR wrt valenceAndWord {
+   *   f_c.stack[0].valenceAndWord = f_p.buf[0].valenceAndWord
+   *   ...
+   * }
+   * 
+   * 
+   * Ah, perhaps here is the problem:
+   * The size of f_{i+1}^{valenceAndWord} grows throughout inference.
+   * Above, the "i" in f_c.stack[i].valenceAndWord is a template.
+   * The real variables are like f_c.stack[2].valenceAndWord
+   * This is now a distribution over W x N.
+   * Its true that this distribution only takes values from the sentence, but it can still grow quickly.
+   * We are back to the case where we want a beam for f_{i+1}^{valenceAndWord}
+   * And we are back to the problem of off-beam messages for mu(phi_i(f_i, a_i) => f_{i+1})
+   * So q(f_{i+1}^{valenceAndWord}) =
+   *    alpha * beamOver(W x N, size=k)
+   *    (1-alpha) * Uniform(W x N)        # this is naive! we could have a variational parameter in place of this Uniform
+   * So mu(phi_i(f_i, a_i) => f_{i+1}) =
+   *    alpha * mu(phi(a_i, beamOver(f_i,k)) => f_{i+1})      # use "AR wrt valenceAndWord" rules to update this, after each step compress beliefs (beam pruning)
+   *    + (1-alpha) * mu(phi(a_i, Uniform(WxN)) => f_{i+1})   # 
+   * This "message" is an abstract thing, what we really care about is q(f_{i+1})
+   * We use the "AR wrt valenceAndWord" rules where we bind f_p values to either beamOver(f_i,k) or Uniform(WxK)
+   * We compute the full set of values for f_{i+1}, which will be bigger than k,
+   * Then we compress this into beamOver(f_{i+1},k) which is one part of q(f_{i+1})
+   * We could choose alpha to optimize KL[q(f_{i+1}) || f_{i+1}],
+   *   where f_{i+1} is what we got from mu(phi(a_i, q(f_i)) => f_{i+1}) BEFORE compressing/pruning to the beam representation q(f_{i+1})
+   *   ...but this requires more math
+   * We could also use the Pal,Sutton,McCallum trick of setting k s.t. KL < epsilon
+   *   ...but we need to stop somewhere!
+   * We could jointly set k,alpha to optimize some penalty on magnitude of k and KL divergence
+   *   ...but now we're way off the rails, too complex, just hand tune k!
+   *
+   *
+   * Lets make sure we have an example of computing off-beam messages for valenceAndWord
+   * mu(phi(a_i, Uniform(WxN)) => f_{i+1}) =
+   *   "p(f_c.stack[0].valenceAndWord | a_i, f_p)"
+   *   where f_p ~ Uniform(WxN)
+   *   so any time we see an equation like:
+   *   f_c.stack[0].valenceAndWord = f_p.buf[0].valenceAndWord
+   *   we need to lift it to a pointwise expression over Uniform(WxN)
+   * Remember, the only reason that we're computing this is to again compress it in beamOver(f_{i+1},k)
+   * So we can start off by computing the message from beamOver(f_i,k) and then re-scoring.
+   * Remember, the values in beamOver(f_i,k) are full assignments:
+   *   {stack[0].valenceAndWord=(0,"John"), stack[1].valenceAndWord=(1,"loves"), ...}
+   * So unifying (1-alpha) * mu(phi(a_i,Uniform(WxN))    => f_{i+1})  # off-beam
+   *        with    alpha  * mu(phi(a_i,beamOver(f_i,k)) => f_{i+1})  # beam
+   * can be done by
+   * 1) computing a list of full assignments derived from beamOver(f_i,k) and a_i
+   * 2) adding in the score induced by phi(a_i,Uniform(WxN))
+   *    score(
+   *      {stack[0].valenceAndWord=(0,"John"), stack[1].valenceAndWord=(1,"loves"), ...}
+   *    ) += log p(f_c.stack[0].valenceAndWord=(0,"John") | f_p.buf[0].valenceAndWord ~ Uniform(WxN))
+   *      += log p(f_c.stack[1].......
+   *
+   * Revisiting the earlier idea, if we say that mu_i = Uniform(WxN)
+   * and that we could choose other values for mu_i, then we could compute mu_i as:
+   * forall config C in apply(a_{i-1}, q(f_{i-1})):
+   *   mu_i[stack[0].valenceAndWord] += q(C.stack[0].valenceAndWord)
+   *
+   *
+   *
+   * AHH, going back to MUCH earlier,
+   * I was having trouble working out what the off-beam messages would be while thinking about
+   * the p(a|s) as a SINGLE factor, and it came out to a need to estimate a partition function
+   * which summed over all CONFIGURATIONS (not variable configs like valenceAndWord), which was
+   * going to be hard/impossible.
+   * This was when I though that the BEAM would be over configurations, and the off-beam messages
+   * would be a function of Uniform(ConfigurationSpace), which won't work well.
+   * By breaking the p(a|s) factor down by module, I realized that I can have a beam-variation-approximation
+   * per module, which makes things much easier.
+   * 
+   * 
+   * To ensure that I'm in touch with my earlier goals, how does this get back to the goal of
+   * being able to "trust" your global features?
+   * 1) WITHOUT learning alpha: the smaller alpha is, the less "context" you have to look at...
+   * 2) OMG, an obvious way to set alpha!
+   * You are pruning mu(=>f_{i+1}) down to beamOver(f_{i+1},k)
+   * That beam is sorted by the alphas (as in DP, cur.alpha = cur.psi + prev.alpha),
+   * which represent probability mass.
+   * You know what proportion of that mass is being pruned!
+   * You can set alpha = (mass preserved by the k items on the beam) / (mass generated by mu(=>f_{i+1}))
+   * 
+   * THIS answers the question: the better the beam approximation, the more q(f_i) deviates from
+   * what it would have been without considering the history!
+   * If the beam approx is terrible, then your model has to learn to deal with
+   * the fact that the "values" (aka f_p) fed to the features will be from Uniform(f_i)!
+   */
+  
+  
+  
+  /**
+   * Represents q(f_i) which is a distribution over s0.
+   * 
+   * When we compute q(f_{i+1}) from q(a_i) and q(f_i),
+   * 1) b(f_{i+1}) += (q(AL) + q(RE)) * [Backoff[q(f_i)], q(f_i)]
+   * 2) b(f_{i+1}) += (q(AR) + q(SH)) * [        q(f_i),  buf0  ]
+   * 3) m(f_{i+1}) = marginalize(b(f_{i+1}))  # s0 values, but can be large
+   * 4) t(f_{i+1}) = TopK(m(f_{i+1}))
+   * 5) alpha_{i+1} = Weight(t(f_{i+1})) / Weight(m(f_{i+1}))
+   * 6) q(f_{i+1}) = alpha_{i+1} * t(f_{i+1}) + (1-alpha_{i+1}) * Uniform(s0)
+   * 
+   * The tricky part is computing (1) and (2) efficiently.
+   * 
+   * Also, this assumes that buf0 is given.
+   * Put another way, that i indexes |Beta|.
+   * This transition system requires that the action space be (AL|RE)*(AR|SH)
+   * If this is the case, a_prev is infinite.
+   * Lines (1) and (2) don't really make sense anymore.
+   */
+  static class Stack0AssumingBuf0IsGivenB {
+    
+    static class StackBigram {
+      double weight;
+      String s1, s0;  // stack representation
+      StackBigram(String s1, String s0, double w) {
+        this.s1 = s1;
+        this.s0 = s0;
+        this.weight = w;
+      }
+    }
+    
+    static class BackoffDist {
+      List<StackBigram> dist;
+      // TODO: s0 -> [s1, weight] where the lists are sorted (decreasing) by weight
+    }
+    
+    private Stack0AssumingBuf0IsGivenB f_prev;
+    private double[] a_prev;
+    
+    private List<StackBigram> beliefs_beam;
+    private BackoffDist beliefs_offbeam;      // This is given at the outset! Static resource!
+    private double alpha;
+
+    // TODO Have entries sorted by weight, decreasing
+    // THIS is what we limit to size k.
+    private Map<String, Double> s0_marginal_beliefs;
+    
+    
+    
+    
+    public Stack0AssumingBuf0IsGivenB(Stack0AssumingBuf0IsGivenB f_prev, double[] a_prev, String buf0) {
+      
+      // SH {{{
+      // beam message
+      for (String prev_s0 : f_prev.s0_marginal_beliefs.keySet()) {
+        double prev_s0_alpha = f_prev.s0_marginal_beliefs.get(prev_s0);
+        StackBigram s2 = new StackBigram(prev_s0, buf0, prev_s0_alpha * a_prev[SH]);
+        beliefs_beam.add(s2);
+        // s0_marginal_beliefs[stackBigram.s0] += alpha * stackBigram.w
+      }
+      
+      // offbeam message
+
+      // }}}
+
+    }
+  }
+  
+  /*
+   * Was I mistaken in assuming that you can decompose the variational distribution by feature aspect?
+   * The problem appears to be that we can't just maintain a distribution over stack[0]
+   * since the equations used to update it reference arbitrary information about the state.
+   * 
+   * Lets zoom in on stack[0] as an example.
+   * How do we compute what q(f_{i+1}) after a SH if our beam doesn't have a dist over buf[0]?
+   * Is this any easier if we don't take any information from buf, just stack?
+   * (I'm thinking of whether the switch to the |B|-indexed transition system is worthwhile)
+   * If this were the case, we could take buf[0] from x for SH, but for RE we would need to take stack[1] from an item in the beam.
+   * This is perhaps do-able: beam stores a distribution over stacks.
+   * Stacks are strings, can estimate this with a regular weighted FSA, roughly p(head, modifier)
+   * 
+   * So for computing messages, we would 
+   */
+  public static class Stack0AssumingBuf0IsGiven {
+    static class Dist {
+      LL<String> stack;
+      double weight;
+    }
+    
+    // f_i
+    Stack0AssumingBuf0IsGiven f_prev;
+    // a_i: problem is that this is now a distribution over the language (AL|RE)*(AR|SH)
+    double[] a_prev;
+    // x_i: assumes that i indexes |B|
+    String buf0;
+
+    // f_{i+1}
+    List<Dist> beliefs_beam;
+    double beliefs_offbeam;     // mass not captured by first k elements in beliefs_beam, evenly distributed over V tokens
+    // 1 == beliefs_offbeam + sum_{i=1 to k} beliefs_beam[i].weight
+    int k, V;
+    
+    
+    
+    public Stack0AssumingBuf0IsGiven(Stack0AssumingBuf0IsGiven f_prev, double[] a_prev, String buf0) {
+      
+      beliefs_beam = new ArrayList<>();
+      for (int i = 0; i < f_prev.k; i++) {
+        Dist stack_prev = f_prev.beliefs_beam.get(i);
+
+        Dist stack_cur_AR_or_SH = new Dist();
+        stack_cur_AR_or_SH.weight = stack_prev.weight * (a_prev[AR] + a_prev[SH]);
+        stack_cur_AR_or_SH.stack = new LL<>(buf0, stack_prev.stack);
+        beliefs_beam.add(stack_cur_AR_or_SH);
+        
+        Dist stack_cur_AL_or_RE = new Dist();
+        stack_cur_AL_or_RE.weight = stack_prev.weight * (a_prev[AL] + a_prev[RE]);
+        stack_cur_AL_or_RE.stack = stack_prev.stack.next;
+        beliefs_beam.add(stack_cur_AL_or_RE);
+      }
+      
+      // TODO Merge
+      
+      // TODO Add in offbeam message
+      // What would the model do under the "Uniform" distribution?
+      double Z = 0;
+      for (Dist d : beliefs_beam) {
+        
+        // AR and SH push buf0
+        // 
+      }
+    }
+  }
+  
+  
+  
+  
+
+  public static boolean areNormalizedProbs(double... ds) {
+    double s = 0;
+    for (int i = 0; i < ds.length; i++) {
+      if (ds[i] < 0)
+        return false;
+      if (ds[i] > 1)
+        return false;
+      s += ds[i];
+    }
+    return Math.abs(1 - s) < 1e-8;
+  }
+
+
+  // Represents the variables this module cares about
+  static class Dist {
+    double weight;
+    LL<String> stack;
+    LL<String> buf;
+  }
+  
+  static final int AL = 0;
+  static final int AR = 1;
+  static final int RE = 2;
+  static final int SH = 3;
+
+  public static class Stack1ModuleC {
+    // distribution over fp.buf[0]? then we would need to take fp.buf[1] dist upon construction...
+    // 
+  }
+  
+  public static class Stack1ModuleB {
+    // f_i
+    Stack1ModuleB f_prev;
+    // a_i
+    double[] a_prev;        // beliefs about [AL, AR, RE, SH]
+    // q(f_{i+1})
+    List<Dist> f_cur_beam;  // contains all derived dists
+    double f_cur_offbeam;   // prob mass captured by the first k items in f_cur_beam
+    int k, V;                  // vocab size
+    
+    public Stack1ModuleB(Stack1ModuleB f_prev, double[] a_prev) {
+      this.f_prev = f_prev;
+      this.a_prev = a_prev;
+      
+      // Where do we get fp.buf[0] from?
+      // This seems like this could be given at construction since it is known based on i...
+      // not really, buf[0] is not known (with arg-eager definition)
+      
+      
+    }
+  }
+    
+  /**
+   * Maintains a distribution over stack[0] and any features which can be derived from it.
+   */
+  public static class Stack1Module {
+
+    List<Dist> fc_unpruned;
+    List<Dist> fp_beam_beliefs;   // p(f_c.stack[0] == x) where x is a word
+    double fp_offbeam_beliefs;              // probability mass not on the beam
+    int V;                                  // vocabulary size, fp_offbeam_beliefs are distributed uniformly over this
+    
     /*
-     * Before I write any more code, I need to have a clear idea of how to compute the off-beam messages for one feature.
-     * 
-     * First lets define variables:
-     * 
-     * f_i = a vector variable representing the features at state i
-     *       there is one index per feature, e.g. f_i[0] = "stack[0].leftmostModifier.word"
-     * a_i = a categorical variable over action i (domain is [AL,AR,RE,SH]
-     *
-     * We can exactly represent the distribution over a_i during EM.
-     * For f_i, we use the variational family
-     *  q(f_i) = 
-     *    alpha * 1/B * \sum_{i in B} I(state i on the beam has feature f_i)
-     *    + (1-alpha) * u_i
-     * What is u_i?
-     * It is a random variable of course. Same shape as f_i.
-     * We optimize u_i to minimize KL divergence from the true message.
-     * 
-     * Wait, why even use a beam if we can use f_i?
-     * Ah, I think the answer is in p(f_{i+1} | a_i, f_i)
-     * We don't have to specify this in normal beam search (variational distribution using states)
-     * p("stack[0].word"_{i+1} | SH, f_i) = ???
-     * Simple cases will be covered, e.g.
-     *   f_{i+1}="stack[0].word" | a_i=SH, f_i="buf[0].word"
-     *   f_{i+1}="stack[0].word" | a_i=RE, f_i="stack[1].word"
-     *   f_{i+1}="stack[0].word" | a_i=AL, f_i="stack[1].word"
-     *   f_{i+1}="stack[0].word" | a_i=AR, f_i="buf[0].word"
-     * Complex cases will use information which is not contained in f_i.
-     * Using the beam variational family lets you answer these questions, always.
-     * But, since this family is so size-constrained, q(f_i) is not perfect.
-     *
-     * What if we just learned a unary factor on f_i?
-     * q(f_i) ~ beam + resid
-     * p(a_i) = model(q(f_i))
-     * q(f_{i+1}) = apply(a_i, q(f_i).beam) + apply(a_i, q(f_i).resid)
-     * 
-     * To clarify this, I think I need to extend the definition of f_i to include all features used to compute actually parameterized features.
-     * e.g. "stack[0].leftmostModifier" | RE needs to know stack[1].leftmostModifier
-     * As Huang and Sagae (2010) http://www.aclweb.org/anthology/P10-1110
-     * point out: f_i only needs to be extended with extra facts for computing what happens on RE.
-     * There is not "state" on the buf, only the stack.
-     * Their DP alg is based on state merging based on kernel features. This is certainly a good thing to do.
-     * I don't think that work is "complete", in the sense that all possible sources of evidence are used to update q(f_{i+1})
-     * It is certainly more complete than regular beam search with no state merging.
-     * Since it is non-prob it is also using early update (I think this was pre-VFP)
-     * 
-     * 
-     * I am now a bit confused why we can't just do EP: compute expectations over the features.
-     * Likelihood factorizes over features, so the messages factorize over features.
-     * Need a table of (f_{i+1}, a_i, f_i) weights... or something like that.
-     * Lets say we want to add the feature "stack[0].lc" to the model ("lc" == "left child", aka "leftmost modifier")
-     * We need to specify how the feature is updated under all actions:
-     *    buf[0]=X & AR => stack[0].lc = min(prev(stack[0].lc), X)
-     * where prev(*) is a function of an index in f_i which returns that indices value at f_{i-1}
-     * 
-     * Once you have enumerated all rules, f_i^R are all of the RHSs of those rules
-     * and f_i^I is (all vars mention in a rule) \setminus f_i^R
-     * Ah!
-     * but f_i^I also need update rules!
-     * So when you add a rule, you really have to add its transitive dependencies.
-     * What is one such rule where we couldn't do this?
-     * idk, it doesn't seem that hard.
-     * 
-     * Going through Zhang and Nivre (2011) features, the hard ones seem to be:
-     * a) distance between stack[0] and buf[0]
-     * b) valency of stack[0] (number of left or right children)
-     * c) parent, lc, and rc of stack[0] and buf[0]
-     * 
-     * ###                    # expressions on the RHS of = are evaluated on f_i, so (probably) no need for prev(*)
-     * stack[0].distance | AR = 0   # the top of buf is pushed onto the stack
-     * stack[0].distance | AL = stack[1].distance
-     * stack[0].distance | RE = stack[1].distance
-     * stack[0].distance | SH = 0
-     * 
-     * stack[0].lValence | AR = stack[0].lValence
-     * stack[0].lValence | AL = stack[1].lValence   # head of stack is popped, f_{i+1}.buf[0].lValence = f_i.buf[0].lValence + 1
-     * stack[0].lValence | RE = stack[1].lValence   # head of stack is popped
-     * stack[0].lValence | SH = 0
-     * 
-     * stack[0].rValence | AR = 0   # head of buf is pushed onto stack, but f_{i+1}.stack[1].rValence = f_i.stack[0].rValence + 1
-     * stack[0].rValence | AL = stack[1].rValence
-     * stack[0].rValence | RE =
-     * stack[0].rValence | SH =
-     * 
-     * I think I need to reframe this so that I state updates to a block of f_i condition on each action:
-     * I'm going to use f_c = f_{i+1} and f_p = f_i which correspond to the "prev" and "cur" mnemonic
-     * 
-     * AR wrt valence {
-     *   f_c.stack[0].valence = f_p.buf[0].valence
-     *   f_c.stack[1].valence = f_p.stack[0].valence + 1
-     *   f_c.stack[i+1].valence = f_p.stack[i].valence        FORALL i >= 1
-     *   f_c.buf[i].valence = 0                               FORALL i
+     * LA and RE {
+     *   fc.stack[i+1] = fp.stack[i]    FORALL i
      * }
-     * AL wrt valence {
-     *   f_c.stack[i+1].valence = f_p.stack[i].valence        FORALL i
-     *   f_c.buf[0].valence = f_p.buf[0].valence + 1
+     * RA and SH {
+     *   fc.stack[0] = fp.buf[0]
+     *   fc.stack[i+1] = fp.stack[i]    FORALL i
      * }
-     * RE wrt valence {
-     *   f_c.stack[i].valence = f_p.stack[i+1].valence        FORALL i
-     * }
-     * SH wrt valence {
-     *   f_c.stack[0].valence = 0
-     *   f_c.stack[i+1].valence = f_p.stack[i].valence        FORALL i
-     * }
-     * 
-     * AR wrt distance {
-     *   f_c.stack[0].distance = 1
-     *   f_c.stack[i+1].distance = f_p.stack[i].distance      FORALL i
-     * }
-     * AL wrt distance {
-     *   f_c.stack[i].distance = f_p.stack[i+1].distance      FORALL i
-     * }
-     * RE wrt distance {
-     *   f_c.stack[i].distance = f_p.stack[i+1].distance      FORALL i
-     * }
-     * SH wrt distance {
-     *   f_c.stack[0].distance = 1
-     *   f_c.stack[i+1].distance = f_p.stack[i].distance + 1  FORALL i
-     * }
-     * 
-     * 
-     * So this makes it seem like we can really do exact dynamic programming.
-     * What about conjoining, say valency, with the word.
-     * Can we do the joint table?
-     * Doesn't seem that hard...
-     * AR wrt valenceAndWord {
-     *   f_c.stack[0].valenceAndWord = f_p.buf[0].valenceAndWord
-     *   ...
-     * }
-     * 
-     * 
-     * Ah, perhaps here is the problem:
-     * The size of f_{i+1}^{valenceAndWord} grows throughout inference.
-     * Above, the "i" in f_c.stack[i].valenceAndWord is a template.
-     * The real variables are like f_c.stack[2].valenceAndWord
-     * This is now a distribution over W x N.
-     * Its true that this distribution only takes values from the sentence, but it can still grow quickly.
-     * We are back to the case where we want a beam for f_{i+1}^{valenceAndWord}
-     * And we are back to the problem of off-beam messages for mu(phi_i(f_i, a_i) => f_{i+1})
-     * So q(f_{i+1}^{valenceAndWord}) =
-     *    alpha * beamOver(W x N, size=k)
-     *    (1-alpha) * Uniform(W x N)        # this is naive! we could have a variational parameter in place of this Uniform
-     * So mu(phi_i(f_i, a_i) => f_{i+1}) =
-     *    alpha * mu(phi(a_i, beamOver(f_i,k)) => f_{i+1})      # use "AR wrt valenceAndWord" rules to update this, after each step compress beliefs (beam pruning)
-     *    + (1-alpha) * mu(phi(a_i, Uniform(WxN)) => f_{i+1})   # 
-     * This "message" is an abstract thing, what we really care about is q(f_{i+1})
-     * We use the "AR wrt valenceAndWord" rules where we bind f_p values to either beamOver(f_i,k) or Uniform(WxK)
-     * We compute the full set of values for f_{i+1}, which will be bigger than k,
-     * Then we compress this into beamOver(f_{i+1},k) which is one part of q(f_{i+1})
-     * We could choose alpha to optimize KL[q(f_{i+1}) || f_{i+1}],
-     *   where f_{i+1} is what we got from mu(phi(a_i, q(f_i)) => f_{i+1}) BEFORE compressing/pruning to the beam representation q(f_{i+1})
-     *   ...but this requires more math
-     * We could also use the Pal,Sutton,McCallum trick of setting k s.t. KL < epsilon
-     *   ...but we need to stop somewhere!
-     * We could jointly set k,alpha to optimize some penalty on magnitude of k and KL divergence
-     *   ...but now we're way off the rails, too complex, just hand tune k!
-     *
-     *
-     * Lets make sure we have an example of computing off-beam messages for valenceAndWord
-     * mu(phi(a_i, Uniform(WxN)) => f_{i+1}) =
-     *   "p(f_c.stack[0].valenceAndWord | a_i, f_p)"
-     *   where f_p ~ Uniform(WxN)
-     *   so any time we see an equation like:
-     *   f_c.stack[0].valenceAndWord = f_p.buf[0].valenceAndWord
-     *   we need to lift it to a pointwise expression over Uniform(WxN)
-     * Remember, the only reason that we're computing this is to again compress it in beamOver(f_{i+1},k)
-     * So we can start off by computing the message from beamOver(f_i,k) and then re-scoring.
-     * Remember, the values in beamOver(f_i,k) are full assignments:
-     *   {stack[0].valenceAndWord=(0,"John"), stack[1].valenceAndWord=(1,"loves"), ...}
-     * So unifying (1-alpha) * mu(phi(a_i,Uniform(WxN))    => f_{i+1})  # off-beam
-     *        with    alpha  * mu(phi(a_i,beamOver(f_i,k)) => f_{i+1})  # beam
-     * can be done by
-     * 1) computing a list of full assignments derived from beamOver(f_i,k) and a_i
-     * 2) adding in the score induced by phi(a_i,Uniform(WxN))
-     *    score(
-     *      {stack[0].valenceAndWord=(0,"John"), stack[1].valenceAndWord=(1,"loves"), ...}
-     *    ) += log p(f_c.stack[0].valenceAndWord=(0,"John") | f_p.buf[0].valenceAndWord ~ Uniform(WxN))
-     *      += log p(f_c.stack[1].......
-     *
-     * Revisiting the earlier idea, if we say that mu_i = Uniform(WxN)
-     * and that we could choose other values for mu_i, then we could compute mu_i as:
-     * forall config C in apply(a_{i-1}, q(f_{i-1})):
-     *   mu_i[stack[0].valenceAndWord] += q(C.stack[0].valenceAndWord)
-     *
-     *
-     *
-     * AHH, going back to MUCH earlier,
-     * I was having trouble working out what the off-beam messages would be while thinking about
-     * the p(a|s) as a SINGLE factor, and it came out to a need to estimate a partition function
-     * which summed over all CONFIGURATIONS (not variable configs like valenceAndWord), which was
-     * going to be hard/impossible.
-     * This was when I though that the BEAM would be over configurations, and the off-beam messages
-     * would be a function of Uniform(ConfigurationSpace), which won't work well.
-     * By breaking the p(a|s) factor down by module, I realized that I can have a beam-variation-approximation
-     * per module, which makes things much easier.
-     * 
-     * 
-     * To ensure that I'm in touch with my earlier goals, how does this get back to the goal of
-     * being able to "trust" your global features?
-     * 1) WITHOUT learning alpha: the smaller alpha is, the less "context" you have to look at...
-     * 2) OMG, an obvious way to set alpha!
-     * You are pruning mu(=>f_{i+1}) down to beamOver(f_{i+1},k)
-     * That beam is sorted by the alphas (as in DP, cur.alpha = cur.psi + prev.alpha),
-     * which represent probability mass.
-     * You know what proportion of that mass is being pruned!
-     * You can set alpha = (mass preserved by the k items on the beam) / (mass generated by mu(=>f_{i+1}))
-     * 
-     * THIS answers the question: the better the beam approximation, the more q(f_i) deviates from
-     * what it would have been without considering the history!
-     * If the beam approx is terrible, then your model has to learn to deal with
-     * the fact that the "values" (aka f_p) fed to the features will be from Uniform(f_i)!
      */
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    public void sendMessage(double pAL, double pAR, double pRE, double pSH) {
+      assert areNormalizedProbs(pAL, pAR, pRE, pSH);
+
+      /*
+       * So we can start off by computing the message from beamOver(f_i,k) and then re-scoring.
+       * Remember, the values in beamOver(f_i,k) are full assignments:
+       *   {stack[0].valenceAndWord=(0,"John"), stack[1].valenceAndWord=(1,"loves"), ...}
+       * So unifying (1-alpha) * mu(phi(a_i,Uniform(WxN))    => f_{i+1})  # off-beam
+       *        with    alpha  * mu(phi(a_i,beamOver(f_i,k)) => f_{i+1})  # beam
+       * can be done by
+       * 1) computing a list of full assignments derived from beamOver(f_i,k) and a_i
+       * 2) adding in the score induced by phi(a_i,Uniform(WxN))
+       *    score(
+       *      {stack[0].valenceAndWord=(0,"John"), stack[1].valenceAndWord=(1,"loves"), ...}
+       *    ) += log p(f_c.stack[0].valenceAndWord=(0,"John") | f_p.buf[0].valenceAndWord ~ Uniform(WxN))
+       *      += log p(f_c.stack[1].......
+       */
+      
+      fc_unpruned = new ArrayList<>();
+      
+      // 1) compute a list of full assignments derived from beamOver(f_i,k) and a_i
+      for (Dist fp : fp_beam_beliefs) {
+        // AL and RE
+        Dist fc = new Dist();
+        fc.stack = fp.stack.next;
+        fc.buf = fp.buf;
+        fc.weight = fp.weight * (pAL + pRE);
+        fc_unpruned.add(fc);
+
+        // AR and SH
+        fc = new Dist();
+        fc.stack = null;
+        fc.buf = null;
+        fc.weight = fp.weight * (pAR + pSH);
+        fc_unpruned.add(fc);
+      }
+      
+      // 1b) merge equivalent fc Dists
+      // TODO
+      
+      // 2) add in mu(phi(a_i, Uniform) => f_{i+1})
+      for (Dist fc : fc_unpruned) {
+        // For LA, the score of this dist assuming fp ~ Uniform is ???
+        
+      }
+    }
   }
   
 
