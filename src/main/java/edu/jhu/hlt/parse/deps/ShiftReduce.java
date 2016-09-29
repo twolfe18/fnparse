@@ -9,10 +9,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.Counts;
@@ -1562,6 +1564,218 @@ public class ShiftReduce {
    * If the beam approx is terrible, then your model has to learn to deal with
    * the fact that the "values" (aka f_p) fed to the features will be from Uniform(f_i)!
    */
+  
+  /*
+   * What about domain(q(f_i)) = whatever the features read, e.g. [s0,b0]
+   * where q(f_i) is implemented as alpha * (pointwise mixture over configurations) + (1-alpha) * \prod_{feature} Prior(configuration[feature])
+   * When a feature reads more than one value out of q(f_i), the beam(k) captures real correlations and the backoff (1-alpha) is under an independence assumption.
+   * If alpha=0, then the product features read products of beliefs, and offer no advantage over base features.
+   * 
+   * Do we want a "prior" over pieces of configurations (in the 1-alpha piece of q(f_i))
+   * or do we want a dynamic program?
+   * Prior is probably a bad idea.
+   * The dynamic program is giving me a lot of trouble (below).
+   * 
+   * What if we maintain a distribution over [s1, s0, b0] all in the service of q(s0)?
+   * What about just [s0,b0]
+   * OH, I was worrying about knowing b0 (taking it as input to computing messages)
+   * BUT as long as we include it in q(f_i), then SH/AR is easy: fc.buf = fp.buf + 1
+   * THERE IS NO buf[1]
+   * omg. so dum.
+   */
+  
+  
+  
+  /**
+   * q(f_i) distribution over (s[:n],b)
+   * if n=0, this is distribution over b
+   * if n=1, this is distribution over (s0,b)
+   * if n=2, this is distribution over (s1,s0,b)
+   * 
+   * Internally we maintain a beam of size k.
+   * q(f_i) =    alpha  * beam((s[:n],b) values, k)
+   *        + (1-alpha) * someOtherMoreCompactDistributionOver(s[:n],b)
+   *
+   * The essential part is the ability to compute q(f_{i+1}) from q(a_i) and q(f_i)
+   * "beam message":     q(f_{i+1}) +=    alpha  * mu(phi(a_i, beam_i) => f_{i+1})
+   * "off-beam message": q(f_{i+1}) += (1-alpha) * mu(phi(a_i, someOtherMoreCompactDistributionOver(s[:n],b)) => f_{i+1})
+   * 
+   * The beam message is just running beam search. Generate new states from [AL,AR,RE,SH] and merge according to (s[:n],b)
+   * The off-beam message fuu....
+   * 
+   * 
+   * 
+   * How about we just call this q(n, k, f_i) which stores n-tuples of (s[:n],b) values
+   * Perform EP using:
+   * 
+   * q(3, k, f_i) =
+   *        alpha_3                                   * beam([s1,s0,b], k)
+   *   + (1-alpha_3) * (     alpha_2                  * beam([s0,b], k)
+   *                    + (1-alpha_2 * (     alpha_1  * beam([b], k)
+   *                                    + (1-alpha_1) * Uniform(sentenceLen))))
+   * 
+   * Fuck, this is too complex. Can we just do n=1, [s0,b]?
+   */
+  static class Basic {
+  }
+  
+  
+  
+  static class Foo {
+    
+    static class Item {
+      double weight;
+      int b;
+      int s0;
+    }
+    
+    Foo f_prev;
+    double[] a_prev;
+    
+    List<Item> sparse;
+    double alpha;
+    int k, V;
+    
+    public Foo(Foo f_prev, double[] a_prev) {
+      
+      sparse = new ArrayList<>();
+      for (int i = 0; i < f_prev.k; i++) {
+        Item fp = f_prev.sparse.get(i);
+        
+        Item ar_or_sh = new Item();
+        ar_or_sh.b = fp.b + 1;
+        ar_or_sh.s0 = fp.b;
+        ar_or_sh.weight = fp.weight * (a_prev[AR] + a_prev[SH]);
+        sparse.add(ar_or_sh);
+        
+        Item al_or_re = new Item();
+        al_or_re.b = fp.b;
+        al_or_re.s0 = guess;
+        ar_or_sh.weight = fp.weight * (a_prev[AL] + a_prev[RE]);
+        sparse.add(al_or_re);
+      }
+      
+      // TODO merge, renormalize
+      // TODO sort by alpha
+      
+      k = 10;
+      for (int i = 0; i < k; i++)
+        alpha += sparse.get(i).weight;
+      
+      
+      // Backoff distribution:
+      // [something, marginal(b)]
+    }
+  }
+  
+  
+
+  /**
+   * Represents q(f_i) which is a distribution over [s0,b].
+   * 
+   * When we compute q(f_{i+1}) from q(a_i) and q(f_i),
+   * 1) u(f_{i+1}) += (q(AL) + q(RE)) * [Uniform(q(f_i).b-1), q(f_i).b ]
+   * 2) u(f_{i+1}) += (q(AR) + q(SH)) * [        q(f_i).b,    q(f_i).b+1]
+   * 3) t(f_{i+1}) = TopK(u(f_{i+1}))
+   * 4) alpha_{i+1} = Weight(t(f_{i+1})) / Weight(u(f_{i+1}))
+   * 5) b(f_{i+1}) = sum_{[s0,b] in u(f_{i+1})} b
+   * 6) q(f_{i+1}) = alpha_{i+1} * t(f_{i+1}) + (1-alpha_{i+1}) * CartesianProd(Uniform(k), b(f_{i+1}))
+   */
+  static class S0b {
+
+    static class Item {
+      double weight;
+      int s0, b;
+    }
+
+    S0b qf_prev;
+    double[] qa_prev;
+    
+    Map<IntPair, Double> qf_cur_u;  // values sum to 1
+    List<IntPair> qf_cur_t;         // [s0,b] values, weights are in qf_cur_u
+    double qf_cur_alpha;
+    Map<Integer, Double> qf_cur_b;  // margin of qf_cur_u w.r.t. b
+    
+    private double backoff(int s0, int b) {
+      double mb = qf_cur_b.get(b);
+      double u = 1d / b;
+      return u * mb;
+    }
+    
+    private double beam(int s0, int b) {
+      Double p = qf_cur_u.get(new IntPair(s0, b));
+      if (p == null)
+        return 0;
+      // I'm assuming u sums to 1
+      assert qf_cur_alpha <= 1 && qf_cur_alpha > 0;
+      return p / qf_cur_alpha;
+    }
+    
+    private double q(int s0, int b) {
+      return qf_cur_alpha * beam(s0, b)
+          + (1-qf_cur_alpha) * backoff(s0, b);
+    }
+    
+    private void addToU(int s0, int b, double prob) {
+      throw new RuntimeException("implement me");
+    }
+    private void addToB(int b, double prob) {
+      throw new RuntimeException("implement me");
+    }
+
+    public S0b(S0b qf_prev, double[] qa_prev, int k) {
+      
+      // 1) AL+RE
+      // f_{i+1}.b = f_i.b
+      // f_{i+1}.s0 ~ Uniform([b])
+      qf_cur_u = new HashMap<>();
+      for (int b : qf_prev.qf_cur_b.keySet()) {
+        for (int s0 = 0; s0 < b; s0++) {
+          double q = qf_prev.q(s0, b);
+          addToU(s0, b, (qa_prev[AL] + qa_prev[RE]) * q);
+        }
+      }
+
+      // 2) AR+SH
+      // f_{i+1}.s0 = f_i.b
+      // f_{i+1}.b  = f_i.b+1
+      for (int b : qf_prev.qf_cur_b.keySet()) {
+        double p = qf_prev.beam(b, b+1);
+        addToU(b, b+1, (qa_prev[AR] + qa_prev[SH]) * p);
+      }
+
+      // 3) Compute t
+      qf_cur_t = new ArrayList<>(qf_cur_u.keySet());
+      Collections.sort(qf_cur_t, new Comparator<IntPair>() {
+        @Override public int compare(IntPair o1, IntPair o2) {
+          double p1 = qf_cur_u.get(o1);
+          double p2 = qf_cur_u.get(o2);
+          if (p1 > p2) return -1;
+          if (p1 < p2) return +1;
+          return 0;
+        }
+      });
+      qf_cur_t.subList(0, k);
+      
+      // 4) Compute alpha
+      for (IntPair s0b : qf_cur_t) {
+        qf_cur_alpha += qf_cur_u.get(s0b);
+      }
+      double Z = 0;
+      for (double v : qf_cur_u.values())
+        Z += v;
+      assert Math.abs(Z - 1) < 1e-8;
+      
+      // 5) Compute b
+      qf_cur_b = new HashMap<>();
+      for (Entry<IntPair, Double> x : qf_cur_u.entrySet())
+        addToB(x.getKey().second, x.getValue());
+      
+      // 6) This is not really computation as much as definition
+    }
+  }
+
+  
   
   
   
