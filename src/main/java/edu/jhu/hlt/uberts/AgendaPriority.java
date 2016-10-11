@@ -3,6 +3,7 @@ package edu.jhu.hlt.uberts;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,7 +18,6 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
-import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
@@ -98,8 +98,13 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     case "frequency":
     case "frequency-role":
       ExperimentProperties config = ExperimentProperties.getInstance();
-      List<File> train = config.getExistingFiles("train.facts");
-      return new Arg4ByRoleFrequency(train.get(0));
+      List<File> train = config.getExistingFiles("train.facts", Collections.emptyList());
+      File cache = config.getFile("cacheArg4RoleFreqCounts", null);
+      if (cache == null && train.size() == 0) {
+        throw new RuntimeException("role frequency needs to be"
+            + " pre-computed (and a cache file given) or on train data (which was not provided)");
+      }
+      return new Arg4ByRoleFrequency(cache, train.isEmpty() ? null : train.get(0));
     default:
       throw new IllegalArgumentException("don't know about: " + name);
     }
@@ -258,25 +263,23 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
     private File providence;
     public boolean pedantic = false;
 
-    private static File cacheFor(File containsArgument4Facts) {
-      ExperimentProperties config = ExperimentProperties.getInstance();
-      boolean fn = config.getString("train.facts").contains("framenet");
-      boolean pb = config.getString("train.facts").contains("propbank");
-      assert fn != pb;
-      String f = Hash.sha256(containsArgument4Facts.getPath())
-          + (fn ? ".fn" : ".pb")
-          + ".jser.gz";
-      return new File("/tmp/Arg4ByRoleFrequency-cache-" + f);
-    }
+//    private static File cacheFor(File containsArgument4Facts) {
+//      ExperimentProperties config = ExperimentProperties.getInstance();
+//      boolean fn = config.getString("train.facts").contains("framenet");
+//      boolean pb = config.getString("train.facts").contains("propbank");
+//      assert fn != pb;
+//      String f = Hash.sha256(containsArgument4Facts.getPath())
+//          + (fn ? ".fn" : ".pb")
+//          + ".jser.gz";
+//      return new File("/tmp/Arg4ByRoleFrequency-cache-" + f);
+//    }
 
     @SuppressWarnings("unchecked")
-    public Arg4ByRoleFrequency(File containsArgument4Facts) {
-      ExperimentProperties config = ExperimentProperties.getInstance();
-      boolean c = config.getBoolean("cacheArg4RoleFreqCounts", false);
-      File cache = cacheFor(containsArgument4Facts);
-      if (c && cache.isFile()) {
-        providence = cache;
-        roleCounts = (Counts<String>) FileUtil.deserialize(cache);
+    public Arg4ByRoleFrequency(File countJserCache, File containsArgument4Facts) {
+      assert countJserCache != null || containsArgument4Facts != null;
+      if (countJserCache.isFile()) {
+        providence = countJserCache;
+        roleCounts = (Counts<String>) FileUtil.deserialize(countJserCache);
       } else {
         Log.info("reading role counts from " + containsArgument4Facts.getPath());
         roleCounts = new Counts<>();
@@ -306,9 +309,9 @@ public interface AgendaPriority extends BiFunction<HypEdge, Adjoints, Double> {
           throw new RuntimeException(e);
         }
         Log.info("done, counts: " + roleCounts);
-        if (c) {
-          Log.info("saving cache to " + cache.getPath());
-          FileUtil.serialize(roleCounts, cache);
+        if (countJserCache != null) {
+          Log.info("saving cache to " + countJserCache.getPath());
+          FileUtil.serialize(roleCounts, countJserCache);
         }
       }
     }

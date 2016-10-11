@@ -9,10 +9,12 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.function.Predicate;
 
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
@@ -22,6 +24,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
@@ -105,6 +108,31 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   private int nRescore = 0;
   private int nEdgeRescore = 0;
   private TimeMarker tm = new TimeMarker();
+  
+  
+  @Override
+  public void writeWeightsTo(File f) {
+    if (f == null) {
+      Log.info("[main] not writing weights because file was null");
+      return;
+    }
+    Log.info("writing weights to " + f.getPath());
+    SerializationUtils.serialize(new Pair<>(theta, featureNames), f);
+  }
+  @Override
+  public void readWeightsFrom(File f) {
+    if (f == null) {
+      Log.info("[main] not reading weights because file was null");
+      return;
+    }
+    Log.info("reading weights from " + f.getPath());
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    Pair<AveragedPerceptronWeights, Alphabet<String>> p =
+        (Pair) SerializationUtils.deserialize(f);
+    theta = p.get1();
+    featureNames = p.get2();
+  }
+  
 
   /**
    * @param refinementArgPos can be <0 if you don't want a refinement
@@ -117,7 +145,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     this.aggregateArgPos = aggregateArgPos;
 
     ExperimentProperties config = ExperimentProperties.getInstance();
-    dimension = config.getInt("global.hashDimension", 1 << 25);
+    dimension = config.getInt("global.hashDimension", 1 << 22);
     int numIntercept = 0;
     theta = new AveragedPerceptronWeights(dimension, numIntercept);
 
@@ -574,7 +602,7 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
 
     if ("argument4".equals(firesFor) && "0-0".equals(t.getValue())) {
       // Do not allow nil facts to trigger re-scorings.
-      // This is a problem with argument4/s global factors since 0-0 facts are very common.
+      // This is a problem with argument4_s global factors since 0-0 facts are very common.
       events.increment("rescore/nilFactSkip");
       return;
     }
@@ -818,6 +846,10 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
   public static class MultiGlobalParams {
     Map<String, GlobalParams> name2params = new HashMap<>();
 
+    /**
+     * Looks for key "globalFeats".
+     * Value should be a comma-separate list of strings like "argument4_t^numArgs@F"
+     */
     public void configure(ExperimentProperties config) {
       String key = "globalFeats";
       if (!config.containsKey(key)) {
@@ -863,8 +895,12 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     public FyMode roleCooc = null;
     public FyMode targetLocPairwise = null;
 
+    /**
+     * Accepts strings like "argument4_t^numArg@F^roleCooc@const"
+     */
     public GlobalParams(String desc) {
-      String[] toks = desc.split("\\+");
+//      String[] toks = desc.split("\\+");
+      String[] toks = desc.split("\\^");
       if (toks.length > 1)
         Log.info("[main] " + desc);
       name = toks[0];
@@ -946,31 +982,31 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
       StringBuilder sb = new StringBuilder();
       if (numArgs != null) {
         if (includeSpaces) sb.append(' ');
-        sb.append("+numArgs@" + numArgs);
+        sb.append("^numArgs@" + numArgs);
       }
       if (argLocPairwise != null) {
         if (includeSpaces) sb.append(' ');
-        sb.append("+argLocPairwise@" + argLocPairwise);
+        sb.append("^argLocPairwise@" + argLocPairwise);
       }
       if (argLocGlobal != null) {
         if (includeSpaces) sb.append(' ');
-        sb.append("+argLocGlobal@" + argLocGlobal);
+        sb.append("^argLocGlobal@" + argLocGlobal);
       }
       if (roleCooc != null) {
         if (includeSpaces) sb.append(' ');
-        sb.append("+roleCooc@" + roleCooc);
+        sb.append("^roleCooc@" + roleCooc);
       }
       if (frameCooc != null) {
         if (includeSpaces) sb.append(' ');
-        sb.append("+frameCooc@" + frameCooc);
+        sb.append("^frameCooc@" + frameCooc);
       }
       if (argLocRoleCooc != null) {
         if (includeSpaces) sb.append(' ');
-        sb.append("+argLocRoleCooc@" + argLocRoleCooc);
+        sb.append("^argLocRoleCooc@" + argLocRoleCooc);
       }
       if (targetLocPairwise != null) {
         if (includeSpaces) sb.append(' ');
-        sb.append("+targetLocPairwise@" + targetLocPairwise);
+        sb.append("^targetLocPairwise@" + targetLocPairwise);
       }
       return sb.toString().trim();
     }
@@ -1321,6 +1357,16 @@ public class NumArgsRoleCoocArgLoc implements GlobalFactor {
     x = x.replaceAll("propbank", "pb");
     x = x.replaceAll("framenet", "fn");
     return x;
+  }
+
+  // TODO This is not quite right, since this only counts the RHS of
+  // this global factor. If this factor fires on facts from another
+  // relation, then technically they should be included here.
+  @Override
+  public Set<String> isSenstiveToLabelsFromRelations() {
+    Set<String> s = new HashSet<>();
+    s.add(firesFor);
+    return s;
   }
 
 

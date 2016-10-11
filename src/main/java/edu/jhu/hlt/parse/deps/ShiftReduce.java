@@ -601,10 +601,10 @@ public class ShiftReduce {
         cur = cur.arcLeft(0);
       else if (costs[1] == 0)
         cur = cur.arcRight(0);
-      else if (costs[2] == 0)
-        cur = cur.reduce();
       else if (costs[3] == 0)
         cur = cur.shift();
+      else if (costs[2] == 0)
+        cur = cur.reduce();
       else
         throw new RuntimeException("no zero cost action?");
     }
@@ -718,7 +718,15 @@ public class ShiftReduce {
     return costs;
   }
   
-  /** This is how you memoize work across various feature functions */
+  /**
+   * This is how you memoize work across various feature functions.
+   * 
+   * This stores the information which you typically see in the a regular
+   * shift-reduce state definition, like edges in the graph built so far. Here
+   * our states are persistent and we don't do (an eager) constructor which
+   * computes very much. This class lazily computes all information derived from
+   * the persistent data structures.
+   */
   public static class FeatureHelper {
     private int[] words;  // one per word, so if you have 1-indexed word ids, subtract one before uisng as an index
     private int[] pos;
@@ -1650,7 +1658,7 @@ public class ShiftReduce {
         
         Item al_or_re = new Item();
         al_or_re.b = fp.b;
-        al_or_re.s0 = guess;
+//        al_or_re.s0 = guess;
         ar_or_sh.weight = fp.weight * (a_prev[AL] + a_prev[RE]);
         sparse.add(al_or_re);
       }
@@ -1669,9 +1677,53 @@ public class ShiftReduce {
   }
   
   
+  /**
+   * Stores a distribution over [s0l,b] so that we can expose s0.leftChild
+   * 
+   * AL {
+   *   f_{i+1}.s0l = f_i.s1l
+   * }
+   */
+  static class S0l {
+  }
+  
+  
+  /**
+   * Stores a distribution over [s0head, b0, b0head] so that we can expose s0head
+   * 
+   * How do we feed s1head?
+   * We know that s1head is not right of s0
+   * Is that right, what about under AR? s1head could be s0...
+   * ...wait, AR is the only action that ends with something on the stack having a head
+   * so if s1 has a head, it got it from AR
+   *   if s1 got its head from AR, then its head is s2
+   * NOOOO
+   *   you could do AL;SH; to get s0head to be something which used to be on the stack.
+   * 
+   * 
+   * AL OR RE {
+   *   f_{i+1}.s0head = f_i.s1head
+   *   f_{i+1}.b0head = f_i.b0head
+   *   f_{i+1}.b0 = f_i.b0
+   * }
+   * AR {
+   *   f_{i+1}.s0head = f_i.s0
+   *   f_{i+1}.b0head = none
+   *   f_{i+1}.b0 = f_i.b0 + 1
+   * }
+   * SH {
+   *   f_{i+1}.s0head = f_i.n0head
+   *   f_{i+1}.b0head = none
+   *   f_{i+1}.b0 = f_i.b0 + 1
+   * }
+   */
+  static class S0h {
+  }
 
   /**
    * Represents q(f_i) which is a distribution over [s0,b].
+   * 
+   * Approximation is good after AR/SH and bad after AL/RE.
    * 
    * When we compute q(f_{i+1}) from q(a_i) and q(f_i),
    * 1) u(f_{i+1}) += (q(AL) + q(RE)) * [Uniform(q(f_i).b-1), q(f_i).b ]
@@ -1681,14 +1733,9 @@ public class ShiftReduce {
    * 5) b(f_{i+1}) = sum_{[s0,b] in u(f_{i+1})} b
    * 6) q(f_{i+1}) = alpha_{i+1} * t(f_{i+1}) + (1-alpha_{i+1}) * CartesianProd(Uniform(k), b(f_{i+1}))
    */
-  static class S0b {
+  static class S0 {
 
-    static class Item {
-      double weight;
-      int s0, b;
-    }
-
-    S0b qf_prev;
+    S0 qf_prev;
     double[] qa_prev;
     
     Map<IntPair, Double> qf_cur_u;  // values sum to 1
@@ -1723,7 +1770,7 @@ public class ShiftReduce {
       throw new RuntimeException("implement me");
     }
 
-    public S0b(S0b qf_prev, double[] qa_prev, int k) {
+    public S0(S0 qf_prev, double[] qa_prev, int k) {
       
       // 1) AL+RE
       // f_{i+1}.b = f_i.b
@@ -1797,6 +1844,8 @@ public class ShiftReduce {
    * This transition system requires that the action space be (AL|RE)*(AR|SH)
    * If this is the case, a_prev is infinite.
    * Lines (1) and (2) don't really make sense anymore.
+   * 
+   * @deprecated
    */
   static class Stack0AssumingBuf0IsGivenB {
     
@@ -1847,74 +1896,6 @@ public class ShiftReduce {
     }
   }
   
-  /*
-   * Was I mistaken in assuming that you can decompose the variational distribution by feature aspect?
-   * The problem appears to be that we can't just maintain a distribution over stack[0]
-   * since the equations used to update it reference arbitrary information about the state.
-   * 
-   * Lets zoom in on stack[0] as an example.
-   * How do we compute what q(f_{i+1}) after a SH if our beam doesn't have a dist over buf[0]?
-   * Is this any easier if we don't take any information from buf, just stack?
-   * (I'm thinking of whether the switch to the |B|-indexed transition system is worthwhile)
-   * If this were the case, we could take buf[0] from x for SH, but for RE we would need to take stack[1] from an item in the beam.
-   * This is perhaps do-able: beam stores a distribution over stacks.
-   * Stacks are strings, can estimate this with a regular weighted FSA, roughly p(head, modifier)
-   * 
-   * So for computing messages, we would 
-   */
-  public static class Stack0AssumingBuf0IsGiven {
-    static class Dist {
-      LL<String> stack;
-      double weight;
-    }
-    
-    // f_i
-    Stack0AssumingBuf0IsGiven f_prev;
-    // a_i: problem is that this is now a distribution over the language (AL|RE)*(AR|SH)
-    double[] a_prev;
-    // x_i: assumes that i indexes |B|
-    String buf0;
-
-    // f_{i+1}
-    List<Dist> beliefs_beam;
-    double beliefs_offbeam;     // mass not captured by first k elements in beliefs_beam, evenly distributed over V tokens
-    // 1 == beliefs_offbeam + sum_{i=1 to k} beliefs_beam[i].weight
-    int k, V;
-    
-    
-    
-    public Stack0AssumingBuf0IsGiven(Stack0AssumingBuf0IsGiven f_prev, double[] a_prev, String buf0) {
-      
-      beliefs_beam = new ArrayList<>();
-      for (int i = 0; i < f_prev.k; i++) {
-        Dist stack_prev = f_prev.beliefs_beam.get(i);
-
-        Dist stack_cur_AR_or_SH = new Dist();
-        stack_cur_AR_or_SH.weight = stack_prev.weight * (a_prev[AR] + a_prev[SH]);
-        stack_cur_AR_or_SH.stack = new LL<>(buf0, stack_prev.stack);
-        beliefs_beam.add(stack_cur_AR_or_SH);
-        
-        Dist stack_cur_AL_or_RE = new Dist();
-        stack_cur_AL_or_RE.weight = stack_prev.weight * (a_prev[AL] + a_prev[RE]);
-        stack_cur_AL_or_RE.stack = stack_prev.stack.next;
-        beliefs_beam.add(stack_cur_AL_or_RE);
-      }
-      
-      // TODO Merge
-      
-      // TODO Add in offbeam message
-      // What would the model do under the "Uniform" distribution?
-      double Z = 0;
-      for (Dist d : beliefs_beam) {
-        
-        // AR and SH push buf0
-        // 
-      }
-    }
-  }
-  
-  
-  
   
 
   public static boolean areNormalizedProbs(double... ds) {
@@ -1942,99 +1923,11 @@ public class ShiftReduce {
   static final int RE = 2;
   static final int SH = 3;
 
-  public static class Stack1ModuleC {
-    // distribution over fp.buf[0]? then we would need to take fp.buf[1] dist upon construction...
-    // 
-  }
-  
-  public static class Stack1ModuleB {
-    // f_i
-    Stack1ModuleB f_prev;
-    // a_i
-    double[] a_prev;        // beliefs about [AL, AR, RE, SH]
-    // q(f_{i+1})
-    List<Dist> f_cur_beam;  // contains all derived dists
-    double f_cur_offbeam;   // prob mass captured by the first k items in f_cur_beam
-    int k, V;                  // vocab size
-    
-    public Stack1ModuleB(Stack1ModuleB f_prev, double[] a_prev) {
-      this.f_prev = f_prev;
-      this.a_prev = a_prev;
-      
-      // Where do we get fp.buf[0] from?
-      // This seems like this could be given at construction since it is known based on i...
-      // not really, buf[0] is not known (with arg-eager definition)
-      
-      
-    }
-  }
-    
-  /**
-   * Maintains a distribution over stack[0] and any features which can be derived from it.
+  /*
+   * I think these feature-taylored dynamic programs, each with their own "what do I do if I need a value I don't have"
+   * is not going to work well.
+   * What if I go back to the granularity where my beam is over entire configurations, and the "backoff distribution"
+   * is over kernel features.
+   * We can compute the 
    */
-  public static class Stack1Module {
-
-    List<Dist> fc_unpruned;
-    List<Dist> fp_beam_beliefs;   // p(f_c.stack[0] == x) where x is a word
-    double fp_offbeam_beliefs;              // probability mass not on the beam
-    int V;                                  // vocabulary size, fp_offbeam_beliefs are distributed uniformly over this
-    
-    /*
-     * LA and RE {
-     *   fc.stack[i+1] = fp.stack[i]    FORALL i
-     * }
-     * RA and SH {
-     *   fc.stack[0] = fp.buf[0]
-     *   fc.stack[i+1] = fp.stack[i]    FORALL i
-     * }
-     */
-    public void sendMessage(double pAL, double pAR, double pRE, double pSH) {
-      assert areNormalizedProbs(pAL, pAR, pRE, pSH);
-
-      /*
-       * So we can start off by computing the message from beamOver(f_i,k) and then re-scoring.
-       * Remember, the values in beamOver(f_i,k) are full assignments:
-       *   {stack[0].valenceAndWord=(0,"John"), stack[1].valenceAndWord=(1,"loves"), ...}
-       * So unifying (1-alpha) * mu(phi(a_i,Uniform(WxN))    => f_{i+1})  # off-beam
-       *        with    alpha  * mu(phi(a_i,beamOver(f_i,k)) => f_{i+1})  # beam
-       * can be done by
-       * 1) computing a list of full assignments derived from beamOver(f_i,k) and a_i
-       * 2) adding in the score induced by phi(a_i,Uniform(WxN))
-       *    score(
-       *      {stack[0].valenceAndWord=(0,"John"), stack[1].valenceAndWord=(1,"loves"), ...}
-       *    ) += log p(f_c.stack[0].valenceAndWord=(0,"John") | f_p.buf[0].valenceAndWord ~ Uniform(WxN))
-       *      += log p(f_c.stack[1].......
-       */
-      
-      fc_unpruned = new ArrayList<>();
-      
-      // 1) compute a list of full assignments derived from beamOver(f_i,k) and a_i
-      for (Dist fp : fp_beam_beliefs) {
-        // AL and RE
-        Dist fc = new Dist();
-        fc.stack = fp.stack.next;
-        fc.buf = fp.buf;
-        fc.weight = fp.weight * (pAL + pRE);
-        fc_unpruned.add(fc);
-
-        // AR and SH
-        fc = new Dist();
-        fc.stack = null;
-        fc.buf = null;
-        fc.weight = fp.weight * (pAR + pSH);
-        fc_unpruned.add(fc);
-      }
-      
-      // 1b) merge equivalent fc Dists
-      // TODO
-      
-      // 2) add in mu(phi(a_i, Uniform) => f_{i+1})
-      for (Dist fc : fc_unpruned) {
-        // For LA, the score of this dist assuming fp ~ Uniform is ???
-        
-      }
-    }
-  }
-  
-
 }

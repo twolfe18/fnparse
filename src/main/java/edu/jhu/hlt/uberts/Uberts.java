@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
+import java.util.Set;
 import java.util.function.BiFunction;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -793,12 +794,19 @@ public class Uberts {
    * current model + loss augmentation rather than using oracle global features.
    * If there is a large difference between the oracle and the model, what
    * global features fire on oracle trajectories may not be informative as to
-   * what action should be taken from states that the model will put inself in.
+   * what action should be taken from states that the model will put itself in.
+   * 
+   * NOTE: For relations which use the default DecisionFunction (i.e. not a ByGroup
+   * instance), a ClassEx is returned for every FP and FN with the gold and pred
+   * fields respectively set to null.
    */
-  public List<ClassEx> getLaso2Update(boolean classificationLoss, boolean correctPred2Mistakes) {
+  public List<ClassEx> getLaso2Update(boolean classificationLoss, Set<String> oracleRollInRelations) {
+
+    List<AgendaItem> defDfFP = new ArrayList<>();
+    List<AgendaItem> defDfFN = new ArrayList<>();
+    List<Step> trajForByGroupRelations = new ArrayList<>();
 
     // LOSS AUGMENTED INFERENCE
-    List<Step> traj = new ArrayList<>();
     assert agenda.getRescoreMode() == RescoreMode.NONE;
     assert !lossAugmentation;
     agenda.oneTimeRescore(RescoreMode.LOSS_AUGMENTED, goldEdges);
@@ -809,21 +817,31 @@ public class Uberts {
 //      assert ai.score == p.get2();    // THEY'RE NOT, thresh hands out junk with (LearningRate 0 wrapped)
       boolean yhat = p.get1();
       boolean y = getLabel(ai);
+      
+      if (thresh.getDecisionFunction(ai.edge) == DecisionFunction.DEFAULT) {
+        if (yhat && !y)
+          defDfFP.add(ai);
+        if (!yhat && y)
+          defDfFN.add(ai);
+      } else {
+        if (yhat)
+          trajForByGroupRelations.add(new Step(ai, y, yhat));
+      }
 
-      if (yhat)
-        traj.add(new Step(ai, y, yhat));
+      boolean addToState;
+      if (oracleRollInRelations != null && oracleRollInRelations.contains(ai.edge.getRelation().getName()))
+        addToState = y;
+      else
+        addToState = yhat;
 
-      boolean addToState = (correctPred2Mistakes && "predicate2".equals(ai.edge.getRelation().getName()))
-          ? y : yhat;
       if (addToState)
         addEdgeToState(ai);
     }
     lossAugmentation = false;
 
-
     // Go collect the gold fact in every bucket that LA visited.
     List<ClassEx> updates = new ArrayList<>();
-    for (Step s : traj) {
+    for (Step s : trajForByGroupRelations) {
       assert s.pred;
       DecisionFunction.ByGroup t = (ByGroup) thresh.get(s.edge.getRelation().getName());
       if (t == null) {
@@ -867,6 +885,13 @@ public class Uberts {
         }
       }
     }
+    
+    // Handle all of the non-ByGroup errors
+    for (AgendaItem ai : defDfFN)
+      updates.add(new ClassEx(ai.edge, ai.score, null, null, -1));
+    for (AgendaItem ai : defDfFP)
+      updates.add(new ClassEx(null, null, ai.edge, ai.score, -1));
+    
     return updates;
   }
 

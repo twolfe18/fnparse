@@ -89,13 +89,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   public static enum TrainMethod {
     EARLY_UPDATE,
     MAX_VIOLATION,
-    LATEST_UPDATE,    // TODO implement me!
+    LATEST_UPDATE,
     DAGGER,
     DAGGER1,  // Only updates w.r.t. top item on the agenda at every state
     LASO2,
   }
-
-  static boolean performTest = false;
 
   // Useful when you use oracle features and test out various hard constraints
   // which may not allow you to get 100% recall.
@@ -134,16 +132,18 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private Map<String, GlobalFactor> name2globalFactor = new HashMap<>();
 
   // Specifies which global features to enable
-  // keys are thing like "argument4/t"
-  // has 0 or more global factor flags, like +roleCooc+numArgs
+  // keys are thing like "argument4_t"
+  // has 0 or more global factor flags, like @roleCooc@numArgs
   // The name of a global factor is both of these concatenated
-  // e.g. "argument4/t+roleCooc+numArgs+argLoc"
+  // e.g. "argument4_t^roleCooc@F^numArgs^FKargLoc@const".
+  // These names should not include '+' since that is used by ParameterIO
+  // to deliminate IO directives like +learn and +write:/path/to/save/to.bin
   private MultiGlobalParams globalParamConfig = null;
 
   // Handles where to read/write model components from/to.
   // Keys are:
   // 1) relation names for local factors
-  // 2) global factor names like "argument4/t+numArgs"
+  // 2) global factor names like "argument4_t+numArgs"
   private ParameterSimpleIO parameterIO;
 
   // Tracks the maximum performance over passes, lets us know when to save
@@ -290,12 +290,13 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private boolean includeClassificationObjectiveTerm = false;
 
   // LOLS calls for model roll in, which would dictate that if the model
-  // predicts the wrong frame, training for the resultant arg4 facts should
-  // be supervised towards choosing nullSpan. If this flag is true, the model
-  // is not allowed to make pred2 mistakes, and all arg4 training data will be
-  // conditioned on gold pred2 facts.
+  // predicts the wrong frame, training for the resultant arg4 facts should be
+  // supervised towards choosing nullSpan. If "predicate2" is in this set, the
+  // model is not allowed to make pred2 mistakes, and all arg4 training data
+  // will be conditioned on gold pred2 facts.
   // TRUE works better, but FALSE is more true to LOLS.
-  private boolean laso2CorrectPred2Mistakes = true;
+//  private boolean laso2CorrectPred2Mistakes = true;
+  private Set<String> laso2OracleRollInRelations = new HashSet<>();
 
   private boolean showParamStatsAfterEveryConsume = false;
 
@@ -357,9 +358,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     File relationDefs = config.getExistingFile("relations");
     List<File> schemaFiles = config.getExistingFiles("schema");
 
-    performTest = config.getBoolean("performTest", performTest);
-    Log.info("[main] performTest=" + performTest);
-
     showDevFN = config.getBoolean("showDevFN", showDevFN);
 
     skipSrlFilterStages = config.getBoolean("skipSrlFilterStages", skipSrlFilterStages);
@@ -405,8 +403,11 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     pipe.showParamStatsAfterEveryConsume = config.getBoolean("showParamStatsAfterEveryConsume", false);
 
-    pipe.laso2CorrectPred2Mistakes = config.getBoolean("laso2CorrectPred2Mistakes", pipe.laso2CorrectPred2Mistakes);
-    Log.info("[main] laso2CorrectPred2Mistakes=" + pipe.laso2CorrectPred2Mistakes);
+    for (String r : config.getStrings("laso2OracleRollIn", new String[] {})) {
+      Log.info("[main] laso2OracleRollInFor=" + r);
+      pipe.laso2OracleRollInRelations.add(r);
+      assert u.getEdgeType(r, true) != null : "unknown relation: " + r;
+    }
 
     pipe.costMode = CostMode.valueOf(config.getString("costMode", pipe.costMode.name()));
     Log.info("[main] costMode=" + pipe.costMode);
@@ -467,13 +468,12 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
 
     // Train and dev should be shuffled. Test doesn't need to be.
-    List<File> train = config.getExistingFiles("train.facts");
-    File dev = config.getExistingFile("dev.facts");
-    File test = performTest ? config.getExistingFile("test.facts") : null;
+    List<File> train = config.getExistingFiles("train.facts", Collections.emptyList());
+    File dev = config.getFile("dev.facts", null);
+    File test = config.getFile("test.facts", null);
     Log.info("[main] trainFiles=" + train);
-    Log.info("[main] devFile=" + dev.getPath());
-    if (performTest)
-      Log.info("[main] testFile=" + test.getPath());
+    Log.info("[main] devFile=" + (dev == null ? "null" : dev.getPath()));
+    Log.info("[main] testFile=" + (test == null ? "null" : test.getPath()));
 
     // The ratio of miniDevSize/trainSegSize is the price of knowing how well
     // you're doing during training. Try to minimize it to keep train times down.
@@ -483,19 +483,23 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     // Option: run a perl regex over the train/dev/test files
     String dataRegex = config.getString("dataRegex", "");
     List<Supplier<InputStream>> train2 = new ArrayList<>();
-    Supplier<InputStream> dev2;
-    Supplier<InputStream> test2;
+    Supplier<InputStream> dev2 = null;
+    Supplier<InputStream> test2 = null;
     if (!dataRegex.isEmpty()) {
       Log.info("[main] applying dataRegex=" + dataRegex);
       for (File f : train)
         train2.add(() -> new PerlRegexFileInputStream(f, dataRegex).startOrBlowup());
-      dev2 = () -> new PerlRegexFileInputStream(dev, dataRegex).startOrBlowup();
-      test2 = () -> new PerlRegexFileInputStream(test, dataRegex).startOrBlowup();
+      if (dev != null)
+        dev2 = () -> new PerlRegexFileInputStream(dev, dataRegex).startOrBlowup();
+      if (test != null)
+        test2 = () -> new PerlRegexFileInputStream(test, dataRegex).startOrBlowup();
     } else {
       for (File f : train)
         train2.add(() -> FileUtil.getInputStreamOrBlowup(f));
-      dev2 = () -> FileUtil.getInputStreamOrBlowup(dev);
-      test2 = () -> FileUtil.getInputStreamOrBlowup(test);
+      if (dev != null)
+        dev2 = () -> FileUtil.getInputStreamOrBlowup(dev);
+      if (test != null)
+        test2 = () -> FileUtil.getInputStreamOrBlowup(test);
     }
 
     /*
@@ -509,47 +513,57 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     long startTime = System.currentTimeMillis();
     boolean overTimeLimit = false;
     for (int i = 0; i < passes && !overTimeLimit; i++) {
-      for (int trainIdx = 0; trainIdx < train.size() && !overTimeLimit; trainIdx++) {
-        Log.info("[main] pass=" + (i+1) + " of=" + passes + " trainFile=" + train.get(trainIdx).getPath());
-        try (InputStream is = train2.get(trainIdx).get();
-            RelationFileIterator rels = new RelationFileIterator(is);
-            ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-          Iterator<List<RelDoc>> segItr = Iterators.partition(many, trainSegSize);
-          int s = 0;
-          while (segItr.hasNext() && !overTimeLimit) {
-            // Train on segment
-            List<RelDoc> segment = segItr.next();
-            pipe.runInference(segment.iterator(), "train-epoch" + i + "-segment" + s);
+      for (int trainIdx = 0; trainIdx < Math.max(1, train.size()) && !overTimeLimit; trainIdx++) {
+        assert train.size() == train2.size();
+        File tf = trainIdx < train.size() ? train.get(trainIdx) : null;
+        if (tf != null) {
+          Log.info("[main] pass=" + (i+1) + " of=" + passes + " trainFile=" + tf.getPath());
+          try (InputStream is = train2.get(trainIdx).get();
+              RelationFileIterator rels = new RelationFileIterator(is);
+              ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
+            Iterator<List<RelDoc>> segItr = Iterators.partition(many, trainSegSize);
+            int s = 0;
+            while (segItr.hasNext() && !overTimeLimit) {
+              // Train on segment
+              List<RelDoc> segment = segItr.next();
+              pipe.runInference(segment.iterator(), "train-epoch" + i + "-segment" + s);
 
-            // Evaluate on mini-dev
-            try (InputStream dev2is = dev2.get();
-                RelationFileIterator dr = new RelationFileIterator(dev2is);
-                ManyDocRelationFileIterator devDocs = new ManyDocRelationFileIterator(dr, true)) {
-              Iterator<RelDoc> miniDev = Iterators.limit(devDocs, miniDevSize);
-              pipe.runInference(miniDev, "dev-mini-epoch" + i + "-segment" + s);
-            }
+              // Evaluate on mini-dev
+              if (dev2 != null) {
+                try (InputStream dev2is = dev2.get();
+                    RelationFileIterator dr = new RelationFileIterator(dev2is);
+                    ManyDocRelationFileIterator devDocs = new ManyDocRelationFileIterator(dr, true)) {
+                  Iterator<RelDoc> miniDev = Iterators.limit(devDocs, miniDevSize);
+                  pipe.runInference(miniDev, "dev-mini-epoch" + i + "-segment" + s);
+                }
+              }
 
-            s++;
+              s++;
 
-            long sec = (System.currentTimeMillis() - startTime)/1000;
-            if (sec/60d > pipe.trainTimeLimitMinutes && pipe.trainTimeLimitMinutes > 0) {
-              Log.info("[main] ran for " + (sec/60d) + " mins, hit time limit of "
-                  + pipe.trainTimeLimitMinutes + " mins."
-                  + " Will perform dev and test before exiting.");
-              overTimeLimit = true;
+              long sec = (System.currentTimeMillis() - startTime)/1000;
+              if (sec/60d > pipe.trainTimeLimitMinutes && pipe.trainTimeLimitMinutes > 0) {
+                Log.info("[main] ran for " + (sec/60d) + " mins, hit time limit of "
+                    + pipe.trainTimeLimitMinutes + " mins."
+                    + " Will perform dev and test before exiting.");
+                overTimeLimit = true;
+              }
             }
           }
         }
         // Full evaluate on dev
         pipe.useAvgWeights(true);
-        Log.info("[main] pass=" + (i+1) + " of=" + passes + " devFile=" + dev.getPath());
-        try (InputStream dev2is = dev2.get();
-            RelationFileIterator rels = new RelationFileIterator(dev2is);
-            ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-          pipe.runInference(many, "dev-full-epoch" + i);
+        if (dev != null) {
+          Log.info("[main] pass=" + (i+1) + " of=" + passes + " devFile=" + dev.getPath());
+          if (dev2 != null) {
+            try (InputStream dev2is = dev2.get();
+                RelationFileIterator rels = new RelationFileIterator(dev2is);
+                ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
+              pipe.runInference(many, "dev-full-epoch" + i);
+            }
+          }
         }
         // Full evaluate on test
-        if (performTest) {
+        if (test2 != null) {
           Log.info("[main] pass=" + (i+1) + " of=" + passes + " testFile=" + test.getPath());
           try (InputStream test2is = test2.get();
               RelationFileIterator rels = new RelationFileIterator(test2is);
@@ -618,13 +632,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     String key;
     GlobalParams p;
+    ParameterSimpleIO.Instance2 io;
 
-    key = "predicate2/t";
+    key = "predicate2_t";
     p = globalParamConfig.getOrAddDefault(key);
     if (p.frameCooc != null) {
       NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("predicate2", 0, p, u);
       a.storeExactFeatureIndices();
       String gfName = key + p.toString(false);
+      if ((io = parameterIO.get(gfName)) != null && io.read != null)
+        a.readWeightsFrom(io.read);
       Object old = name2globalFactor.put(gfName, a);
       assert old == null;
       u.addGlobalFactor(a.getTrigger(u), a);
@@ -633,7 +650,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
 
     Relation srl2 = u.getEdgeType("srl2", true);
-    key = "srl2/s";
+    key = "srl2_s";
     p = globalParamConfig.getOrAddDefault(key);
     if (srl2 == null) {
       if (p.any())
@@ -643,12 +660,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2.getName(), 1, p, u);
         a.storeExactFeatureIndices();
         String gfName = key + p.toString(false);
+        if ((io = parameterIO.get(gfName)) != null && io.read != null)
+          a.readWeightsFrom(io.read);
         name2globalFactor.put(gfName, a);
         u.addGlobalFactor(a.getTrigger(u), a);
       }
     }
 
-    key = "srl2/t";
+    key = "srl2_t";
     p = globalParamConfig.getOrAddDefault(key);
     if (srl2 == null) {
       if (p.any())
@@ -658,13 +677,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl2.getName(), 0, p, u);
         a.storeExactFeatureIndices();
         String gfName = key + p.toString(false);
+        if ((io = parameterIO.get(gfName)) != null && io.read != null)
+          a.readWeightsFrom(io.read);
         name2globalFactor.put(gfName, a);
         u.addGlobalFactor(a.getTrigger(u), a);
       }
     }
 
     Relation srl3 = u.getEdgeType("srl3", true);
-    key = "srl3/t";
+    key = "srl3_t";
     p = globalParamConfig.getOrAddDefault(key);
     if (srl3 == null) {
       if (p.any())
@@ -674,27 +695,34 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc(srl3.getName(), 0, p, u);
         a.storeExactFeatureIndices();
         String gfName = key + p.toString(false);
+        if ((io = parameterIO.get(gfName)) != null && io.read != null)
+          a.readWeightsFrom(io.read);
         name2globalFactor.put(gfName, a);
         u.addGlobalFactor(a.getTrigger(u), a);
       }
     }
 
-    key = "argument4/t";
+    key = "argument4_t";
     p = globalParamConfig.getOrAddDefault(key);
     if (p.any()) {
-      NumArgsRoleCoocArgLoc numArgsArg4 = new NumArgsRoleCoocArgLoc("argument4", 0, p, u);
-      numArgsArg4.storeExactFeatureIndices();
+      NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("argument4", 0, p, u);
+      a.storeExactFeatureIndices();
       String gfName = key + p.toString(false);
-      name2globalFactor.put(gfName, numArgsArg4);
-      u.addGlobalFactor(numArgsArg4.getTrigger(u), numArgsArg4);
+      if ((io = parameterIO.get(gfName)) != null && io.read != null)
+        a.readWeightsFrom(io.read);
+      name2globalFactor.put(gfName, a);
+      u.addGlobalFactor(a.getTrigger(u), a);
     }
 
     // argument4(t,f,s,k) with mutexArg=s
-    key = "argument4/s";
+    key = "argument4_s";
     p = globalParamConfig.getOrAddDefault(key);
     if (p.any()) {
       NumArgsRoleCoocArgLoc a = new NumArgsRoleCoocArgLoc("argument4", 2, p, u);
       a.storeExactFeatureIndices();
+      String gfName = key + p.toString(false);
+      if ((io = parameterIO.get(gfName)) != null && io.read != null)
+        a.readWeightsFrom(io.read);
       name2globalFactor.put(key + p.toString(false), a);
       u.addGlobalFactor(a.getTrigger(u), a);
     }
@@ -817,7 +845,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     }
 
     // Setup to write out predictions
-    if (predictionsDir != null && mode != Mode.TRAIN) {
+    if (predictionsDir != null) {
       if (!predictionsDir.isDirectory())
         predictionsDir.mkdirs();
       try {
@@ -873,16 +901,24 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     perfByRel.clear();
     for (String line : Labels.showPerfByRel(perf))
       System.out.println("[main] " + dataName + ": " + line);
+    if (addNullSpanFacts) {
+//      assert perf.containsKey("argument4");
+      assert !perf.containsKey("argument4NilSpan");
+      perf.put("argument4NilSpan", perf.get("argument4"));
+    }
 
     // Tell PerformanceTracker about the performance on this iteration
-    if (!mini)
+    if (!mini) {
       perfTracker.observe(mode, perf);
+    }
 
     // Record the performance by relation
     if (/*!mini &&*/ mode == Mode.DEV) {
       ExperimentProperties config = ExperimentProperties.getInstance();
       File d = config.getFile("output.perfByRoleDir", null);
       if (d != null) {
+        if (!d.isDirectory())
+          d.mkdirs();
         File f = new File(d, "perf-by-role." + dataName + ".txt");
         Log.info("writing perfByRole to " + f.getPath());
         try (BufferedWriter w = FileUtil.getWriter(f)) {
@@ -903,9 +939,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
                 fhat,
                 phat,
                 rhat,
-//                x.f1(),
-//                x.precision(),
-//                x.recall(),
                 (int) x.getTP(),
                 (int) x.getFP(),
                 (int) x.getFN()));
@@ -920,9 +953,34 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     // Maybe save some local factors.
     if (!mini && mode == Mode.DEV) {
+      Set<String> shouldSave = new HashSet<>();
       for (Entry<String, Ints3> x : name2localFactor.entrySet()) {
+        
+        String rel = x.getKey();
+        boolean ss = perfTracker.shouldSaveParameters(rel);
+        if (ss)
+          shouldSave.add(rel);
+
+        File saveModel = getParameterIO().write(rel);
+
+        Log.info("[save] (" + dataName + ") for " + x.getKey()
+          + " shouldSave=" + ss + " outfile=" + saveModel);
+
+        // It just so happens that the name of local factors is the same
+        // as the RHS relation, e.g. argument4.
+        // perfTracker can look at performance, notice if it went up, and
+        // here we only save the argument4 local factor weights when it does.
+        if (saveModel != null && ss) {
+          x.getValue().writeWeightsTo(saveModel);
+        }
+      }
+      for (Entry<String, GlobalFactor> x : name2globalFactor.entrySet()) {
+        Set<String> blanket = x.getValue().isSenstiveToLabelsFromRelations();
+        boolean ss = shouldSave.containsAll(blanket);
         File saveModel = getParameterIO().write(x.getKey());
-        if (saveModel != null && perfTracker.shouldSaveParameters(x.getKey())) {
+        Log.info("[save] (" + dataName + ") for " + x.getKey()
+          + " shouldSave=" + ss + " blanket=" + blanket + " outfile=" + saveModel);
+        if (ss && saveModel != null) {
           x.getValue().writeWeightsTo(saveModel);
         }
       }
@@ -1052,19 +1110,30 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       Log.info("[main] WARNING: " + sent.getId() + " doesn't have a cparse, not building xue-palmer-otf-args2");
       return;
     }
+    
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    boolean expectEvent1Facts = !config.getBoolean("computeXuePalmerForWithoutEvent1Predictions", false);
 
     // Run arg triage
     // 1) Read predicates/targets out of the state (they should be added already)
     Relation ev1 = u.getEdgeType("event1");
     List<FrameInstance> frameMentions = new ArrayList<>();
-    Set<Span> uniq = new HashSet<>();
-    Set<Span> goldTargets = new HashSet<>();
     Frame f = new Frame(0, "propbank/dummyframe", null, new String[] {"ARG0", "ARG1"});
-    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1, false)) {
-      assert target.getEdge().getNumTails() == 1;
-      Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
-      if (goldTargets.add(t) && uniq.add(t))
+    if (expectEvent1Facts) {
+      Set<Span> uniq = new HashSet<>();
+      Set<Span> goldTargets = new HashSet<>();
+      for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1, false)) {
+        assert target.getEdge().getNumTails() == 1;
+        Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
+        if (goldTargets.add(t) && uniq.add(t))
+          frameMentions.add(FrameInstance.frameMention(f, t, sent));
+      }
+    } else {
+      // Compute args assuming every width-1 span is a target
+      for (int i = 0; i < u.dbgSentenceCache.size(); i++) {
+        Span t = Span.widthOne(i);
         frameMentions.add(FrameInstance.frameMention(f, t, sent));
+      }
     }
     FNTagging argsFor = new FNTagging(sent, frameMentions);
 
@@ -1115,6 +1184,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     public final int index;   // where in the traj does this example occur?
 
     public ClassEx(HypEdge goldEdge, Adjoints goldScore, HypEdge predEdge, Adjoints predScore, int index) {
+      assert (goldEdge == null) == (goldScore == null);
+      assert (predEdge == null) == (predScore == null);
       this.goldEdge = goldEdge;
       this.goldScore = goldScore;
       this.predEdge = predEdge;
@@ -1589,8 +1660,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     PairFeat f = null;
 
     // Figure out what features to call
-    // TODO Support argument4/s features!
-    GlobalParams gp = globalParamConfig.getOrAddDefault("argument4/t");
+    // TODO Support argument4_s features!
+    GlobalParams gp = globalParamConfig.getOrAddDefault("argument4_t");
     if (gp.numArgs != null) {
       assert f == null;
       useOnlyNumArgs = true;
@@ -2030,7 +2101,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     case LASO2:
       boolean classificationLoss = costMode == CostMode.HAMMING;
       assert classificationLoss || costMode == CostMode.HINGE;
-      List<ClassEx> updates = u.getLaso2Update(classificationLoss, laso2CorrectPred2Mistakes);
+      List<ClassEx> updates = u.getLaso2Update(classificationLoss, laso2OracleRollInRelations);
       assert batchSize == 1;
 
       assert !includeClassificationObjectiveTerm : "LaSO/LOLS does should not have a classification term added";
@@ -2042,7 +2113,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         System.out.println("starting laso2 ORACLE update...\t" + u.dbgSentenceCache.getId());
 //      int ci = 0;
       for (ClassEx c : updates) {
-        c.goldScore.backwards(-1);
+        if (c.goldScore != null)
+          c.goldScore.backwards(-1);
 
 //        if (Uberts.LEARN_DEBUG) {
 //          // Show the local factor weights
@@ -2065,7 +2137,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       if (Uberts.DEBUG > 1 || Uberts.LEARN_DEBUG)
         System.out.println("starting laso2 LOSS_AUGMENTED update...\t" + u.dbgSentenceCache.getId());
       for (ClassEx c : updates)
-        c.predScore.backwards(+1);
+        if (c.predScore != null)
+          c.predScore.backwards(+1);
 
       if (updates.size() > 0)
         completedObservation();

@@ -30,7 +30,7 @@ public class FactWriter implements Closeable {
   }
 
   public void writeToFile(File f) {
-    Log.info(f.getPath());
+    Log.info("writing to " + f.getPath());
     try {
       w = FileUtil.getWriter(f);
     } catch (Exception e) {

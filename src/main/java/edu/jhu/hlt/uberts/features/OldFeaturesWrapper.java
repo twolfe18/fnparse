@@ -291,7 +291,7 @@ public class OldFeaturesWrapper {
       File ff = new File(dir, r.getName() + ".fs");
       if (!ff.isFile())
         throw new RuntimeException("not a file: " + ff.getPath());
-      int dim = 1 << config.getInt(r.getName() + ".hashBits", 25);
+      int dim = 1 << config.getInt(r.getName() + ".hashBits", 22);
       Log.info("[main] relation=" + r.getName() + " featureSetDir=" + dir.getPath() + " dim=" + dim);
       boolean cacheArg4 = !learnDebug && r.getName().equals("argument4");  // && ff.getPath().contains("by-hand");
       Ints3 i3 = new Ints3(name, bft, r, ff, dim, fixed, cacheArg4, learnDebug);
@@ -325,6 +325,10 @@ public class OldFeaturesWrapper {
 //          String frame = EdgeUtils.frame(e);
 //          return frame;
 //        }, "f");
+        
+      } else if ("event1".equals(r.getName())) {
+        
+        // No refinements
 
       } else {
         throw new RuntimeException("how to handle: " + r);
@@ -979,7 +983,7 @@ public class OldFeaturesWrapper {
     }
 
     if (foundCons == 0) {
-      Log.info("WARNING: " + sentenceId + " has no " + consRel.getName() + " facts?");
+//      Log.info("WARNING: " + sentenceId + " has no " + consRel.getName() + " facts?");
       return null;
     }
 
@@ -1037,7 +1041,10 @@ public class OldFeaturesWrapper {
         gov[i] = -1;
         lab[i] = "UKN";
       } else {
-        assert gov2dep.next == null : "two gov (not tree) for basic?";
+        if (gov2dep.next != null) {
+          Log.warn("two gov (not tree) for " + depsRelName + " ? proof: " + gov2dep
+            + "\nin sentence: " + tokens);
+        }
         HypEdge e = gov2dep.item;
         gov[i] = Integer.parseInt((String) e.getTail(0).getValue());
         lab[i] = (String) e.getTail(2).getValue();

@@ -1,6 +1,7 @@
 package edu.jhu.hlt.uberts.auto;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,7 +50,7 @@ import edu.jhu.hlt.uberts.srl.EdgeUtils;
 public abstract class UbertsPipeline {
   public static int DEBUG = 1;  // 0 means off, 1 means coarse, 2+ means fine grain logging
 
-  // How should the document being consumed be interpretted?
+  // How should the document being consumed be interpreted?
   public static enum Mode {
     TRAIN, DEV, TEST,
   }
@@ -340,16 +341,16 @@ public abstract class UbertsPipeline {
     if (debug)
       Log.info("cx=" + cx + " cy=" + cy + " all=" + doc.facts.size());
 
-    // Put out a notification that all of the annotations have been added.
-    // Up to this, most actions will be blocked.
-    HypEdge d = u.makeEdge(false /* isSchema */, doneAnnoRel, docidN);
-    u.addEdgeToState(d, Adjoints.Constant.ZERO);
-
     // Build fnparse.Sentence index of the annotations already read in.
     // This needs to go before adding any oracle edges since they may trigger
     // edges to be added to the agenda which require the Sentence to be around
     // for computing features.
     buildSentenceCacheInUberts();
+
+    // Put out a notification that all of the annotations have been added.
+    // Up to this, most actions will be blocked.
+    HypEdge d = u.makeEdge(false /* isSchema */, doneAnnoRel, docidN);
+    u.addEdgeToState(d, Adjoints.Constant.ZERO);
 
     // Add the oracle edges
     for (HypEdge.WithProps f : oracleEdges) {
@@ -410,7 +411,6 @@ public abstract class UbertsPipeline {
       ctx.setHead1(ctx.getArgHead());
     }
   }
-
 
 
   int interval = 500;

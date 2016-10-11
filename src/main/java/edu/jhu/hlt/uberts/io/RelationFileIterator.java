@@ -8,9 +8,14 @@ import java.io.InputStreamReader;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.function.Predicate;
 
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.uberts.HypEdge;
+import edu.jhu.hlt.uberts.HypNode;
+import edu.jhu.hlt.uberts.NodeType;
+import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.prim.tuple.Pair;
@@ -35,6 +40,34 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
         assert tokens[i].indexOf('#') < 0;
         assert tokens[i].indexOf(' ') < 0;
       }
+    }
+    
+    /**
+     * Normally you would convert between {@link RelLine}s and
+     * {@link HypEdge}s using an {@link Uberts}s instance which keeps
+     * track of relations and objects. Use this ONLY if you are doing
+     * simple IO.
+     */
+    public HypEdge buildEdgeWithoutInterning() {
+      NodeType untyped = new NodeType("untyped"); // no types!
+
+      HypNode[] tail = new HypNode[tokens.length - 2];
+      for (int i = 0; i < tail.length; i++)
+        tail[i] = new HypNode(untyped, tokens[i+2]);
+
+      NodeType[] types = new NodeType[tail.length];
+      Arrays.fill(types, untyped);
+
+      Relation edgeType = new Relation(tokens[1], types);
+      HypNode head = null;  // no head!
+      HypEdge e = new HypEdge(edgeType, head, tail);
+      return e;
+    }
+    
+    public boolean commentContains(String substring) {
+      if (comment != null)
+        return comment.contains(substring);
+      return false;
     }
 
     public String toLine() {
@@ -100,21 +133,33 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
   private RelLine next;
   private int lineNo;
   public boolean includeProvidence;
+  private final Predicate<RelLine> skip;
 
-  public RelationFileIterator(File f, boolean includeProvidence) throws IOException {
+  public RelationFileIterator(File f, boolean includeProvidence, Predicate<RelLine> skip) throws IOException {
     Log.info("includeProvidence=" + includeProvidence + " f=" + f.getPath());
     this.includeProvidence = includeProvidence;
     this.file = null;
     this.reader = FileUtil.getReader(f);
     this.lineNo = -1;
+    this.skip = skip;
     next();
   }
-  public RelationFileIterator(InputStream is) throws IOException {
+
+  public RelationFileIterator(File f, boolean includeProvidence) throws IOException {
+    this(f, includeProvidence, null);
+  }
+
+  public RelationFileIterator(InputStream is, Predicate<RelLine> skip) throws IOException {
     this.includeProvidence = false;
     this.file = null;
     this.reader = new BufferedReader(new InputStreamReader(is));
     this.lineNo = -1;
+    this.skip = skip;
     next();
+  }
+
+  public RelationFileIterator(InputStream is) throws IOException {
+    this(is, null);
   }
 
   @Override
@@ -172,6 +217,8 @@ public class RelationFileIterator implements Iterator<RelLine>, AutoCloseable {
         if (includeProvidence)
           providence = "line " + lineNo + " of " + file.getPath();
         next = new RelLine(tokens, comment, providence);
+        if (skip != null && skip.test(next))
+          next = null;
       }
     } catch (IOException e) {
       throw new RuntimeException(e);

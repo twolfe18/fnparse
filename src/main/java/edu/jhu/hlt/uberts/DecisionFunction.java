@@ -189,6 +189,13 @@ public interface DecisionFunction {
 
     // TODO Switch to Relation as key, it has better and faster hash/eq
     private Map<String, DecisionFunction> rel2df = new HashMap<>();
+    
+    public DecisionFunction getDecisionFunction(HypEdge e) {
+      DecisionFunction df = rel2df.get(e.getRelation().getName());
+      if (df == null)
+        return DEFAULT;
+      return df;
+    }
 
     public List<Object> getBucket(HypEdge e) {
       List<Object> key = new ArrayList<>();

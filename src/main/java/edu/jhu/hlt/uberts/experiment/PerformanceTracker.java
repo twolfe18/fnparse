@@ -31,13 +31,6 @@ public interface PerformanceTracker {
   public boolean shouldSaveParameters(String relation);
 
 
-//  /**
-//   * Accepts strings like....
-//   */
-//  public static PerformanceTracker parse(String description) {
-//    throw new RuntimeException("implement me");
-//  }
-
   /**
    * Creates a {@link PerformanceTracker} for every relation it sees on the fly.
    */

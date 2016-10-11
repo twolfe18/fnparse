@@ -131,7 +131,7 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
 //    }
 //  }
 
-  private RelationFileIterator itr;
+  private Iterator<RelLine> itr;
   private RelDoc cur;
   private RelLine nextDesc;
   private Set<RelLine> uniq;
@@ -140,7 +140,7 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
    * @param dedup if true, will remove duplicate {@link RelLine} entries within
    * each document.
    */
-  public ManyDocRelationFileIterator(RelationFileIterator itr, boolean dedup) {
+  public ManyDocRelationFileIterator(Iterator<RelLine> itr, boolean dedup) {
     Log.info("dedup=" + dedup + " itr=" + itr);
     this.itr = itr;
     if (dedup)
@@ -151,7 +151,7 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
     next();
   }
 
-  public RelationFileIterator getWrapped() {
+  public Iterator<RelLine> getWrapped() {
     return itr;
   }
 
@@ -185,7 +185,16 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
 
   @Override
   public void close() throws IOException {
-    Log.info("closing " + itr);
-    itr.close();
+    if (itr instanceof AutoCloseable) {
+      Log.info("closing " + itr);
+      try {
+        ((AutoCloseable) itr).close();
+      } catch (Exception e) {
+        if (e instanceof IOException)
+          throw (IOException) e;
+        throw new RuntimeException("not going to refactor all my "
+            + "code to handle Exception instead of IOException...", e);
+      }
+    }
   }
 }
