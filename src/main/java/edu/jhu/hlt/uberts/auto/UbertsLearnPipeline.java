@@ -1,5 +1,6 @@
 package edu.jhu.hlt.uberts.auto;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
@@ -58,6 +59,7 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.Uberts.AgendaSnapshot;
 import edu.jhu.hlt.uberts.Uberts.Traj;
 import edu.jhu.hlt.uberts.experiment.ParameterSimpleIO;
+import edu.jhu.hlt.uberts.experiment.PerfByRole;
 import edu.jhu.hlt.uberts.experiment.ParameterSimpleIO.Instance2;
 import edu.jhu.hlt.uberts.experiment.PerformanceTracker;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
@@ -165,81 +167,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   // For now these store all performances for the last data segment
   private List<Map<String, FPR>> perfByRel = new ArrayList<>();
   private PerfByRole perfByRole = new PerfByRole();
-  static class PerfByRole {
-    private Counts<Pair<String, String>> tp, fp, fn;
-    private Set<Pair<String, String>> roles;
-
-    public PerfByRole() {
-      tp = new Counts<>();
-      fp = new Counts<>();
-      fn = new Counts<>();
-      roles = new HashSet<>();
-    }
-
-    public int numRoles() {
-      return roles.size();
-    }
-
-    public void clear() {
-      tp.clear();
-      fp.clear();
-      fn.clear();
-      roles.clear();
-    }
-
-    public List<Pair<Pair<String, String>, FPR>> getValues() {
-      List<Pair<Pair<String, String>, FPR>> v = new ArrayList<>();
-      for (Pair<String, String> role : roles) {
-        int tp = this.tp.getCount(role);
-        int fp = this.fp.getCount(role);
-        int fn = this.fn.getCount(role);
-        FPR f = new FPR();
-        f.accum(tp, fp, fn);
-        v.add(new Pair<>(role, f));
-      }
-      return v;
-    }
-
-    boolean relevant(HashableHypEdge e) {
-      return e.getEdge().getRelation().getName().equals("argument4");
-    }
-
-    Pair<String, String> getKey(HashableHypEdge he) {
-      assert relevant(he);
-      HypEdge e = he.getEdge();
-      String f = (String) e.getTail(1).getValue();
-      String k = (String) e.getTail(3).getValue();
-      return new Pair<>(f, k);
-    }
-
-    public void add(Labels.Perf perf) {
-      Pair<Set<HashableHypEdge>, Set<HashableHypEdge>> gp = perf.getGoldAndPred();
-      add(gp.get1(), gp.get2());
-    }
-
-    public void add(Set<HashableHypEdge> gold, Set<HashableHypEdge> pred) {
-      for (HashableHypEdge g : gold) {
-        if (!relevant(g))
-          continue;
-        Pair<String, String> k = getKey(g);
-        roles.add(k);
-        if (pred.contains(g))
-          tp.increment(k);
-        else
-          fn.increment(k);
-      }
-      for (HashableHypEdge p : pred) {
-        if (!relevant(p))
-          continue;
-        if (!gold.contains(p)) {
-          Pair<String, String> k = getKey(p);
-          roles.add(k);
-          fp.increment(k);
-        }
-      }
-    }
-  }
-
   // For writing out predictions for dev/test data
   private File predictionsDir;
   private BufferedWriter predictionsWriter;
@@ -320,6 +247,21 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     CONF_REL_NON_NIL,   // score(bucket) = max_{f in bucket and f is not nil} diff(score(f), score(nil))
   }
   public TfkRerorder hackyTFKReorderMethod = TfkRerorder.NONE;
+  
+  
+  // USEFUL for sentences with errors which you'd like to skip (e.g. CAG pipeline).
+  // Do not run inference on any RelDocs which have a startdoc <id>
+  // in this set. This is compatible with predictionWriter since this
+  // only skips *inference*, and the output for this document will still
+  // be written (at least a startdoc output line), but there will be no facts
+  // created during inference.
+  public Set<String> skipInferenceDocIds = new HashSet<>();
+  
+  // USEFUL for very long sentences which make inference too slow (e.g. CAG pipeline).
+  // Checks the sentence length by counting the number of word2 or pos2 facts,
+  // and does not run inference if that length exceeds this value (and this value is >0).
+  public int skipInferenceMaxNumTokens = 0;
+  
 
   // A much stricter version than the time constraint, just do one call to consume()
   public static boolean EXACTLY_ONE_CONSUME = false;
@@ -437,6 +379,15 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     pipe.skipDocsWithoutPredicate2 = config.getBoolean("skipDocsWithoutPredicate2", pipe.skipDocsWithoutPredicate2);
     Log.info("[main] skipDocsWithoutPredicate2=" + pipe.skipDocsWithoutPredicate2);
+    
+    for (File f : config.getExistingFiles("skipInferenceDocIds", Collections.emptyList())) {
+      Log.info("[main] skipInferencePipeIds adding all ids in " + f.getPath());
+      pipe.skipInferenceDocIds.addAll(FileUtil.getLines(f));
+    }
+    Log.info("[main] skipInferencePipeIds contains " + pipe.skipInferenceDocIds.size() + " ids");
+    
+    pipe.skipInferenceMaxNumTokens = config.getInt("skipInferenceMaxNumTokens", 0);
+    Log.info("[main] skipInferenceMaxNumTokens=" + pipe.skipInferenceMaxNumTokens);
 
     pipe.normalizeUpdatesOnCount = config.getBoolean("normalizeUpdatesOnCount", pipe.normalizeUpdatesOnCount);
     Log.info("[main] normalizeUpdatesOnCount=" + pipe.normalizeUpdatesOnCount);
@@ -1878,6 +1829,32 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     return false;
   }
 
+  private boolean shouldSkipInference(RelDoc doc) {
+    if (skipInferenceMaxNumTokens > 0) {
+      int n = 0;
+      for (String r : Arrays.asList("word2", "pos2", "lemma2")) {
+        Relation rel = u.getEdgeType(r, true);
+        if (rel != null) {
+          int nn = 0;
+          for (LL<HypEdge> cur = u.getState().match2(rel); cur != null; cur = cur.next)
+            nn++;
+          if (nn > n)
+            n = nn;
+        }
+      }
+      if (n > skipInferenceMaxNumTokens)
+        return true;
+    }
+    
+    if (skipInferenceDocIds.contains(doc.getId()))
+      return true;
+    
+    // NOTE: I think skipDocsWithoutPredicate2 has to stay where it is
+    // because it is used to skip EVERYTHING, not just inference.
+    // TODO Test this and maybe move it here.
+    
+    return false;
+  }
 
   @Override
   public void consume(RelDoc doc) {
@@ -1943,13 +1920,20 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             + " [memLeak] perfByRel.size=" + perfByRel.size()
             + " perfByRole.numRoles=" + perfByRole.numRoles());
         }
-        boolean oracle = false;
-        boolean ignoreDecoder = false;
-        timer.start("inf/" + mode);
-        Pair<Perf, List<Step>> p = u.dbgRunInference(oracle, ignoreDecoder);
-        timer.stop("inf/" + mode);
-        perfByRel.add(p.get1().perfByRel());
-        perfByRole.add(p.get1());
+        
+        Pair<Perf, List<Step>> p = null;
+        if (shouldSkipInference(doc)) {
+          Log.info("skipping " + doc.getId());
+          eventCounts.increment("consume/skipInference");
+        } else {
+          boolean oracle = false;
+          boolean ignoreDecoder = false;
+          timer.start("inf/" + mode);
+          p = u.dbgRunInference(oracle, ignoreDecoder);
+          timer.stop("inf/" + mode);
+          perfByRel.add(p.get1().perfByRel());
+          perfByRole.add(p.get1());
+        }
 
         // Write out predictions to a file in (many doc) fact file format with
         // comments which say gold, pred, score.
@@ -1957,21 +1941,23 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           try {
             predictionsWriter.write(doc.def.toLine());
             predictionsWriter.newLine();
-            for (Step s : p.get2()) {
-              if (!includeNegativePredictions && !s.pred && !s.gold)
-                continue;
-              Adjoints a = s.getReason();
-              predictionsWriter.write(
-                  String.format("%s # gold=%s pred=%s score=%.4f",
-                  s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, a.forwards()));
-              predictionsWriter.newLine();
+            if (p != null) {
+              for (Step s : p.get2()) {
+                if (!includeNegativePredictions && !s.pred && !s.gold)
+                  continue;
+                Adjoints a = s.getReason();
+                predictionsWriter.write(
+                    String.format("%s # gold=%s pred=%s score=%.4f",
+                        s.edge.getRelLine("yhat").toLine(), s.gold, s.pred, a.forwards()));
+                predictionsWriter.newLine();
+              }
             }
           } catch (IOException e) {
             e.printStackTrace();
           }
         }
 
-        if (showDevFN && mode == Mode.DEV) {
+        if (p != null && showDevFN && mode == Mode.DEV) {
 
           // Steps
           System.out.println();
@@ -1993,7 +1979,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         }
 
         ExperimentProperties config = ExperimentProperties.getInstance();
-        if (DEBUG > 0 && config.getBoolean("showDevTestDetails", false)) {// && perfByRel.size() % 50 == 0) {
+        if (p != null && DEBUG > 0 && config.getBoolean("showDevTestDetails", false)) {// && perfByRel.size() % 50 == 0) {
 
           // Show some stats about this example
           System.out.println("trajLength=" + p.get2().size());

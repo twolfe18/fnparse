@@ -87,7 +87,9 @@ java -ea -cp "$JAR" -Xmx5G \
     data.embeddings "$FNPARSE_DATA/embeddings" \
     data.wordnet "$FNPARSE_DATA/wordnet/dict" \
     pred2arg.feat.paths "$INPUT_MODEL_DIR/pred2arg-paths/propbank.txt" \
-    rolePathCounts "$INPUT_MODEL_DIR/pred2arg-paths/propbank.byRole.txt"
+    rolePathCounts "$INPUT_MODEL_DIR/pred2arg-paths/propbank.byRole.txt" \
+    skipInferenceMaxNumTokens 0 \
+    skipInferenceDocIds /dev/null   # can be comma separated multiple files
 
 echo ""
 echo "DONE WITH PARSING"
