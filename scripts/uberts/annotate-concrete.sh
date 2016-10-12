@@ -77,6 +77,7 @@ IO="$IO,argument4NilSpan+fixed+read:$INPUT_MODEL_DIR/argument4NilSpan.model"
 IO="$IO,${GF}+fixed+read:$INPUT_MODEL_DIR/${GF}.model"
 java -ea -cp "$JAR" -Xmx5G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
+    passes 1 \
     test.facts $TEMP_FACT_RAW_FILE \
     predictions.outputDir "$TEMP_FACT_ANNO_DIR" \
     parameterIO "$IO" \
