@@ -52,12 +52,18 @@ java -ea -cp $JAR \
     $INPUT_COMM_FILE \
     $TEMP_FACT_RAW_FILE
 
+# POST-PROCESS: map dsyn3-basic => dsyn3-parsey since
+# only concrete-stanford has run on the CAG
+T=`mktemp --suffix ".facts.gz"`
+zcat $TEMP_FACT_RAW_FILE \
+  | grep -v 'dsyn3-col' \
+  | perl -pe 's/ dsyn3-basic / dsyn3-parsey /' \
+  | gzip -c >$T
+mv $T $TEMP_FACT_RAW_FILE
+
+
 ### 2) Call UbertsLearnPipeline with test.facts from above
 ###    write out startdoc|predicate2|argument4 facts to another file
-# TODO Train a model locally to do this
-# + ensure that it trains an event1 model
-# + train piecewise? ensure not training off mistaken state_{i-1} predictions.
-# - ensure that it uses stanford dependencies
 TEMP_FACT_ANNO_DIR=`mktemp -d`
 # easyfirst-static is best but requires extra train/test step
 # easyfirst-dynamic is hit or miss

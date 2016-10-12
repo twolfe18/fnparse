@@ -71,7 +71,9 @@ ARG4_COUNTS="$OUTPUT_MODEL_DIR/cacheArg4RoleFreqCounts.jser.gz"
 
 cp -r data/pred2arg-paths "$OUTPUT_MODEL_DIR/pred2arg-paths"
 
-#    easyfirst.static.role data/srl-easyfirst/pbfn-role-perf.txt \
+#    miniDevSize 30 \
+#    trainSegSize 500 \
+#    trainTimeLimitMinutes 5 \
 
 java -ea -cp "$JAR_STABLE" -Xmx5G \
   edu.jhu.hlt.uberts.auto.UbertsLearnPipeline \
@@ -88,9 +90,6 @@ java -ea -cp "$JAR_STABLE" -Xmx5G \
     schema "$SCHEMA" \
     relations "$RELATIONS" \
     includeClassificationObjectiveTerm false \
-    miniDevSize 30 \
-    trainSegSize 500 \
-    trainTimeLimitMinutes 5 \
     featureSetDir "$FEATURES" \
     cacheArg4RoleFreqCounts "$ARG4_COUNTS" \
     data.embeddings "$FNPARSE_DATA/embeddings" \
