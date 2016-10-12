@@ -1,7 +1,6 @@
 package edu.jhu.hlt.uberts.auto;
 
 import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -86,7 +85,6 @@ public abstract class UbertsPipeline {
   protected boolean removeContinuationRolesDuringTrain = true;
   // Removes all facts in a RelDoc which end in "/R"
   protected boolean removeReferenceRolesDuringTrain = false;
-
 
   /**
    * @param u
