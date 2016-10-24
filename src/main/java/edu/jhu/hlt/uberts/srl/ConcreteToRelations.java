@@ -31,6 +31,7 @@ import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.io.FactWriter;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 
 /**
  * Converts {@link Communication}s into facts ({@link HypEdge}s) for use by
@@ -51,6 +52,10 @@ public class ConcreteToRelations extends FactWriter {
 
   public ConcreteToRelations(File f) {
     super(f);
+  }
+  
+  public ConcreteToRelations() {
+    super();
   }
 
   // TODO update this
@@ -216,57 +221,72 @@ public class ConcreteToRelations extends FactWriter {
     return c.getEnding() - c.getStart();
   }
 
-  public void writeOneDocPerSentence(Communication c) throws IOException {
-    int tokenOffset = 0;
+  /**
+   * Uses "<commUuid>/<sentenceUuid>" as the {@link RelDoc} id.
+   */
+  public void writeOneDocForEverySentence(Communication c) throws IOException {
+//    int tokenOffset = 0;
     for (Section section : c.getSectionList()) {
-      int secTokStart = tokenOffset;
+//      int secTokStart = tokenOffset;
       if (!section.isSetSentenceList())
         continue;
-      for (Sentence sentence : section.getSentenceList()) {
-        int sentTokStart = tokenOffset;
-        
-        // startdoc
-        assert c.getUuid().getUuidString().indexOf('/') < 0;
-        assert sentence.getUuid().getUuidString().indexOf('/') < 0;
-        String arg0 = c.getUuid().getUuidString() + "/" + sentence.getUuid().getUuidString();
-        assert arg0.split("\\s+").length == 1;
-        write("startdoc", arg0);
+      for (Sentence sentence : section.getSentenceList())
+        writeSentenceAsDocument(c, sentence);
+      if (writeSegment4) {
+//        int secTokEnd = tokenOffset;
+//        write("x", "segment4", section.getUuid().getUuidString(), "section", secTokStart, secTokEnd);
+        throw new RuntimeException("implement me");
+      }
+    }
+  }
+  
+  /**
+   * Uses "<commUuid>/<sentenceUuid>" as the {@link RelDoc} id.
+   */
+  public void writeSentenceAsDocument(Communication c, Sentence sentence) throws IOException {
+    // startdoc
+    assert c.getUuid().getUuidString().indexOf('/') < 0;
+    assert sentence.getUuid().getUuidString().indexOf('/') < 0;
+    String arg0 = c.getUuid().getUuidString() + "/" + sentence.getUuid().getUuidString();
+    assert arg0.split("\\s+").length == 1;
+    write("startdoc", arg0);
 
-        // word2
-        // tokloc3
-        Tokenization t = sentence.getTokenization();
-        tokenOffset = 0;
-        for (Token tk : t.getTokenList().getTokenList()) {
-          String word = tk.getText();
-          assert word.split("\\s+").length == 1 : "word with whitespace? requires escaping: " + word;
+    // word2
+    // tokloc3
+    Tokenization t = sentence.getTokenization();
+    int tokenOffset = 0;
+    for (Token tk : t.getTokenList().getTokenList()) {
+      String word = tk.getText();
+      assert word.split("\\s+").length == 1 : "word with whitespace? requires escaping: " + word;
 
-          write("x", "word2", tokenOffset, word);
+      write("x", "word2", tokenOffset, word);
 
-          if (writeTokloc) {
-            TextSpan ts = tk.getTextSpan();
-            write("x", "tokloc3", tokenOffset, ts.getStart(), ts.getEnding());
-          }
+      if (writeTokloc) {
+        TextSpan ts = tk.getTextSpan();
+        write("x", "tokloc3", tokenOffset, ts.getStart(), ts.getEnding());
+      }
 
-          tokenOffset++;
-        }
-        
-        if (writeSegment4) {
-          int sentTokEnd = tokenOffset;
-          write("x", "segment4", t.getUuid().getUuidString(), "sentence", sentTokStart, sentTokEnd);
-        }
+      tokenOffset++;
+    }
 
-        // pos2, lemma2
-        boolean logFail = true;
-        writeTags("Stanford CoreNLP", "POS", sentence, "pos2", logFail);
-        writeTags("Stanford CoreNLP", "LEMMA", sentence, "lemma2", logFail);
-        
-        // dsyn3-*
-        writeDeps("Stanford CoreNLP basic", sentence, "dsyn3-basic", logFail);
-        writeDeps("Stanford CoreNLP col", sentence, "dsyn3-col", logFail);
-        writeDeps("Stanford CoreNLP col-CC", sentence, "dsyn3-colcc", logFail);
-        
-        // csyn5-*
-        writeCons("Stanford CoreNLP", sentence, "csyn5-stanford", logFail);
+    if (writeSegment4) {
+//      int sentTokEnd = tokenOffset;
+//      write("x", "segment4", t.getUuid().getUuidString(), "sentence", sentTokStart, sentTokEnd);
+      throw new RuntimeException("implement me");
+    }
+
+    // pos2, lemma2
+    boolean logFail = true;
+    writeTags("Stanford CoreNLP", "POS", sentence, "pos2", logFail);
+    writeTags("Stanford CoreNLP", "LEMMA", sentence, "lemma2", logFail);
+
+    // dsyn3-*
+    writeDeps("Stanford CoreNLP basic", sentence, "dsyn3-basic", logFail);
+    writeDeps("Stanford CoreNLP col", sentence, "dsyn3-col", logFail);
+    writeDeps("Stanford CoreNLP col-CC", sentence, "dsyn3-colcc", logFail);
+
+    // csyn5-*
+    writeCons("Stanford CoreNLP", sentence, "csyn5-stanford", logFail);
 
 //        // tag3
 //        for (TokenTagging tt : t.getTokenTaggingList()) {
@@ -274,13 +294,6 @@ public class ConcreteToRelations extends FactWriter {
 //          for (TaggedToken tti : tt.getTaggedTokenList())
 //            write("x", "tag3", tp, tti.getTokenIndex(), tti.getTag());
 //        }
-      }
-      if (writeSegment4) {
-        int secTokEnd = tokenOffset;
-        write("x", "segment4", section.getUuid().getUuidString(), "section", secTokStart, secTokEnd);
-      }
-    }
-
   }
   
   /**
@@ -361,15 +374,15 @@ public class ConcreteToRelations extends FactWriter {
     File f = new File(args[0]);
     Log.info("reading raw Communications (expected *.tgz) from " + f.getPath());
     try (FileInputStream fis = new FileInputStream(f);
-        ConcreteToRelations c2r = new ConcreteToRelations(new File(args[1]))) {
-      TarGzArchiveEntryCommunicationIterator itr = new TarGzArchiveEntryCommunicationIterator(fis);
+        ConcreteToRelations c2r = new ConcreteToRelations(new File(args[1]));
+        TarGzArchiveEntryCommunicationIterator itr = new TarGzArchiveEntryCommunicationIterator(fis)) {
       while (itr.hasNext()) {
         tmRead.start();
         Communication c = itr.next();
         tmRead.stop();
         
         tmWrite.start();
-        c2r.writeOneDocPerSentence(c);
+        c2r.writeOneDocForEverySentence(c);
         tmWrite.stop();
       }
     }
