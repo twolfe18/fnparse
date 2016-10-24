@@ -68,8 +68,8 @@ public class RfToConcreteClusterings implements ConcreteIkbpAnnotations {
     // e.g. [5 2 go 40 none] in XML/test/pair_26/  AFP_ENG_20090410.0528
 //    this(config.getExistingFile("data.rf.standoff", new File("data/parma/roth-frank/manual-alignments/stand_off_annotations.txt")),
     this(tool,
-        config.getExistingFile("data.rf.standoff", new File("data/parma/roth-frank/manual-alignments/stand_off_annotations.no_unaligned.txt")),
-        config.getExistingDir("data.rf.communications", new File("data/parma/roth-frank/manual-alignments/concrete-parsey-and-stanford/")),
+        config.getExistingFile("data.rf.standoff", new File("/home/travis/code/fnparse/data/parma/roth-frank/manual-alignments/stand_off_annotations.no_unaligned.txt")),
+        config.getExistingDir("data.rf.communications", new File("/home/travis/code/fnparse/data/parma/roth-frank/manual-alignments/concrete-parsey-and-stanford/")),
         keep);
   }
 
@@ -205,7 +205,7 @@ public class RfToConcreteClusterings implements ConcreteIkbpAnnotations {
       part = "dev";
     
 //    return new Pair<>(c, new ArrayList<>(comms.values()));
-    return new Topic(c, new ArrayList<>(comms.values()), part);
+    return new Topic(c, new ArrayList<>(comms.values()), part, pair);
   }
   
   public static TokenRefSequence findMention(Link mention, Communication c) {

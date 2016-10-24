@@ -53,8 +53,38 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
   private Clustering curClust;
   private List<Communication> curDocs;
   private String curPart; // train|dev|test
+  private String curName;
   
   private AnnotationMetadata meta;
+  
+  
+  
+  
+  
+  public boolean verifyIntegrity() {
+
+    for (Cluster c : curClust.getClusterList()) {
+      for (int mIdx : c.getClusterMemberIndexList()) {
+        ClusterMember cm = curClust.getClusterMemberList().get(mIdx);
+        Communication comm = ConcreteIkbpAnnotations.lookup(curDocs, cm.getCommunicationId());
+        if (comm == null)
+          return false;
+        SituationMentionSet sms = ConcreteIkbpAnnotations.lookupSms(comm, cm.getSetId());
+        EntityMentionSet ems = ConcreteIkbpAnnotations.lookupEms(comm, cm.getSetId());
+        if (ems == null && sms == null)
+          return false;
+        if (sms != null && ConcreteIkbpAnnotations.lookup(sms, cm.getElementId()) == null)
+          return false;
+        if (ems != null && ConcreteIkbpAnnotations.lookup(ems, cm.getElementId()) == null)
+          return false;
+      }
+    }
+    
+    return true;
+  }
+  
+  
+  
   
   public EcbPlusConcreteClusterings(String tool, EcbPlusXmlStore xmlDocs, File concreteDocDir) {
     this.docs = xmlDocs;
@@ -71,8 +101,9 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
     
     // Read in Communication
     Map<String, Communication> docsById = new HashMap<>();
-    curDocs.clear();
+    curDocs = new ArrayList<>();
     File t = topics.pop();
+    curName = "ecbplus/" + t.getName();
     int partIdx = (int) (Hash.sha256(t.getPath()) % 8L);
     switch (partIdx) {
     case 0:
@@ -111,6 +142,7 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
     curClust.setUuid(g.next());
     Map<String, Clst> clusters = new HashMap<>();
     for (File d : docs.getDocs(t)) {
+//      Log.info("reading " + d.getPath());
       EcbPlusXmlWrapper xml = docs.get(d);
       Communication comm = docsById.get(xml.getId());
 
@@ -125,6 +157,10 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
       for (EcbPlusXmlWrapper.Node n : xml.getNodes()) {
         if (n.isGrounded()) {
           Pair<TokenRefSequence, String> trs = find(comm, n.t_id);
+          if (trs == null) {
+            Log.info("WARNING: couldn't find TRS for: " + n);
+            continue;
+          }
           if (EcbPlusUtil.isEntityMention(n.type))
             groundedEntMentions.put(n.m_id, trs);
           else
@@ -134,10 +170,8 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
           assert old == null;
         }
       }
-      
-      // Make the mentions (on SituationMention per)
-      Map<String, UUID> m_id2sitMentionId = new HashMap<>();
 
+      // Make the mentions (on SituationMention per)
       SituationMentionSet sms = new SituationMentionSet();
       sms.setMetadata(meta);
       sms.setUuid(g.next());
@@ -147,14 +181,15 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
       ems.setMetadata(meta);
       ems.setUuid(g.next());
       comm.addToEntityMentionSetList(ems);
-
+      
+      Map<String, Pair<UUID, Boolean>> m_id2uuidAndSit = new HashMap<>();
       for (Entry<String, Pair<TokenRefSequence, String>> x : groundedSitMentions.entrySet()) {
         SituationMention sm = new SituationMention();
         sm.setTokens(x.getValue().get1());
         sm.setText(x.getValue().get2());
         sm.setUuid(g.next());
         sms.addToMentionList(sm);
-        Object old = m_id2sitMentionId.put(x.getKey(), sm.getUuid());
+        Object old = m_id2uuidAndSit.put(x.getKey(), new Pair<>(sm.getUuid(), true));
         assert old == null;
       }
       for (Entry<String, Pair<TokenRefSequence, String>> x : groundedEntMentions.entrySet()) {
@@ -163,12 +198,11 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
         em.setText(x.getValue().get2());
         em.setUuid(g.next());
         ems.addToMentionList(em);
-        Object old = m_id2sitMentionId.put(x.getKey(), em.getUuid());
+        Object old = m_id2uuidAndSit.put(x.getKey(), new Pair<>(em.getUuid(), false));
         assert old == null;
       }
       
       // Which mentions are in the same cluster?
-//      int mentionsCovered = 0;
       for (EcbPlusXmlWrapper.Edge e : xml.getEdges()) {
         int mentionIdx = curClust.getClusterMemberListSize();
         
@@ -183,29 +217,32 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
         clst.cluster.addToConfidenceList(1d);
         
         ClusterMember cm = new ClusterMember();
-        cm.setElementId(m_id2sitMentionId.remove(e.m_id_source));
+        
+        
+        
+        Pair<UUID, Boolean> p = m_id2uuidAndSit.remove(e.m_id_source);
+        cm.setElementId(p.get1());
 //        assert groundedSitMentions.containsKey(e.m_id_source) == groundedSitMentions.containsKey(e.m_id_target)
 //            : "e=" + e
 //            + " source/sit=" + groundedSitMentions.containsKey(e.m_id_source)
 //            + " target/sit=" + groundedSitMentions.containsKey(e.m_id_target);
         if (groundedSitMentions.containsKey(e.m_id_source)) {
-          Log.info("adding " + e + " to sms.uuid=" + getLastSmsId(comm).getUuidString());
+          assert p.get2();
+//          Log.info("adding " + e + " to sms.uuid=" + getLastSmsId(comm).getUuidString());
           cm.setSetId(getLastSmsId(comm));
         } else {
+          assert !p.get2();
           assert groundedEntMentions.containsKey(e.m_id_source);
-          Log.info("adding " + e + " to ems.uuid=" + getLastEmsId(comm).getUuidString());
+//          Log.info("adding " + e + " to ems.uuid=" + getLastEmsId(comm).getUuidString());
           cm.setSetId(getLastEmsId(comm));
         }
         cm.setCommunicationId(comm.getUuid());
         
         curClust.addToClusterMemberList(cm);
-
-//        mentionsCovered++;
       }
       
       // Create singleton clusters for any mentions which didn't appear in a cluster
-//      assert mentionsCovered == groundedMentions.size() : "mentionsCovered=" + mentionsCovered + " groundedMentions=" + groundedMentions.size();
-      for (Entry<String, UUID> x : m_id2sitMentionId.entrySet()) {
+      for (Entry<String, Pair<UUID, Boolean>> x : m_id2uuidAndSit.entrySet()) {
         int mentionIdx = curClust.getClusterMemberListSize();
 
         Clst clst = new Clst(null, curClust.getClusterListSize());
@@ -214,13 +251,17 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
         clst.cluster.addToConfidenceList(1d);
 
         ClusterMember cm = new ClusterMember();
-        cm.setElementId(x.getValue());
-        cm.setSetId(getLastSmsId(comm));
         cm.setCommunicationId(comm.getUuid());
+        cm.setElementId(x.getValue().get1());
+        if (x.getValue().get2())
+          cm.setSetId(getLastSmsId(comm));
+        else
+          cm.setSetId(getLastEmsId(comm));
         
         curClust.addToClusterMemberList(cm);
       }
     }
+    assert verifyIntegrity();
   }
   
   public static Pair<TokenRefSequence, String> find(Communication c, int[] tokens) {
@@ -254,7 +295,12 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
           i++;
         }
         if (trs != null) {
-          assert trs.getTokenIndexListSize() == tokens.length;
+          if (trs.getTokenIndexListSize() != tokens.length) {
+            // Known issue
+            // I sent an email (subject: "ECB+ Data Issue" date:  8/31/2016) to them about this, no reply.
+            assert c.getId().equals("36_4ecbplus") && Arrays.equals(tokens, new int[] {124, 125, 126});
+            return null;
+          }
           StringBuilder t = new StringBuilder();
           for (int ti : trs.getTokenIndexList()) {
             if (t.length() > 0) t.append(' ');
@@ -307,12 +353,21 @@ public class EcbPlusConcreteClusterings implements ConcreteIkbpAnnotations {
 
   @Override
   public Topic next() {
-    return new Topic(curClust, curDocs, curPart);
+    Topic t = new Topic(curClust, curDocs, curPart, curName);
+    if (topics.isEmpty()) {
+      curClust = null;
+      curDocs = null;
+      curPart = null;
+      curName = null;
+    } else {
+      bump();
+    }
+    return t;
   }
   
   public static EcbPlusConcreteClusterings build(ExperimentProperties config) {
     EcbPlusXmlStore xml = new EcbPlusXmlStore(config);
-    File concreteDocDir = config.getExistingDir("data.ecbplus.comms", new File("data/parma/ecbplus/ECB+_LREC2014/concrete-parsey-and-stanford/"));
+    File concreteDocDir = config.getExistingDir("data.ecbplus.comms", new File("/home/travis/code/fnparse/data/parma/ecbplus/ECB+_LREC2014/concrete-parsey-and-stanford/"));
     EcbPlusConcreteClusterings labels = new EcbPlusConcreteClusterings("ecbplus", xml, concreteDocDir);
     return labels;
   }

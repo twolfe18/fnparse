@@ -215,7 +215,7 @@ public interface IkbpSearch {
         Log.info("numFeats=" + f.size());
       return f;
     }
-
+    
     @Override
     public List<Pair<Response, Adjoints>> search(Query q) {
       List<Pair<Response, Adjoints>> b = new ArrayList<>();

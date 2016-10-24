@@ -14,6 +14,11 @@
   </properties>
 
   <dependencies>
+    <dependency>
+      <groupId>edu.cmu.lti.ws4j</groupId>
+      <artifactId>ws4j</artifactId>
+      <version>1.0.1</version>
+    </dependency>
 
     <!-- silences logging
       http://stackoverflow.com/questions/2372056/how-to-turn-off-logging-from-slf4j

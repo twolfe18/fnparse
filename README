@@ -16,3 +16,8 @@ mvn install:install-file -Dfile=lib/javaoctave-0.6.4.jar -DgroupId=dk.ange.octav
 
 
 
+
+mvn install:install-file -Dfile=lib/ws4j-1.0.1.jar -DgroupId=edu.cmu.lti.ws4j -DartifactId=ws4j -Dversion=1.0.1 -Dpackaging=jar
+
+
+

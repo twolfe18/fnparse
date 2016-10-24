@@ -1,5 +1,6 @@
 package edu.jhu.hlt.ikbp;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -12,6 +13,9 @@ import java.util.function.Predicate;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotator.QueryGenerationMode;
 import edu.jhu.hlt.ikbp.RfToConcreteClusterings.Link;
+import edu.jhu.hlt.ikbp.data.FeatureType;
+import edu.jhu.hlt.ikbp.data.Id;
+import edu.jhu.hlt.ikbp.data.Node;
 import edu.jhu.hlt.ikbp.data.Query;
 import edu.jhu.hlt.ikbp.data.Response;
 import edu.jhu.hlt.ikbp.evaluation.QueryResponseAnnotations;
@@ -19,6 +23,7 @@ import edu.jhu.hlt.ikbp.features.ConcreteMentionFeatureExtractor;
 import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
@@ -50,7 +55,10 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
     Log.info("labels.toolName=" + labels.getName() + " queryGenerationMode=" + qmode.name());
     this.labels = labels;
 
-    this.searchFeats = new ConcreteMentionFeatureExtractor(labels.getName(), Collections.emptyList());
+    String situationMentionTool = labels.getName();
+    String entityMentionTool = labels.getName();
+    this.searchFeats = new ConcreteMentionFeatureExtractor(
+        situationMentionTool, entityMentionTool, Collections.emptyList());
 
     this.searchTriage = new ConcreteIkbpSearch();
 
@@ -93,11 +101,18 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
     Query q = anno.next();
     if (q == null)
       return null;
+    
+    searchFeats.extract(q.getSubject(), q.getSubject().getFeatures());
+    
     List<Pair<Response, Adjoints>> r = searchParams.search(q);
     QueryResponseAnnotations yy = new QueryResponseAnnotations(q);
     double prevScore = Double.POSITIVE_INFINITY;
     for (Pair<Response, Adjoints> p : r) {
       Response rr = p.get1();
+
+      Node rn = DataUtil.lookup(rr.getAnchor(), rr.getDelta().getNodes());
+      searchFeats.extract(rn, rn.getFeatures());
+
       assert rr.getScore() <= prevScore;
       Response y = anno.annotate(q, rr);
       yy.add(rr, y);
@@ -198,7 +213,73 @@ public class InformationRetrievalExperiment { //implements Iterator<Pair<Query, 
     return t;
   }
   
+  /**
+   * Write out Responses which have 2-node PKBs (with features extracted).
+   * The two nodes are either two entities or situations which are either
+   * equivalent/linked or not.
+   * 1) Allows you to debug/inspect feature extraction
+   * 2) Allows offline training
+   */
   public static void main(String[] args) throws Exception {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    config.putIfAbsent("ikbp.search.randScore", "true");
+    Random rand = config.getRandom();
+
+//    InformationRetrievalExperiment t = buildEcbTrainer(config, rand);
+    InformationRetrievalExperiment ire = buildRfConcreteTrainer(config, rand);
+//    t.verbose = true;
+    
+    File out = config.getFile("output", new File("/tmp/responses.txt"));
+    try (BufferedWriter w = FileUtil.getWriter(out)) {
+      while (ire.hasNext()) {
+        // This will contain a bunch of (query, response_{search}, response_{anno}) tuples.
+        // I believe the two responses only differ on the score.
+        // Both responses surely contain the query's subject Node (an entity or situation).
+        QueryResponseAnnotations x = ire.next();
+        for (int i = 0; i < x.size(); i++) {
+          // Output format:
+          // <label> (q:<feat>)+ (r:<feat>)+
+          // where <label> is +1 or -1 for whether the query subject and response anchor are equivalent
+          // and q:<feat> is a string feature of the query subject
+          // and r:<feat> is a string feature of the response anchor
+          
+          // label
+          w.write(String.valueOf(x.getGold(i).getScore()));
+          
+          // q feats
+          Node q = x.getQuery().getSubject();
+          for (int j = 0; j < q.getFeaturesSize(); j++) {
+            Id f = q.getFeatures().get(j);
+            if (skip(f)) continue;
+            String t = FeatureType.findByValue(f.getType()).name();
+            w.write(" q:" + t + "/" + f.getName());
+          }
+          
+          // r feats
+          Response rr = x.getPred(i);
+          Node r = DataUtil.lookup(rr.getAnchor(), rr.getDelta().getNodes());
+          for (int j = 0; j < r.getFeaturesSize(); j++) {
+            Id f = r.getFeatures().get(j);
+            if (skip(f)) continue;
+            String t = FeatureType.findByValue(f.getType()).name();
+            w.write(" r:" + t + "/" + f.getName());
+          }
+          
+          w.newLine();
+        }
+      }
+    }
+  }
+  
+  public static boolean skip(Id f) {
+    if (f.getType() == FeatureType.CONCRETE_UUID.getValue())
+      return true;
+    if (f.getType() == FeatureType.MENTION_ID.getValue())
+      return true;
+    return false;
+  }
+
+  public static void oldMain(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     config.putIfAbsent("ikbp.search.randScore", "true");
     Random rand = config.getRandom();

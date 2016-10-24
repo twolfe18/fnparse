@@ -1,7 +1,9 @@
 package edu.jhu.hlt.ikbp;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.concrete.Clustering;
 import edu.jhu.hlt.concrete.Communication;
@@ -30,12 +32,33 @@ public interface ConcreteIkbpAnnotations
     public final Clustering clustering;
     public final List<Communication> comms;
     public final String part; // train|dev|test
+    public final String name;
 
-    public Topic(Clustering clustering, List<Communication> comms, String part) {
+    public Topic(Clustering clustering, List<Communication> comms, String part, String name) {
       this.clustering = clustering;
       this.comms = comms;
       this.part = part;
+      this.name = name;
     }
+    
+    private Map<String, Communication> indexedComms;
+    
+    public Communication getCommById(UUID id) {
+      if (indexedComms == null) {
+        indexedComms = new HashMap<>();
+        for (Communication c : comms) {
+          Object old = indexedComms.put(c.getUuid().getUuidString(), c);
+          assert old == null;
+        }
+      }
+      return indexedComms.get(id.getUuidString());
+    }
+    
+//    public void find(ClusterMember item) {
+//      UUID commId = item.getCommunicationId();
+//      Communication c = getCommById(commId);
+//      item.getElementId()
+//    }
     
     public Pair<Communication, SituationMention> findSitutionMention(UUID sitMentionId) {
       throw new RuntimeException("implement me");
@@ -106,9 +129,9 @@ public interface ConcreteIkbpAnnotations
       if (sms.getUuid().equals(key))
         return sms;
     }
-    Log.info("WARNING: couldn't find EntityMentionSet with id "
-        + key.getUuidString() + " in Communication "
-        + dict.getId() + " aka " + dict.getUuid().getUuidString());
+//    Log.info("WARNING: couldn't find EntityMentionSet with id "
+//        + key.getUuidString() + " in Communication "
+//        + dict.getId() + " aka " + dict.getUuid().getUuidString());
     return null;
   }
 
@@ -117,9 +140,9 @@ public interface ConcreteIkbpAnnotations
       if (sms.getUuid().equals(key))
         return sms;
     }
-    Log.info("WARNING: couldn't find SituationMentionSet with id "
-        + key.getUuidString() + " in Communication "
-        + dict.getId() + " aka " + dict.getUuid().getUuidString());
+//    Log.info("WARNING: couldn't find SituationMentionSet with id "
+//        + key.getUuidString() + " in Communication "
+//        + dict.getId() + " aka " + dict.getUuid().getUuidString());
     return null;
   }
 
@@ -128,9 +151,9 @@ public interface ConcreteIkbpAnnotations
       if (sm.getUuid().equals(key))
         return sm;
     }
-    Log.info("WARNING: couldn't find EntityMention with id "
-        + key.getUuidString() + " in EntityMentionSet "
-        + dict.getUuid().getUuidString());
+//    Log.info("WARNING: couldn't find EntityMention with id "
+//        + key.getUuidString() + " in EntityMentionSet "
+//        + dict.getUuid().getUuidString());
     return null;
   }
 
@@ -139,9 +162,9 @@ public interface ConcreteIkbpAnnotations
       if (sm.getUuid().equals(key))
         return sm;
     }
-    Log.info("WARNING: couldn't find SituationMention with id "
-        + key.getUuidString() + " in SituationMentionSet "
-        + dict.getUuid().getUuidString());
+//    Log.info("WARNING: couldn't find SituationMention with id "
+//        + key.getUuidString() + " in SituationMentionSet "
+//        + dict.getUuid().getUuidString());
     return null;
   }
 }

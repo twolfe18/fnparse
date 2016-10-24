@@ -21,7 +21,7 @@ public class EcbPlusXmlStore {
   public boolean showReads = false;
   
   public EcbPlusXmlStore(ExperimentProperties config) {
-    this(config.getExistingDir("data.ecbplus", new File("data/parma/ecbplus/ECB+_LREC2014/ECB+")));
+    this(config.getExistingDir("data.ecbplus", new File("/home/travis/code/fnparse/data/parma/ecbplus/ECB+_LREC2014/ECB+")));
   }
 
   public EcbPlusXmlStore(File topicParent) {

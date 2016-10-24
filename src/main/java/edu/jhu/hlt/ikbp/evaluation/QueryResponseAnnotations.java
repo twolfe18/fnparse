@@ -33,6 +33,14 @@ public class QueryResponseAnnotations {
     labels.add(label);
   }
   
+  public Response getGold(int i) {
+    return labels.get(i);
+  }
+  
+  public Response getPred(int i) {
+    return responses.get(i);
+  }
+  
   public int size() {
     return responses.size();
   }

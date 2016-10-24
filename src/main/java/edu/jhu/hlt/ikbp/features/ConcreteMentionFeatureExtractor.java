@@ -1,11 +1,26 @@
 package edu.jhu.hlt.ikbp.features;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.function.Predicate;
 
+import approxlib.distance.EditDist;
+import approxlib.tree.LblTree;
+import edu.cmu.lti.lexical_db.ILexicalDatabase;
+import edu.cmu.lti.lexical_db.NictWordNet;
+import edu.cmu.lti.ws4j.impl.JiangConrath;
+import edu.cmu.lti.ws4j.impl.Lin;
+import edu.cmu.lti.ws4j.impl.Path;
+import edu.cmu.lti.ws4j.impl.Resnik;
+import edu.cmu.lti.ws4j.impl.WuPalmer;
+import edu.cmu.lti.ws4j.util.WS4JConfiguration;
 import edu.jhu.hlt.concrete.ClusterMember;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.EntityMention;
@@ -27,9 +42,12 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.Document;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
+import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
 import edu.jhu.hlt.tutils.ling.Language;
 
 /**
@@ -49,6 +67,9 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
   private List<ConcreteDocumentMapping> cdocs;
   private Map<String, IntPair> mentionLocations;  // keys are SituationMention UUIDs, values are (docIndex, consIndex)
   
+  // Config
+  public boolean backoffDepsFeatures = false;
+  
   // Misc
   private Counts<String> events = new Counts<>();
   public boolean requireAtLeastOneMention = true;
@@ -57,13 +78,14 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
    * @param mentionToolName is the name of the tool which creates {@link SituationMention}s and {@link EntityMention}s in the given {@link Communication}s
    * @param comms is a set of documents which contain (Situation|Entity)Mentions to index.
    */
-  public ConcreteMentionFeatureExtractor(String mentionToolName, Iterable<Communication> comms) {
-    Log.info("mentionToolName=" + mentionToolName);
+  public ConcreteMentionFeatureExtractor(String situationMentionToolName, String entityMentionToolName, Iterable<Communication> comms) {
     lang = Language.EN;
     c2d = new ConcreteToDocument(null, null, null, lang);
     c2d.readConcreteStanford();
-    c2d.situationMentionToolAuto = mentionToolName;
-//    c2d.corefMentionToolAuto = mentionToolName;   // TODO enable this later!
+    c2d.readParsey();
+    c2d.situationMentionToolAuto = situationMentionToolName;
+    c2d.corefMentionToolAuto = entityMentionToolName;
+
     alph = new MultiAlphabet();
     
     cdocs = new ArrayList<>();
@@ -78,6 +100,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
   public void set(Iterable<Communication> comms) {
     cdocs.clear();
     mentionLocations.clear();
+    events.increment("resets");
     for (Communication c : comms) {
       
       int docIndex = cdocs.size();
@@ -116,6 +139,235 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     }
     Log.info("added " + mentionLocations.size() + " mentions in " + cdocs.size() + " docs, " + events.toStringWithEq());
   }
+  
+  private void show(Document.Constituent mention, int A, int B) {
+    Document d = mention.getDocument();
+    MultiAlphabet a = d.getAlphabet();
+    LabeledDirectedGraph deps = d.parseyMcParseFace;
+    int left = Math.max(0, mention.getFirstToken() - B);
+    int right = Math.min(d.numTokens()-1, mention.getLastToken() + A);
+    System.out.println("in doc " + d.getId());
+    for (int i = left; i <= right; i++) {
+      if (i == mention.getFirstToken())
+        System.out.println("-----------------------------------------");
+      LabeledDirectedGraph.Node n = deps.getNode(i);
+      System.out.printf("%d\t%-20s\t%-10s\t%-10s\t%-10s\n",
+          i,
+          d.getWordStr(i),
+          a.pos(d.getPosH(i)),
+          n.isRoot() ? "ROOT" : a.dep(n.getParentEdgeLabel(0)),
+          n.isRoot() ? "ROOT" : d.getWordStr(n.getParent(0)));
+      if (i == mention.getLastToken())
+        System.out.println("-----------------------------------------");
+    }
+  }
+  
+  public List<String> pairwiseFeats(Id concreteMention1, Id concreteMention2) {
+    List<String> f = new ArrayList<>();
+    boolean verbose = false;
+    
+    // Resolve both mentions (they must be in this topic)
+    IntPair loc1 = mentionLocations.get(concreteMention1.getName());
+    IntPair loc2 = mentionLocations.get(concreteMention2.getName());
+    if (loc1 == null)
+      throw new RuntimeException("couldn't lookup location of mention " + concreteMention1.getName());
+    if (loc2 == null)
+      throw new RuntimeException("couldn't lookup location of mention " + concreteMention2.getName());
+    
+    DParseHeadFinder hf = new DParseHeadFinder();
+    hf.useParse(d -> d.parseyMcParseFace);
+
+    ConcreteDocumentMapping cd1 = cdocs.get(loc1.first);
+    Document d1 = cd1.getDocument();
+    Document.Constituent mention1 = d1.getConstituent(loc1.second);
+    int h1 = hf.head(d1, mention1.getFirstToken(), mention1.getLastToken());
+
+    ConcreteDocumentMapping cd2 = cdocs.get(loc2.first);
+    Document d2 = cd2.getDocument();
+    Document.Constituent mention2 = d2.getConstituent(loc2.second);
+    int h2 = hf.head(d2, mention2.getFirstToken(), mention2.getLastToken());
+    
+    // Show the mentions
+    if (verbose) {
+      System.out.println("################################################################################");
+      show(mention1, 10, 10);
+      System.out.println();
+      show(mention2, 10, 10);
+      System.out.println();
+    }
+
+    // tree edit distance
+    EditDist ed = new EditDist(true);
+    String ts1 = makeTreeString(mention1);
+    String ts2 = makeTreeString(mention2);
+    LblTree t1 = LblTree.fromString(ts1);
+    LblTree t2 = LblTree.fromString(ts2);
+    double dist = ed.treeDist(t1, t2);
+    if (verbose) {
+      System.out.println("tree1: " + ts1);
+      System.out.println("tree2: " + ts2);
+      System.out.println("distance=" + dist);
+    }
+    
+    int distDiscrete = (int) (0.5 + 10 * dist);
+    f.add("tedDist=" + distDiscrete);
+
+    if (verbose) {
+////    System.out.println(ed.printEditScript());
+
+      String s = ed.printHumaneEditScript();
+//      System.out.println(s);
+      System.out.println("edit script:");
+      String[] st = s.split(";");
+      System.out.println(StringUtils.join("\n", st));
+      System.out.println();
+
+//    System.out.println(ed.getCompactEditList());
+    }
+    
+    int aligned = 0;
+    for (Entry<Integer, Integer> p : ed.getAlignInWordOrder1to2().entrySet()) {
+      boolean in1 = mention1.getFirstToken() <= p.getKey() && p.getKey() <= mention1.getLastToken();
+      boolean in2 = mention2.getFirstToken() <= p.getValue() && p.getValue() <= mention2.getLastToken();
+      if (in1 && in2)
+        aligned++;
+    }
+    int n = Math.min(mention1.getWidth(), mention2.getWidth());
+    if (verbose)
+      System.out.println("aligned=" + aligned + "/" + n);
+    f.add("aligned=" + aligned + "/" + n);
+    
+    if (verbose) {
+      System.out.println();
+      System.out.println();
+    }
+    
+    // wordnet
+    WS4JConfiguration.getInstance().setMFS(true);
+    String w1 = d1.getWordStr(h1);
+    String w2 = d2.getWordStr(h2);
+    f.add("wordnet/wuPalmer=" + d2s(new WuPalmer(db).calcRelatednessOfWords(w1, w2)));
+    f.add("wordnet/lin=" + d2s(new Lin(db).calcRelatednessOfWords(w1, w2)));
+    f.add("wordnet/resnik=" + d2s(new Resnik(db).calcRelatednessOfWords(w1, w2)));
+    f.add("wordnet/path=" + d2s(new Path(db).calcRelatednessOfWords(w1, w2)));
+    f.add("wordnet/jiangConrath=" + d2s(new JiangConrath(db).calcRelatednessOfWords(w1, w2)));
+    
+    // lemma match
+    int l1 = d1.getLemma(h1);
+    int l2 = d2.getLemma(h2);
+    int p1 = d1.getPosH(h1);
+    int p2 = d2.getPosH(h2);
+    if (l1 == l2) {
+      f.add("lemma/match");
+      f.add("lemma/match/posToo_" + (p1 == p2));
+    } else if (d1.getAlphabet().word(l1).equalsIgnoreCase(d2.getAlphabet().word(l2))) {
+      f.add("lemma/nocase");
+      f.add("lemma/nocase/posToo_" + (p1 == p2));
+    } else {
+      f.add("lemma/none");
+      f.add("lemma/none/posToo_" + (p1 == p2));
+    }
+    
+    return f;
+  }
+  private static ILexicalDatabase db = new NictWordNet();
+  private static String d2s(double s) {
+    if (Double.isNaN(s))
+      return "nan";
+    if (Double.isInfinite(s))
+      return s > 0 ? "+inf" : "-inf";
+    int n = (int) (0.5d + 20d * Math.log1p(s));
+    if (n > 10)
+      return "10+";
+    if (n < 0)
+      return "<0";
+    return String.valueOf(n);
+  }
+  
+  /**
+   * Makes a new tree with the given headword as root.
+   */
+  public static LabeledDirectedGraph rotateTreeAboutHeadword(LabeledDirectedGraph deps, int head) {
+    // Go up to the root, build spine
+    Set<IntPair> spine = new HashSet<>();
+    LabeledDirectedGraph.Node root = deps.getNode(head);
+    while (!root.isRoot()) {
+      if (root.numParents() != 1)
+        throw new RuntimeException("only works for trees!");
+      int old = root.getNodeIndex();
+      root = root.getParentNode(0);
+      spine.add(new IntPair(root.getNodeIndex(), old));
+    }
+    
+    // Traversal from root, adding edges to b,
+    // reversing the edges along the spine between root and head.
+    LabeledDirectedGraph.Builder b = new LabeledDirectedGraph().new Builder();
+    Deque<LabeledDirectedGraph.Node> q = new ArrayDeque<>();
+    q.addLast(root);
+    while (!q.isEmpty()) {
+      LabeledDirectedGraph.Node n = q.pop();
+      for (int i = 0; i < n.numChildren(); i++) {
+        int c = n.getChild(i);
+        int e = n.getChildEdgeLabel(i);
+        // Flip edges on the spine
+        if (spine.contains(new IntPair(n.getNodeIndex(), c)))
+          b.add(c, n.getNodeIndex(), e);
+        else
+          b.add(n.getNodeIndex(), c, e);
+        q.addFirst(deps.getNode(c));
+      }
+    }
+    
+    return b.freeze();
+  }
+  
+  private static String makeTreeString(Document.Constituent mention) {
+    // Find the root of the relevant sentence
+//    int t = mention.getLastToken();
+    Document d = mention.getDocument();
+
+//    LabeledDirectedGraph.Node node = d.parseyMcParseFace.getNode(t);
+//    while (node != null && !node.isRoot())
+//      node = node.getParentNode(0);
+    DParseHeadFinder hf = new DParseHeadFinder();
+    hf.useParse(doc -> doc.parseyMcParseFace);
+    int h = hf.head(d, mention.getFirstToken(), mention.getLastToken());
+    LabeledDirectedGraph deps = hf.getParse(d);
+    LabeledDirectedGraph rot = rotateTreeAboutHeadword(deps, h);
+    LabeledDirectedGraph.Node node = rot.getNode(h);  // node indices are the same, can still use h
+    
+    // Recursively build the tree string
+    String ts = makeTreeString(node, d);
+    
+    return ts;
+  }
+  
+  private static String makeTreeString(LabeledDirectedGraph.Node node, Document doc) {
+    // Node format:
+    // word/lemma/pos/deprel
+    // can also omit lemma
+    int t = node.getNodeIndex();
+    String label = escape(doc.getWordStr(t))
+        + "/" + escape(doc.getAlphabet().word(doc.getLemma(t)))
+        + "/" + escape(doc.getAlphabet().pos(doc.getPosH(t)))
+        + "/" + (node.isRoot() ? "root" : escape(doc.getAlphabet().dep(node.getParentEdgeLabel(0))));
+
+    String r = "{" + label;
+    if (node.isRoot())
+      r = node.getNodeIndex() + ":" + r;
+    for (int i = 0; i < node.numChildren(); i++)
+      r += makeTreeString(node.getChildNode(i), doc);
+    r += "}";
+    return r;
+  }
+  
+  public static String escape(String word) {
+    return word.toLowerCase()
+        .replaceAll(":", "#colon#")
+        .replaceAll("/", "#slash#")
+        .replaceAll("\\{", "#left_curly_brace#")
+        .replaceAll("\\}", "#right_curly_brace#");
+  }
 
   @Override
   public void extract(Node n, List<Id> addTo) {
@@ -129,14 +381,62 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
 
     for (Id mid : concreteMentions) {
       IntPair loc = mentionLocations.get(mid.getName());
+      if (loc == null)
+        throw new RuntimeException("couldn't lookup location of mention " + mid.getName());
       ConcreteDocumentMapping cd = cdocs.get(loc.first);
       Document d = cd.getDocument();
       Document.Constituent mention = d.getConstituent(loc.second);
 
-      addTo.add(f("firstToken=" + d.getWordStr(mention.getFirstToken())));
-      addTo.add(f("lastToken=" + d.getWordStr(mention.getLastToken())));
-      addTo.add(f("lhs=" + mention.getLhs()));
-      addTo.add(f("hw", FeatureType.HEADWORD));
+//      // MENTION TYPE (given by training data, e.g. EVENT or ENTITY)
+//      if (mention.getLhs() >= 0)
+//        addTo.add(f("lhs=" + mention.getLhs()));
+      
+      assert d.parseyMcParseFace != null;
+      DParseHeadFinder hf = new DParseHeadFinder();
+      hf.useParse(x -> x.parseyMcParseFace);
+      int h = hf.head(d, mention.getFirstToken(), mention.getLastToken());
+
+      // HEADWORD
+      addTo.add(f(alph.word(d.getLemma(h)), FeatureType.HEADWORD));
+      addTo.add(f("head/pos/" + alph.pos(d.getPosH(h))));
+      addTo.add(f("head/ner/" + alph.ner(d.getNerH(h))));
+      
+      // LENGTH-1 DEPENDENCY PATHS FROM HEADWORD
+      LabeledDirectedGraph deps = hf.getParse(d);
+      LabeledDirectedGraph.Node hn = deps.getNode(h);
+      for (int i = 0; i < hn.numParents(); i++) {
+        String e = alph.dep(hn.getParentEdgeLabel(i));
+        String w = alph.word(d.getLemma(hn.getParent(i)));
+//        String p = alph.pos(d.getPosH(hn.getParent(i)));
+//        String t = alph.ner(d.getNerH(hn.getParent(i)));
+        addTo.add(f("parent/" + e + "/" + w));
+//        addTo.add(f("parent/" + e + "/" + p));
+//        addTo.add(f("parent/" + e + "/" + t));
+        if (backoffDepsFeatures) {
+          addTo.add(f("parent/" + e));
+          addTo.add(f("parent/" + w));
+//          addTo.add(f("parent/" + p));
+//          addTo.add(f("parent/" + t));
+        }
+      }
+      for (int i = 0; i < hn.numChildren(); i++) {
+        String e = alph.dep(hn.getChildEdgeLabel(i));
+        String w = alph.word(d.getLemma(hn.getChild(i)));
+//        String p = alph.pos(d.getPosH(hn.getChild(i)));
+//        String t = alph.ner(d.getNerH(hn.getChild(i)));
+        addTo.add(f("child/" + e + "/" + w));
+//        addTo.add(f("child/" + e + "/" + p));
+//        addTo.add(f("child/" + e + "/" + t));
+        if (backoffDepsFeatures) {
+          addTo.add(f("child/" + e));
+          addTo.add(f("child/" + w));
+//          addTo.add(f("child/" + p));
+//          addTo.add(f("child/" + t));
+        }
+      }
+      
+      // FRAME PREDICTIONS
+      // TODO
     }
   }
   
@@ -188,7 +488,10 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     
     Topic t0 = labels.next();
 
-    ConcreteMentionFeatureExtractor fe = new ConcreteMentionFeatureExtractor(labels.getName(), t0.comms);
+    String situationMentionTool = labels.getName();
+    String entityMentionTool = labels.getName();
+    ConcreteMentionFeatureExtractor fe = new ConcreteMentionFeatureExtractor(
+        situationMentionTool, entityMentionTool, t0.comms);
     
     for (ClusterMember cm : t0.clustering.getClusterMemberList()) {
       UUID sitMentionId = cm.getElementId();
