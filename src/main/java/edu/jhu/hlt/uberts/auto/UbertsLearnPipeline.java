@@ -1,6 +1,5 @@
 package edu.jhu.hlt.uberts.auto;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
@@ -17,6 +16,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -171,6 +171,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
   private File predictionsDir;
   private BufferedWriter predictionsWriter;
   private boolean includeNegativePredictions = false;
+
+  // Called after dev/test consume completes
+  // TODO Refactor consume code to use this better.
+  public BiConsumer<UbertsLearnPipeline, Pair<Perf, List<Step>>> postDevTestConsumeObserve = null;
 
   private double trainTimeLimitMinutes = 0;
 
@@ -1957,8 +1961,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           }
         }
 
-        if (p != null && showDevFN && mode == Mode.DEV) {
+        if (postDevTestConsumeObserve != null)
+          postDevTestConsumeObserve.accept(this, p);
 
+        if (p != null && showDevFN && mode == Mode.DEV) {
           // Steps
           System.out.println();
           for (Step s : p.get2())
