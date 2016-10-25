@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import java.util.function.ToIntFunction;
 
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Parse;
@@ -54,10 +53,8 @@ import edu.jhu.hlt.uberts.Relation.EqualityArray;
 import edu.jhu.hlt.uberts.State;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
-import edu.jhu.hlt.uberts.auto.UbertsPipeline;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
 import edu.jhu.hlt.uberts.srl.EdgeUtils;
-import edu.jhu.hlt.uberts.srl.Srl3EdgeWrapper;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 
@@ -300,22 +297,28 @@ public class OldFeaturesWrapper {
         Log.info("[main] refining with (f,k) and (k,)");
         i3.inner.onlyUseTS = cacheArg4;
         i3.useBaseFeatures(false);
-        i3.refine((Function<HypEdge, String> & Serializable) e -> {
-          assert e.getRelation().getName().equals("argument4");
-          String frame = EdgeUtils.frame(e);
-          String role = EdgeUtils.role(e);
-          return frame + "-" + role;
-        }, "fk");
-//        i3.refine((Function<HypEdge, String> & Serializable) e -> {
-//          assert e.getRelation().getName().equals("argument4");
-//          String frame = EdgeUtils.frame(e);
-//          return frame;
-//        }, "f");
-        i3.refine((Function<HypEdge, String> & Serializable) e -> {
-          assert e.getRelation().getName().equals("argument4");
-          String role = EdgeUtils.role(e);
-          return role;
-        }, "k");
+
+        i3.refine(new Refinement() {
+          private static final long serialVersionUID = 42L;
+          @Override public String refine(HypEdge e) {
+            assert e.getRelation().getName().equals("argument4");
+            String frame = EdgeUtils.frame(e);
+            String role = EdgeUtils.role(e);
+            return frame + "-" + role;
+          }
+          @Override public String name() { return "fk"; }
+        });
+
+        i3.refine(new Refinement() {
+          private static final long serialVersionUID = 9001L;
+          @Override public String refine(HypEdge e) {
+            assert e.getRelation().getName().equals("argument4");
+            String role = EdgeUtils.role(e);
+            return role;
+          }
+          @Override public String name() { return "k"; }
+        });
+
       } else if ("predicate2".equals(r.getName())) {
 
         // We don't need any refinements because the semafor frameid features include them (not good?)
@@ -337,6 +340,7 @@ public class OldFeaturesWrapper {
       return i3;
     }
 
+    @SuppressWarnings("unchecked")
     public void readWeightsFrom(File f, boolean fixed) {
       Log.info("rel=" + rel.getName() + " fixed=" + fixed + " f=" + f.getPath());
       try (InputStream is = FileUtil.getInputStream(f);
@@ -354,7 +358,8 @@ public class OldFeaturesWrapper {
 //        System.out.println("after:  dim=" + dimension + " useAvg=" + useAvg);
         theta = (AveragedPerceptronWeights) ois.readObject();
 //        theta2 = (List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>>) ois.readObject();
-        theta2 = (List<Pair<Function<HypEdge, String>, AveragedPerceptronWeights>>) ois.readObject();
+//        theta2 = (List<Pair<Function<HypEdge, String>, AveragedPerceptronWeights>>) ois.readObject();
+        theta2 = (List<Pair<Refinement, AveragedPerceptronWeights>>) ois.readObject();
         this.fixed = fixed;
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -405,7 +410,8 @@ public class OldFeaturesWrapper {
       }
       System.out.printf("%s %s %s nnz=%d fixed=%s useAvg=%s\n", prefix, name, "noRef", nnz, fixed, useAvg);
       for (int j = 0; theta2 != null && j < theta2.size(); j++) {
-        String ref = theta2RefName.get(j);
+//        String ref = theta2RefName.get(j);
+        String ref = theta2.get(j).get1().name();
         nnz = 0;
         for (int i = 0; i < dimension; i++) {
           double w = theta2.get(j).get2().getWeight(i);
@@ -442,8 +448,9 @@ public class OldFeaturesWrapper {
 
     // For refinements
 //    private List<Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights>> theta2;
-    private List<Pair<Function<HypEdge, String>, AveragedPerceptronWeights>> theta2;
-    private List<String> theta2RefName;
+//    private List<Pair<Function<HypEdge, String>, AveragedPerceptronWeights>> theta2;
+//    private List<String> theta2RefName;
+    private List<Pair<Refinement, AveragedPerceptronWeights>> theta2;
 
     // For writing out features to a file
     private BufferedWriter featStrDebug;
@@ -478,23 +485,37 @@ public class OldFeaturesWrapper {
 
     @Override
     public String toString() {
+      StringBuilder sb = new StringBuilder();
+      if (theta2 == null) {
+        sb.append("none");
+      } else {
+        for (Pair<Refinement, AveragedPerceptronWeights> x : theta2)
+          sb.append("+" + x.get1().name());
+      }
       return "(Int3 " + rel.getName()
-          + " refs=" + theta2RefName
+          + " refs=" + sb.toString()
           + " pOracleFeatFlip=" + pOracleFeatureFlip
           + " dim=" + dimension
           + " intercept=" + intercept
           + " fixed=" + fixed + ")";
     }
+    
+    interface Refinement extends Serializable {
+      String refine(HypEdge e);
+      String name();
+    }
 
-    public void refine(Function<HypEdge, String> f, String name) {
+//    public void refine(Function<HypEdge, String> f, String name) {
+    public void refine(Refinement r) {
       // By default lambdas aren't Serializable...
-      f = (Function<HypEdge, String> & Serializable) f;
+//      f = (Function<HypEdge, String> & Serializable) f;
       if (theta2 == null) {
         theta2 = new ArrayList<>();
-        theta2RefName = new ArrayList<>();
+//        theta2RefName = new ArrayList<>();
       }
-      theta2.add(new Pair<>(f, new AveragedPerceptronWeights(dimension, 0)));
-      theta2RefName.add(name);
+//      theta2.add(new Pair<>(f, new AveragedPerceptronWeights(dimension, 0)));
+//      theta2RefName.add(name);
+      theta2.add(new Pair<>(r, new AveragedPerceptronWeights(dimension, 0)));
     }
 
     /**
@@ -715,38 +736,46 @@ public class OldFeaturesWrapper {
 
 //          Pair<ToIntFunction<HypEdge>, AveragedPerceptronWeights> ref = theta2.get(i);
 //          int r = ref.get1().applyAsInt(y);
-          Pair<Function<HypEdge, String>, AveragedPerceptronWeights> ref = theta2.get(i);
-          String rr = ref.get1().apply(y);
+//          Pair<Function<HypEdge, String>, AveragedPerceptronWeights> ref = theta2.get(i);
+//          String rr = ref.get1().apply(y);
+          Pair<Refinement, AveragedPerceptronWeights> t2 = theta2.get(i);
+          Refinement r = t2.get1();
+          AveragedPerceptronWeights rt = t2.get2();
+          String rr = r.refine(y);
 
-          fy.add(theta2RefName.get(i) + "=" + rr);
+          fy.add(r.name() + "=" + rr);
           int[] fr = new int[features.length];
 
-          // Mix in the VALUE of the refinement, not the refinement NAME
+          // Mix in the VALUE of the refinement, not the refinement NAME.
+          // Don't add the name since each distinct name has its own set of
+          // weights (AveragePerceptronWeights).
           if (UbertsLearnPipeline.FEATURE_DEBUG != null) {
             for (int j = 0; j < fr.length; j++) {
               fr[j] = UbertsLearnPipeline.FEATURE_DEBUG.lookupIndex(
-                  "ref/" + theta2RefName.get(i) + "=" + rr + "/"
+                  "ref/" + r.name() + "=" + rr + "/"
                   + UbertsLearnPipeline.FEATURE_DEBUG.lookupObject(features[j]));
             }
           } else {
-            int r = Hash.hash(rr);
+            int rh = Hash.hash(rr);
             for (int j = 0; j < fr.length; j++)
-              fr[j] = Hash.mix(r, features[j]);
+              fr[j] = Hash.mix(rh, features[j]);
           }
 
           Adjoints a2;
           if (useAvg) {
-            a2 = ref.get2().averageView().score(fr, reindex);
+            a2 = rt.averageView().score(fr, reindex);
+//            a2 = ref.get2().averageView().score(fr, reindex);
 //            a2 = ref.get2().averageView().score(features, reindex);
           } else {
-            a2 = ref.get2().score(fr, reindex);
+            a2 = rt.score(fr, reindex);
+//            a2 = ref.get2().score(fr, reindex);
 //            a2 = ref.get2().score(features, reindex);
           }
           a = Adjoints.sum(a2, a);
         }
       }
 
-      assert a != Adjoints.Constant.ZERO : "useBaseFeatures=" + useBaseFeatures + " and refinements=" + theta2RefName;
+      assert a != Adjoints.Constant.ZERO : "useBaseFeatures=" + useBaseFeatures + " and theta2=" + theta2;
 
       // If fixed, make sure the parameters are not updated via backwards
       if (fixed)
@@ -1177,19 +1206,16 @@ public class OldFeaturesWrapper {
         }
         break;
       case "srl3":
-        Srl3EdgeWrapper s3 = new Srl3EdgeWrapper(yhat);
-        t = s3.t;
-        s = s3.s; // may be null if srl3(t,f,k)
-//        ctx.setFrame(FrameIndex.getFrameWithSchemaPrefix(s3.f));
-//        ctx.setRoleS(s3.k);
-        f = s3.f;
-        k = s3.k;
+        t = EdgeUtils.target(yhat);
+        s = EdgeUtils.arg(yhat);
+        f = EdgeUtils.frame(yhat);
+        k = EdgeUtils.role(yhat);
         break;
       case "srl4":
-        t = UbertsPipeline.getTargetFromSrl4(yhat);
-        s = UbertsPipeline.getArgFromSrl4(yhat);
-        f = (String) yhat.getTail(2).getValue();
-        k = (String) yhat.getTail(5).getValue();
+        t = EdgeUtils.target(yhat);
+        s = EdgeUtils.arg(yhat);
+        f = EdgeUtils.frame(yhat);
+        k = EdgeUtils.role(yhat);
         break;
       case "event1":
         t = Span.inverseShortString((String) yhat.getTail(0).getValue());

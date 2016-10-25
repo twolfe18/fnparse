@@ -11,8 +11,6 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
-import edu.jhu.hlt.uberts.Uberts;
-import edu.jhu.hlt.uberts.auto.UbertsLearnPipeline;
 import edu.jhu.prim.Primitives.MutableDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleHashVector;

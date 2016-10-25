@@ -256,7 +256,7 @@ public class ConcreteToRelations extends FactWriter {
     Tokenization t = sentence.getTokenization();
     int tokenOffset = 0;
     for (Token tk : t.getTokenList().getTokenList()) {
-      String word = tk.getText();
+      String word = escape(tk.getText());
       assert word.split("\\s+").length == 1 : "word with whitespace? requires escaping: " + word;
 
       write("x", "word2", tokenOffset, word);
@@ -294,6 +294,11 @@ public class ConcreteToRelations extends FactWriter {
 //          for (TaggedToken tti : tt.getTaggedTokenList())
 //            write("x", "tag3", tp, tti.getTokenIndex(), tti.getTag());
 //        }
+  }
+  
+  private static String escape(String word) {
+    return word.replaceAll("\t", "-TAB-")
+        .replaceAll(" ", "-SPACE-");
   }
   
   /**

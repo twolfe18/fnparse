@@ -361,28 +361,6 @@ public abstract class UbertsPipeline {
     return docid;
   }
 
-  public static String i2s(int i) {
-    return String.valueOf(i);
-  }
-  public static int s2i(Object s) {
-    return Integer.parseInt((String) s);
-  }
-  public static Span getTargetFromXuePalmer(HypEdge e) {
-    int ts = s2i(e.getTail(0).getValue());
-    int te = s2i(e.getTail(1).getValue());
-    return Span.getSpan(ts, te);
-  }
-  public static Span getTargetFromSrl4(HypEdge e) {
-    int ts = s2i(e.getTail(0).getValue());
-    int te = s2i(e.getTail(1).getValue());
-    return Span.getSpan(ts, te);
-  }
-  public static Span getArgFromSrl4(HypEdge e) {
-    int ss = s2i(e.getTail(3).getValue());
-    int se = s2i(e.getTail(4).getValue());
-    return Span.getSpan(ss, se);
-  }
-
 
   public static void ctxHelper(TemplateContext ctx, Span t, Span s) {
     ctxHelper(ctx, t, s, null, null);

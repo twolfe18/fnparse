@@ -59,8 +59,8 @@ import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.Uberts.AgendaSnapshot;
 import edu.jhu.hlt.uberts.Uberts.Traj;
 import edu.jhu.hlt.uberts.experiment.ParameterSimpleIO;
-import edu.jhu.hlt.uberts.experiment.PerfByRole;
 import edu.jhu.hlt.uberts.experiment.ParameterSimpleIO.Instance2;
+import edu.jhu.hlt.uberts.experiment.PerfByRole;
 import edu.jhu.hlt.uberts.experiment.PerformanceTracker;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.factor.LocalFactor;
@@ -289,9 +289,9 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     NumArgsRoleCoocArgLoc.SHOW_GLOBAL_FEAT_COMMUNICATION = false;
   }
 
-  public static void main(String[] args) throws IOException {
+  public static UbertsLearnPipeline build(ExperimentProperties config) throws IOException {
     Log.info("[main] starting at " + new java.util.Date().toString());
-    ExperimentProperties config = ExperimentProperties.init(args);
+//    ExperimentProperties config = ExperimentProperties.init(args);
 
     EXACTLY_ONE_CONSUME = config.getBoolean("exactlyOneConsume", false);
 
@@ -332,12 +332,6 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     trainMethod = TrainMethod.valueOf(config.getString("trainMethod", trainMethod.toString()));
     Log.info("[main] trainMethod=" + trainMethod);
-
-    // This is how many passes over ALL training files are given. If there are
-    // 10 train files, each of which is all the data shuffled in a particular
-    // way, then setting this to 3 would mean making 30 epochs.
-    int passes = config.getInt("passes", 10);
-    Log.info("[main] passes=" + passes);
 
 //    Comparator<AgendaItem> comparator = AgendaComparators.getPriority(config);
     String ac = config.getString("agendaComparator");
@@ -421,6 +415,23 @@ public class UbertsLearnPipeline extends UbertsPipeline {
     } else {
       Log.info("[main] not writing out predictions.");
     }
+    return pipe;
+  }
+  
+  public static void main(String[] args) throws IOException {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    UbertsLearnPipeline pipe = build(config);
+    pipe.run();
+  }
+  
+  public void run() throws IOException {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+
+    // This is how many passes over ALL training files are given. If there are
+    // 10 train files, each of which is all the data shuffled in a particular
+    // way, then setting this to 3 would mean making 30 epochs.
+    int passes = config.getInt("passes", 10);
+    Log.info("[main] passes=" + passes);
 
     // Train and dev should be shuffled. Test doesn't need to be.
     List<File> train = config.getExistingFiles("train.facts", Collections.emptyList());
@@ -481,7 +492,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
             while (segItr.hasNext() && !overTimeLimit) {
               // Train on segment
               List<RelDoc> segment = segItr.next();
-              pipe.runInference(segment.iterator(), "train-epoch" + i + "-segment" + s);
+              runInference(segment.iterator(), "train-epoch" + i + "-segment" + s);
 
               // Evaluate on mini-dev
               if (dev2 != null) {
@@ -489,16 +500,16 @@ public class UbertsLearnPipeline extends UbertsPipeline {
                     RelationFileIterator dr = new RelationFileIterator(dev2is);
                     ManyDocRelationFileIterator devDocs = new ManyDocRelationFileIterator(dr, true)) {
                   Iterator<RelDoc> miniDev = Iterators.limit(devDocs, miniDevSize);
-                  pipe.runInference(miniDev, "dev-mini-epoch" + i + "-segment" + s);
+                  runInference(miniDev, "dev-mini-epoch" + i + "-segment" + s);
                 }
               }
 
               s++;
 
               long sec = (System.currentTimeMillis() - startTime)/1000;
-              if (sec/60d > pipe.trainTimeLimitMinutes && pipe.trainTimeLimitMinutes > 0) {
+              if (sec/60d > trainTimeLimitMinutes && trainTimeLimitMinutes > 0) {
                 Log.info("[main] ran for " + (sec/60d) + " mins, hit time limit of "
-                    + pipe.trainTimeLimitMinutes + " mins."
+                    + trainTimeLimitMinutes + " mins."
                     + " Will perform dev and test before exiting.");
                 overTimeLimit = true;
               }
@@ -506,14 +517,14 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           }
         }
         // Full evaluate on dev
-        pipe.useAvgWeights(true);
+        useAvgWeights(true);
         if (dev != null) {
           Log.info("[main] pass=" + (i+1) + " of=" + passes + " devFile=" + dev.getPath());
           if (dev2 != null) {
             try (InputStream dev2is = dev2.get();
                 RelationFileIterator rels = new RelationFileIterator(dev2is);
                 ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-              pipe.runInference(many, "dev-full-epoch" + i);
+              runInference(many, "dev-full-epoch" + i);
             }
           }
         }
@@ -523,10 +534,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           try (InputStream test2is = test2.get();
               RelationFileIterator rels = new RelationFileIterator(test2is);
               ManyDocRelationFileIterator many = new ManyDocRelationFileIterator(rels, true)) {
-            pipe.runInference(many, "test-full-epoch" + i);
+            runInference(many, "test-full-epoch" + i);
           }
         }
-        pipe.useAvgWeights(false);
+        useAvgWeights(false);
       }
     }
     Log.info("[main] done at " + new java.util.Date().toString());
@@ -1883,6 +1894,7 @@ public class UbertsLearnPipeline extends UbertsPipeline {
       }
     }
 
+    // NOTE: This only works when there are gold labels!
     if (addNullSpanFacts) {
       AddNullSpanArgs ans = new AddNullSpanArgs(u);
       List<HypEdge.WithProps> ns = ans.goldNullSpanFacts(doc);
