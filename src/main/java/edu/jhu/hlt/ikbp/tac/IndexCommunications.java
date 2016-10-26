@@ -63,14 +63,17 @@ public class IndexCommunications implements AutoCloseable {
    */
   public static class Search {
     
-    public static void main(ExperimentProperties config) throws IOException {
+    public static Search build(ExperimentProperties config) throws IOException {
       File nerNgrams = config.getExistingFile("nerNgrams", new File(HOME, "raw/nerNgrams.txt.gz"));
       File docVecs = config.getExistingFile("docVecs", new File(HOME, "doc/docVecs.128.txt"));
       File idf = config.getExistingFile("idf", new File(HOME, "doc/idf.txt"));
       File mentionLocs = config.getExistingFile("mentionLocs", new File(HOME, "raw/mentionLocs.txt.gz"));
-
       Search s = new Search(nerNgrams, docVecs, idf, mentionLocs);
-      
+      return s;
+    }
+    
+    public static void main(ExperimentProperties config) throws IOException {
+      Search s = build(config);
       String context = "Barack Hussein Obama II (US Listen i/bəˈrɑːk huːˈseɪn oʊˈbɑːmə/;[1][2] born August 4 , 1961 )"
           + " is an American politician who is the 44th and current President of the United States . He is the first"
           + " African American to hold the office and the first president born outside the continental United States . "
@@ -81,7 +84,6 @@ public class IndexCommunications implements AutoCloseable {
           + "1997 to 2004 , he ran unsuccessfully in the Democratic primary for the United States House of Representatives "
           + "in 2000 against incumbent Bobby Rush .";
       List<Result> rr = s.search("Barack Obama", "PERSON", context);
-
       for (int i = 0; i < 10 && i < rr.size(); i++) {
         System.out.println(rr.get(i));
       }
@@ -128,6 +130,7 @@ public class IndexCommunications implements AutoCloseable {
         assert Double.isFinite(r.score);
         assert !Double.isNaN(r.score);
         r.communicationUuid = emUuid2commUuid.get(r.entityMentionUuid);
+        r.communicationId = emUuid2commId.get(r.entityMentionUuid);
         r.debug("queryNgramOverlap", r.score);
         assert r.communicationUuid != null : "no comm uuid for em uuid: " + r.entityMentionUuid;
         double scoreContext = tfidf.tfidf(contextVec, r.communicationUuid);
@@ -149,6 +152,9 @@ public class IndexCommunications implements AutoCloseable {
     String entityMentionUuid;
     String communicationUuid;
     double score;
+    
+    // Optional
+    String communicationId;
 
     String queryEntityName;
     String queryEntityType;
@@ -501,16 +507,16 @@ public class IndexCommunications implements AutoCloseable {
   /**
    * Runs after (count, hashedTerm, comm uuid) table is built.
    * 
-   * If there are 5.6M documents in gigaword (best estimate),
+   * If there are 9.9M documents in gigaword (best estimate),
    * Each doc needs
    * a) 16 bytes for UUID
    * b) 128 * (4 bytes term idx + 1 byte for count)
    * = 656 bytes
-   * * 5.6M = 3.6G
+   * * 9.9M docs = 6.3GB
    * 
    * I think I estimated without pruning that it would be something like 12G?
    * 
-   * The point is that 3.6G easily fits in memory and can be scaled up or down.
+   * The point is that 6.3G easily fits in memory and can be scaled up or down.
    */
   public static class ComputeTfIdfDocVecs {
     
