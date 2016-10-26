@@ -288,6 +288,12 @@ public class Kbp2014 {
 
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
+
+    System.setProperty("scion.accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181");
+    System.setProperty("scion.accumulo.instanceName", "minigrid");
+    System.setProperty("scion.accumulo.user", "reader");
+    System.setProperty("scion.accumulo.password", "an accumulo reader");
+
     List<Query> queries = Query.parse(new File("data/parma/LDC2014E81/data/tac_2014_kbp_english_EDL_evaluation_queries.xml"));
     
     /*
@@ -346,7 +352,8 @@ public class Kbp2014 {
           }));
           w.newLine();
           
-          v.showMention(r.entityMentionUuid, r.communicationUuid);
+//          v.showMention(r.entityMentionUuid, r.communicationUuid);
+          v.showMention(r.entityMentionUuid, r.communicationId);
         }
       }
     }
