@@ -1,8 +1,11 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.io.BufferedOutputStream;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -12,19 +15,23 @@ import java.util.Map.Entry;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import edu.jhu.hlt.acute.archivers.tar.TarArchiver;
 import edu.jhu.hlt.concrete.Cluster;
 import edu.jhu.hlt.concrete.ClusterMember;
 import edu.jhu.hlt.concrete.Clustering;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.EntityMentionSet;
+import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
+import edu.jhu.hlt.concrete.serialization.archiver.ArchivableCommunication;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Result;
 import edu.jhu.hlt.scion.concrete.server.FetchCommunicationServiceImpl;
@@ -34,6 +41,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * KBP 2014 will serve as the base for the retrieval annotations
@@ -238,25 +246,20 @@ public class Kbp2014 {
    * The point of this class is to take an (EntityMention UUID, Communication UUID),
    * retrieve the Communication from scion/accumulo, and then show the results.
    */
-  public static class ViewResponse {
+  public static class MentionFetcher {
     private FetchCommunicationServiceImpl impl;
 
-    public ViewResponse() throws Exception {
+    public MentionFetcher() throws Exception {
       ConnectorFactory cf = new ConnectorFactory();
       ScionConnector sc = cf.getConnector();
       impl = new FetchCommunicationServiceImpl(sc);
-//      int redisPort = 9090;
-//      FetchCommunicationServiceWrapper wrapper = new FetchCommunicationServiceWrapper(impl, redisPort);
-//      Thread srvThread = new Thread(wrapper);
-//      srvThread.start();
-//      srvThread.join();
     }
     
-    public void showMention(String entityMentionUuid, String communicationUuid) {
+    public Pair<Communication, EntityMention> fetch(String entityMentionUuid, String communicationId, boolean showMention) {
       Communication comm = null;
       
       FetchRequest fr = new FetchRequest();
-      fr.addToCommunicationIds(communicationUuid);
+      fr.addToCommunicationIds(communicationId);
       try {
         FetchResult r = impl.fetch(fr);
         assert r.getCommunicationsSize() == 1;
@@ -275,14 +278,28 @@ public class Kbp2014 {
         }
       }
       
-      Map<String, Tokenization> tokz = AddNerTypeToEntityMentions.buildTokzIndex(comm);
-      String tid = emRef.getTokens().getTokenizationId().getUuidString();
-      Tokenization tk = tokz.get(tid);
+      if (showMention) {
+        Map<String, Tokenization> tokz = AddNerTypeToEntityMentions.buildTokzIndex(comm);
+        String tid = emRef.getTokens().getTokenizationId().getUuidString();
+        Tokenization tk = tokz.get(tid);
+        List<Token> tokens = tk.getTokenList().getTokenList();
+
+        List<Integer> tks = emRef.getTokens().getTokenIndexList();
+        int first = tks.get(0);
+        int last = tks.get(tks.size() - 1);
+
+        // Mentions +/- 10 tokens
+        StringBuilder sb = new StringBuilder();
+        int i0 = Math.max(0, first - 10);
+        for (int i = i0; i < Math.min(last+1+10, tokens.size()); i++) {
+          if (i > i0)
+            sb.append(' ');
+          sb.append(tokens.get(i).getText());
+        }
+        System.out.println(sb.toString());
+      }
       
-      System.out.println(emRef.getText());
-      for (int t : emRef.getTokens().getTokenIndexList())
-        System.out.println(tk.getTokenList().getTokenList().get(t).getText());
-      System.out.println();
+      return new Pair<>(comm, emRef);
     }
   }
 
@@ -318,9 +335,15 @@ public class Kbp2014 {
     }
 
     // 3) Search CAG for mentions of each query
-    ViewResponse v = new ViewResponse();
+    // Write out text results as well as communications they live in
+    MentionFetcher v = new MentionFetcher();
     IndexCommunications.Search s = IndexCommunications.Search.build(config);
-    try (BufferedWriter w = FileUtil.getWriter(new File("data/parma/tac_kbp2014_querySearchResults_nyt_eng_200909.txt"))) {
+    File searchResults = config.getFile("searchResults", new File("data/parma/tac_kbp2014_querySearchResults_nyt_eng_200909.txt"));
+    File searchResultComms = config.getFile("searchResultComms", new File("data/parma/tac_kbp2014_querySearchResults_nyt_eng_200909.comms.tgz"));
+    try (BufferedWriter w = FileUtil.getWriter(searchResults);
+        OutputStream os = Files.newOutputStream(searchResultComms.toPath());
+        BufferedOutputStream bos = new BufferedOutputStream(os, 1024 * 8 * 24);
+        TarArchiver archiver = new TarArchiver(new GzipCompressorOutputStream(bos))) {
       w.write(StringUtils.join("\t", new String[] {
           "query_id", "query_entity_id", "query_entity_type",
           "response_score",
@@ -338,12 +361,8 @@ public class Kbp2014 {
         
         System.out.println(q + "\t" + q.entity_id + "\t" + q.entity_type);
         assert q.name.indexOf('\t') < 0;
-//        for (int i = 0; i < 10 && i < rr.size(); i++) {
-//          System.out.println(rr.get(i));
-//        }
-//        System.out.println();
         for (Result r : rr) {
-//          w.write(q.id);
+          try {
           w.write(StringUtils.join("\t", new String[] {
               q.id, q.entity_id, q.entity_type,
               String.valueOf(r.score),
@@ -351,9 +370,18 @@ public class Kbp2014 {
               q.name,
           }));
           w.newLine();
+          } catch (Exception e) {
+            e.printStackTrace();
+          }
           
-//          v.showMention(r.entityMentionUuid, r.communicationUuid);
-          v.showMention(r.entityMentionUuid, r.communicationId);
+          try {
+            boolean showMention = true;
+            Pair<Communication, EntityMention> p =
+                v.fetch(r.entityMentionUuid, r.communicationId, showMention);
+            archiver.addEntry(new ArchivableCommunication(p.get1()));
+          } catch (Exception e) {
+            e.printStackTrace();
+          }
         }
       }
     }
