@@ -342,8 +342,8 @@ public class Kbp2014 {
 
     // 3) Search CAG for mentions of each query
     // Write out text results as well as communications they live in
-    MentionFetcher v = new MentionFetcher();
-    IndexCommunications.Search s = IndexCommunications.Search.build(config);
+    IndexCommunications.Search s = IndexCommunications.Search.build(config);  // Long load time!
+    MentionFetcher v = new MentionFetcher();  // Make sure you use this right away, will timeout after 30s
     Set<String> commsWritten = new HashSet<>();
     File searchResults = config.getFile("searchResults", new File("data/parma/tac_kbp2014_querySearchResults_nyt_eng_200909.txt"));
     File searchResultComms = config.getFile("searchResultComms", new File("data/parma/tac_kbp2014_querySearchResults_nyt_eng_200909.comms.tgz"));

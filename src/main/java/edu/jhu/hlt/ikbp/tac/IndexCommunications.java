@@ -78,7 +78,9 @@ public class IndexCommunications implements AutoCloseable {
       File docVecs = config.getExistingFile("docVecs", new File(HOME, "doc/docVecs.128.txt"));
       File idf = config.getExistingFile("idf", new File(HOME, "doc/idf.txt"));
       File mentionLocs = config.getExistingFile("mentionLocs", new File(HOME, "raw/mentionLocs.txt.gz"));
-      Search s = new Search(nerFeatures, docVecs, idf, mentionLocs);
+      File tokObs = config.getExistingFile("tokenObs", new File(HOME, "tokenObs.jser.gz"));
+      File tokObsLc = config.getExistingFile("tokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
+      Search s = new Search(nerFeatures, docVecs, idf, mentionLocs, tokObs, tokObsLc);
       return s;
     }
     
@@ -104,19 +106,22 @@ public class IndexCommunications implements AutoCloseable {
     private TfIdf tfidf;
     private Map<String, String> emUuid2commUuid;
     private Map<String, String> emUuid2commId;
+    private TokenObservationCounts tokObs, tokObsLc;
     
-    public Search(File nerFeatures, File docVecs, File idf, File mentionLocs) throws IOException {
+    public Search(File nerFeatures, File docVecs, File idf, File mentionLocs, File tokObs, File tokObsLc) throws IOException {
       this.nerFeatures = new NerFeatureInvertedIndex(nerFeatures);
       this.tfidf = new TfIdf(docVecs, idf);
+      this.tokObs = (TokenObservationCounts) FileUtil.deserialize(tokObs);
+      this.tokObsLc = (TokenObservationCounts) FileUtil.deserialize(tokObsLc);
       emUuid2commUuid = new HashMap<>();
       emUuid2commId = new HashMap<>();
       Log.info("loading mention locations from " + mentionLocs.getPath());
       TIMER.start("load/mentionLocs");
       try (BufferedReader r = FileUtil.getReader(mentionLocs)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
-          // EntityMention UUID, Communication UUID, Communication id
+          // EntityMention UUID, Communication UUID, Communication id, entityType, hasHead?, numTokens, numChars
           String[] ar = line.split("\t");
-          assert ar.length == 3;
+          assert ar.length == 7;
           String emUuid = ar[0];
           String commUuid = ar[1];
           String commId = ar[2];
@@ -135,7 +140,7 @@ public class IndexCommunications implements AutoCloseable {
       String[] context = contextWhitespaceDelim.split("\\s+");
       TermVec contextVec = TfIdf.build(context, numTermsInPack, tfidf.idf);
       
-      List<Result> mentions = nerFeatures.findMentionsMatching(entityName, entityType, headwords);
+      List<Result> mentions = nerFeatures.findMentionsMatching(entityName, entityType, headwords, tokObs, tokObsLc);
       for (Result r : mentions) {
         assert Double.isFinite(r.score);
         assert !Double.isNaN(r.score);
@@ -300,6 +305,7 @@ public class IndexCommunications implements AutoCloseable {
     }
 
     public List<Result> findMentionsMatching(String entityName, String entityType, String[] headwords) {
+      err_misc++;
       return findMentionsMatching(entityName, entityType, headwords, null, null);
     }
 
@@ -604,6 +610,8 @@ public class IndexCommunications implements AutoCloseable {
     public void pack(int numTerms, File prunedTermDoc) throws IOException {
       TIMER.start("pack");
       Log.info("numTerms=" + numTerms + " output=" + prunedTermDoc);
+      TimeMarker tm = new TimeMarker();
+      int n = 0;
       // ((term, count), tf*idf)
       List<Pair<IntPair, Double>> curTerms = new ArrayList<>();
       String curId = null;
@@ -625,6 +633,10 @@ public class IndexCommunications implements AutoCloseable {
 
           IntPair key = new IntPair(term, count);
           curTerms.add(new Pair<>(key, count * idf(term)));
+          
+          n++;
+          if (tm.enoughTimePassed(10))
+            Log.info("processed " + n + " documents");
         }
         if (curId != null)
           packHelper(numTerms, w, curTerms, curId);
@@ -713,7 +725,7 @@ public class IndexCommunications implements AutoCloseable {
   private BufferedWriter w_nerFeatures;   // hashedFeature, nerType, EntityMention UUID
   private BufferedWriter w_termDoc;       // count, hashedTerm, Communication UUID
   private BufferedWriter w_termHash;      // hashedTerm, term
-  private BufferedWriter w_mentionLocs;   // EntityMention UUID, Communication UUUID, Communication id
+  private BufferedWriter w_mentionLocs;   // EntityMention UUID, Communication UUID, Communication id, entityType, hasHead?, numTokens, numChars
 
   private boolean outputTfIdfTerms = false;
   
