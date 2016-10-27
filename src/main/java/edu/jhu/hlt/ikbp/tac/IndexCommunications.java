@@ -40,7 +40,7 @@ import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.TimeMarker;
-import edu.jhu.hlt.tutils.TokenOberservationCounts;
+import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.map.IntObjectHashMap;
@@ -307,7 +307,7 @@ public class IndexCommunications implements AutoCloseable {
      * Returns a list of (EntityMention UUID, score) pairs.
      */
     public List<Result> findMentionsMatching(String entityName, String entityType, String[] headwords,
-        TokenOberservationCounts tokeObs, TokenOberservationCounts tokenObsLc) {
+        TokenObservationCounts tokeObs, TokenObservationCounts tokenObsLc) {
       TIMER.start("find/nerFeatures");
       Log.info("entityName=" + entityName + " nerType=" + entityType);
       
@@ -707,8 +707,8 @@ public class IndexCommunications implements AutoCloseable {
   private BloomFilter<String> seenTerms;
   
   // For determining the correct prefix length based on counts
-  private TokenOberservationCounts tokObs;
-  private TokenOberservationCounts tokObsLc;
+  private TokenObservationCounts tokObs;
+  private TokenObservationCounts tokObsLc;
   
   private BufferedWriter w_nerFeatures;   // hashedFeature, nerType, EntityMention UUID
   private BufferedWriter w_termDoc;       // count, hashedTerm, Communication UUID
@@ -722,7 +722,7 @@ public class IndexCommunications implements AutoCloseable {
   // Indexes the Tokenizations of the Communication currently being observed
   private Map<String, Tokenization> tokMap;
 
-  public IndexCommunications(TokenOberservationCounts tokObs, TokenOberservationCounts tokObsLc, File nerFeatures, File termDoc, File termHash, File mentionLocs) {
+  public IndexCommunications(TokenObservationCounts tokObs, TokenObservationCounts tokObsLc, File nerFeatures, File termDoc, File termHash, File mentionLocs) {
     this.tokObs = tokObs;
     this.tokObsLc = tokObsLc;
     double falsePosProb = 0.001;
@@ -786,7 +786,7 @@ public class IndexCommunications implements AutoCloseable {
   }
   
   private static List<String> prefixGrams(String mentionText,
-      TokenOberservationCounts tokObs, TokenOberservationCounts tokObsLc) {
+      TokenObservationCounts tokObs, TokenObservationCounts tokObsLc) {
     boolean verbose = false;
     String[] toks = mentionText
         .replaceAll("-", " ")
@@ -810,8 +810,8 @@ public class IndexCommunications implements AutoCloseable {
     
     // unigram prefixes
     for (int i = 0; i < toks.length; i++) {
-      String p = tokObs.getPrefixOccuringAtLeast(toks[i], 100);
-      String pi = tokObsLc.getPrefixOccuringAtLeast(toksLc[i], 100);
+      String p = tokObs.getPrefixOccuringAtLeast(toks[i], 10);
+      String pi = tokObsLc.getPrefixOccuringAtLeast(toksLc[i], 10);
       f.add("p:" + p);
       f.add("pi:" + pi);
     }
@@ -819,9 +819,9 @@ public class IndexCommunications implements AutoCloseable {
     // bigram prefixes
     String B = "BBBB";
     String A = "AAAA";
-    int lim = 100;
+    int lim = 10;
     boolean lc = true;
-    TokenOberservationCounts c = lc ? tokObsLc : tokObs;
+    TokenObservationCounts c = lc ? tokObsLc : tokObs;
     String[] tk = lc ? toksLc : toks;
     for (int i = -1; i < toks.length; i++) {
       String w, ww;
@@ -847,7 +847,7 @@ public class IndexCommunications implements AutoCloseable {
   }
   
   public static List<String> features(String mentionText, String[] headwords, String nerType,
-      TokenOberservationCounts tokObs, TokenOberservationCounts tokObsLc) {
+      TokenObservationCounts tokObs, TokenObservationCounts tokObsLc) {
     // ngrams
     List<String> features = new ArrayList<>();
     features.addAll(prefixGrams(mentionText, tokObs, tokObsLc));
@@ -1034,9 +1034,9 @@ public class IndexCommunications implements AutoCloseable {
     List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
     File output = config.getFile("outputTokenObs", new File(HOME, "tokenObs.jser.gz"));
     File outputLower = config.getFile("outputTokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
-    TokenOberservationCounts t = new TokenOberservationCounts();
-    TokenOberservationCounts tLower = new TokenOberservationCounts();
-    TokenOberservationCounts.trainOnCommunications(inputCommTgzs, t, tLower);
+    TokenObservationCounts t = new TokenObservationCounts();
+    TokenObservationCounts tLower = new TokenObservationCounts();
+    TokenObservationCounts.trainOnCommunications(inputCommTgzs, t, tLower);
     FileUtil.serialize(t, output);
     FileUtil.serialize(tLower, outputLower);
   }
@@ -1048,8 +1048,8 @@ public class IndexCommunications implements AutoCloseable {
     File tokObsFile = config.getExistingFile("tokenObs", new File(HOME, "tokenObs.jser.gz"));
     File tokObsLowerFile = config.getExistingFile("tokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
     
-    TokenOberservationCounts t = (TokenOberservationCounts) FileUtil.deserialize(tokObsFile);
-    TokenOberservationCounts tl = (TokenOberservationCounts) FileUtil.deserialize(tokObsLowerFile);
+    TokenObservationCounts t = (TokenObservationCounts) FileUtil.deserialize(tokObsFile);
+    TokenObservationCounts tl = (TokenObservationCounts) FileUtil.deserialize(tokObsLowerFile);
     
     File nerFeatures = new File(outputDir, "nerFeatures.txt.gz");
     File termDoc = new File(outputDir, "termDoc.txt.gz");
