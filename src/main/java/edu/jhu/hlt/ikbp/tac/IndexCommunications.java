@@ -21,20 +21,26 @@ import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.EntityMentionSet;
 import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.Sentence;
 import edu.jhu.hlt.concrete.Token;
+import edu.jhu.hlt.concrete.TokenRefSequence;
+import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.serialization.iterators.TarGzArchiveEntryCommunicationIterator;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
+import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
@@ -49,7 +55,7 @@ import edu.jhu.prim.vector.IntIntHashVector;
  */
 public class IndexCommunications implements AutoCloseable {
 
-  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-10-26");
+  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-10-27");
   public static final Charset UTF8 = Charset.forName("UTF-8");
   public static final HashFunction HASH = Hashing.murmur3_32();
   public static final MultiTimer TIMER = new MultiTimer();
@@ -64,11 +70,11 @@ public class IndexCommunications implements AutoCloseable {
   public static class Search {
     
     public static Search build(ExperimentProperties config) throws IOException {
-      File nerNgrams = config.getExistingFile("nerNgrams", new File(HOME, "raw/nerNgrams.txt.gz"));
+      File nerFeatures = config.getExistingFile("nerFeatures", new File(HOME, "raw/nerFeatures.txt.gz"));
       File docVecs = config.getExistingFile("docVecs", new File(HOME, "doc/docVecs.128.txt"));
       File idf = config.getExistingFile("idf", new File(HOME, "doc/idf.txt"));
       File mentionLocs = config.getExistingFile("mentionLocs", new File(HOME, "raw/mentionLocs.txt.gz"));
-      Search s = new Search(nerNgrams, docVecs, idf, mentionLocs);
+      Search s = new Search(nerFeatures, docVecs, idf, mentionLocs);
       return s;
     }
     
@@ -83,20 +89,20 @@ public class IndexCommunications implements AutoCloseable {
           + "between 1992 and 2004 . While serving three terms representing the 13th District in the Illinois Senate from "
           + "1997 to 2004 , he ran unsuccessfully in the Democratic primary for the United States House of Representatives "
           + "in 2000 against incumbent Bobby Rush .";
-      List<Result> rr = s.search("Barack Obama", "PERSON", context);
+      List<Result> rr = s.search("Barack Obama", "PERSON", new String[] {"Obama"}, context);
       for (int i = 0; i < 10 && i < rr.size(); i++) {
         System.out.println(rr.get(i));
       }
       System.out.println(TIMER);
     }
 
-    private NerNgramInvertedIndex nerNgrams;
+    private NerFeatureInvertedIndex nerFeatures;
     private TfIdf tfidf;
     private Map<String, String> emUuid2commUuid;
     private Map<String, String> emUuid2commId;
     
-    public Search(File nerNgrams, File docVecs, File idf, File mentionLocs) throws IOException {
-      this.nerNgrams = new NerNgramInvertedIndex(nerNgrams);
+    public Search(File nerFeatures, File docVecs, File idf, File mentionLocs) throws IOException {
+      this.nerFeatures = new NerFeatureInvertedIndex(nerFeatures);
       this.tfidf = new TfIdf(docVecs, idf);
       emUuid2commUuid = new HashMap<>();
       emUuid2commId = new HashMap<>();
@@ -119,13 +125,13 @@ public class IndexCommunications implements AutoCloseable {
       Log.info("indexed the location of " + emUuid2commUuid.size() + " mentions");
     }
     
-    public List<Result> search(String entityName, String entityType, String contextWhitespaceDelim) {
+    public List<Result> search(String entityName, String entityType, String[] headwords, String contextWhitespaceDelim) {
       TIMER.start("search");
       int numTermsInPack = tfidf.getMaxVecLength();
       String[] context = contextWhitespaceDelim.split("\\s+");
       TermVec contextVec = TfIdf.build(context, numTermsInPack, tfidf.idf);
       
-      List<Result> mentions = nerNgrams.findMentionsMatching(entityName, entityType);
+      List<Result> mentions = nerFeatures.findMentionsMatching(entityName, entityType, headwords);
       for (Result r : mentions) {
         assert Double.isFinite(r.score);
         assert !Double.isNaN(r.score);
@@ -204,26 +210,26 @@ public class IndexCommunications implements AutoCloseable {
    * 2) only index 2005-2007
    * 3) only index PERSON mentions
    */
-  public static class NerNgramInvertedIndex {
+  public static class NerFeatureInvertedIndex {
     
     public static void main(ExperimentProperties config) throws IOException {
-      File input = config.getExistingFile("input", new File(HOME, "raw/nerNgrams.txt.gz"));
+      File input = config.getExistingFile("input", new File(HOME, "raw/nerFeatures.txt.gz"));
 
-      NerNgramInvertedIndex n = new NerNgramInvertedIndex(input);
+      NerFeatureInvertedIndex n = new NerFeatureInvertedIndex(input);
 
-      for (Result x : n.findMentionsMatching("Barack Obama", "PERSON"))
+      for (Result x : n.findMentionsMatching("Barack Obama", "PERSON", new String[] {"Obama"}))
         System.out.println(x);
 
-      for (Result x : n.findMentionsMatching("OBAMA", "PERSON"))
+      for (Result x : n.findMentionsMatching("OBAMA", "PERSON", new String[] {"OBAMA"}))
         System.out.println(x);
 
-      for (Result x : n.findMentionsMatching("barry", "PERSON"))
+      for (Result x : n.findMentionsMatching("barry", "PERSON", new String[] {"barry"}))
         System.out.println(x);
 
-      for (Result x : n.findMentionsMatching("UN", "ORGANIZATION"))
+      for (Result x : n.findMentionsMatching("UN", "ORGANIZATION", new String[] {"UN"}))
         System.out.println(x);
 
-      for (Result x : n.findMentionsMatching("United Nations", "ORGANIZATION"))
+      for (Result x : n.findMentionsMatching("United Nations", "ORGANIZATION", new String[] {"Nations"}))
         System.out.println(x);
     }
     
@@ -257,12 +263,12 @@ public class IndexCommunications implements AutoCloseable {
       r.add(entityMentionUuid);
     }
     
-    public NerNgramInvertedIndex(File nerNgrams) throws IOException {
-      Log.info("nerNgrams=" + nerNgrams.getPath());
+    public NerFeatureInvertedIndex(File nerFeatures) throws IOException {
+      Log.info("nerFeatures=" + nerFeatures.getPath());
       TimeMarker tm = new TimeMarker();
       nerType2term2emUuids = new HashMap<>();
-      TIMER.start("load/nerNgrams");
-      try (BufferedReader r = FileUtil.getReader(nerNgrams)) {
+      TIMER.start("load/nerFeatures");
+      try (BufferedReader r = FileUtil.getReader(nerFeatures)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
           // term, nerType, mention id
           String[] ar = line.split("\t");
@@ -278,7 +284,7 @@ public class IndexCommunications implements AutoCloseable {
             Log.info(toString());
         }
       }
-      TIMER.stop("load/nerNgrams");
+      TIMER.stop("load/nerFeatures");
     }
     
     @Override
@@ -295,30 +301,22 @@ public class IndexCommunications implements AutoCloseable {
      * @param entityType
      * @return
      */
-    public List<Result> findMentionsMatching(String entityName, String entityType) {
-      TIMER.start("find/nerNgrams");
+    public List<Result> findMentionsMatching(String entityName, String entityType, String[] headwords) {
+      TIMER.start("find/nerFeatures");
       Log.info("entityName=" + entityName + " nerType=" + entityType);
       
-      // 1) find ngram -> list<doc> for all ngrams in entityName
-      // 2) sort the list<doc>s by their length
-      // 3) score(em) = \sum_{n in ngrams(query)} I(em contains n) + tfidf(query,em.doc)
-      
-      // There will only be ~entityName.length ngrams, and thus EM lists
-      // We could probably just intersect them first, and then only ask for tf-idf for the results
-      
-      
       // Find out which EntityMentions contain the query ngrams
-      int ngrams = 6;
-      List<String> qng = ScanCAGForMentions.ngrams(entityName, ngrams);
-      int n = qng.size();
-//      List<List<String>> qngContains = new ArrayList<>(n);
+      List<String> features = features(entityName, headwords, entityType);
+      int n = features.size();
       Counts<String> emNgramOverlap = new Counts<>();
       for (int i = 0; i < n; i++) {
-        int term = HASH.hashString(qng.get(i), UTF8).asInt();
+        int term = HASH.hashString(features.get(i), UTF8).asInt();
+        int weight = featureWeight(features.get(i));
         List<String> emsContainingTerm = get(term, entityType);
-//        qngContains.add(emsContainingTerm);
-        for (String em : emsContainingTerm)
-          emNgramOverlap.increment(em);
+        for (String em : emsContainingTerm) {
+//          emNgramOverlap.increment(em);
+          emNgramOverlap.update(em, weight);
+        }
       }
       
       List<Result> rr = new ArrayList<>();
@@ -332,7 +330,7 @@ public class IndexCommunications implements AutoCloseable {
         rr.add(r);
       }
 
-      TIMER.stop("find/nerNgrams");
+      TIMER.stop("find/nerFeatures");
       return rr;
     }
   }
@@ -523,7 +521,7 @@ public class IndexCommunications implements AutoCloseable {
     public static void main(ExperimentProperties config) throws IOException {
       int numTerms = config.getInt("numTerms", 128);
       File in = config.getExistingFile("input", new File(HOME, "raw/termDoc.txt.gz"));
-      File outInvIdx = config.getFile("outputInvIdx", new File(HOME, "doc/docVecs." + numTerms + ".txt"));
+      File outInvIdx = config.getFile("outputDocVecs", new File(HOME, "doc/docVecs." + numTerms + ".txt"));
       File outIdfs = config.getFile("outputIdf", new File(HOME, "doc/idf.txt"));
       ComputeTfIdfDocVecs c = new ComputeTfIdfDocVecs(in);
       c.writeoutIdfs(outIdfs);
@@ -702,22 +700,26 @@ public class IndexCommunications implements AutoCloseable {
   // Given a word, if it's not in this approx-set, then you definitely haven't seen it
   private BloomFilter<String> seenTerms;
   
-  private BufferedWriter w_nerNgrams;   // hashedNgram, nerType, EntityMention UUID
-  private BufferedWriter w_termDoc;     // count, hashedTerm, Communication UUID
-  private BufferedWriter w_termHash;    // hashedTerm, term
+  private BufferedWriter w_nerFeatures;   // hashedFeature, nerType, EntityMention UUID
+  private BufferedWriter w_termDoc;       // count, hashedTerm, Communication UUID
+  private BufferedWriter w_termHash;      // hashedTerm, term
   private BufferedWriter w_mentionLocs;   // EntityMention UUID, Communication UUUID, Communication id
 
   private boolean outputTfIdfTerms = false;
   
   private long n_doc = 0, n_tok = 0, n_ent = 0, n_termWrites = 0, n_termHashes = 0;
   private int err_ner = 0;
+  
+  // Indexes the Tokenizations of the Communication currently being observed
+  private Map<String, Tokenization> tokMap;
 
-  public IndexCommunications(File nerNgrams, File termDoc, File termHash, File mentionLocs) {
+  public IndexCommunications(File nerFeatures, File termDoc, File termHash, File mentionLocs) {
     double falsePosProb = 0.001;
     int expectedInsertions = 1<<20;
     seenTerms = BloomFilter.create(Funnels.stringFunnel(UTF8), expectedInsertions, falsePosProb);
+    tokMap = new HashMap<>();
     try {
-      w_nerNgrams = FileUtil.getWriter(nerNgrams);
+      w_nerFeatures = FileUtil.getWriter(nerFeatures);
       w_termDoc = FileUtil.getWriter(termDoc);
       w_termHash = FileUtil.getWriter(termHash);
       w_mentionLocs = FileUtil.getWriter(mentionLocs);
@@ -726,21 +728,103 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
+  private static String headword(TokenRefSequence trs, Map<String, Tokenization> tokMap) {
+    Tokenization t = tokMap.get(trs.getTokenizationId().getUuidString());
+    if (t == null)
+      return "";
+    
+    List<Token> toks = t.getTokenList().getTokenList();
+    if (trs.isSetAnchorTokenIndex())
+      return toks.get(trs.getAnchorTokenIndex()).getText();
+    
+    // Fall back on a dependency parse
+    int n = toks.size();
+    DependencyParse d = getPreferredDependencyParse(t);
+    LabeledDirectedGraph graph =
+        LabeledDirectedGraph.fromConcrete(d, n, new MultiAlphabet());
+    DParseHeadFinder hf = new DParseHeadFinder();
+    int h = hf.head(graph, 0, n-1);
+    return toks.get(h).getText();
+  }
+  
+  private static DependencyParse getPreferredDependencyParse(Tokenization toks) {
+    for (DependencyParse dp : toks.getDependencyParseList()) {
+      if ("parsey".equalsIgnoreCase(dp.getMetadata().getTool()))
+        return dp;
+    }
+    for (DependencyParse dp : toks.getDependencyParseList()) {
+      if ("Stanford CoreNLP basic".equalsIgnoreCase(dp.getMetadata().getTool()))
+        return dp;
+    }
+    return null;
+  }
+  
+  private void buildTokMap(Communication c) {
+    tokMap.clear();
+    if (c.isSetSectionList()) {
+      for (Section sect : c.getSectionList()) {
+        if (sect.isSetSentenceList()) {
+          for (Sentence sent : sect.getSentenceList()) {
+            Tokenization t = sent.getTokenization();
+            Object old = tokMap.put(t.getUuid().getUuidString(), t);
+            assert old == null;
+          }
+        }
+      }
+    }
+  }
+  
+  public static List<String> features(String mentionText, String[] headwords, String nerType) {
+    // ngrams
+    List<String> features = new ArrayList<>();
+    int ngrams = 6;
+    features.addAll(ScanCAGForMentions.ngrams(mentionText, ngrams));
+    // headword
+    for (int i = 0; i < headwords.length; i++) {
+      String hi = headwords[i].toLowerCase();
+      features.add("h:" + headwords[i]);
+      features.add("hi:" + hi);
+      while (hi.length() < 5)
+        hi = hi + "|";
+      features.add("hi3:" + hi.substring(0, 3));
+      features.add("hi5:" + hi.substring(0, 5));
+    }
+    return features;
+  }
+  public static int featureWeight(String feature) {
+    if (feature.startsWith("h:"))
+      return 12;
+    if (feature.startsWith("hi:"))
+      return 8;
+    if (feature.startsWith("hi5:"))
+      return 3;
+    if (feature.startsWith("hi3:"))
+      return 2;
+    // ngrams
+    return 1;
+  }
+  
   public void observe(Communication c) throws IOException {
+    buildTokMap(c);
     new AddNerTypeToEntityMentions(c);
     n_doc++;
     
-    // EntityMention ngrams
-    int ngrams = 6;
     if (c.isSetEntityMentionSetList()) {
       for (EntityMentionSet ems : c.getEntityMentionSetList()) {
         for (EntityMention em : ems.getMentionList()) {
+
+          if (!em.isSetEntityType() || em.getEntityType().indexOf('\t') >= 0) {
+            err_ner++;
+            continue;
+          }
           
           if ("O".equals(em.getEntityType()))
             continue;
           int ttypes = em.getEntityType().split(",").length;
           if (ttypes > 1)
             continue;
+
+          n_ent++;
           
           w_mentionLocs.write(em.getUuid().getUuidString());
           w_mentionLocs.write('\t');
@@ -748,20 +832,17 @@ public class IndexCommunications implements AutoCloseable {
           w_mentionLocs.write('\t');
           w_mentionLocs.write(c.getId());
           w_mentionLocs.newLine();
-
-          n_ent++;
-          for (String ngram : ScanCAGForMentions.ngrams(em.getText(), ngrams)) {
-            if (!em.isSetEntityType() || em.getEntityType().indexOf('\t') >= 0) {
-              err_ner++;
-              continue;
-            }
-            int i = hash(ngram);
-            w_nerNgrams.write(Integer.toUnsignedString(i));
-            w_nerNgrams.write('\t');
-            w_nerNgrams.write(em.getEntityType());
-            w_nerNgrams.write('\t');
-            w_nerNgrams.write(em.getUuid().getUuidString());
-            w_nerNgrams.newLine();
+          
+          String head = headword(em.getTokens(), tokMap);
+          List<String> feats = features(em.getText(), new String[] {head}, em.getEntityType());
+          for (String f : feats) {
+            int i = hash(f);
+            w_nerFeatures.write(Integer.toUnsignedString(i));
+            w_nerFeatures.write('\t');
+            w_nerFeatures.write(em.getEntityType());
+            w_nerFeatures.write('\t');
+            w_nerFeatures.write(em.getUuid().getUuidString());
+            w_nerFeatures.newLine();
           }
         }
       }
@@ -848,7 +929,7 @@ public class IndexCommunications implements AutoCloseable {
 
   @Override
   public void close() throws Exception {
-    w_nerNgrams.close();
+    w_nerFeatures.close();
     w_termDoc.close();
     w_termHash.close();
     w_mentionLocs.close();
@@ -861,27 +942,21 @@ public class IndexCommunications implements AutoCloseable {
   }
   
   public static void extractBasicData(ExperimentProperties config) throws Exception {
-//    if (args.length != 2) {
-//      System.err.println("please provied:");
-//      System.err.println("1) an input directory containing annotated .tar.gz Communication files");
-//      System.err.println("2) a directory to put output in");
-//      return;
-//    }
-//    File commDir = new File(args[0]);
-//    File outputDir = new File(args[1]);
-    File commDir = config.getExistingDir("communicationsDirectory");
+//    File commDir = config.getExistingDir("communicationsDirectory", new File(HOME, "../source-docs"));
+    List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
     File outputDir = config.getOrMakeDir("outputDirectory", new File(HOME, "raw"));
-
-    File nerNgram = new File(outputDir, "nerNgrams.txt.gz");
+    
+    File nerFeatures = new File(outputDir, "nerFeatures.txt.gz");
     File termDoc = new File(outputDir, "termDoc.txt.gz");
     File termHash = new File(outputDir, "termHash.txt.gz");
     File mentionLocs = new File(outputDir, "mentionLocs.txt.gz");
 
     TimeMarker tm = new TimeMarker();
-    try (IndexCommunications ic = new IndexCommunications(nerNgram, termDoc, termHash, mentionLocs)) {
-      for (File f : commDir.listFiles()) {
-        if (!f.getName().toLowerCase().endsWith(".tar.gz"))
-          continue;
+    try (IndexCommunications ic = new IndexCommunications(nerFeatures, termDoc, termHash, mentionLocs)) {
+//      for (File f : commDir.listFiles()) {
+//        if (!f.getName().toLowerCase().endsWith(".tar.gz"))
+//          continue;
+      for (File f : inputCommTgzs) {
         Log.info("reading " + f.getName());
         try (InputStream is = new FileInputStream(f);
             TarGzArchiveEntryCommunicationIterator iter = new TarGzArchiveEntryCommunicationIterator(is)) {
@@ -906,8 +981,8 @@ public class IndexCommunications implements AutoCloseable {
     case "buildDocVecs":
       ComputeTfIdfDocVecs.main(config);
       break;
-    case "nerNgrams":
-      NerNgramInvertedIndex.main(config);
+    case "nerFeatures":
+      NerFeatureInvertedIndex.main(config);
       break;
     case "search":
       Search.main(config);

@@ -8,9 +8,11 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -294,7 +296,11 @@ public class Kbp2014 {
         for (int i = i0; i < Math.min(last+1+10, tokens.size()); i++) {
           if (i > i0)
             sb.append(' ');
+          if (i == first)
+            sb.append("[[ ");
           sb.append(tokens.get(i).getText());
+          if (i == last)
+            sb.append(" ]]");
         }
         System.out.println(sb.toString());
       }
@@ -338,6 +344,7 @@ public class Kbp2014 {
     // Write out text results as well as communications they live in
     MentionFetcher v = new MentionFetcher();
     IndexCommunications.Search s = IndexCommunications.Search.build(config);
+    Set<String> commsWritten = new HashSet<>();
     File searchResults = config.getFile("searchResults", new File("data/parma/tac_kbp2014_querySearchResults_nyt_eng_200909.txt"));
     File searchResultComms = config.getFile("searchResultComms", new File("data/parma/tac_kbp2014_querySearchResults_nyt_eng_200909.comms.tgz"));
     try (BufferedWriter w = FileUtil.getWriter(searchResults);
@@ -353,7 +360,8 @@ public class Kbp2014 {
       w.newLine();
       for (Query q : queries) {
         String nerType = tacNerTypesToStanfordNerType(q.entity_type);
-        List<Result> rr = s.search(q.name, nerType, q.sourceDoc);
+        String[] heads = q.name.split("\\s+");
+        List<Result> rr = s.search(q.name, nerType, heads, q.sourceDoc);
         
         int lim = 1000;
         if (rr.size() > lim)
@@ -373,14 +381,17 @@ public class Kbp2014 {
           } catch (Exception e) {
             e.printStackTrace();
           }
-          
-          try {
-            boolean showMention = true;
-            Pair<Communication, EntityMention> p =
-                v.fetch(r.entityMentionUuid, r.communicationId, showMention);
-            archiver.addEntry(new ArchivableCommunication(p.get1()));
-          } catch (Exception e) {
-            e.printStackTrace();
+
+          boolean showMention = true;
+          Pair<Communication, EntityMention> p =
+              v.fetch(r.entityMentionUuid, r.communicationId, showMention);
+          if (commsWritten.add(r.communicationId)) {
+            Log.info("finding+saving " + r.communicationId);
+            try {
+              archiver.addEntry(new ArchivableCommunication(p.get1()));
+            } catch (Exception e) {
+              e.printStackTrace();
+            }
           }
         }
       }
