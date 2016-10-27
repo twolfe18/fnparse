@@ -25,5 +25,12 @@ java -ea -cp $JAR \
     outputDocVecs "$OUTPUT_DIR/doc/docVecs.txt.gz" \
     outputIdf "$OUTPUT_DIR/doc/idf.txt"
 
+echo "building ner feature indices... `date`"
+mkdir -p "$OUTPUT_DIR/ner_feats"
+time zcat "$OUTPUT_DIR/raw/nerFeats.txt.gz" \
+  | sort -n -k 1,2 \
+  | ./scripts/sem-diff/doc-indexing/convert-ner-feature-file-format.py \
+    "$OUTPUT_DIR/ner_feats"
+
 echo "done. `date`"
 
