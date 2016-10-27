@@ -269,13 +269,15 @@ public class Kbp2014 {
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
-      
+
       EntityMention emRef = null;
       for (EntityMentionSet ems : comm.getEntityMentionSetList()) {
-        for (EntityMention em : ems.getMentionList()) {
-          if (entityMentionUuid.equals(em.getUuid().getUuidString())) {
-            assert emRef == null;
-            emRef = em;
+        if (ems.isSetMentionList()) {
+          for (EntityMention em : ems.getMentionList()) {
+            if (entityMentionUuid.equals(em.getUuid().getUuidString())) {
+              assert emRef == null;
+              emRef = em;
+            }
           }
         }
       }

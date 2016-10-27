@@ -30,7 +30,9 @@ import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.serialization.iterators.TarGzArchiveEntryCommunicationIterator;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.EfficientUuidList;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
@@ -74,7 +76,7 @@ public class IndexCommunications implements AutoCloseable {
   public static class Search {
     
     public static Search build(ExperimentProperties config) throws IOException {
-      File nerFeatures = config.getExistingFile("nerFeatures", new File(HOME, "raw/nerFeatures.txt.gz"));
+      File nerFeatures = config.getExistingDir("nerFeatureDir", new File(HOME, "ner_feats"));
       File docVecs = config.getExistingFile("docVecs", new File(HOME, "doc/docVecs.128.txt"));
       File idf = config.getExistingFile("idf", new File(HOME, "doc/idf.txt"));
       File mentionLocs = config.getExistingFile("mentionLocs", new File(HOME, "raw/mentionLocs.txt.gz"));
@@ -85,6 +87,7 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public static void main(ExperimentProperties config) throws IOException {
+      EfficientUuidList.simpleTest();
       Search s = build(config);
       String context = "Barack Hussein Obama II (US Listen i/bəˈrɑːk huːˈseɪn oʊˈbɑːmə/;[1][2] born August 4 , 1961 )"
           + " is an American politician who is the 44th and current President of the United States . He is the first"
@@ -108,11 +111,11 @@ public class IndexCommunications implements AutoCloseable {
     private Map<String, String> emUuid2commId;
     private TokenObservationCounts tokObs, tokObsLc;
     
-    public Search(File nerFeatures, File docVecs, File idf, File mentionLocs, File tokObs, File tokObsLc) throws IOException {
-      this.nerFeatures = new NerFeatureInvertedIndex(nerFeatures);
+    public Search(File nerFeaturesDir, File docVecs, File idf, File mentionLocs, File tokObs, File tokObsLc) throws IOException {
       this.tfidf = new TfIdf(docVecs, idf);
       this.tokObs = (TokenObservationCounts) FileUtil.deserialize(tokObs);
       this.tokObsLc = (TokenObservationCounts) FileUtil.deserialize(tokObsLc);
+      loadNerFeatures(nerFeaturesDir);
       emUuid2commUuid = new HashMap<>();
       emUuid2commId = new HashMap<>();
       Log.info("loading mention locations from " + mentionLocs.getPath());
@@ -132,6 +135,24 @@ public class IndexCommunications implements AutoCloseable {
       }
       TIMER.stop("load/mentionLocs");
       Log.info("indexed the location of " + emUuid2commUuid.size() + " mentions");
+    }
+    
+    public void loadNerFeatures(File nerFeaturesDir) throws IOException {
+//      this.nerFeatures = new NerFeatureInvertedIndex(nerFeatures);
+      if (!nerFeaturesDir.isDirectory())
+        throw new IllegalArgumentException("must be a dir: " + nerFeaturesDir.getPath());
+      List<Pair<String, File>> sources = new ArrayList<>();
+      for (File f : nerFeaturesDir.listFiles()) {
+        String[] a = f.getName().split("\\.");
+        if (a.length >= 3 && a[0].equals("nerFeats")) {
+          String nerType = a[1];
+          sources.add(new Pair<>(nerType, f));
+        }
+      }
+      if (sources.isEmpty())
+        err_misc++;
+      Log.info("sources: " + sources);
+      this.nerFeatures = new NerFeatureInvertedIndex(sources);
     }
     
     public List<Result> search(String entityName, String entityType, String[] headwords, String contextWhitespaceDelim) {
@@ -224,7 +245,8 @@ public class IndexCommunications implements AutoCloseable {
     public static void main(ExperimentProperties config) throws IOException {
       File input = config.getExistingFile("input", new File(HOME, "raw/nerFeatures.txt.gz"));
 
-      NerFeatureInvertedIndex n = new NerFeatureInvertedIndex(input);
+//      NerFeatureInvertedIndex n = new NerFeatureInvertedIndex(input);
+      NerFeatureInvertedIndex n = new NerFeatureInvertedIndex(Arrays.asList(new Pair<>("PERSON", input)));
 
       for (Result x : n.findMentionsMatching("Barack Obama", "PERSON", new String[] {"Obama"}))
         System.out.println(x);
@@ -242,65 +264,68 @@ public class IndexCommunications implements AutoCloseable {
         System.out.println(x);
     }
     
-    private Map<String, IntObjectHashMap<List<String>>> nerType2term2emUuids;
-    private int n_mentions = 0;
     
+    private Map<String, IntObjectHashMap<EfficientUuidList>> nerType2term2uuids;
+    private Counts<String> mentionsByType = new Counts<>();
+    private int n_mentions = 0;
+
+    public NerFeatureInvertedIndex(List<Pair<String, File>> featuresByNerType) throws IOException {
+      TimeMarker tm = new TimeMarker();
+      nerType2term2uuids = new HashMap<>();
+      TIMER.start("load/nerFeatures");
+      for (Pair<String, File> t : featuresByNerType) {
+        String nerType = t.get1();
+        Log.info("reading " + nerType + " features from " + t.get2());
+        TIMER.start("load/nerFeatures/" + nerType);
+        IntObjectHashMap<EfficientUuidList> m = new IntObjectHashMap<>();
+        try (BufferedReader r = FileUtil.getReader(t.get2())) {
+          for (String line = r.readLine(); line != null; line = r.readLine()) {
+            // term, comm_uuid+
+            String[] ar = line.split("\t");
+            assert ar.length >= 2;
+            int term = Integer.parseUnsignedInt(ar[0]);
+            EfficientUuidList uuids = new EfficientUuidList(ar.length-1);
+            for (int i = 1; i < ar.length; i++)
+              uuids.add(ar[i]);
+            Object old = m.put(term, uuids);
+            assert old == null;
+            n_mentions++;
+            
+            if (tm.enoughTimePassed(5)) {
+              Log.info("n_mentions=" + n_mentions + " f=" + t.get2()
+                + " c=" + m.size() + "\t" + Describe.memoryUsage());
+            }
+          }
+        }
+        mentionsByType.update(nerType, m.size());
+        nerType2term2uuids.put(nerType, m);
+        TIMER.stop("load/nerFeatures/" + nerType);
+      }
+      Log.info("done, loaded: " + mentionsByType);
+      TIMER.stop("load/nerFeatures");
+    }
+
     private List<String> get(int term, String nerType) {
-      IntObjectHashMap<List<String>> m = nerType2term2emUuids.get(nerType);
-      if (m == null) {
-        Log.warn("unknown/unindexed nerType=" + nerType);
+      IntObjectHashMap<EfficientUuidList> t2m = nerType2term2uuids.get(nerType);
+      if (t2m == null) {
         err_misc++;
         return Collections.emptyList();
       }
-      List<String> r = m.get(term);
-      if (r == null)
-        r = Collections.emptyList();
-      return r;
-    }
-    
-    private void add(int term, String nerType, String entityMentionUuid) {
-      n_mentions++;
-      IntObjectHashMap<List<String>> m = nerType2term2emUuids.get(nerType);
-      if (m == null) {
-        m = new IntObjectHashMap<>();
-        nerType2term2emUuids.put(nerType, m);
+      EfficientUuidList mentions = t2m.get(term);
+      if (mentions == null) {
+        return Collections.emptyList();
       }
-      List<String> r = m.get(term);
-      if (r == null) {
-        r = new ArrayList<>(4);
-        m.put(term, r);
-      }
-      r.add(entityMentionUuid);
-    }
-    
-    public NerFeatureInvertedIndex(File nerFeatures) throws IOException {
-      Log.info("nerFeatures=" + nerFeatures.getPath());
-      TimeMarker tm = new TimeMarker();
-      nerType2term2emUuids = new HashMap<>();
-      TIMER.start("load/nerFeatures");
-      try (BufferedReader r = FileUtil.getReader(nerFeatures)) {
-        for (String line = r.readLine(); line != null; line = r.readLine()) {
-          // term, nerType, mention id
-          String[] ar = line.split("\t");
-          assert ar.length == 3;
-          int term = Integer.parseUnsignedInt(ar[0]);
-          String nerType = ar[1];
-//          if (!"PERSON".equals(nerType))
-//            continue;
-          String emId = ar[2];
-          add(term, nerType, emId);
-          
-          if (tm.enoughTimePassed(2))
-            Log.info(toString());
-        }
-      }
-      TIMER.stop("load/nerFeatures");
+      int n = mentions.size();
+      List<String> l = new ArrayList<>(n);
+      for (int i = 0; i < n; i++)
+        l.add(mentions.getString(i));
+      return l;
     }
     
     @Override
     public String toString() {
-      return "(NE nerTypes=" + nerType2term2emUuids.size()
-        + " n_mentions=" + n_mentions
+      return "(NerFeatures mentions:" + mentionsByType
+        + " totalMentions=" + n_mentions
         + ")";
     }
 
