@@ -40,6 +40,7 @@ import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.TokenOberservationCounts;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.map.IntObjectHashMap;
@@ -55,10 +56,13 @@ import edu.jhu.prim.vector.IntIntHashVector;
  */
 public class IndexCommunications implements AutoCloseable {
 
-  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-10-27");
+  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-10-27_ngram5");
   public static final Charset UTF8 = Charset.forName("UTF-8");
   public static final HashFunction HASH = Hashing.murmur3_32();
   public static final MultiTimer TIMER = new MultiTimer();
+
+  public static int err_ner = 0;
+  public static int err_misc = 0;
   
   /**
    * Given an (entityName, entityType, entityContextDoc) query,
@@ -240,6 +244,7 @@ public class IndexCommunications implements AutoCloseable {
       IntObjectHashMap<List<String>> m = nerType2term2emUuids.get(nerType);
       if (m == null) {
         Log.warn("unknown/unindexed nerType=" + nerType);
+        err_misc++;
         return Collections.emptyList();
       }
       List<String> r = m.get(term);
@@ -294,19 +299,20 @@ public class IndexCommunications implements AutoCloseable {
         + ")";
     }
 
+    public List<Result> findMentionsMatching(String entityName, String entityType, String[] headwords) {
+      return findMentionsMatching(entityName, entityType, headwords, null, null);
+    }
+
     /**
      * Returns a list of (EntityMention UUID, score) pairs.
-     *
-     * @param entityName
-     * @param entityType
-     * @return
      */
-    public List<Result> findMentionsMatching(String entityName, String entityType, String[] headwords) {
+    public List<Result> findMentionsMatching(String entityName, String entityType, String[] headwords,
+        TokenOberservationCounts tokeObs, TokenOberservationCounts tokenObsLc) {
       TIMER.start("find/nerFeatures");
       Log.info("entityName=" + entityName + " nerType=" + entityType);
       
       // Find out which EntityMentions contain the query ngrams
-      List<String> features = features(entityName, headwords, entityType);
+      List<String> features = features(entityName, headwords, entityType, tokeObs, tokenObsLc);
       int n = features.size();
       Counts<String> emNgramOverlap = new Counts<>();
       for (int i = 0; i < n; i++) {
@@ -700,6 +706,10 @@ public class IndexCommunications implements AutoCloseable {
   // Given a word, if it's not in this approx-set, then you definitely haven't seen it
   private BloomFilter<String> seenTerms;
   
+  // For determining the correct prefix length based on counts
+  private TokenOberservationCounts tokObs;
+  private TokenOberservationCounts tokObsLc;
+  
   private BufferedWriter w_nerFeatures;   // hashedFeature, nerType, EntityMention UUID
   private BufferedWriter w_termDoc;       // count, hashedTerm, Communication UUID
   private BufferedWriter w_termHash;      // hashedTerm, term
@@ -708,12 +718,13 @@ public class IndexCommunications implements AutoCloseable {
   private boolean outputTfIdfTerms = false;
   
   private long n_doc = 0, n_tok = 0, n_ent = 0, n_termWrites = 0, n_termHashes = 0;
-  private int err_ner = 0;
   
   // Indexes the Tokenizations of the Communication currently being observed
   private Map<String, Tokenization> tokMap;
 
-  public IndexCommunications(File nerFeatures, File termDoc, File termHash, File mentionLocs) {
+  public IndexCommunications(TokenOberservationCounts tokObs, TokenOberservationCounts tokObsLc, File nerFeatures, File termDoc, File termHash, File mentionLocs) {
+    this.tokObs = tokObs;
+    this.tokObsLc = tokObsLc;
     double falsePosProb = 0.001;
     int expectedInsertions = 1<<20;
     seenTerms = BloomFilter.create(Funnels.stringFunnel(UTF8), expectedInsertions, falsePosProb);
@@ -774,33 +785,101 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
-  public static List<String> features(String mentionText, String[] headwords, String nerType) {
+  private static List<String> prefixGrams(String mentionText,
+      TokenOberservationCounts tokObs, TokenOberservationCounts tokObsLc) {
+    boolean verbose = false;
+    String[] toks = mentionText
+        .replaceAll("-", " ")
+        .replaceAll("\\d", "0")
+        .replaceAll("[^A-Za-z0 ]", "")
+        .split("\\s+");
+    String[] toksLc = new String[toks.length];
+    for (int i = 0; i < toks.length; i++)
+      toksLc[i] = toks[i].toLowerCase();
+    
+    if (verbose) {
+      System.out.println(mentionText);
+      System.out.println(Arrays.toString(toks));
+    }
+    if (toks.length == 0) {
+      err_misc++;
+      return Collections.emptyList();
+    }
+
+    List<String> f = new ArrayList<>();
+    
+    // unigram prefixes
+    for (int i = 0; i < toks.length; i++) {
+      String p = tokObs.getPrefixOccuringAtLeast(toks[i], 100);
+      String pi = tokObsLc.getPrefixOccuringAtLeast(toksLc[i], 100);
+      f.add("p:" + p);
+      f.add("pi:" + pi);
+    }
+    
+    // bigram prefixes
+    String B = "BBBB";
+    String A = "AAAA";
+    int lim = 100;
+    boolean lc = true;
+    TokenOberservationCounts c = lc ? tokObsLc : tokObs;
+    String[] tk = lc ? toksLc : toks;
+    for (int i = -1; i < toks.length; i++) {
+      String w, ww;
+      if (i < 0) {
+        w = B;
+        ww = c.getPrefixOccuringAtLeast(tk[i+1], lim);
+      } else if (i == toks.length-1) {
+        w = c.getPrefixOccuringAtLeast(tk[i], lim);
+        ww = A;
+      } else {
+        w = c.getPrefixOccuringAtLeast(tk[i], lim);
+        ww = c.getPrefixOccuringAtLeast(tk[i+1], lim);
+      }
+      f.add("pb:" + w + "_" + ww);
+    }
+
+    if (verbose) {
+      System.out.println(f);
+      System.out.println();
+    }
+
+    return f;
+  }
+  
+  public static List<String> features(String mentionText, String[] headwords, String nerType,
+      TokenOberservationCounts tokObs, TokenOberservationCounts tokObsLc) {
     // ngrams
     List<String> features = new ArrayList<>();
-    int ngrams = 6;
-    features.addAll(ScanCAGForMentions.ngrams(mentionText, ngrams));
+    features.addAll(prefixGrams(mentionText, tokObs, tokObsLc));
     // headword
     for (int i = 0; i < headwords.length; i++) {
+      String h = headwords[i];
       String hi = headwords[i].toLowerCase();
-      features.add("h:" + headwords[i]);
+      String hp = tokObs.getPrefixOccuringAtLeast(headwords[i], 5);
+//      String hip = tokObsLc.getPrefixOccuringAtLeast(headwords[i].toLowerCase(), 5);
+      features.add("h:" + h);
       features.add("hi:" + hi);
-      while (hi.length() < 5)
-        hi = hi + "|";
-      features.add("hi3:" + hi.substring(0, 3));
-      features.add("hi5:" + hi.substring(0, 5));
+      features.add("hp:" + hp);
+//      features.add("hip:" + hip);
     }
     return features;
   }
   public static int featureWeight(String feature) {
     if (feature.startsWith("h:"))
-      return 12;
+      return 30;
     if (feature.startsWith("hi:"))
+      return 20;
+    if (feature.startsWith("hp:"))
+      return 16;
+    if (feature.startsWith("hip:"))
       return 8;
-    if (feature.startsWith("hi5:"))
-      return 3;
-    if (feature.startsWith("hi3:"))
+    if (feature.startsWith("p:"))
       return 2;
-    // ngrams
+    if (feature.startsWith("pi:"))
+      return 1;
+    if (feature.startsWith("pb:"))
+      return 5;
+    err_misc++;
     return 1;
   }
   
@@ -826,15 +905,25 @@ public class IndexCommunications implements AutoCloseable {
 
           n_ent++;
           
+          // EntityMention UUID, Communication UUID, Communication id, entityType, hasHead?, numTokens, numChars
           w_mentionLocs.write(em.getUuid().getUuidString());
           w_mentionLocs.write('\t');
           w_mentionLocs.write(c.getUuid().getUuidString());
           w_mentionLocs.write('\t');
           w_mentionLocs.write(c.getId());
+          w_mentionLocs.write('\t');
+          w_mentionLocs.write(String.valueOf(em.getEntityType()));
+          w_mentionLocs.write('\t');
+          w_mentionLocs.write(String.valueOf(em.getTokens().isSetAnchorTokenIndex()));
+          w_mentionLocs.write('\t');
+          w_mentionLocs.write(String.valueOf(em.getTokens().getTokenIndexListSize()));
+          w_mentionLocs.write('\t');
+          w_mentionLocs.write(String.valueOf(em.getText().length()));
           w_mentionLocs.newLine();
           
           String head = headword(em.getTokens(), tokMap);
-          List<String> feats = features(em.getText(), new String[] {head}, em.getEntityType());
+          List<String> feats = features(em.getText(), new String[] {head}, em.getEntityType(),
+              tokObs, tokObsLc);
           for (String f : feats) {
             int i = hash(f);
             w_nerFeatures.write(Integer.toUnsignedString(i));
@@ -941,10 +1030,26 @@ public class IndexCommunications implements AutoCloseable {
         n_doc, n_tok, n_ent, err_ner, n_termHashes, n_termWrites);
   }
   
+  public static void mainTokenObs(ExperimentProperties config) throws IOException {
+    List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
+    File output = config.getFile("outputTokenObs", new File(HOME, "tokenObs.jser.gz"));
+    File outputLower = config.getFile("outputTokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
+    TokenOberservationCounts t = new TokenOberservationCounts();
+    TokenOberservationCounts tLower = new TokenOberservationCounts();
+    TokenOberservationCounts.trainOnCommunications(inputCommTgzs, t, tLower);
+    FileUtil.serialize(t, output);
+    FileUtil.serialize(tLower, outputLower);
+  }
+  
   public static void extractBasicData(ExperimentProperties config) throws Exception {
 //    File commDir = config.getExistingDir("communicationsDirectory", new File(HOME, "../source-docs"));
     List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
     File outputDir = config.getOrMakeDir("outputDirectory", new File(HOME, "raw"));
+    File tokObsFile = config.getExistingFile("tokenObs", new File(HOME, "tokenObs.jser.gz"));
+    File tokObsLowerFile = config.getExistingFile("tokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
+    
+    TokenOberservationCounts t = (TokenOberservationCounts) FileUtil.deserialize(tokObsFile);
+    TokenOberservationCounts tl = (TokenOberservationCounts) FileUtil.deserialize(tokObsLowerFile);
     
     File nerFeatures = new File(outputDir, "nerFeatures.txt.gz");
     File termDoc = new File(outputDir, "termDoc.txt.gz");
@@ -952,7 +1057,7 @@ public class IndexCommunications implements AutoCloseable {
     File mentionLocs = new File(outputDir, "mentionLocs.txt.gz");
 
     TimeMarker tm = new TimeMarker();
-    try (IndexCommunications ic = new IndexCommunications(nerFeatures, termDoc, termHash, mentionLocs)) {
+    try (IndexCommunications ic = new IndexCommunications(t, tl, nerFeatures, termDoc, termHash, mentionLocs)) {
 //      for (File f : commDir.listFiles()) {
 //        if (!f.getName().toLowerCase().endsWith(".tar.gz"))
 //          continue;
@@ -973,8 +1078,12 @@ public class IndexCommunications implements AutoCloseable {
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
+    Log.info("starting, args: " + Arrays.toString(args));
     String c = config.getString("command");
     switch (c) {
+    case "tokenObs":
+      mainTokenObs(config);
+      break;
     case "extractBasicData":
       extractBasicData(config);
       break;
