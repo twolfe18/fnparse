@@ -14,9 +14,8 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
-import com.google.common.hash.BloomFilter;
-import com.google.common.hash.Funnels;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
@@ -741,7 +740,7 @@ public class IndexCommunications implements AutoCloseable {
   
 
   // Given a word, if it's not in this approx-set, then you definitely haven't seen it
-  private BloomFilter<String> seenTerms;
+  private WrittenOut seenTerms;
   
   // For determining the correct prefix length based on counts
   private TokenObservationCounts tokObs;
@@ -762,9 +761,7 @@ public class IndexCommunications implements AutoCloseable {
   public IndexCommunications(TokenObservationCounts tokObs, TokenObservationCounts tokObsLc, File nerFeatures, File termDoc, File termHash, File mentionLocs) {
     this.tokObs = tokObs;
     this.tokObsLc = tokObsLc;
-    double falsePosProb = 0.001;
-    int expectedInsertions = 1<<20;
-    seenTerms = BloomFilter.create(Funnels.stringFunnel(UTF8), expectedInsertions, falsePosProb);
+    seenTerms = new WrittenOut(1<<14, 1<<22);
     tokMap = new HashMap<>();
     try {
       w_nerFeatures = FileUtil.getWriter(nerFeatures);
@@ -1009,12 +1006,53 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
+  static class WrittenOut {
+    Counts<String> common, recent;
+    int commonLim, recentLim;
+    
+    public WrittenOut(int recentLim, int commonLim) {
+      this.recentLim = recentLim;
+      this.commonLim = commonLim;
+      this.recent = new Counts<>();
+      this.common = new Counts<>();
+    }
+    
+    public boolean add(String t) {
+      if (common.getCount(t) >= 1)
+        return false;
+      if (recent.getCount(t) >= 1)
+        return false;
+      
+      recent.increment(t);
+      
+      // COMPACT
+      if (recent.numNonZero() > recentLim) {
+        // Merge recent into common
+        for (Entry<String, Integer> tt : recent.entrySet())
+          common.update(tt.getKey(), tt.getValue());
+        recent.clear();
+        
+        // Trim common
+        if (common.numNonZero() > commonLim) {
+          Counts<String> c = new Counts<>(commonLim);
+          for (String x : common.getKeysSortedByCount(true)) {
+            int cc = Math.max(1, common.getCount(x) - 100);
+            c.update(x, cc);
+            if (c.numNonZero() == commonLim)
+              break;
+          }
+          common = c;
+        }
+      }
+      return true;
+    }
+  }
+  
   private int hash(String t) {
     n_termHashes++;
     int i = HASH.hashString(t, UTF8).asInt();
-    if (!seenTerms.mightContain(t)) {
+    if (seenTerms.add(t)) {
       n_termWrites++;
-      seenTerms.put(t);
       try {
         w_termHash.write(Integer.toUnsignedString(i));
         w_termHash.write('\t');
@@ -1034,22 +1072,14 @@ public class IndexCommunications implements AutoCloseable {
         if (section.isSetSentenceList()) {
           for (Sentence sentence : section.getSentenceList()) {
             for (Token tok : sentence.getTokenization().getTokenList().getTokenList()) {
-              t.add(tok.getText().toLowerCase());
+              String w = tok.getText()
+                  .replaceAll("\\d", "0");
+              t.add(w);
             }
           }
         }
       }
     }
-//    int ngrams = 5;
-//    if (c.isSetEntityMentionSetList()) {
-//      for (EntityMentionSet ems : c.getEntityMentionSetList()) {
-//        for (EntityMention em : ems.getMentionList()) {
-//          for (String ngram : ScanCAGForMentions.ngrams(em.getText(), ngrams)) {
-//            t.add("EntityMention-" + em.getEntityType() + "-" + ngram);
-//          }
-//        }
-//      }
-//    }
     return t;
   }
 
@@ -1090,14 +1120,11 @@ public class IndexCommunications implements AutoCloseable {
     
     File nerFeatures = new File(outputDir, "nerFeatures.txt.gz");
     File termDoc = new File(outputDir, "termDoc.txt.gz");
-    File termHash = new File(outputDir, "termHash.txt.gz");
+    File termHash = new File(outputDir, "termHash.approx.txt.gz");
     File mentionLocs = new File(outputDir, "mentionLocs.txt.gz");
 
     TimeMarker tm = new TimeMarker();
     try (IndexCommunications ic = new IndexCommunications(t, tl, nerFeatures, termDoc, termHash, mentionLocs)) {
-//      for (File f : commDir.listFiles()) {
-//        if (!f.getName().toLowerCase().endsWith(".tar.gz"))
-//          continue;
       for (File f : inputCommTgzs) {
         Log.info("reading " + f.getName());
         try (InputStream is = new FileInputStream(f);

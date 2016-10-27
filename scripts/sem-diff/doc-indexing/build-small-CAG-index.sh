@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# This script specifies some CAG input, but in general this is how the
+# ikbp.tac.IndexCommunications pipeline should work.
+
 set -eu
 
 OUTPUT_DIR=$1
@@ -25,6 +28,11 @@ java -ea -cp $JAR \
     outputDirectory "$OUTPUT_DIR/raw" \
     tokenObs "$OUTPUT_DIR/tokenObs.jser.gz" \
     tokenObsLower "$OUTPUT_DIR/tokenObs.lower.jser.gz"
+
+echo "compacting term-hash mapping... `date`"
+zcat "$OUTPUT_DIR/raw/termHash.approx.txt.gz" \
+  | sort -n -u \
+  | gzip -c >"$OUTPUT_DIR/raw/termHash.sortu.txt.gz"
 
 echo "building document vectors... `date`"
 mkdir -p "$OUTPUT_DIR/doc"
