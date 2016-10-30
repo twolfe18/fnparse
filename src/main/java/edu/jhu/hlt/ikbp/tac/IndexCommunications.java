@@ -1103,7 +1103,9 @@ public class IndexCommunications implements AutoCloseable {
     File outputLower = config.getFile("outputTokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
     TokenObservationCounts t = new TokenObservationCounts();
     TokenObservationCounts tLower = new TokenObservationCounts();
-    TokenObservationCounts.trainOnCommunications(inputCommTgzs, t, tLower);
+    TokenObservationCounts b = null;
+    TokenObservationCounts bLower = null;
+    TokenObservationCounts.trainOnCommunications(inputCommTgzs, t, tLower, b, bLower);
     FileUtil.serialize(t, output);
     FileUtil.serialize(tLower, outputLower);
   }
