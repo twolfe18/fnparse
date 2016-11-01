@@ -1119,7 +1119,9 @@ public class IndexCommunications implements AutoCloseable {
     File tokObsFile = config.getExistingFile("tokenObs", new File(HOME, "tokenObs.jser.gz"));
     File tokObsLowerFile = config.getExistingFile("tokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
     
+    Log.info("loading TokenObservationCounts from " + tokObsFile.getPath() + "\t" + Describe.memoryUsage());
     TokenObservationCounts t = (TokenObservationCounts) FileUtil.deserialize(tokObsFile);
+    Log.info("loading TokenObservationCounts from " + tokObsLowerFile.getPath() + "\t" + Describe.memoryUsage());
     TokenObservationCounts tl = (TokenObservationCounts) FileUtil.deserialize(tokObsLowerFile);
     
     File nerFeatures = new File(outputDir, "nerFeatures.txt.gz");
@@ -1137,7 +1139,7 @@ public class IndexCommunications implements AutoCloseable {
             Communication c = iter.next();
             ic.observe(c);
             if (tm.enoughTimePassed(10))
-              Log.info(ic + "\t" + c.getId());
+              Log.info(ic + "\t" + c.getId() + "\t" + Describe.memoryUsage());
           }
         }
       }
