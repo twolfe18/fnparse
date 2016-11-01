@@ -594,8 +594,9 @@ public class IndexCommunications implements AutoCloseable {
           }
           termDocCounts.add(term, 1);
           
-          if (tm.enoughTimePassed(5)) {
-            Log.info("nDoc=" + nDoc + " termDocCounts.size=" + termDocCounts.size());
+          if (tm.enoughTimePassed(10)) {
+            Log.info("nDoc=" + nDoc + " termDocCounts.size=" + termDocCounts.size()
+                + "\t" + Describe.memoryUsage());
           }
         }
       }
@@ -659,8 +660,9 @@ public class IndexCommunications implements AutoCloseable {
           curTerms.add(new Pair<>(key, count * idf(term)));
           
           n++;
-          if (tm.enoughTimePassed(10))
-            Log.info("processed " + n + " documents");
+          if (tm.enoughTimePassed(10)) {
+            Log.info("processed " + n + " documents\t" + Describe.memoryUsage());
+          }
         }
         if (curId != null)
           packHelper(numTerms, w, curTerms, curId);
