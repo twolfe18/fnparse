@@ -11,6 +11,8 @@ JAR=$3
 
 CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
 
+SCRIPTS=/home/hltcoe/twolfe/fnparse-build/fnparse/scripts
+
 JAR_STABLE="$OUTPUT_DIR/fnparse.jar"
 echo "copying jar to safe place:"
 echo "    $JAR"
@@ -54,12 +56,12 @@ echo "building ner feature indices... `date`"
 mkdir -p "$OUTPUT_DIR/ner_feats"
 time zcat "$OUTPUT_DIR/raw/nerFeatures.txt.gz" \
   | sort -n -k 1,2 -T /state/partition1 \
-  | ./scripts/sem-diff/doc-indexing/convert-ner-feature-file-format.py \
+  | $SCRIPTS/sem-diff/doc-indexing/convert-ner-feature-file-format.py \
     "$OUTPUT_DIR/ner_feats"
 
 echo "compacting term-hash mapping... `date`"
 zcat "$OUTPUT_DIR/raw/termHash.approx.txt.gz" \
-  | sort -n -u \
+  | sort -n -u -T /state/partition1 \
   | gzip -c >"$OUTPUT_DIR/raw/termHash.sortu.txt.gz"
 
 echo "done. `date`"

@@ -9,7 +9,7 @@ JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 
 FNPARSE_DATA=/export/projects/twolfe/fnparse-data
 
-MODEL_OUT=/export/projects/twolfe/fnparse-models/concretely-annotated-gigaword/2016-10-11
+MODEL_OUT=/export/projects/twolfe/fnparse-models/concretely-annotated-gigaword/2016-11-01
 mkdir -p $MODEL_OUT
 
 rm -rf $MODEL_OUT/fn
