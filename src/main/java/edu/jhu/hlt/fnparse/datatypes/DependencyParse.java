@@ -81,6 +81,14 @@ public class DependencyParse implements Serializable {
       MultiAlphabet forConvertingEdgeLabels,
       int tokenIndexFirst,
       int tokenIndexLast) {
+    this(deps, forConvertingEdgeLabels, tokenIndexFirst, tokenIndexLast, false);
+  }
+  public DependencyParse(
+      edu.jhu.hlt.tutils.LabeledDirectedGraph deps,
+      MultiAlphabet forConvertingEdgeLabels,
+      int tokenIndexFirst,
+      int tokenIndexLast,
+      boolean recoverFromMultipleHeads) {
     int n = (tokenIndexLast - tokenIndexFirst) + 1;
     if (n <= 0)
       throw new IllegalArgumentException();
@@ -93,7 +101,9 @@ public class DependencyParse implements Serializable {
         labels[j] = "ROOT";
         heads[j] = -1;
       } else {
-        assert node.numParents() == 1 : "numParents=" + node.numParents();
+        assert node.numParents() > 0 : "numParents=" + node.numParents();
+        if (!recoverFromMultipleHeads && node.numParents() > 1)
+          throw new RuntimeException("multiple heads for " + node);
         int h = node.getParent(0);
         if (h > tokenIndexLast) {
           // ConcreteToDocument uses numTokensInDocument as root for all dep trees.

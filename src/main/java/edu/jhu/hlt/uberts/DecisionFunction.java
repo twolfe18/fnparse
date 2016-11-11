@@ -198,6 +198,7 @@ public interface DecisionFunction {
     }
 
     public List<Object> getBucket(HypEdge e) {
+      System.out.println("[getBucket] " + e);
       List<Object> key = new ArrayList<>();
       key.add(e.getRelation());
       DecisionFunction df = rel2df.get(e.getRelation().getName());

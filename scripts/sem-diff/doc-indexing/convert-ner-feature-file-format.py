@@ -17,10 +17,11 @@ if not os.path.isdir(out):
 class Row:
   def __init__(self, line):
     ar = line.rstrip().split('\t')
-    assert len(ar) == 3
+    assert len(ar) == 4
     self.term = int(ar[0])
     self.ner_type = ar[1]
     self.comm_uuid = ar[2]
+    self.tok_uuid = ar[3]
 
 open_files = {}
 
@@ -33,10 +34,14 @@ with open('/dev/stdin', 'r') as f:
       open_files[f] = open(f, 'w')
     fd = open_files[f]
 
+    u = set()
     #fd.write("%d\t%s" % (term, ner_type))
     fd.write("%d" % term)
     for r in docs:
-      fd.write("\t%s" % r.comm_uuid)
+      #fd.write("\t%s" % r.comm_uuid)
+      if r.tok_uuid not in u:
+        u.add(r.tok_uuid)
+        fd.write("\t%s" % r.tok_uuid)
     fd.write('\n')
 
 for f, fd in open_files.items():

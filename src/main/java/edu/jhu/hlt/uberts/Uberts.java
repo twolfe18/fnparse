@@ -174,8 +174,12 @@ public class Uberts {
   public void addLabel(HypEdge e) {
     if (DEBUG > 1)
       System.out.println("Uberts addLabel: " + e);
-    if (goldEdges == null)
-      goldEdges = new Labels(this, thresh::getBucket);
+    if (goldEdges == null) {
+      if (thresh == null)
+        goldEdges = new Labels(this, null);
+      else
+        goldEdges = new Labels(this, thresh::getBucket);
+    }
     goldEdges.add(e);;
   }
   public boolean getLabel(HypEdge e) {

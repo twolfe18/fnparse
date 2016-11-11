@@ -8,6 +8,7 @@ import java.util.List;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.TokenRefSequence;
+import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
@@ -50,6 +51,8 @@ public class Sentence implements HasId, Serializable {
   private String[] lemmas;
 
   private String[] shapes;
+  
+  private String[] ner;
 
   /**
    * @deprecated real collapsed dependences are not trees (may have more than
@@ -155,6 +158,42 @@ public class Sentence implements HasId, Serializable {
       s.stanfordParse.buildPointers();
     }
 
+    return s;
+  }
+  
+  public static Sentence convertFromConcrete(String dataset, String id, Tokenization tokz) {
+    int n = tokz.getTokenList().getTokenListSize();
+    String[] tokens = new String[n];
+    String[] pos = new String[n];
+    String[] lemma = new String[n];
+    String[] ner = new String[n];
+    
+    TokenTagging ttPos = null;
+    TokenTagging ttLemma = null;
+    TokenTagging ttNer = null;
+    for (TokenTagging tt : tokz.getTokenTaggingList()) {
+      String ttt = tt.getTaggingType();
+      if ("lemma".equalsIgnoreCase(ttt)) {
+        assert ttLemma == null;
+        ttLemma = tt;
+      } else if ("pos".equalsIgnoreCase(ttt)) {
+        assert ttPos == null;
+        ttPos = tt;
+      } else if ("ner".equalsIgnoreCase(ttt)) {
+        assert ttNer == null;
+        ttNer = tt;
+      }
+    }
+    
+    for (int i = 0; i < n; i++) {
+      tokens[i] = tokz.getTokenList().getTokenList().get(i).getText();
+      pos[i] = ttPos.getTaggedTokenList().get(i).getTag();
+      lemma[i] = ttLemma.getTaggedTokenList().get(i).getTag();
+      ner[i] = ttNer.getTaggedTokenList().get(i).getTag();
+    }
+    
+    Sentence s = new Sentence(dataset, id, tokens, pos, lemma);
+    s.ner = ner;
     return s;
   }
 
@@ -325,6 +364,9 @@ public class Sentence implements HasId, Serializable {
   public String getPos(int i) { return pos[i]; }
   public String[] getLemmas() { return lemmas; }
   public String getLemma(int i){return lemmas[i];}
+
+  public String[] getNer() { return ner; }
+  public String getNer(int i) { return ner[i]; }
 
   public String getCoarsePos(int i) {
     return pos[i].substring(0, 1).toUpperCase();

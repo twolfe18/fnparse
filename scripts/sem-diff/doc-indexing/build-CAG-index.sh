@@ -9,6 +9,9 @@ OUTPUT_DIR=$1
 COMM_GLOB=$2    # e.g. "$CAG/**/nyt_eng_2007*.tar.gz"
 JAR=$3
 
+# TODO Consider doing this on NFS
+TEMP_DIR=/state/partition1
+
 CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
 
 JAR_STABLE="$OUTPUT_DIR/fnparse.jar"
@@ -53,14 +56,37 @@ java -ea -cp $JAR_STABLE \
 echo "building ner feature indices... `date`"
 mkdir -p "$OUTPUT_DIR/ner_feats"
 time zcat "$OUTPUT_DIR/raw/nerFeatures.txt.gz" \
-  | sort -n -k 1,2 -T /state/partition1 \
+  | sort -n -k 1,2 -T "$TEMP_DIR" \
   | ./scripts/sem-diff/doc-indexing/convert-ner-feature-file-format.py \
     "$OUTPUT_DIR/ner_feats"
 
 echo "compacting term-hash mapping... `date`"
 zcat "$OUTPUT_DIR/raw/termHash.approx.txt.gz" \
-  | sort -n -u \
+  | sort -n -u -T "$TEMP_DIR" \
   | gzip -c >"$OUTPUT_DIR/raw/termHash.sortu.txt.gz"
+
+echo "extracting situations... `date`"
+java -ea -cp $JAR_STABLE \
+  edu.jhu.hlt.ikbp.tac.IndexCommunications \
+    command indexSituations \
+    communicationArchives "$COMM_GLOB" \
+    outputDirectory "$OUTPUT_DIR/sit_feats"
+
+echo "building deprel index... `date`"
+./scripts/sem-diff/doc-indexing/prune-deprel-index.sh \
+  $OUTPUT_DIR/sit_feats/deprels.txt.gz \
+  $OUTPUT_DIR/sit_feats/index_deprel/deprels.txt \
+  $OUTPUT_DIR/sit_feats/index_deprel/hashedArgs.txt.gz \
+  $OUTPUT_DIR/sit_feats/index_deprel \
+  $JAR_STABLE
+
+echo "build unified Tokenization UUID => Communication UUID"
+echo "across [entity, deprel, situation] values... `date`"
+T2C=$OUTPUT_DIR/tokUuid2commUuid.txt
+echo "writing to $T2C"
+touch $T2C
+zcat $OUTPUT_DIR/raw/emTokCommUuidId.txt.gz | awk '{printf("%s\t%s\n", $2, $3)}' | uniq >>$T2C
+cat $OUTPUT_DIR/sit_feats/index_deprel/deprels.txt | awk '{printf("%s\t%s\n", $8, $9)}' | uniq >>$T2C
 
 echo "done. `date`"
 

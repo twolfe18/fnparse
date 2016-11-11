@@ -38,36 +38,53 @@ public class AddNerTypeToEntityMentions {
         continue;
       for (EntityMention em : ems.getMentionList()) {
         TokenRefSequence trs = em.getTokens();
-        Tokenization t = tokz.get(trs.getTokenizationId().getUuidString());
-        List<TaggedToken> tags = null;
-        for (TokenTagging tt : t.getTokenTaggingList()) {
-          if (!"NER".equals(tt.getTaggingType()))
-            continue;
-          if (!nerTool.equals(tt.getMetadata().getTool()))
-            continue;
-          assert tags == null;
-          tags = tt.getTaggedTokenList();
-        }
-        String tag;
-        if (trs.isSetAnchorTokenIndex() && trs.getAnchorTokenIndex() >= 0
-            && !((tag = t(trs.getAnchorTokenIndex(), tags))).equals("O")) {
-          // Head tag
-//          System.out.println("head: " + tag);
-          em.setEntityType(tag);
-        } else {
-          // All tags
-          Deque<String> stag = new ArrayDeque<>();
-          for (int i : trs.getTokenIndexList()) {
-            tag = t(i, tags);
-            if (stag.isEmpty())
-              stag.addLast(tag);
-            else if (!tag.equals(stag.peekLast()))
-              stag.addLast(tag);
-          }
-          em.setEntityType(StringUtils.join(",", stag));
-//          System.out.println("all: " + em.getEntityType());
-        }
+        String tag = getNerType(trs, tokz, nerTool);
+        em.setEntityType(tag);
       }
+    }
+  }
+  
+  /**
+   * Computes the NER type for an arbitrary span. If no NER span exactly matches,
+   * this will return a string containing all of the NER tags in the sequence,
+   * e.g. "Obama, president of the United States" => "PER,O,LOC"
+   *
+   * @param trs is the span which we are computing an NER type for.
+   * @param tokz is a map containing Tokenization UUID string keys.
+   * @param nerTool is the preferred NER tool to use, must match.
+   */
+  public static String getNerType(TokenRefSequence trs, Map<String, Tokenization> tokz, String nerTool) {
+    if (trs == null)
+      throw new IllegalArgumentException("must provide TokenRefSequence");
+    if (tokz == null || nerTool == null)
+      throw new IllegalArgumentException();
+    Tokenization t = tokz.get(trs.getTokenizationId().getUuidString());
+    List<TaggedToken> tags = null;
+    for (TokenTagging tt : t.getTokenTaggingList()) {
+      if (!"NER".equals(tt.getTaggingType()))
+        continue;
+      if (!nerTool.equals(tt.getMetadata().getTool()))
+        continue;
+      assert tags == null;
+      tags = tt.getTaggedTokenList();
+    }
+    assert tags != null;
+    String tag;
+    if (trs.isSetAnchorTokenIndex() && trs.getAnchorTokenIndex() >= 0
+        && !((tag = t(trs.getAnchorTokenIndex(), tags))).equals("O")) {
+      // Head tag
+      return tag;
+    } else {
+      // All tags
+      Deque<String> stag = new ArrayDeque<>();
+      for (int i : trs.getTokenIndexList()) {
+        tag = t(i, tags);
+        if (stag.isEmpty())
+          stag.addLast(tag);
+        else if (!tag.equals(stag.peekLast()))
+          stag.addLast(tag);
+      }
+      return StringUtils.join(",", stag);
     }
   }
   
