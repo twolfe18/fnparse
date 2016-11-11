@@ -18,6 +18,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.thrift.protocol.TCompactProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.TTransport;
+
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
@@ -33,6 +38,7 @@ import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.access.FetchCommunicationService;
 import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
 import edu.jhu.hlt.concrete.serialization.iterators.TarGzArchiveEntryCommunicationIterator;
@@ -80,36 +86,54 @@ public class IndexCommunications implements AutoCloseable {
   public static int err_ner = 0;
   public static int err_misc = 0;
   private static long n_doc = 0, n_tok = 0, n_ent = 0, n_termWrites = 0, n_termHashes = 0;
+
+  
+  
   
   /**
    * Given a bunch of query results, fetch their {@link Communication}s from scion/accumulo.
    */
   public static class CommunicationRetrieval {
-    private FetchCommunicationServiceImpl impl;
+//    private FetchCommunicationServiceImpl impl;
+    private FetchCommunicationService.Client client;
     
-    public CommunicationRetrieval() {
-      System.setProperty("scion.accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181");
-      System.setProperty("scion.accumulo.instanceName", "minigrid");
-      System.setProperty("scion.accumulo.user", "reader");
-      System.setProperty("scion.accumulo.password", "an accumulo reader");
+    public CommunicationRetrieval(int localPort) {
+//      System.setProperty("scion.accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181");
+//      System.setProperty("scion.accumulo.instanceName", "minigrid");
+//      System.setProperty("scion.accumulo.user", "reader");
+//      System.setProperty("scion.accumulo.password", "an accumulo reader");
+//      try {
+//        ConnectorFactory cf = new ConnectorFactory();
+//        ScionConnector sc = cf.getConnector();
+//        impl = new FetchCommunicationServiceImpl(sc);
+//      } catch (Exception e) {
+//        throw new RuntimeException(e);
+//      }
+      Log.info("talking to server at localhost:" + localPort);
       try {
-        ConnectorFactory cf = new ConnectorFactory();
-        ScionConnector sc = cf.getConnector();
-        impl = new FetchCommunicationServiceImpl(sc);
+        TTransport transport = new TSocket("localhost", localPort);
+        transport.open();
+        TProtocol protocol = new  TCompactProtocol(transport);
+        client = new FetchCommunicationService.Client(protocol);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
     }
     
-    public void test() {
+    public void test(String commId) {
       FetchRequest fr = new FetchRequest();
-      fr.addToCommunicationIds("ef93e366-79cc-b8e5-c816-8627a2e25887");
-      FetchResult res = null;
+      fr.addToCommunicationIds(commId);
+      Log.info(fr);
       try {
-        res = impl.fetch(fr);
-        Communication c = res.getCommunications().get(0);
-        System.out.println(c.getId());
-        System.out.println(c.getText());
+//        FetchResult res = impl.fetch(fr);
+        FetchResult res = client.fetch(fr);
+        if (res.getCommunicationsSize() == 0) {
+          Log.info("no results!");
+        } else {
+          Communication c = res.getCommunications().get(0);
+          Log.info("got back: " + c.getId());
+          System.out.println(c.getText());
+        }
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -125,7 +149,8 @@ public class IndexCommunications implements AutoCloseable {
       
       FetchResult res = null;
       try {
-        res = impl.fetch(fr);
+//        res = impl.fetch(fr);
+        res = client.fetch(fr);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -2060,8 +2085,10 @@ public class IndexCommunications implements AutoCloseable {
       SituationSearch.main(config);
       break;
     case "testAccumulo":
-      CommunicationRetrieval cr = new CommunicationRetrieval();
-      cr.test();
+      int localPort = config.getInt("port", 8585);
+      CommunicationRetrieval cr = new CommunicationRetrieval(localPort);
+      cr.test("NYT_ENG_20090901.0206");
+      cr.test("ef93e366-79cc-b8e5-c816-8627a2e25887");
       break;
     default:
       Log.info("unknown command: " + c);
