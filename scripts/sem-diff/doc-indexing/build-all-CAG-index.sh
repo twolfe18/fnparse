@@ -10,13 +10,13 @@ JAR="`pwd`/target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar"
 
 #make jar
 
-#mkdir -p "$OUTPUT_DIR/nyt_eng_2007"
-#qsub -N "cag-index-sml" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
-#  -j y -o "$OUTPUT_DIR/nyt_eng_2007" \
-#  ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
-#    "$OUTPUT_DIR/nyt_eng_2007" \
-#    "$CAG/**/nyt_eng_2007*.tar.gz" \
-#    "$JAR"
+mkdir -p "$OUTPUT_DIR/nyt_eng_2007"
+qsub -N "cag-index-sml" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
+  -j y -o "$OUTPUT_DIR/nyt_eng_2007" \
+  ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
+    "$OUTPUT_DIR/nyt_eng_2007" \
+    "$CAG/**/nyt_eng_2007*.tar.gz" \
+    "$JAR"
 
 mkdir -p "$OUTPUT_DIR/apw_eng_2XXX"
 qsub -N "cag-index-med" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \

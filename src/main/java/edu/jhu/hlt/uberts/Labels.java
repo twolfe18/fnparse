@@ -68,8 +68,10 @@ public class Labels {
     edgesByRelation = new HashMap<>();
     edgesNilByRelation = new HashMap<>();
 
-    this.edgesByBucket = new HashMap<>();
-    this.bucketing = bucketing;
+    if (bucketing != null) {
+      this.edgesByBucket = new HashMap<>();
+      this.bucketing = bucketing;
+    }
   }
 
   public void add(HypEdge e) {
@@ -97,13 +99,17 @@ public class Labels {
     }
     s.add(e);
 
-    List<Object> k = bucketing.apply(e.getEdge());
-    Set<HashableHypEdge> ss = edgesByBucket.get(k);
-    if (ss == null) {
-      ss = new HashSet<>();
-      edgesByBucket.put(k, ss);
+    if (bucketing != null) {
+      HypEdge ee = e.getEdge();
+      assert ee != null;
+      List<Object> k = bucketing.apply(ee);
+      Set<HashableHypEdge> ss = edgesByBucket.get(k);
+      if (ss == null) {
+        ss = new HashSet<>();
+        edgesByBucket.put(k, ss);
+      }
+      ss.add(e);
     }
-    ss.add(e);
   }
 
   public boolean getLabel(HypEdge e) {

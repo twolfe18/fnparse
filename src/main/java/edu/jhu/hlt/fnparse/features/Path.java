@@ -15,7 +15,8 @@ public class Path {
     WORD,
     LEMMA,
     POS,
-    NONE    // puts in a "*" for every head/phrase
+    NONE,   // puts in a "*" for every head/phrase
+    WORD_NER_BACKOFF,
   }
 
   public static enum EdgeType {
@@ -129,6 +130,12 @@ public class Path {
       return sent.getPos(i);
     case NONE:
       return "*";
+    case WORD_NER_BACKOFF:
+      String n = sent.getNer(i);
+      if ("O".equalsIgnoreCase(n))
+        return sent.getWord(i).toLowerCase();
+      else
+        return n;
     default:
       throw new RuntimeException("unknown nodeType: " + nodeType);
     }

@@ -36,6 +36,12 @@ public class Path2 {
         return sent.getPos(tokenIndex);
       case NONE:
         return "*";
+      case WORD_NER_BACKOFF:
+        String n = sent.getNer(tokenIndex);
+        if ("O".equalsIgnoreCase(n))
+          return sent.getWord(tokenIndex).toLowerCase();
+        else
+          return n;
       default:
         throw new RuntimeException("unknown nodeType: " + nt);
       }
@@ -123,15 +129,31 @@ public class Path2 {
   }
 
   public String getPath(NodeType nt, EdgeType et) {
+    return getPath(nt, et, true);
+  }
+  public String getPath(NodeType nt, EdgeType et, boolean includeEndpoints) {
     if (!connected())
       return "noPath";
     StringBuilder sb = new StringBuilder();
-    for (Entry e : entries) {
+    int n = entries.size();
+    for (int i = 0; i < n; i++) {
+      if (!includeEndpoints && (i == 0 || i == (n-1)))
+        continue;
+      Entry e = entries.get(i);
       if (sb.length() > 0)
         sb.append('/');
       sb.append(e.show(nt, et));
     }
     return sb.toString();
+  }
+  
+  public int getNumWordsOnPath() {
+    assert connected();
+    int c = 0;
+    for (Entry e : entries)
+      if (e instanceof Node)
+        c++;
+    return c;
   }
 
   public boolean connected() {

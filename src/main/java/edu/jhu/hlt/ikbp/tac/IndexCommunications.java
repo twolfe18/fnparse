@@ -9,12 +9,14 @@ import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
+import java.util.Set;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
@@ -23,13 +25,20 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.EntityMentionSet;
+import edu.jhu.hlt.concrete.MentionArgument;
 import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.Sentence;
+import edu.jhu.hlt.concrete.SituationMention;
+import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.serialization.iterators.TarGzArchiveEntryCommunicationIterator;
+import edu.jhu.hlt.fnparse.features.Path.EdgeType;
+import edu.jhu.hlt.fnparse.features.Path.NodeType;
+import edu.jhu.hlt.fnparse.features.Path2;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.EfficientUuidList;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -40,11 +49,12 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.OrderStatistics;
+import edu.jhu.hlt.tutils.StringInt;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
+import edu.jhu.hlt.tutils.Weighted;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
 import edu.jhu.prim.map.IntDoubleHashMap;
-import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.util.Lambda.FnIntFloatToFloat;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
@@ -62,8 +72,830 @@ public class IndexCommunications implements AutoCloseable {
   public static final HashFunction HASH = Hashing.murmur3_32();
   public static final MultiTimer TIMER = new MultiTimer();
 
+  public static int err_head = 0;
   public static int err_ner = 0;
   public static int err_misc = 0;
+  private static long n_doc = 0, n_tok = 0, n_ent = 0, n_termWrites = 0, n_termHashes = 0;
+  
+  /**
+   * Stores everything needed to score a mention to be shown to a user.
+   * Does not include all of the Communication info, which must be queried separately.
+   *
+   * Implicitly has an external Tokenization UUID primary key.
+   * Store a Map<String, SentFeats> for all sentences in CAG which:
+   * 1) contain two entities
+   * 2) contains either a deprel or situation
+   *
+   * If we assume there are 20 of these per document, 10M docs in CAG,
+   * 16 + 3 + 4*3 = 32 bytes per instance
+   * 200M * 32 = 6G?
+   * The 32 is not accurate since the arrays require pointers.
+   *
+   * If I solve the pointer issue and we count the 16 bytes for the Tokenization UUID key,
+   * then 16+16+3+4*3 = 47 bytes, round up to 64 bytes
+   * 200M * 64 bytes < 2^28 * 2^6 = 2^34 = 16 GB
+   * 
+   * If I include the pointer to TermDoc and ignore the cost of the actual vectors
+   * 8+47 = 55, which is still under the 64 byte budget.
+   */
+  static class SentFeats {
+    // Use this to track down the Communication to show to the user
+    long comm_uuid_lo, comm_uuid_hi;
+    
+    // These are the features which appear in this sentence/Tokenization
+    char n_deprel;
+    char n_situation;
+    char n_entity;
+    int[] features;     // contains hashed deprel, situation, and entity features
+    
+    // Pointer to TermDoc so that you can do tf-idf cosine sim with PKB documents
+    TermVec tfidf;
+    
+    // TODO Have pointers to other Tokenizations in the same Communication?
+    
+    public SentFeats() {
+      features = new int[0];
+    }
+    
+    @Override
+    public String toString() {
+      java.util.UUID u = new java.util.UUID(comm_uuid_hi, comm_uuid_lo);
+      return "(Sentence comm=" + u
+          + " n_deprel=" + Integer.valueOf(n_deprel)
+          + " n_situation=" + Integer.valueOf(n_situation)
+          + " n_ent=" + Integer.valueOf(n_entity)
+          + " n_words=" + (tfidf == null ? "NA" : tfidf.totalCount)
+          + ")";
+    }
+    
+    public String getCommunicationUuidString() {
+      java.util.UUID u = new java.util.UUID(comm_uuid_hi, comm_uuid_lo);
+      return u.toString();
+    }
+    
+    public void setCommunicationUuid(String commUuid) {
+      java.util.UUID u = java.util.UUID.fromString(commUuid);
+      long old_hi = comm_uuid_hi;
+      long old_lo = comm_uuid_lo;
+      comm_uuid_hi = u.getMostSignificantBits();
+      comm_uuid_lo = u.getLeastSignificantBits();
+      assert old_hi == 0 || old_hi == comm_uuid_hi;
+      assert old_lo == 0 || old_lo == comm_uuid_lo;
+    }
+    
+    public void addDeprel(int deprelPath, int deprelArg) {
+      int[] nf = new int[features.length + 2];
+      nf[0] = deprelPath;
+      nf[1] = deprelArg;
+      System.arraycopy(features, 0, nf, 2, features.length);
+      features = nf;
+      n_deprel++;
+    }
+    
+    public void addEntity(int entityFeat) {
+      int[] nf = new int[features.length + 1];
+      System.arraycopy(features, 0, nf, 0, features.length);
+      nf[nf.length-1] = entityFeat;
+      features = nf;
+      n_entity++;
+    }
+    
+    public int[] getDeprels() {
+      int[] d = new int[n_deprel];
+      System.arraycopy(features, 0, d, 0, n_deprel);
+      return d;
+    }
+    
+    public int[] getEntities() {
+      int[] d = new int[n_entity];
+      System.arraycopy(features, 2*n_deprel + n_situation, d, 0, n_entity);
+      return d;
+    }
+  }
+  
+  public static class QResult {
+    public final String tokUuid;
+    public final SentFeats feats;
+    public final double score;
+
+    public QResult(String tokUuid, SentFeats feats, double score) {
+      this.tokUuid = tokUuid;
+      this.feats = feats;
+      this.score = score;
+    }
+    
+    @Override
+    public String toString() {
+      return String.format("(QResult score=%.3f tok=%s feats=%s)", score, tokUuid, feats);
+    }
+    
+    public static final Comparator<QResult> BY_SCORE_DESC = new Comparator<QResult>() {
+      @Override
+      public int compare(QResult o1, QResult o2) {
+        if (o1.score > o2.score)
+          return -1;
+        if (o1.score < o2.score)
+          return +1;
+        return 0;
+      }
+    };
+  }
+  
+  /**
+   * Retrieve situations (FN/PB frames as well as universal schema dependency relations).
+   */
+  public static class SituationSearch {
+    
+    /**
+     * This is user/session-specific data, comes and goes, not index data.
+     */
+    static class State {
+      List<TermVec> pkbDocs = new ArrayList<>();
+      Set<String> pkbTokUuid = new HashSet<>();
+
+      List<StringInt> pkbRel = new ArrayList<>();     // e.g. "appos</PERSON/appos</PERSON/appos>/PERSON/appos>"
+      List<StringInt> pkbEnt = new ArrayList<>();     // e.g. "Barack_Obama"
+      List<StringInt> pkbFrame = new ArrayList<>();   // e.g. "Commerce_buy"
+
+      List<StringInt> seedRel = new ArrayList<>();    // e.g. "appos</PERSON/appos</PERSON/appos>/PERSON/appos>"
+      List<StringInt> seedEnt = new ArrayList<>();    // e.g. "Barack_Obama"
+      List<StringInt> seedFrame = new ArrayList<>();  // e.g. "Commerce_buy"
+      
+      // TODO Have PKB/seed slots, which is a relation + argument position + entity
+      // TODO Include list of queries and responses?
+    }
+
+    // PKB, seeds, etc.
+    private transient State state;
+    
+    // Contains ~200M entries? ~20GB?
+    private Map<String, SentFeats> tok2feats;  // keys are Tokenization UUID
+    
+    // These let you look up Tokenizations given some features
+    // which may appear in a seed or a query.
+    private StringIntUuidIndex deprel;      // dependency path string, hash("arg0/entityWord"), Tokenization UUID+
+    private StringIntUuidIndex situation;   // SituationMention kind, hash("role/entityWord"), Tokenization UUID+
+    private StringIntUuidIndex entity;      // NER type, hash(entity word), Tokenization UUID+
+    
+    private Counts<String> ec;
+    private MultiTimer tm;
+
+    /**
+     * @param tokUuid2commUuid has lines like: <tokenizationUuid> <tab> <communicationUuid>
+     */
+    public SituationSearch(File tokUuid2commUuid, TfIdf docVecs) throws IOException {
+      
+      ec = new Counts<>();
+      tm = new MultiTimer();
+      
+      // TODO Populate [deprel, situation, entity] => Tokenization UUID maps
+      tm.start("load/PERSON");
+      entity = new StringIntUuidIndex();
+      entity.putIntLines("PERSON", new File(HOME, "ner_feats/nerFeats.PERSON.txt"));
+      tm.stop("load/PERSON");
+      
+      // NOTE: Currently this is very fine grain, e.g.
+      // key = ("appos>/chairman/prep>/of/pobj>", hash("ARG1/ORGANIZATION/NBC"))
+      // The datastructure lets me iterate over all int values, so I could search by deprel.
+      tm.start("load/deprel");
+      deprel = new StringIntUuidIndex();
+      deprel.addStringIntLines(new File(HOME, "sit_feats/index_deprel/deprels.txt"));
+      tm.stop("load/deprel");
+      
+      // Populate SentFeats
+      tm.start("load/feats/deprel");
+      tok2feats = new HashMap<>();
+      for (StrIntUuidEntry x : deprel) {
+        SentFeats f = tok2feats.get(x.uuid);
+        if (f == null) {
+          f = new SentFeats();
+          tok2feats.put(x.uuid, f);
+          ec.increment("tokenization");
+        }
+        int hs = ReversableHashWriter.onewayHash(x.string);
+        f.addDeprel(hs, x.integer);
+        ec.increment("feat/deprel");
+      }
+      tm.stop("load/feats/deprel");
+      tm.start("load/feats/entity");
+      for (StrIntUuidEntry x : entity) {
+        SentFeats f = tok2feats.get(x.uuid);
+        if (f == null) {
+          f = new SentFeats();
+          tok2feats.put(x.uuid, f);
+          ec.increment("tokenization");
+        }
+        f.addEntity(x.integer);
+        ec.increment("feat/entity");
+      }
+      tm.stop("load/feats/entity");
+      // TODO situations
+      
+      
+      // Read in the Communication UUID for every Tokenization UUID in the input
+      Log.info("we know about " + tok2feats.size() + " Tokenizations,"
+          + " looking for the docVecs for them in " + tokUuid2commUuid.getPath());
+      tm.start("load/docVec/link");
+      try (BufferedReader r = FileUtil.getReader(tokUuid2commUuid)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          String[] ar = line.split("\t");
+          if (ar.length == 0) {
+            Log.info("why is there a line with a single tab in: " + tokUuid2commUuid.getPath());
+            continue;
+          }
+          assert ar.length == 2;
+          String tokUuid = ar[0];
+          SentFeats f = tok2feats.get(tokUuid);
+          if (f != null) {
+            f.setCommunicationUuid(ar[1]);
+            f.tfidf = docVecs.get(ar[1]);
+            assert f.tfidf != null;
+            ec.increment("docVec");
+          } else {
+            ec.increment("skip/docVec");
+          }
+        }
+      }
+      tm.stop("load/docVec/link");
+      
+      state = new State();
+      Log.info("done setup, " + ec);
+    }
+    
+    public void clearState() {
+      state = new State();
+    }
+    
+    public void seed(String s) {
+      // TODO detect variables like "X" and "Y"
+      // TODO Parse s and/or run semafor/etc
+      // TODO extract deprel, situation, entity
+      // TODO Add to state
+//      throw new RuntimeException("implement me");
+      
+      Log.info("WARNING: assuming this is a deprel: " + s);
+      state.seedRel.add(h(s));
+    }
+    
+    public void addToPkb(QResult response) {
+      Log.info("response: " + response);
+      
+      SentFeats f = response.feats;
+      
+      assert f.tfidf != null;
+      state.pkbDocs.add(f.tfidf);
+
+      for (int e : f.getEntities())
+        state.pkbEnt.add(new StringInt("NA", e));
+      
+      // TODO entities
+      
+      for (int d : f.getDeprels())
+        state.pkbRel.add(new StringInt("NA", d));
+      
+      state.pkbTokUuid.add(response.tokUuid);
+    }
+    
+    public List<QResult> query(String entityName, String entityType, int limit) {
+      tm.start("query");
+      Log.info("entityName=" + entityName + " entityType=" + entityType);
+
+      // Lookup mentions for the query entity
+      int entityNameHash = ReversableHashWriter.onewayHash("h:" + entityName);
+      List<String> toks = entity.get(entityType, entityNameHash);
+      Log.info("entity results initial: " + toks);
+      
+      // Re-score mentions based on seeds/PKB
+      List<QResult> scored = new ArrayList<>();
+      for (String t : toks) {
+        if (state.pkbTokUuid.contains(t)) {
+          Log.info("skipping tok=" + t + " because it is already in the PKB");
+          continue;
+        }
+        
+        QResult r = score(t);
+        scored.add(r);
+      }
+      Collections.sort(scored, QResult.BY_SCORE_DESC);
+      
+      if (limit > 0 && scored.size() > limit)
+        scored = scored.subList(0, limit);
+
+      tm.stop("query");
+      return scored;
+    }
+    
+    /**
+     * Score a retrieved sentence/tokenization against seed and PKB items.
+     */
+    private QResult score(String tokUuid) {
+      tm.start("score");
+      
+      /*
+       * entMentions WILL be Tokenization UUIDs.
+       * Go through each of them and boost their score if they:
+       * 1) contain a deprel which is a seed
+       * 2) contain an entity type/sim which is a seed
+       * 3) contain an entity in the PKB
+       * 4) etc for seed/PKB situations
+       */
+      
+      SentFeats f = tok2feats.get(tokUuid);
+
+      Log.info("f.tok=" + tokUuid);
+      Log.info("f.comm=" + f.getCommunicationUuidString());
+      
+      double scoreTfidf = 0;
+      double scorePkbDoc = 0;
+      double maxTfidf = 0;
+      for (TermVec d : state.pkbDocs) {
+        double t = TermVec.tfidf(f.tfidf, d);
+        scoreTfidf += t;
+        if (f.tfidf == d)
+          scorePkbDoc += 1;
+        if (t > maxTfidf)
+          maxTfidf = t;
+      }
+      double z = Math.sqrt(state.pkbDocs.size() + 1);
+      scoreTfidf /= z;
+      scorePkbDoc /= z;
+      
+      Log.info("maxTfIdf=" + maxTfidf);
+      Log.info("pkbDocs.size=" + state.pkbDocs.size());
+      Log.info("scoreTfidf=" + scoreTfidf);
+      Log.info("scorePkbdoc=" + scorePkbDoc);
+      
+      // TODO Currently we measure a hard "this entity/deprel/situation/etc
+      // showed up in the result and the PKB/seed", but we should generalize
+      // this to be similarity of the embeddings.
+      
+      int[] deprel = f.getDeprels();
+      int[] ent = f.getEntities();
+
+      double scorePkbDeprel = dot(deprel, state.pkbRel);
+      double scorePkbEnt = dot(ent, state.pkbEnt);
+      
+      double scoreSeedDeprel = 0.1 * dot(deprel, state.seedRel);
+      double scoreSeedEnt = 0.1 * dot(ent, state.seedEnt);
+      
+      Log.info("f.deprels=" + Arrays.toString(deprel));
+      Log.info("scorePkbDeprel=" + scorePkbDeprel);
+      Log.info("scoreSeedDeprel=" + scoreSeedDeprel);
+
+      Log.info("f.entities=" + Arrays.toString(ent));
+      Log.info("scorePkbEnt=" + scorePkbEnt);
+      Log.info("scoreSeedEnt=" + scoreSeedEnt);
+
+      System.out.println();
+      
+      double score = scoreTfidf + scorePkbDeprel
+          + scorePkbDeprel + scoreSeedDeprel
+          + scorePkbEnt + scoreSeedEnt;
+          
+      tm.stop("score");
+      return new QResult(tokUuid, f, score);
+    }
+    
+    private static double dot(int[] feats, List<StringInt> pkbFeats) {
+      double score = 0;
+      for (StringInt f : pkbFeats)
+        for (int i = 0; i < feats.length; i++)
+          if (feats[i] == f.integer)
+            score += 1;
+      return score /= Math.sqrt(pkbFeats.size() + 1);
+    }
+    
+    public static void main(ExperimentProperties config) throws IOException {
+      
+      File tokUuid2commUuid = config.getExistingFile("tok2comm", new File(HOME, "tokUuid2commUuid.txt"));
+
+      File docVecs = config.getExistingFile("docVecs", new File(HOME, "doc/docVecs.128.txt"));
+      File idf = config.getExistingFile("idf", new File(HOME, "doc/idf.txt"));
+      TfIdf docs = new TfIdf(docVecs, idf);
+
+      SituationSearch ss = new SituationSearch(tokUuid2commUuid, docs);
+
+//      ss.seed("conj>/leaders/prep>/of/pobj>");    // This appears to be a pruned relation in the small data case
+      ss.seed("conj>");
+
+      int responseLim = 20;
+      List<QResult> results = ss.query("Barack_Obama", "PERSON", responseLim);
+      for (QResult r : results)
+        System.out.println(r);
+      
+      
+      // Lets suppose that the user like the second response
+      // Add it to the PKB and see if we can get the PKB/tfidf features to fire
+      QResult userLiked = results.get(1);
+      ss.addToPkb(userLiked);
+      
+      // Lets just re-do the same query
+      List<QResult> results2 = ss.query("Barack_Obama", "PERSON", responseLim);
+      for (QResult r : results2)
+        System.out.println(r);
+      
+      Log.info("done\n" + ss.tm);
+    }
+  }
+
+  private static StringInt h(String s) {
+    int h = ReversableHashWriter.onewayHash(s);
+    return new StringInt(s, h);
+  }
+  
+  
+  /**
+   * After pruning, run this to do the conversion:
+   * (deprel, arg0, arg1, location) => 2 instances of (deprel, hash(argpos, argval), Tokenization UUID)
+   * NOTE: Output is and UNSORTED version of input for {@link StringIntUuidIndex}.
+   * Also outputs a argHash file mapping strings like "ARG0/DATE/July" to their hashed values, e.g. sit_feats/index_deprel/hashedArgs.txt.gz
+   */
+  public static class HashDeprels {
+    /**
+     * @see IndexSituations#writeDepRels(Communication, Map) for line format
+     */
+    public static void main(ExperimentProperties config) throws IOException {
+      File input = config.getExistingFile("input");
+      File output = config.getFile("output"); // may want to be /dev/stdout so you can pipe into sort
+      File alph = config.getFile("argHash");
+      
+      try (BufferedWriter w = FileUtil.getWriter(output);
+          BufferedReader r = FileUtil.getReader(input);
+          ReversableHashWriter a = new ReversableHashWriter(alph);) {
+        
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          String[] ar = line.split("\t");
+          assert ar.length == 10;
+          
+          String deprel = ar[0];
+          String role0 = ar[1];
+          String type0 = ar[2];
+          String head0 = ar[3];
+          String role1 = ar[4];
+          String type1 = ar[5];
+          String head1 = ar[6];
+          String tokUuid = ar[7];
+//          String commUuid = ar[8];
+//          String commId = ar[9];
+          
+          int h0 = a.hash(role0 + "/" + type0 + "/" + head0);
+          int h1 = a.hash(role1 + "/" + type1 + "/" + head1);
+          
+          w.write(deprel);
+          w.write('\t');
+          w.write(Integer.toUnsignedString(h0));
+          w.write('\t');
+          w.write(tokUuid);
+          w.newLine();
+          
+          w.write(deprel);
+          w.write('\t');
+          w.write(Integer.toUnsignedString(h1));
+          w.write('\t');
+          w.write(tokUuid);
+          w.newLine();
+        }
+      }
+    }
+  }
+  
+  
+  /**
+   * Reads every SituationMention and writes to sit_feats/situations.txt.gz and sit_feats/deprels.txt.gz
+   * 
+   * (frame, role, arg NER type, arg head word/phrase, Tokenization UUID, Communication UUID, Communication ID)
+   * No SituationMention UUID since they won't exist for dependency path relations.
+   *
+   * Currently (2016-11-08) setup for
+   * edu.jhu.hlt.framenet.semafor.parsing.JHUParserDriver via Semafor V2.1 4.10.3-SNAPSHOT
+   * /export/projects/fferraro/cag-4.6.10/processing/from-marcc/20161012-083257/gigaword-merged
+   * $FNPARSE/data/concretely-annotated-gigaword/sample-with-semafor-nov08
+   */
+  public static class IndexSituations implements AutoCloseable {
+
+    public static void main(ExperimentProperties config) throws Exception {
+      List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
+      File outputDir = config.getOrMakeDir("outputDirectory", new File(HOME, "sit_feats"));
+      String nerTool = config.getString("nerTool", "Stanford CoreNLP");
+      
+      boolean disableSits = config.getBoolean("disableSits", false);
+      boolean disableRels = config.getBoolean("disableRels", false);
+      Log.info("disable sit=" + disableSits + " rel=" + disableRels);
+      
+      // This includes the two headwords on either end of the path.
+      int maxWordsOnDeprelPath = config.getInt("maxWordsOnDeprelPath", 5);
+
+      try (IndexSituations is = new IndexSituations(nerTool,
+          maxWordsOnDeprelPath,
+          disableSits ? null : new File(outputDir, "situation.txt.gz"),
+          disableRels ? null : new File(outputDir, "deprels.txt.gz"))) {
+        for (File f : inputCommTgzs)
+          is.observe(f);
+      }
+    }
+    
+    private String nerTool;
+    private Set<String> deprelEntityTypeEnpoints;
+    private int maxWordsOnDeprelPath;
+    
+    // Both of these have the same format:
+    // frame, role, arg NER type, arg head word/phrase, Tokenization UUID, Communication UUID, Communication ID
+    private BufferedWriter w_situations;
+    private BufferedWriter w_deprel;
+
+    // Misc
+    private TimeMarker tm;
+    private Counts<String> ec;
+    
+    public IndexSituations(String nerTool, int maxWordsOnDeprelPath, File f_situations, File f_deprel) {
+      Log.info("nerTool=" + nerTool);
+      Log.info("maxWordsOnDeprelPath=" + maxWordsOnDeprelPath);
+      this.nerTool = nerTool;
+      this.maxWordsOnDeprelPath = maxWordsOnDeprelPath;
+      this.tm =  new TimeMarker();
+      this.ec = new Counts<>();
+      if (f_situations != null) {
+        Log.info("writing situations to " + f_situations.getPath());
+        try {
+          w_situations = FileUtil.getWriter(f_situations);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+      if (f_deprel != null) {
+        Log.info("writing deprels to " + f_deprel.getPath());
+        try {
+          w_deprel = FileUtil.getWriter(f_deprel);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+      
+      this.deprelEntityTypeEnpoints = new HashSet<>();
+      this.deprelEntityTypeEnpoints.addAll(Arrays.asList(
+          "PERSON",
+          "LOCATION",
+          "ORGANIZATION",
+          "DATE",
+          "MISC"));
+//      415620 PERSON
+//      238344 LOCATION
+//      228197 ORGANIZATION
+//      201512 NUMBER
+//      144665 DATE
+//       61295 MISC
+//       45475 DURATION
+//       32155 ORDINAL
+//       12266 TIME
+//        1541 SET
+    }
+    
+    public void observe(File commTgzArchive) throws IOException {
+      ec.increment("files");
+      Log.info("reading from " + commTgzArchive.getPath());
+      try (InputStream is = new FileInputStream(commTgzArchive);
+          TarGzArchiveEntryCommunicationIterator iter = new TarGzArchiveEntryCommunicationIterator(is)) {
+        while (iter.hasNext()) {
+          Communication c = iter.next();
+          observe(c);
+        }
+      }
+    }
+    
+    public void observe(Communication c) throws IOException {
+      ec.increment("communications");
+      Map<String, Tokenization> tmap = AddNerTypeToEntityMentions.buildTokzIndex(c);
+      writeSituations(c, tmap);
+      writeDepRels(c, tmap);
+      if (tm.enoughTimePassed(10))
+        Log.info(c.getId() + "\t" + ec + "\t" + Describe.memoryUsage());
+    }
+    
+    private void writeDepRels(Communication comm, Map<String, Tokenization> tmap) throws IOException {
+      new AddNerTypeToEntityMentions(comm, tmap);
+      List<EntityMention> mentions = getEntityMentions(comm);
+      
+      // Go over every pair of mentions in the same sentence, and output
+      // a deprel fact if there is a relatively short path that connects
+      // the two entities.
+      Map<String, List<EntityMention>> bySent = groupBySentence(mentions);
+      for (List<EntityMention> ms : bySent.values()) {
+        
+        int n = ms.size();
+        for (int i = 0; i < n-1; i++) {
+          for (int j = i+1; j < n; j++) {
+            EntityMention a0 = ms.get(i);
+            EntityMention a1 = ms.get(j);
+
+            if (overlap(a0.getTokens(), a1.getTokens()))
+              continue;
+            
+            String a0Type = AddNerTypeToEntityMentions.getNerType(a0.getTokens(), tmap, nerTool);
+            String a1Type = AddNerTypeToEntityMentions.getNerType(a1.getTokens(), tmap, nerTool);
+            if (!deprelEntityTypeEnpoints.contains(a0Type))
+              continue;
+            if (!deprelEntityTypeEnpoints.contains(a1Type))
+              continue;
+            
+            Pair<String, Boolean> d = deprelBetween(
+                a0.getTokens(), a1.getTokens(), tmap, maxWordsOnDeprelPath);
+            if (d == null)
+              continue;
+
+            boolean takeNnCompounts = true;
+            boolean allowFailures = true;
+            String a0Head = headword(a0.getTokens(), tmap, takeNnCompounts, allowFailures);
+            String a1Head = headword(a1.getTokens(), tmap, takeNnCompounts, allowFailures);
+            if (a0Head == null || a1Head == null) {
+              ec.increment("err/headfinder");
+              continue;
+            }
+
+            assert a0Head.split("\\s+").length == 1;
+            assert a1Head.split("\\s+").length == 1;
+            String tokId = a0.getTokens().getTokenizationId().getUuidString();
+            assert tokId.equals(a1.getTokens().getTokenizationId().getUuidString());
+
+            w_deprel.write(d.get1()
+                + "\t" + (d.get2() ? "ARG1" : "ARG0")
+                + "\t" + a0Type
+                + "\t" + a0Head
+                + "\t" + (d.get2() ? "ARG0" : "ARG1")
+                + "\t" + a1Type
+                + "\t" + a1Head
+                + "\t" + tokId
+                + "\t" + comm.getUuid().getUuidString()
+                + "\t" + comm.getId());
+            w_deprel.newLine();
+
+//            // TODO NO: This is what we want to end up with, but only AFTER pruning based on different info
+//            // Can I convert this to the following format?
+//            // dependency path string, hash("arg0/entityWord"), Tokenization UUID+
+//            int a0h = ReversableHashWriter.onewayHash("arg0/" + a0Type + "/" + a0Head);
+//            int a1h = ReversableHashWriter.onewayHash("arg1/" + a1Type + "/" + a1Head);
+//            w_deprel.write(d.get1()
+//                + "\t" + a0h
+//                + "\t" + tokId
+//                + "\t" + comm.getUuid().getUuidString()
+//                + "\t" + comm.getId());
+//            w_deprel.newLine();
+          }
+        }
+      }
+    }
+    
+    public static boolean overlap(TokenRefSequence a, TokenRefSequence b) {
+      BitSet x = new BitSet();
+      for (int i : a.getTokenIndexList())
+        x.set(i);
+      for (int i : b.getTokenIndexList())
+        if (x.get(i))
+          return true;
+      return false;
+    }
+    
+    private static Pair<String, Boolean> deprelBetween(
+        TokenRefSequence a, TokenRefSequence b, Map<String, Tokenization> tmap, int maxWordsOnDeprelPath) {
+      
+      assert a.getTokenizationId().getUuidString().equals(b.getTokenizationId().getUuidString());
+      Tokenization t = tmap.get(a.getTokenizationId().getUuidString());
+      List<Token> toks = t.getTokenList().getTokenList();
+      
+      int n = toks.size();
+      DependencyParse d = getPreferredDependencyParse(t);
+      MultiAlphabet alph = new MultiAlphabet();
+      LabeledDirectedGraph graph =
+          LabeledDirectedGraph.fromConcrete(d, n, alph);
+      DParseHeadFinder hf = new DParseHeadFinder();
+      hf.ignoreEdge(alph.dep("prep"));
+      hf.ignoreEdge(alph.dep("poss"));
+      hf.ignoreEdge(alph.dep("possessive"));
+
+      List<Integer> ts;
+      int first, last;
+      int ha, hb;
+
+      try {
+        ts = a.getTokenIndexList();
+        first = ts.get(0);
+        last = ts.get(ts.size()-1);
+        ha = hf.head(graph, first, last);
+
+        ts = b.getTokenIndexList();
+        first = ts.get(0);
+        last = ts.get(ts.size()-1);
+        hb = hf.head(graph, first, last);
+      } catch (RuntimeException e) {
+        err_head++;
+        Log.info("head finding error: " + e.getMessage());
+        return null;
+      }
+
+      boolean flip = false;
+      if (ha > hb) {
+        flip = true;
+        int temp = ha;
+        ha = hb;
+        hb = temp;
+      }
+      
+      boolean allowMultipleHeads = true;
+      edu.jhu.hlt.fnparse.datatypes.DependencyParse fndp =
+          new edu.jhu.hlt.fnparse.datatypes.DependencyParse(graph, alph, 0, n, allowMultipleHeads);
+      edu.jhu.hlt.fnparse.datatypes.Sentence sent =
+          edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete("ds", "id", t);
+      Path2 path = new Path2(ha, hb, fndp, sent);
+      
+      if (path.connected() && path.getNumWordsOnPath() <= maxWordsOnDeprelPath) {
+        boolean includeEndpoints = false;
+        String p = path.getPath(NodeType.WORD_NER_BACKOFF, EdgeType.DEP, includeEndpoints);
+//        System.out.println("flip:     " + flip);
+//        System.out.println("path:     " + p);
+//        System.out.println("entries:  " + path.getEntries());
+//        System.out.println("sentence: " + Arrays.toString(sent.getWords()));
+        return new Pair<>(p, flip);
+      }
+      return null;
+    }
+    
+    private static Map<String, List<EntityMention>> groupBySentence(List<EntityMention> mentions) {
+      Map<String, List<EntityMention>> m = new HashMap<>();
+      for (EntityMention em : mentions) {
+        String key = em.getTokens().getTokenizationId().getUuidString();
+        List<EntityMention> l = m.get(key);
+        if (l == null) {
+          l = new ArrayList<>();
+          m.put(key, l);
+        }
+        l.add(em);
+      }
+      return m;
+    }
+
+    private void writeSituations(Communication c, Map<String, Tokenization> tmap) throws IOException {
+      if (c.isSetSituationMentionSetList()) {
+        for (SituationMentionSet sms : c.getSituationMentionSetList()) {
+          if (sms.isSetMentionList()) {
+            for (SituationMention sm : sms.getMentionList()) {
+
+              TokenRefSequence sitMention = sm.getTokens();
+              assert tmap.get(sitMention.getTokenizationId().getUuidString()) != null;
+
+              for (MentionArgument a : sm.getArgumentList()) {
+
+                // Do not output if argument doens't contain a named entity
+                TokenRefSequence argMention = a.getTokens();
+                String nerType = AddNerTypeToEntityMentions.getNerType(argMention, tmap, nerTool);
+                if ("O".equals(nerType)) {
+                  ec.increment("skip/argsuments/O");
+                  continue;
+                }
+                int ttypes = nerType.split(",").length;
+                if (ttypes > 1) {
+                  ec.increment("skip/argsuments/complexType");
+                  continue;
+                }
+
+                boolean takeNnCompounts = true;
+                boolean allowFailures = true;
+                String argHead = headword(argMention, tmap, takeNnCompounts, allowFailures);
+                if (argHead == null) {
+                  ec.increment("err/headfinder");
+                  continue;
+                }
+                //                      if (argHead.length() < 3 && !"a".equalsIgnoreCase(argHead) && !argHead.matches("\\d+") && !argHead.matches("[A-Z]+") && !"Count".equals(a.getRole()) && argMention.getTokenIndexListSize() > 1) {
+                //                        Log.info("why? " + argHead);
+                //                        argHead = headword(argMention, tmap, allowFailures);
+                //                      }
+                assert argHead.split("\\s+").length == 1;
+                String tokId = argMention.getTokenizationId().getUuidString();
+                assert tokId.equals(sitMention.getTokenizationId().getUuidString());
+
+                w_situations.write(sm.getSituationKind()
+                    + "\t" + a.getRole()
+                    + "\t" + nerType
+                    + "\t" + argHead
+                    + "\t" + tokId
+                    + "\t" + c.getUuid().getUuidString()
+                    + "\t" + c.getId());
+                w_situations.newLine();
+                ec.increment("arguments");
+              }
+            }
+          }
+        }
+      }
+    }
+
+    @Override
+    public void close() throws Exception {
+      Log.info("closing, " + ec);
+      if (w_situations != null)
+        w_situations.close();
+      if (w_deprel != null)
+        w_deprel.close();
+    }
+  }
   
   /**
    * Given an (entityName, entityType, entityContextDoc) query,
@@ -72,22 +904,22 @@ public class IndexCommunications implements AutoCloseable {
    * b) entityType matches
    * c) the tf-idf similarity between entityContextDoc and the doc in which the result appears.
    */
-  public static class Search {
+  public static class EntitySearch {
     
-    public static Search build(ExperimentProperties config) throws IOException {
+    public static EntitySearch build(ExperimentProperties config) throws IOException {
       File nerFeatures = config.getExistingDir("nerFeatureDir", new File(HOME, "ner_feats"));
       File docVecs = config.getExistingFile("docVecs", new File(HOME, "doc/docVecs.128.txt"));
       File idf = config.getExistingFile("idf", new File(HOME, "doc/idf.txt"));
       File mentionLocs = config.getExistingFile("mentionLocs", new File(HOME, "raw/mentionLocs.txt.gz"));
       File tokObs = config.getExistingFile("tokenObs", new File(HOME, "tokenObs.jser.gz"));
       File tokObsLc = config.getExistingFile("tokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
-      Search s = new Search(nerFeatures, docVecs, idf, mentionLocs, tokObs, tokObsLc);
+      EntitySearch s = new EntitySearch(nerFeatures, docVecs, idf, mentionLocs, tokObs, tokObsLc);
       return s;
     }
     
     public static void main(ExperimentProperties config) throws IOException {
       EfficientUuidList.simpleTest();
-      Search s = build(config);
+      EntitySearch s = build(config);
       String context = "Barack Hussein Obama II (US Listen i/bəˈrɑːk huːˈseɪn oʊˈbɑːmə/;[1][2] born August 4 , 1961 )"
           + " is an American politician who is the 44th and current President of the United States . He is the first"
           + " African American to hold the office and the first president born outside the continental United States . "
@@ -110,7 +942,7 @@ public class IndexCommunications implements AutoCloseable {
     private Map<String, String> emUuid2commId;
     private TokenObservationCounts tokObs, tokObsLc;
     
-    public Search(File nerFeaturesDir, File docVecs, File idf, File mentionLocs, File tokObs, File tokObsLc) throws IOException {
+    public EntitySearch(File nerFeaturesDir, File docVecs, File idf, File mentionLocs, File tokObs, File tokObsLc) throws IOException {
       this.tfidf = new TfIdf(docVecs, idf);
       this.tokObs = (TokenObservationCounts) FileUtil.deserialize(tokObs);
       this.tokObsLc = (TokenObservationCounts) FileUtil.deserialize(tokObsLc);
@@ -239,8 +1071,9 @@ public class IndexCommunications implements AutoCloseable {
    * 2) only index 2005-2007
    * 3) only index PERSON mentions
    */
-  public static class NerFeatureInvertedIndex {
-    
+  public static class NerFeatureInvertedIndex extends StringIntUuidIndex {
+    private static final long serialVersionUID = -8638109659685198036L;
+
     public static void main(ExperimentProperties config) throws IOException {
       File input = config.getExistingFile("input", new File(HOME, "raw/nerFeatures.txt.gz"));
 
@@ -264,67 +1097,17 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     
-    private Map<String, IntObjectHashMap<EfficientUuidList>> nerType2term2uuids;
-    private Counts<String> mentionsByType = new Counts<>();
-    private int n_mentions = 0;
-
     public NerFeatureInvertedIndex(List<Pair<String, File>> featuresByNerType) throws IOException {
-      TimeMarker tm = new TimeMarker();
-      nerType2term2uuids = new HashMap<>();
-      TIMER.start("load/nerFeatures");
-      for (Pair<String, File> t : featuresByNerType) {
-        String nerType = t.get1();
-        Log.info("reading " + nerType + " features from " + t.get2());
-        TIMER.start("load/nerFeatures/" + nerType);
-        IntObjectHashMap<EfficientUuidList> m = new IntObjectHashMap<>();
-        try (BufferedReader r = FileUtil.getReader(t.get2())) {
-          for (String line = r.readLine(); line != null; line = r.readLine()) {
-            // term, comm_uuid+
-            String[] ar = line.split("\t");
-            assert ar.length >= 2;
-            int term = Integer.parseUnsignedInt(ar[0]);
-            EfficientUuidList uuids = new EfficientUuidList(ar.length-1);
-            for (int i = 1; i < ar.length; i++)
-              uuids.add(ar[i]);
-            Object old = m.put(term, uuids);
-            assert old == null;
-            n_mentions++;
-            
-            if (tm.enoughTimePassed(5)) {
-              Log.info("n_mentions=" + n_mentions + " f=" + t.get2()
-                + " c=" + m.size() + "\t" + Describe.memoryUsage());
-            }
-          }
-        }
-        mentionsByType.update(nerType, m.size());
-        nerType2term2uuids.put(nerType, m);
-        TIMER.stop("load/nerFeatures/" + nerType);
+      super();
+      for (Pair<String, File> x : featuresByNerType) {
+        this.putIntLines(x.get1(), x.get2());
       }
-      Log.info("done, loaded: " + mentionsByType);
-      TIMER.stop("load/nerFeatures");
-    }
-
-    private List<String> get(int term, String nerType) {
-      IntObjectHashMap<EfficientUuidList> t2m = nerType2term2uuids.get(nerType);
-      if (t2m == null) {
-        err_misc++;
-        return Collections.emptyList();
-      }
-      EfficientUuidList mentions = t2m.get(term);
-      if (mentions == null) {
-        return Collections.emptyList();
-      }
-      int n = mentions.size();
-      List<String> l = new ArrayList<>(n);
-      for (int i = 0; i < n; i++)
-        l.add(mentions.getString(i));
-      return l;
     }
     
     @Override
     public String toString() {
-      return "(NerFeatures mentions:" + mentionsByType
-        + " totalMentions=" + n_mentions
+      return "(NerFeatures mentions:" + valuesPerString
+        + " totalMentions=" + n_values
         + ")";
     }
 
@@ -348,7 +1131,7 @@ public class IndexCommunications implements AutoCloseable {
       for (int i = 0; i < n; i++) {
         int term = HASH.hashString(features.get(i), UTF8).asInt();
         int weight = featureWeight(features.get(i));
-        List<String> emsContainingTerm = get(term, entityType);
+        List<String> emsContainingTerm = get(entityType, term);
         for (String em : emsContainingTerm) {
 //          emNgramOverlap.increment(em);
           emNgramOverlap.update(em, weight);
@@ -406,6 +1189,33 @@ public class IndexCommunications implements AutoCloseable {
       terms[index] = term;
       counts[index] = (short) count;
     }
+
+    public static double tfidf(TermVec x, TermVec y) {
+      TIMER.start("tfidf");
+
+      // a = query.tf * idf
+      int sizeGuess = y.numTerms() + x.numTerms();
+      double missingEntry = 0;
+      IntDoubleHashMap a = new IntDoubleHashMap(sizeGuess, missingEntry);
+      for (int i = 0; i < y.numTerms(); i++) {
+        double s = y.tfLowerBound(i);
+        a.put(y.terms[i], s);
+      }
+      
+      // a *= comm.tf, reduceSum
+      double s = 0;
+      for (int i = 0; i < x.numTerms(); i++) {
+        double pre = a.getWithDefault(x.terms[i], 0);
+        assert Double.isFinite(pre);
+        assert !Double.isNaN(pre);
+        s += pre * x.tfLowerBound(i);
+        assert Double.isFinite(s);
+        assert !Double.isNaN(s);
+      }
+      
+      TIMER.stop("tfidf");
+      return s;
+    }
   }
 
   /**
@@ -422,6 +1232,13 @@ public class IndexCommunications implements AutoCloseable {
       loadDocVecs(docVecs);
     }
     
+    public TermVec get(String commUuid) {
+      return comm2vec.get(commUuid);
+    }
+
+    /**
+     * @param docVecs should have lines like: <commUuid> (<tab> <hashedWord>:<count>)+
+     */
     public void loadDocVecs(File docVecs) throws IOException {
       Log.info("source=" + docVecs.getPath());
       TIMER.start("load/docVecs");
@@ -450,6 +1267,9 @@ public class IndexCommunications implements AutoCloseable {
       TIMER.stop("load/docVecs");
     }
     
+    /**
+     * @param idf should have lines like: <hashedWord> <tab> <idf>
+     */
     public void loadIdf(File idf) throws IOException {
       TIMER.start("load/idf");
       Log.info("source=" + idf.getPath());
@@ -473,31 +1293,8 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public double tfidf(TermVec query, String commUuid) {
-      TIMER.start("tfidf");
       TermVec comm = comm2vec.get(commUuid);
-
-      // a = query.tf * idf
-      int sizeGuess = query.numTerms() + comm.numTerms();
-      double missingEntry = 0;
-      IntDoubleHashMap a = new IntDoubleHashMap(sizeGuess, missingEntry);
-      for (int i = 0; i < query.numTerms(); i++) {
-        double x = query.tfLowerBound(i);
-        a.put(query.terms[i], x);
-      }
-      
-      // a *= comm.tf, reduceSum
-      double s = 0;
-      for (int i = 0; i < comm.numTerms(); i++) {
-        double pre = a.getWithDefault(comm.terms[i], 0);
-        assert Double.isFinite(pre);
-        assert !Double.isNaN(pre);
-        s += pre * comm.tfLowerBound(i);
-        assert Double.isFinite(s);
-        assert !Double.isNaN(s);
-      }
-      
-      TIMER.stop("tfidf");
-      return s;
+      return TermVec.tfidf(query, comm);
     }
     
     public static TermVec build(String[] document, int numTermsInPack, IntDoubleHashMap idf) {
@@ -741,57 +1538,100 @@ public class IndexCommunications implements AutoCloseable {
   
   
 
-  // Given a word, if it's not in this approx-set, then you definitely haven't seen it
-  private WrittenOut seenTerms;
+  // Writes out a file containing (hashedTerm, term) pairs for every
+  // term used in any output file.
+  private ReversableHashWriter termHash;    // hashedTerm, term
   
   // For determining the correct prefix length based on counts
   private TokenObservationCounts tokObs;
   private TokenObservationCounts tokObsLc;
   
-  private BufferedWriter w_nerFeatures;   // hashedFeature, nerType, EntityMention UUID
+  private BufferedWriter w_nerFeatures;   // hashedFeature, nerType, EntityMention UUID, Tokenization UUID
   private BufferedWriter w_termDoc;       // count, hashedTerm, Communication UUID
-  private BufferedWriter w_termHash;      // hashedTerm, term
   private BufferedWriter w_mentionLocs;   // EntityMention UUID, Communication UUID, Communication id, entityType, hasHead?, numTokens, numChars
+  private BufferedWriter w_tok2comm;      // EntityMention UUID, Tokenization UUID, Communication UUID, Communication ID
 
   private boolean outputTfIdfTerms = false;
-  
-  private long n_doc = 0, n_tok = 0, n_ent = 0, n_termWrites = 0, n_termHashes = 0;
   
   // Indexes the Tokenizations of the Communication currently being observed
   private Map<String, Tokenization> tokMap;
 
-  public IndexCommunications(TokenObservationCounts tokObs, TokenObservationCounts tokObsLc, File nerFeatures, File termDoc, File termHash, File mentionLocs) {
+  public IndexCommunications(
+      TokenObservationCounts tokObs, TokenObservationCounts tokObsLc,
+      File nerFeatures, File termDoc, File termHash, File mentionLocs, File tok2comm) {
     this.tokObs = tokObs;
     this.tokObsLc = tokObsLc;
-    seenTerms = new WrittenOut(1<<14, 1<<22);
     tokMap = new HashMap<>();
     try {
       w_nerFeatures = FileUtil.getWriter(nerFeatures);
       w_termDoc = FileUtil.getWriter(termDoc);
-      w_termHash = FileUtil.getWriter(termHash);
       w_mentionLocs = FileUtil.getWriter(mentionLocs);
+      w_tok2comm = FileUtil.getWriter(tok2comm);
+      this.termHash = new ReversableHashWriter(termHash, 1<<14, 1<<22);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
   }
   
-  private static String headword(TokenRefSequence trs, Map<String, Tokenization> tokMap) {
+  private static String headword(TokenRefSequence trs, Map<String, Tokenization> tokMap, boolean takeNnCompounds, boolean allowFailures) {
     Tokenization t = tokMap.get(trs.getTokenizationId().getUuidString());
-    if (t == null)
-      return "";
+    if (t == null) {
+      if (!allowFailures)
+        throw new RuntimeException("can't find tokenization! " + trs.getTokenizationId().getUuidString());
+      return null;
+    }
     
     List<Token> toks = t.getTokenList().getTokenList();
-    if (trs.isSetAnchorTokenIndex())
-      return toks.get(trs.getAnchorTokenIndex()).getText();
+    if (!takeNnCompounds) {
+      if (trs.isSetAnchorTokenIndex())
+        return toks.get(trs.getAnchorTokenIndex()).getText();
+      if (trs.getTokenIndexListSize() == 1)
+        return toks.get(trs.getTokenIndexList().get(0)).getText();
+    }
     
     // Fall back on a dependency parse
     int n = toks.size();
     DependencyParse d = getPreferredDependencyParse(t);
+    MultiAlphabet a = new MultiAlphabet();
     LabeledDirectedGraph graph =
-        LabeledDirectedGraph.fromConcrete(d, n, new MultiAlphabet());
+        LabeledDirectedGraph.fromConcrete(d, n, a);
     DParseHeadFinder hf = new DParseHeadFinder();
-    int h = hf.head(graph, 0, n-1);
-    return toks.get(h).getText();
+    hf.ignoreEdge(a.dep("prep"));
+    hf.ignoreEdge(a.dep("poss"));
+    hf.ignoreEdge(a.dep("possessive"));
+    try {
+
+      List<Integer> ts = trs.getTokenIndexList();
+      int first = ts.get(0);
+      int last = ts.get(ts.size()-1);
+      
+      if (takeNnCompounds) {
+        int nnEdgeType = a.dep("nn");
+        int[] hs = hf.headWithNn(graph, first, last, nnEdgeType);
+        if (hs == null) {
+          err_head++;
+          if (!allowFailures)
+            throw new RuntimeException();
+          return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < hs.length; i++) {
+          if (i > 0) sb.append('_');
+          assert hs[i] >= 0;
+          sb.append(toks.get(hs[i]).getText());
+        }
+        return sb.toString();
+      } else {
+        int h = hf.head(graph, first, last);
+        return toks.get(h).getText();
+      }
+
+    } catch (RuntimeException e) {
+      if (allowFailures)
+        return null;
+      System.err.println(d);
+      throw e;
+    }
   }
   
   private static DependencyParse getPreferredDependencyParse(Tokenization toks) {
@@ -889,6 +1729,8 @@ public class IndexCommunications implements AutoCloseable {
     features.addAll(prefixGrams(mentionText, tokObs, tokObsLc));
     // headword
     for (int i = 0; i < headwords.length; i++) {
+      if (headwords[i] == null)
+        continue;
       String h = headwords[i];
       String hi = headwords[i].toLowerCase();
       String hp = tokObs.getPrefixOccuringAtLeast(headwords[i], 5);
@@ -919,11 +1761,8 @@ public class IndexCommunications implements AutoCloseable {
     return 1;
   }
   
-  public void observe(Communication c) throws IOException {
-    buildTokMap(c);
-    new AddNerTypeToEntityMentions(c);
-    n_doc++;
-    
+  public static List<EntityMention> getEntityMentions(Communication c) {
+    List<EntityMention> mentions = new ArrayList<>();
     if (c.isSetEntityMentionSetList()) {
       for (EntityMentionSet ems : c.getEntityMentionSetList()) {
         for (EntityMention em : ems.getMentionList()) {
@@ -940,36 +1779,62 @@ public class IndexCommunications implements AutoCloseable {
             continue;
 
           n_ent++;
-          
-          // EntityMention UUID, Communication UUID, Communication id, entityType, hasHead?, numTokens, numChars
-          w_mentionLocs.write(em.getUuid().getUuidString());
-          w_mentionLocs.write('\t');
-          w_mentionLocs.write(c.getUuid().getUuidString());
-          w_mentionLocs.write('\t');
-          w_mentionLocs.write(c.getId());
-          w_mentionLocs.write('\t');
-          w_mentionLocs.write(String.valueOf(em.getEntityType()));
-          w_mentionLocs.write('\t');
-          w_mentionLocs.write(String.valueOf(em.getTokens().isSetAnchorTokenIndex()));
-          w_mentionLocs.write('\t');
-          w_mentionLocs.write(String.valueOf(em.getTokens().getTokenIndexListSize()));
-          w_mentionLocs.write('\t');
-          w_mentionLocs.write(String.valueOf(em.getText().length()));
-          w_mentionLocs.newLine();
-          
-          String head = headword(em.getTokens(), tokMap);
-          List<String> feats = features(em.getText(), new String[] {head}, em.getEntityType(),
-              tokObs, tokObsLc);
-          for (String f : feats) {
-            int i = hash(f);
-            w_nerFeatures.write(Integer.toUnsignedString(i));
-            w_nerFeatures.write('\t');
-            w_nerFeatures.write(em.getEntityType());
-            w_nerFeatures.write('\t');
-            w_nerFeatures.write(em.getUuid().getUuidString());
-            w_nerFeatures.newLine();
-          }
+          mentions.add(em);
         }
+      }
+    }
+    return mentions;
+  }
+  
+  public void observe(Communication c) throws IOException {
+    buildTokMap(c);
+    new AddNerTypeToEntityMentions(c);
+    n_doc++;
+
+    for (EntityMention em : getEntityMentions(c)) {
+
+      // EntityMention UUID, Communication UUID, Communication id, entityType, hasHead?, numTokens, numChars
+      w_mentionLocs.write(em.getUuid().getUuidString());
+      w_mentionLocs.write('\t');
+      w_mentionLocs.write(c.getUuid().getUuidString());
+      w_mentionLocs.write('\t');
+      w_mentionLocs.write(c.getId());
+      w_mentionLocs.write('\t');
+      w_mentionLocs.write(String.valueOf(em.getEntityType()));
+      w_mentionLocs.write('\t');
+      w_mentionLocs.write(String.valueOf(em.getTokens().isSetAnchorTokenIndex()));
+      w_mentionLocs.write('\t');
+      w_mentionLocs.write(String.valueOf(em.getTokens().getTokenIndexListSize()));
+      w_mentionLocs.write('\t');
+      w_mentionLocs.write(String.valueOf(em.getText().length()));
+      w_mentionLocs.newLine();
+      
+      // EntityMention UUID, Tokenization UUID, Communication UUID, Communication ID
+      w_tok2comm.write(em.getUuid().getUuidString());
+      w_tok2comm.write('\t');
+      w_tok2comm.write(em.getTokens().getTokenizationId().getUuidString());
+      w_tok2comm.write('\t');
+      w_tok2comm.write(c.getUuid().getUuidString());
+      w_tok2comm.write('\t');
+      w_tok2comm.write(c.getId());
+      w_tok2comm.newLine();
+
+      boolean takeNnCompounts = true;
+      boolean allowFailures = true;
+      String head = headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
+      List<String> feats = features(em.getText(), new String[] {head}, em.getEntityType(),
+          tokObs, tokObsLc);
+      for (String f : feats) {
+        int i = termHash.hash(f);
+        // hash(word), nerType, EntityMention UUID, Tokenization UUID
+        w_nerFeatures.write(Integer.toUnsignedString(i));
+        w_nerFeatures.write('\t');
+        w_nerFeatures.write(em.getEntityType());
+        w_nerFeatures.write('\t');
+        w_nerFeatures.write(em.getUuid().getUuidString());
+        w_nerFeatures.write('\t');
+        w_nerFeatures.write(em.getTokens().getTokenizationId().getUuidString());
+        w_nerFeatures.newLine();
       }
     }
     
@@ -985,7 +1850,7 @@ public class IndexCommunications implements AutoCloseable {
       IntFloatUnsortedVector tf = new IntFloatUnsortedVector(terms.size());
       for (String t : terms) {
         n_tok++;
-        int i = hash(t);
+        int i = termHash.hash(t);
         tf.add(i, 1);
       }
       // apply calls compact
@@ -1006,65 +1871,6 @@ public class IndexCommunications implements AutoCloseable {
         }
       });
     }
-  }
-  
-  static class WrittenOut {
-    Counts<String> common, recent;
-    int commonLim, recentLim;
-    
-    public WrittenOut(int recentLim, int commonLim) {
-      this.recentLim = recentLim;
-      this.commonLim = commonLim;
-      this.recent = new Counts<>();
-      this.common = new Counts<>();
-    }
-    
-    public boolean add(String t) {
-      if (common.getCount(t) >= 1)
-        return false;
-      if (recent.getCount(t) >= 1)
-        return false;
-      
-      recent.increment(t);
-      
-      // COMPACT
-      if (recent.numNonZero() > recentLim) {
-        // Merge recent into common
-        for (Entry<String, Integer> tt : recent.entrySet())
-          common.update(tt.getKey(), tt.getValue());
-        recent.clear();
-        
-        // Trim common
-        if (common.numNonZero() > commonLim) {
-          Counts<String> c = new Counts<>(commonLim);
-          for (String x : common.getKeysSortedByCount(true)) {
-            int cc = Math.max(1, common.getCount(x) - 100);
-            c.update(x, cc);
-            if (c.numNonZero() == commonLim)
-              break;
-          }
-          common = c;
-        }
-      }
-      return true;
-    }
-  }
-  
-  private int hash(String t) {
-    n_termHashes++;
-    int i = HASH.hashString(t, UTF8).asInt();
-    if (seenTerms.add(t)) {
-      n_termWrites++;
-      try {
-        w_termHash.write(Integer.toUnsignedString(i));
-        w_termHash.write('\t');
-        w_termHash.write(t);
-        w_termHash.newLine();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-    return i;
   }
   
   private static List<String> terms(Communication c) {
@@ -1089,8 +1895,9 @@ public class IndexCommunications implements AutoCloseable {
   public void close() throws Exception {
     w_nerFeatures.close();
     w_termDoc.close();
-    w_termHash.close();
     w_mentionLocs.close();
+    w_tok2comm.close();
+    termHash.close();
   }
   
   @Override
@@ -1128,9 +1935,11 @@ public class IndexCommunications implements AutoCloseable {
     File termDoc = new File(outputDir, "termDoc.txt.gz");
     File termHash = new File(outputDir, "termHash.approx.txt.gz");
     File mentionLocs = new File(outputDir, "mentionLocs.txt.gz");
+    File tok2comm = new File(outputDir, "emTokCommUuidId.txt.gz");
 
     TimeMarker tm = new TimeMarker();
-    try (IndexCommunications ic = new IndexCommunications(t, tl, nerFeatures, termDoc, termHash, mentionLocs)) {
+    try (IndexCommunications ic = new IndexCommunications(t, tl,
+        nerFeatures, termDoc, termHash, mentionLocs, tok2comm)) {
       for (File f : inputCommTgzs) {
         Log.info("reading " + f.getName());
         try (InputStream is = new FileInputStream(f);
@@ -1163,8 +1972,17 @@ public class IndexCommunications implements AutoCloseable {
     case "nerFeatures":
       NerFeatureInvertedIndex.main(config);
       break;
-    case "search":
-      Search.main(config);
+    case "entitySearch":
+      EntitySearch.main(config);
+      break;
+    case "indexSituations":
+      IndexSituations.main(config);
+      break;
+    case "hashDeprels":
+      HashDeprels.main(config);
+      break;
+    case "situationSearch":
+      SituationSearch.main(config);
       break;
     default:
       Log.info("unknown command: " + c);
