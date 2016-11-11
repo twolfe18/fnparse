@@ -33,12 +33,17 @@ import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.access.FetchRequest;
+import edu.jhu.hlt.concrete.access.FetchResult;
 import edu.jhu.hlt.concrete.serialization.iterators.TarGzArchiveEntryCommunicationIterator;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.Path2;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
+import edu.jhu.hlt.scion.concrete.server.FetchCommunicationServiceImpl;
+import edu.jhu.hlt.scion.core.accumulo.ConnectorFactory;
+import edu.jhu.hlt.scion.core.accumulo.ScionConnector;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.EfficientUuidList;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -52,7 +57,6 @@ import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.StringInt;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
-import edu.jhu.hlt.tutils.Weighted;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
@@ -78,6 +82,62 @@ public class IndexCommunications implements AutoCloseable {
   private static long n_doc = 0, n_tok = 0, n_ent = 0, n_termWrites = 0, n_termHashes = 0;
   
   /**
+   * Given a bunch of query results, fetch their {@link Communication}s from scion/accumulo.
+   */
+  public static class CommunicationRetrieval {
+    private FetchCommunicationServiceImpl impl;
+    
+    public CommunicationRetrieval() {
+      System.setProperty("scion.accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181");
+      System.setProperty("scion.accumulo.instanceName", "minigrid");
+      System.setProperty("scion.accumulo.user", "reader");
+      System.setProperty("scion.accumulo.password", "an accumulo reader");
+      try {
+        ConnectorFactory cf = new ConnectorFactory();
+        ScionConnector sc = cf.getConnector();
+        impl = new FetchCommunicationServiceImpl(sc);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    
+    public void test() {
+      FetchRequest fr = new FetchRequest();
+      fr.addToCommunicationIds("ef93e366-79cc-b8e5-c816-8627a2e25887");
+      FetchResult res = null;
+      try {
+        res = impl.fetch(fr);
+        Communication c = res.getCommunications().get(0);
+        System.out.println(c.getId());
+        System.out.println(c.getText());
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    
+    public void fetch(List<QResult> needComms) {
+      
+      // TODO Break up request if there are too many?
+      // TODO Have option to do one-at-a-time retrieval?
+      FetchRequest fr = new FetchRequest();
+      for (QResult r : needComms)
+        fr.addToCommunicationIds(r.feats.getCommunicationUuidString());
+      
+      FetchResult res = null;
+      try {
+        res = impl.fetch(fr);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+      
+      assert res.getCommunicationsSize() == needComms.size();
+      for (int i = 0; i < needComms.size(); i++) {
+        needComms.get(i).setCommunication(res.getCommunications().get(i));
+      }
+    }
+  }
+  
+  /**
    * Stores everything needed to score a mention to be shown to a user.
    * Does not include all of the Communication info, which must be queried separately.
    *
@@ -98,7 +158,7 @@ public class IndexCommunications implements AutoCloseable {
    * If I include the pointer to TermDoc and ignore the cost of the actual vectors
    * 8+47 = 55, which is still under the 64 byte budget.
    */
-  static class SentFeats {
+  public static class SentFeats {
     // Use this to track down the Communication to show to the user
     long comm_uuid_lo, comm_uuid_hi;
     
@@ -178,15 +238,28 @@ public class IndexCommunications implements AutoCloseable {
     public final SentFeats feats;
     public final double score;
 
+    // Can be set later, not stored in memory
+    private Communication comm;
+
     public QResult(String tokUuid, SentFeats feats, double score) {
       this.tokUuid = tokUuid;
       this.feats = feats;
       this.score = score;
     }
     
+    public Communication setCommunication(Communication c) {
+      Communication old = comm;
+      comm = c;
+      return old;
+    }
+    
+    public Communication getCommunication() {
+      return comm;
+    }
+    
     @Override
     public String toString() {
-      return String.format("(QResult score=%.3f tok=%s feats=%s)", score, tokUuid, feats);
+      return String.format("(QResult score=%.3f tok=%s has_comm=%s feats=%s)", score, tokUuid, comm!=null, feats);
     }
     
     public static final Comparator<QResult> BY_SCORE_DESC = new Comparator<QResult>() {
@@ -1926,6 +1999,8 @@ public class IndexCommunications implements AutoCloseable {
     File tokObsFile = config.getExistingFile("tokenObs", new File(HOME, "tokenObs.jser.gz"));
     File tokObsLowerFile = config.getExistingFile("tokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
     
+    Log.info("provided " + inputCommTgzs.size() + " communication archive files to scan");
+    
     Log.info("loading TokenObservationCounts from " + tokObsFile.getPath() + "\t" + Describe.memoryUsage());
     TokenObservationCounts t = (TokenObservationCounts) FileUtil.deserialize(tokObsFile);
     Log.info("loading TokenObservationCounts from " + tokObsLowerFile.getPath() + "\t" + Describe.memoryUsage());
@@ -1983,6 +2058,10 @@ public class IndexCommunications implements AutoCloseable {
       break;
     case "situationSearch":
       SituationSearch.main(config);
+      break;
+    case "testAccumulo":
+      CommunicationRetrieval cr = new CommunicationRetrieval();
+      cr.test();
       break;
     default:
       Log.info("unknown command: " + c);
