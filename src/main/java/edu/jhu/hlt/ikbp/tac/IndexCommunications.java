@@ -47,14 +47,12 @@ import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.Path2;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
-import edu.jhu.hlt.scion.concrete.server.FetchCommunicationServiceImpl;
-import edu.jhu.hlt.scion.core.accumulo.ConnectorFactory;
-import edu.jhu.hlt.scion.core.accumulo.ScionConnector;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.EfficientUuidList;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
+import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
@@ -65,6 +63,7 @@ import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
 import edu.jhu.prim.map.IntDoubleHashMap;
+import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.util.Lambda.FnIntFloatToFloat;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
@@ -78,8 +77,8 @@ import edu.jhu.prim.vector.IntIntHashVector;
 public class IndexCommunications implements AutoCloseable {
 
   public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-10-27_ngram5");
-  public static final Charset UTF8 = Charset.forName("UTF-8");
-  public static final HashFunction HASH = Hashing.murmur3_32();
+//  public static final Charset UTF8 = Charset.forName("UTF-8");
+//  public static final HashFunction HASH = Hashing.murmur3_32();
   public static final MultiTimer TIMER = new MultiTimer();
 
   public static int err_head = 0;
@@ -87,7 +86,8 @@ public class IndexCommunications implements AutoCloseable {
   public static int err_misc = 0;
   private static long n_doc = 0, n_tok = 0, n_ent = 0, n_termWrites = 0, n_termHashes = 0;
 
-  
+  // May be used by any class in this module, but plays no role by default
+  static IntObjectHashMap<String> INVERSE_HASH = null;
   
   
   /**
@@ -187,11 +187,52 @@ public class IndexCommunications implements AutoCloseable {
     // Use this to track down the Communication to show to the user
     long comm_uuid_lo, comm_uuid_hi;
     
-    // These are the features which appear in this sentence/Tokenization
-    char n_deprel;
-    char n_situation;
-    char n_entity;
-    int[] features;     // contains hashed deprel, situation, and entity features
+    // wait, the only reason to split these features out is so that you can assign them different weights.
+    // alternatively, i could
+    // for now: put all these features into one bag, strings hashed in would ...
+    // check the score code first.
+    
+    /*
+     * The only reason to maintain any FEATURES is to support the scoring model.
+     * The scoring model only supports things in the seeds/PKB.
+     * I should fully describe the seed/PKB model so that I can craft these features in support of them.
+     * 
+     * 
+     * 1) queries: do entity name matching
+     *    once you click on an entity, it is put into the PKB and other results which mention this entity will be highly ranked
+     * 2) seed relations: "X, married to Y", "X bought Y from Z", "X traveled to Y"
+     *    these can be syntactic or semantic descriptions of situations.
+     *    we parse them into a formal representation and then use that representation to match against retrieved events.
+     *    a) in a retrieved situation, we want every argument to be realized
+     *    b) for every argument that is realized, we want the filler to be in the query (10 points) or the PKB (1 point)
+     *    c) maybe I'll have time to worry about computing the utility of roles, this may be done through online learning
+     *
+     * It seems that I can unify this scoring model under a data model where we store:
+     *   (frame, (role,arg)+)+
+     * If there are 4 deprels, 10 fn, and 10 extra situations,
+     * each having an average of 3 arguments,
+     * 24 * (1 + 3) = 96 ints = 384 bytes.
+     * That is WAY more than my 64 byte budget.
+     * ...If I cut out the 10 extra and use shorts instead of ints:
+     * 14 * 4 = 56 shorts = 112 bytes
+     * I think this is as small as we can hope to go:
+     * there is already 16 bytes for comm_uuid and 8 for the TermVec pointer, 112/24 = 4.67
+     *
+     * What about roles?
+     * i.e. how do we distinguish "man bites dog" from "dog bites man"?
+     * option 1: ignore this, then we're just trying to find ANY alignment between PKB ents and mention ents
+     * AH, this is correct, at least as long as our scoring model doesn't distinguish between roles!
+     *
+     *
+     * bit readout:
+     * "frame" = hash32("fn/Commerce_buy")
+     * "numArgs" = 8 bits saying how many arguments will follow this (run-length encoding)
+     * "roles" = [optional/future] a 32 bit mask saying which roles appeared. roles/args to follow are always in sorted order.
+     * "args" = hash32("PERSON/Barack_Obama"). Note: does not include a role. Need for backoff to NER type?
+     */
+
+    /** Use {@link FeaturePacker} to read/write this */
+    byte[] featBuf;
     
     // Pointer to TermDoc so that you can do tf-idf cosine sim with PKB documents
     TermVec tfidf;
@@ -199,18 +240,62 @@ public class IndexCommunications implements AutoCloseable {
     // TODO Have pointers to other Tokenizations in the same Communication?
     
     public SentFeats() {
-      features = new int[0];
+      featBuf = new byte[0];
     }
     
     @Override
     public String toString() {
       java.util.UUID u = new java.util.UUID(comm_uuid_hi, comm_uuid_lo);
+      FeaturePacker.Unpacked ff = FeaturePacker.unpack(featBuf);
       return "(Sentence comm=" + u
-          + " n_deprel=" + Integer.valueOf(n_deprel)
-          + " n_situation=" + Integer.valueOf(n_situation)
-          + " n_ent=" + Integer.valueOf(n_entity)
+          + " " + ff
           + " n_words=" + (tfidf == null ? "NA" : tfidf.totalCount)
           + ")";
+    }
+    
+    public String show() {
+      StringBuilder sb = new StringBuilder();
+      sb.append("comm=" + getCommunicationUuidString() + "\n");
+
+      FeaturePacker.Unpacked ff = FeaturePacker.unpack(featBuf);
+
+      sb.append("deprel:");
+      if (ff.deprels == null || ff.deprels.isEmpty()) {
+        sb.append(" NONE");
+      } else {
+        for (IntTrip t : ff.deprels) {
+          String deprel = INVERSE_HASH.get(t.first);
+          String arg0 = INVERSE_HASH.get(t.second);
+          String arg1 = INVERSE_HASH.get(t.third);
+          if (deprel == null) deprel = t.first + "?";
+          if (arg0 == null) arg0 = t.second + "?";
+          if (arg1 == null) arg1 = t.third + "?";
+          sb.append(String.format(" (%s, %s, %s)", deprel, arg0, arg1));
+        }
+      }
+      sb.append('\n');
+
+      sb.append("entities:");
+      if (ff.entities == null || ff.entities.isEmpty()) {
+        sb.append(" NONE");
+      } else {
+        for (IntPair e : ff.entities) {
+          int type = e.first;
+          String ent = INVERSE_HASH.get(e.second);
+          if (ent == null) ent = e.second + "?";
+          sb.append(String.format(" %s:%d", ent, type));
+        }
+      }
+      sb.append('\n');
+      
+      sb.append("terms:");
+      for (int i = 0; i < tfidf.numTerms(); i++) {
+        sb.append(' ');
+        sb.append(INVERSE_HASH.get(tfidf.terms[i]));
+      }
+      sb.append('\n');
+      
+      return sb.toString();
     }
     
     public String getCommunicationUuidString() {
@@ -226,35 +311,6 @@ public class IndexCommunications implements AutoCloseable {
       comm_uuid_lo = u.getLeastSignificantBits();
       assert old_hi == 0 || old_hi == comm_uuid_hi;
       assert old_lo == 0 || old_lo == comm_uuid_lo;
-    }
-    
-    public void addDeprel(int deprelPath, int deprelArg) {
-      int[] nf = new int[features.length + 2];
-      nf[0] = deprelPath;
-      nf[1] = deprelArg;
-      System.arraycopy(features, 0, nf, 2, features.length);
-      features = nf;
-      n_deprel++;
-    }
-    
-    public void addEntity(int entityFeat) {
-      int[] nf = new int[features.length + 1];
-      System.arraycopy(features, 0, nf, 0, features.length);
-      nf[nf.length-1] = entityFeat;
-      features = nf;
-      n_entity++;
-    }
-    
-    public int[] getDeprels() {
-      int[] d = new int[n_deprel];
-      System.arraycopy(features, 0, d, 0, n_deprel);
-      return d;
-    }
-    
-    public int[] getEntities() {
-      int[] d = new int[n_entity];
-      System.arraycopy(features, 2*n_deprel + n_situation, d, 0, n_entity);
-      return d;
     }
   }
   
@@ -285,6 +341,14 @@ public class IndexCommunications implements AutoCloseable {
     @Override
     public String toString() {
       return String.format("(QResult score=%.3f tok=%s has_comm=%s feats=%s)", score, tokUuid, comm!=null, feats);
+    }
+    
+    public String show() {
+      StringBuilder sb = new StringBuilder();
+      sb.append(String.format("(QResult score=%.3f tok=%s\n", score, tokUuid));
+      sb.append(feats.show());
+      sb.append(')');
+      return sb.toString();
     }
     
     public static final Comparator<QResult> BY_SCORE_DESC = new Comparator<QResult>() {
@@ -321,6 +385,32 @@ public class IndexCommunications implements AutoCloseable {
       
       // TODO Have PKB/seed slots, which is a relation + argument position + entity
       // TODO Include list of queries and responses?
+      
+      public boolean containsEntity(int entity) {
+        throw new RuntimeException("implement me");
+      }
+
+      public boolean containsPkbEntity(int nerType, int entity) {
+        for (StringInt x : pkbEnt)
+          if (x.integer == entity)
+            return true;
+        return false;
+      }
+      
+      /**
+       * Compute the distribution over entity types in the PKB
+       * with add-lambda smoothing, return mass on a given type.
+       */
+      public double pEntityType(int nerType, double lambda) {
+        throw new RuntimeException("implement me");
+      }
+      
+      public boolean containsPkbDeprel(int deprel) {
+        for (StringInt x : pkbRel)
+          if (x.integer == deprel)
+            return true;
+        return false;
+      }
     }
 
     // PKB, seeds, etc.
@@ -331,9 +421,10 @@ public class IndexCommunications implements AutoCloseable {
     
     // These let you look up Tokenizations given some features
     // which may appear in a seed or a query.
-    private StringIntUuidIndex deprel;      // dependency path string, hash("arg0/entityWord"), Tokenization UUID+
+    private StringIntUuidIndex deprel;      // dependency path string, hash("entityWord"), Tokenization UUID+
     private StringIntUuidIndex situation;   // SituationMention kind, hash("role/entityWord"), Tokenization UUID+
-    private StringIntUuidIndex entity;      // NER type, hash(entity word), Tokenization UUID+
+//    private StringIntUuidIndex entity;      // NER type, hash(entity word), Tokenization UUID+
+    private NerFeatureInvertedIndex entity;      // NER type, hash(entity word), Tokenization UUID+
     
     private Counts<String> ec;
     private MultiTimer tm;
@@ -346,9 +437,14 @@ public class IndexCommunications implements AutoCloseable {
       ec = new Counts<>();
       tm = new MultiTimer();
       
+      INVERSE_HASH = new IntObjectHashMap<>();
+      readInverseHash(new File(HOME, "raw/termHash.txt.gz"), INVERSE_HASH);
+      readInverseHash(new File(HOME, "sit_feats/index_deprel/hashedArgs.txt.gz"), INVERSE_HASH);
+      
       // TODO Populate [deprel, situation, entity] => Tokenization UUID maps
       tm.start("load/PERSON");
-      entity = new StringIntUuidIndex();
+      entity = new NerFeatureInvertedIndex(Collections.emptyList());
+//      entity = new StringIntUuidIndex();
       entity.putIntLines("PERSON", new File(HOME, "ner_feats/nerFeats.PERSON.txt"));
       tm.stop("load/PERSON");
       
@@ -360,36 +456,66 @@ public class IndexCommunications implements AutoCloseable {
       deprel.addStringIntLines(new File(HOME, "sit_feats/index_deprel/deprels.txt"));
       tm.stop("load/deprel");
       
-      // Populate SentFeats
+
+      /* Populate SentFeats **************************************************/
+
+      // Deprels
       tm.start("load/feats/deprel");
       tok2feats = new HashMap<>();
-      for (StrIntUuidEntry x : deprel) {
-        SentFeats f = tok2feats.get(x.uuid);
-        if (f == null) {
-          f = new SentFeats();
-          tok2feats.put(x.uuid, f);
-          ec.increment("tokenization");
+//      for (StrIntUuidEntry x : deprel) {
+//        SentFeats f = tok2feats.get(x.uuid);
+//        if (f == null) {
+//          f = new SentFeats();
+//          tok2feats.put(x.uuid, f);
+//          ec.increment("tokenization");
+//        }
+//        int hs = ReversableHashWriter.onewayHash(x.string);
+//        f.addDeprel(hs, x.integer);
+//        ec.increment("feat/deprel");
+//      }
+      File f = new File(HOME, "sit_feats/deprels.txt.gz");
+      try (BufferedReader r = FileUtil.getReader(f)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          String[] ar = line.split("\t");
+          String deprel = ar[0];
+          String tokUuid = ar[7];
+          
+          // This may not have made its way into the inverse hash
+          addInverseHash(deprel, INVERSE_HASH);
+
+          int arg0 = ReversableHashWriter.onewayHash(ar[3]);
+          int arg1 = ReversableHashWriter.onewayHash(ar[6]);
+          if ("ARG0".equalsIgnoreCase(ar[1])) {
+            // no-op
+          } else {
+            assert "ARG1".equalsIgnoreCase(ar[1]);
+            // swap
+            int t;
+            t = arg0; arg0 = arg1; arg1 = t;
+          }
+          SentFeats sf = getOrPutNew(tokUuid);
+          assert sf != null;
+          int hd = ReversableHashWriter.onewayHash(deprel);
+          FeaturePacker.writeDeprel(hd, arg0, arg1, sf);
         }
-        int hs = ReversableHashWriter.onewayHash(x.string);
-        f.addDeprel(hs, x.integer);
-        ec.increment("feat/deprel");
       }
       tm.stop("load/feats/deprel");
+      
+      // Entities
       tm.start("load/feats/entity");
       for (StrIntUuidEntry x : entity) {
-        SentFeats f = tok2feats.get(x.uuid);
-        if (f == null) {
-          f = new SentFeats();
-          tok2feats.put(x.uuid, f);
-          ec.increment("tokenization");
-        }
-        f.addEntity(x.integer);
+        SentFeats sf = getOrPutNew(x.uuid);
+//        sf.addEntity(x.integer);
+        byte nerType = 0;    // TODO
+        FeaturePacker.writeEntity(x.integer, nerType, sf);
         ec.increment("feat/entity");
       }
       tm.stop("load/feats/entity");
+
       // TODO situations
       
       
+      /* *********************************************************************/
       // Read in the Communication UUID for every Tokenization UUID in the input
       Log.info("we know about " + tok2feats.size() + " Tokenizations,"
           + " looking for the docVecs for them in " + tokUuid2commUuid.getPath());
@@ -403,11 +529,11 @@ public class IndexCommunications implements AutoCloseable {
           }
           assert ar.length == 2;
           String tokUuid = ar[0];
-          SentFeats f = tok2feats.get(tokUuid);
-          if (f != null) {
-            f.setCommunicationUuid(ar[1]);
-            f.tfidf = docVecs.get(ar[1]);
-            assert f.tfidf != null;
+          SentFeats sf = tok2feats.get(tokUuid);
+          if (sf != null) {
+            sf.setCommunicationUuid(ar[1]);
+            sf.tfidf = docVecs.get(ar[1]);
+            assert sf.tfidf != null;
             ec.increment("docVec");
           } else {
             ec.increment("skip/docVec");
@@ -418,6 +544,16 @@ public class IndexCommunications implements AutoCloseable {
       
       state = new State();
       Log.info("done setup, " + ec);
+    }
+    
+    private SentFeats getOrPutNew(String tokUuid) {
+      SentFeats sf = tok2feats.get(tokUuid);
+      if (sf == null) {
+        sf = new SentFeats();
+        tok2feats.put(tokUuid, sf);
+        ec.increment("tokenization");
+      }
+      return sf;
     }
     
     public void clearState() {
@@ -439,39 +575,58 @@ public class IndexCommunications implements AutoCloseable {
       Log.info("response: " + response);
       
       SentFeats f = response.feats;
+      FeaturePacker.Unpacked ff = FeaturePacker.unpack(f.featBuf);
       
       assert f.tfidf != null;
       state.pkbDocs.add(f.tfidf);
 
-      for (int e : f.getEntities())
-        state.pkbEnt.add(new StringInt("NA", e));
+      // TODO entity features need to follow "p:" "pi:" and "pb:" extractions from below
+      for (IntPair e : ff.entities) {
+        state.pkbEnt.add(new StringInt("NA", e.second));
+      }
       
-      // TODO entities
+      // TODO Situations
       
-      for (int d : f.getDeprels())
-        state.pkbRel.add(new StringInt("NA", d));
+      for (IntTrip d : ff.deprels)
+        state.pkbRel.add(new StringInt("NA", d.first));
       
       state.pkbTokUuid.add(response.tokUuid);
     }
     
+    /**
+     * @param entityName e.g. "President Barack_Obama"
+     * @param entityType e.g. "PERSON"
+     * @param limit is how many items to return (max)
+     */
     public List<QResult> query(String entityName, String entityType, int limit) {
       tm.start("query");
       Log.info("entityName=" + entityName + " entityType=" + entityType);
-
+      
+      // TODO
+      TokenObservationCounts tokObs = null;
+      TokenObservationCounts tokObsLc = null;
+      String[] entToks = entityName.split(" ");
+      String[] headwords = new String[] {entToks[entToks.length - 1]};    // TODO
+//      List<String> entFeats = getEntityMentionFeatures(entityName, headwords, entityType, tokObs, tokObsLc);
       // Lookup mentions for the query entity
-      int entityNameHash = ReversableHashWriter.onewayHash("h:" + entityName);
-      List<String> toks = entity.get(entityType, entityNameHash);
-      Log.info("entity results initial: " + toks);
+      List<Result> toks = entity.findMentionsMatching(entityName, entityType, headwords, tokObs, tokObsLc);
+//      int entityNameHash = ReversableHashWriter.onewayHash("h:" + entityName);
+//      List<String> toks = entity.get(entityType, entityNameHash);
+      
+      List<Result> ts = toks.size() > 20 ? toks.subList(0, 20) : toks;
+      Log.info("entity results initial (" + toks.size() + "): " + ts);
       
       // Re-score mentions based on seeds/PKB
       List<QResult> scored = new ArrayList<>();
-      for (String t : toks) {
-        if (state.pkbTokUuid.contains(t)) {
+      for (Result t : toks) {
+        String tokUuid = t.entityMentionUuid; // NOTE, this is right! old code had this as EM UUIDs instead of Tokenization UUIDs
+        if (state.pkbTokUuid.contains(tokUuid)) {
           Log.info("skipping tok=" + t + " because it is already in the PKB");
           continue;
         }
         
-        QResult r = score(t);
+        double nameMatchScore = t.score;
+        QResult r = score(tokUuid, nameMatchScore);
         scored.add(r);
       }
       Collections.sort(scored, QResult.BY_SCORE_DESC);
@@ -486,8 +641,9 @@ public class IndexCommunications implements AutoCloseable {
     /**
      * Score a retrieved sentence/tokenization against seed and PKB items.
      */
-    private QResult score(String tokUuid) {
+    private QResult score(String tokUuid, double nameMatchScore) {
       tm.start("score");
+      boolean verbose = false;
       
       /*
        * entMentions WILL be Tokenization UUIDs.
@@ -499,9 +655,12 @@ public class IndexCommunications implements AutoCloseable {
        */
       
       SentFeats f = tok2feats.get(tokUuid);
+      FeaturePacker.Unpacked ff = FeaturePacker.unpack(f.featBuf);
 
-      Log.info("f.tok=" + tokUuid);
-      Log.info("f.comm=" + f.getCommunicationUuidString());
+      if (verbose) {
+        Log.info("f.tok=" + tokUuid);
+        Log.info("f.comm=" + f.getCommunicationUuidString());
+      }
       
       double scoreTfidf = 0;
       double scorePkbDoc = 0;
@@ -518,37 +677,73 @@ public class IndexCommunications implements AutoCloseable {
       scoreTfidf /= z;
       scorePkbDoc /= z;
       
-      Log.info("maxTfIdf=" + maxTfidf);
-      Log.info("pkbDocs.size=" + state.pkbDocs.size());
-      Log.info("scoreTfidf=" + scoreTfidf);
-      Log.info("scorePkbdoc=" + scorePkbDoc);
+      if (verbose) {
+        Log.info("nameMatchScore=" + nameMatchScore);
+        Log.info("maxTfIdf=" + maxTfidf);
+        Log.info("pkbDocs.size=" + state.pkbDocs.size());
+        Log.info("scoreTfidf=" + scoreTfidf);
+        Log.info("scorePkbdoc=" + scorePkbDoc);
+      }
       
       // TODO Currently we measure a hard "this entity/deprel/situation/etc
       // showed up in the result and the PKB/seed", but we should generalize
       // this to be similarity of the embeddings.
       
-      int[] deprel = f.getDeprels();
-      int[] ent = f.getEntities();
-
-      double scorePkbDeprel = dot(deprel, state.pkbRel);
-      double scorePkbEnt = dot(ent, state.pkbEnt);
+      double scoreSeedEnt = 0;  // TODO
+      double scorePkbEnt = 0;
+      for (IntPair et : ff.entities) {
+        if (state.containsPkbEntity(et.first, et.second))
+          scorePkbEnt += 1;
+      }
+      scorePkbEnt /= Math.sqrt(ff.entities.size() + 1);
       
-      double scoreSeedDeprel = 0.1 * dot(deprel, state.seedRel);
-      double scoreSeedEnt = 0.1 * dot(ent, state.seedEnt);
+      // TODO
+      double scoreSeedSit = 0;
+      double scorePkbSit = 0;
       
-      Log.info("f.deprels=" + Arrays.toString(deprel));
-      Log.info("scorePkbDeprel=" + scorePkbDeprel);
-      Log.info("scoreSeedDeprel=" + scoreSeedDeprel);
-
-      Log.info("f.entities=" + Arrays.toString(ent));
-      Log.info("scorePkbEnt=" + scorePkbEnt);
-      Log.info("scoreSeedEnt=" + scoreSeedEnt);
-
-      System.out.println();
+      double scorePkbDeprel = 0;
+      for (IntTrip d : ff.deprels) {
+        int deprel = d.first;
+        int arg0 = d.second;
+        int arg1 = d.third;
+        if (state.containsPkbDeprel(deprel)) {
+          boolean ca0 = state.containsEntity(arg0);
+          boolean ca1 = state.containsEntity(arg1);
+          if (ca0 && ca1)
+            scorePkbDeprel += 3;
+          if (ca0 || ca1)
+            scorePkbDeprel += 1;
+        }
+      }
+      scorePkbDeprel /= Math.sqrt(ff.deprels.size() + 1);
+      double scoreSeedDeprel = 0; // TODO
       
-      double score = scoreTfidf + scorePkbDeprel
+//      int[] deprel = f.getDeprels();
+//      int[] ent = f.getEntities();
+//
+//      double scorePkbDeprel = dot(deprel, state.pkbRel);
+//      double scorePkbEnt = dot(ent, state.pkbEnt);
+//
+//      double scoreSeedDeprel = 0.1 * dot(deprel, state.seedRel);
+//      double scoreSeedEnt = 0.1 * dot(ent, state.seedEnt);
+//
+//      if (verbose) {
+//        Log.info("f.deprels=" + Arrays.toString(deprel));
+//        Log.info("scorePkbDeprel=" + scorePkbDeprel);
+//        Log.info("scoreSeedDeprel=" + scoreSeedDeprel);
+//
+//        Log.info("f.entities=" + Arrays.toString(ent));
+//        Log.info("scorePkbEnt=" + scorePkbEnt);
+//        Log.info("scoreSeedEnt=" + scoreSeedEnt);
+//
+//        System.out.println();
+//      }
+      
+      double score = nameMatchScore
+          * (scoreTfidf + scorePkbDoc
           + scorePkbDeprel + scoreSeedDeprel
-          + scorePkbEnt + scoreSeedEnt;
+          + scorePkbSit + scoreSeedSit
+          + scorePkbEnt + scoreSeedEnt);
           
       tm.stop("score");
       return new QResult(tokUuid, f, score);
@@ -578,9 +773,12 @@ public class IndexCommunications implements AutoCloseable {
 
       int responseLim = 20;
       List<QResult> results = ss.query("Barack_Obama", "PERSON", responseLim);
-      for (QResult r : results)
-        System.out.println(r);
+      for (int i = 0; i < results.size(); i++) {
+        System.out.println("res1[" + i + "]: " + results.get(i).show());
+      }
       
+      for (int i = 0; i < 20; i++)
+        System.out.println();
       
       // Lets suppose that the user like the second response
       // Add it to the PKB and see if we can get the PKB/tfidf features to fire
@@ -589,8 +787,9 @@ public class IndexCommunications implements AutoCloseable {
       
       // Lets just re-do the same query
       List<QResult> results2 = ss.query("Barack_Obama", "PERSON", responseLim);
-      for (QResult r : results2)
-        System.out.println(r);
+      for (int i = 0; i < results2.size(); i++) {
+        System.out.println("res2[" + i + "]: " + results2.get(i).show());
+      }
       
       Log.info("done\n" + ss.tm);
     }
@@ -626,18 +825,20 @@ public class IndexCommunications implements AutoCloseable {
           assert ar.length == 10;
           
           String deprel = ar[0];
-          String role0 = ar[1];
-          String type0 = ar[2];
+//          String role0 = ar[1];
+//          String type0 = ar[2];
           String head0 = ar[3];
-          String role1 = ar[4];
-          String type1 = ar[5];
+//          String role1 = ar[4];
+//          String type1 = ar[5];
           String head1 = ar[6];
           String tokUuid = ar[7];
 //          String commUuid = ar[8];
 //          String commId = ar[9];
           
-          int h0 = a.hash(role0 + "/" + type0 + "/" + head0);
-          int h1 = a.hash(role1 + "/" + type1 + "/" + head1);
+//          int h0 = a.hash(role0 + "/" + type0 + "/" + head0);
+//          int h1 = a.hash(role1 + "/" + type1 + "/" + head1);
+          int h0 = a.hash(head0);
+          int h1 = a.hash(head1);
           
           w.write(deprel);
           w.write('\t');
@@ -837,6 +1038,7 @@ public class IndexCommunications implements AutoCloseable {
 //                + "\t" + comm.getUuid().getUuidString()
 //                + "\t" + comm.getId());
 //            w_deprel.newLine();
+            
           }
         }
       }
@@ -1218,17 +1420,18 @@ public class IndexCommunications implements AutoCloseable {
      * Returns a list of (EntityMention UUID, score) pairs.
      */
     public List<Result> findMentionsMatching(String entityName, String entityType, String[] headwords,
-        TokenObservationCounts tokeObs, TokenObservationCounts tokenObsLc) {
+        TokenObservationCounts tokenObs, TokenObservationCounts tokenObsLc) {
       TIMER.start("find/nerFeatures");
       Log.info("entityName=" + entityName + " nerType=" + entityType);
       
       // Find out which EntityMentions contain the query ngrams
-      List<String> features = features(entityName, headwords, entityType, tokeObs, tokenObsLc);
+      List<String> features = getEntityMentionFeatures(entityName, headwords, entityType, tokenObs, tokenObsLc);
       int n = features.size();
       Counts<String> emNgramOverlap = new Counts<>();
       for (int i = 0; i < n; i++) {
-        int term = HASH.hashString(features.get(i), UTF8).asInt();
-        int weight = featureWeight(features.get(i));
+//        int term = HASH.hashString(features.get(i), UTF8).asInt();
+        int term = ReversableHashWriter.onewayHash(features.get(i));
+        int weight = getEntityMentionFeatureWeight(features.get(i));
         List<String> emsContainingTerm = get(entityType, term);
         for (String em : emsContainingTerm) {
 //          emNgramOverlap.increment(em);
@@ -1402,7 +1605,8 @@ public class IndexCommunications implements AutoCloseable {
       int sizeGuess = document.length;
       IntFloatUnsortedVector tf = new IntFloatUnsortedVector(sizeGuess);
       for (String t : document) {
-        int term = HASH.hashString(t, UTF8).asInt();
+//        int term = HASH.hashString(t, UTF8).asInt();
+        int term = ReversableHashWriter.onewayHash(t);
         tf.add(term, 1);
       }
 
@@ -1759,6 +1963,10 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
+  /**
+   * @param tokObs can be null, will take full string
+   * @param tokObsLc can be null, will take full string
+   */
   private static List<String> prefixGrams(String mentionText,
       TokenObservationCounts tokObs, TokenObservationCounts tokObsLc) {
     boolean verbose = false;
@@ -1784,8 +1992,8 @@ public class IndexCommunications implements AutoCloseable {
     
     // unigram prefixes
     for (int i = 0; i < toks.length; i++) {
-      String p = tokObs.getPrefixOccuringAtLeast(toks[i], 10);
-      String pi = tokObsLc.getPrefixOccuringAtLeast(toksLc[i], 10);
+      String p = tokObs == null ? toks[i] : tokObs.getPrefixOccuringAtLeast(toks[i], 10);
+      String pi = tokObsLc == null ? toksLc[i] : tokObsLc.getPrefixOccuringAtLeast(toksLc[i], 10);
       f.add("p:" + p);
       f.add("pi:" + pi);
     }
@@ -1801,13 +2009,18 @@ public class IndexCommunications implements AutoCloseable {
       String w, ww;
       if (i < 0) {
         w = B;
-        ww = c.getPrefixOccuringAtLeast(tk[i+1], lim);
+        ww = c == null ? tk[i+1] : c.getPrefixOccuringAtLeast(tk[i+1], lim);
       } else if (i == toks.length-1) {
-        w = c.getPrefixOccuringAtLeast(tk[i], lim);
+        w = c == null ? tk[i] : c.getPrefixOccuringAtLeast(tk[i], lim);
         ww = A;
       } else {
-        w = c.getPrefixOccuringAtLeast(tk[i], lim);
-        ww = c.getPrefixOccuringAtLeast(tk[i+1], lim);
+        if (c == null) {
+          w = tk[i];
+          ww = tk[i+1];
+        } else {
+          w = c.getPrefixOccuringAtLeast(tk[i], lim);
+          ww = c.getPrefixOccuringAtLeast(tk[i+1], lim);
+        }
       }
       f.add("pb:" + w + "_" + ww);
     }
@@ -1820,7 +2033,12 @@ public class IndexCommunications implements AutoCloseable {
     return f;
   }
   
-  public static List<String> features(String mentionText, String[] headwords, String nerType,
+  /**
+   * @param tokObs can be null
+   * @param tokObsLc can be null
+   * @return
+   */
+  public static List<String> getEntityMentionFeatures(String mentionText, String[] headwords, String nerType,
       TokenObservationCounts tokObs, TokenObservationCounts tokObsLc) {
     // ngrams
     List<String> features = new ArrayList<>();
@@ -1831,7 +2049,7 @@ public class IndexCommunications implements AutoCloseable {
         continue;
       String h = headwords[i];
       String hi = headwords[i].toLowerCase();
-      String hp = tokObs.getPrefixOccuringAtLeast(headwords[i], 5);
+      String hp = tokObs == null ? headwords[i] : tokObs.getPrefixOccuringAtLeast(headwords[i], 5);
 //      String hip = tokObsLc.getPrefixOccuringAtLeast(headwords[i].toLowerCase(), 5);
       features.add("h:" + h);
       features.add("hi:" + hi);
@@ -1840,7 +2058,7 @@ public class IndexCommunications implements AutoCloseable {
     }
     return features;
   }
-  public static int featureWeight(String feature) {
+  public static int getEntityMentionFeatureWeight(String feature) {
     if (feature.startsWith("h:"))
       return 30;
     if (feature.startsWith("hi:"))
@@ -1920,7 +2138,7 @@ public class IndexCommunications implements AutoCloseable {
       boolean takeNnCompounts = true;
       boolean allowFailures = true;
       String head = headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
-      List<String> feats = features(em.getText(), new String[] {head}, em.getEntityType(),
+      List<String> feats = getEntityMentionFeatures(em.getText(), new String[] {head}, em.getEntityType(),
           tokObs, tokObsLc);
       for (String f : feats) {
         int i = termHash.hash(f);
@@ -2055,6 +2273,48 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
+  public static void addInverseHash(String s, IntObjectHashMap<String> addTo) {
+    int h = ReversableHashWriter.onewayHash(s);
+    String ss = addTo.get(h);
+    if (ss == null) {
+      addTo.put(h, s);
+    } else if (ss.equals(s)) {
+      // no-op
+    } else {
+      // TODO split on "||" and check if already contains
+      addTo.put(h, ss + "||" + s);
+    }
+  }
+  
+  /**
+   * Adds "||" between two strings which could both serve as values.
+   * @param f should have lines like: <hashedTerm> <tab> <termString>
+   */
+  public static void readInverseHash(File f, IntObjectHashMap<String> addTo) {
+    Log.info("adding rows from " + f.getPath());
+    int n0 = addTo.size();
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        String[] ar = line.split("\t", 2);
+        int k = Integer.parseUnsignedInt(ar[0]);
+        Object old = addTo.put(k, ar[1]);
+//        assert old == null || ar[1].equals(old) : "key=" + k + " appears to have two values old=" + old + " and new=" + ar[1];
+        if (old != null) {
+          if (old.equals(ar[1])) {
+            // no op
+            // TODO split on "||" and check each term
+          } else {
+            addTo.put(k, old + "||" + ar[1]);
+          }
+        }
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    int added = addTo.size() - n0;
+    Log.info("added " + added + " rows, prevSize=" + n0 + " curSize=" + addTo.size());
+  }
+  
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     Log.info("starting, args: " + Arrays.toString(args));
@@ -2085,7 +2345,7 @@ public class IndexCommunications implements AutoCloseable {
       SituationSearch.main(config);
       break;
     case "testAccumulo":
-      int localPort = config.getInt("port", 8585);
+      int localPort = config.getInt("port", 7248);
       CommunicationRetrieval cr = new CommunicationRetrieval(localPort);
       cr.test("NYT_ENG_20090901.0206");
       cr.test("ef93e366-79cc-b8e5-c816-8627a2e25887");
