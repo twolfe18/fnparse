@@ -6,9 +6,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
 import org.apache.thrift.TException;
 import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.protocol.TCompactProtocol;
@@ -20,15 +24,22 @@ import org.apache.thrift.transport.TNonblockingServerSocket;
 import org.apache.thrift.transport.TNonblockingServerTransport;
 import org.apache.thrift.transport.TTransportException;
 
+import edu.jhu.hlt.acute.archivers.tar.TarArchiver;
 import edu.jhu.hlt.concrete.AnnotationMetadata;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.Sentence;
+import edu.jhu.hlt.concrete.SituationMention;
+import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.annotate.AnnotateCommunicationService;
 import edu.jhu.hlt.concrete.annotate.AnnotateCommunicationService.Iface;
+import edu.jhu.hlt.concrete.serialization.archiver.ArchivableCommunication;
+import edu.jhu.hlt.concrete.serialization.iterators.TarGzArchiveEntryCommunicationIterator;
 import edu.jhu.hlt.concrete.services.ConcreteThriftException;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.uberts.Step;
 import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.MergeFactsIntoSituationMentionSets;
@@ -49,6 +60,8 @@ public class FNParseConcreteService implements AnnotateCommunicationService.Ifac
   private AnnotationMetadata meta;
   private String situationType;
   
+  Counts<String> ec = new Counts<>();   // event counts
+  
   public boolean verbose = false;
   public boolean echo = false;
   
@@ -67,6 +80,7 @@ public class FNParseConcreteService implements AnnotateCommunicationService.Ifac
 
   @Override
   public Communication annotate(Communication comm) throws ConcreteThriftException, TException {
+    ec.increment("annotate/communication");
     if (verbose)
       Log.info("annotating " + comm.getId());
     if (echo) {
@@ -101,12 +115,13 @@ public class FNParseConcreteService implements AnnotateCommunicationService.Ifac
         for (Step s : traj) {
 //          Log.info(comm.getId() + "\t" + s);
           if (s.pred) {
-            RelLine rl = s.edge.getRelLine("y");
+            RelLine rl = s.edge.getRelLine("y", "score=" + s.score.forwards());
             annoFacts.items.add(rl);
           }
         }
         anno.addSentenceFacts(annoFacts);
         idx.v++;
+        ec.increment("annotate/sentence");
       };
 
       if (verbose)
@@ -118,13 +133,13 @@ public class FNParseConcreteService implements AnnotateCommunicationService.Ifac
         Log.info("adding annotations to Communication...");
       anno.addSituationMentionSetToCommunication(meta, situationType);
       
-      // DEBUG: can we serialize this to disk (minimum requirement for it making it over the wire)
-      File of = File.createTempFile("fnparse-concrete-service-test", ".comm");
-      if (verbose)
-        Log.info("saving to " + of.getPath());
-      try (BufferedOutputStream b = new BufferedOutputStream(new FileOutputStream(of))) {
-        comm.write(new TCompactProtocol(new TIOStreamTransport(b)));
-      }
+//      // DEBUG: can we serialize this to disk (minimum requirement for it making it over the wire)
+//      File of = File.createTempFile("fnparse-concrete-service-test", ".comm");
+//      if (verbose)
+//        Log.info("saving to " + of.getPath());
+//      try (BufferedOutputStream b = new BufferedOutputStream(new FileOutputStream(of))) {
+//        comm.write(new TCompactProtocol(new TIOStreamTransport(b)));
+//      }
 
       if (verbose)
         Log.info("returning annotations for " + comm.getId());
@@ -169,32 +184,67 @@ public class FNParseConcreteService implements AnnotateCommunicationService.Ifac
     TServer server = new TNonblockingServer(args);
     server.serve();
   }
+  
+  public static void foo() throws Exception {
+    File f = new File("/tmp/fnparse-concrete-service-debug-7945541799297194742.comm");
+    Communication comm = new Communication();
+    try (BufferedInputStream b = new BufferedInputStream(new FileInputStream(f))) {
+      comm.read(new TCompactProtocol(new TIOStreamTransport(b)));
+      System.out.println(comm.getId());
+      
+      for (SituationMentionSet sms : comm.getSituationMentionSetList()) {
+        Log.info("sms: " + sms.getMetadata());
+        for (SituationMention sm : sms.getMentionList()) {
+          Log.info("sm: " + sm);
+        }
+      }
+
+    }
+  }
 
   public static void main(String[] as) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(as);
+    
+    boolean debug = config.getBoolean("debug", false);
+    if (debug) {
+      foo();
+      return;
+    }
+    
 //    serve(config);
+    TimeMarker tm = new TimeMarker();
     FNParseConcreteService client = new FNParseConcreteService(config);
-    File i = new File("data/parma/ecbplus/ECB+_LREC2014/concrete-parsey-and-stanford/");
-    File o = new File("data/parma/ecbplus/ECB+_LREC2014/concrete-parsey-and-stanford-and-fnparsePB/");
-    if (!o.isDirectory())
-      o.mkdirs();
-    Communication c = new Communication();
-    for (File f : i.listFiles()) {
-      if (!f.getName().endsWith(".comm"))
-        continue;
-      Log.info("processing " + f.getPath());
-      try (BufferedInputStream b = new BufferedInputStream(new FileInputStream(f))) {
-        c.read(new TCompactProtocol(new TIOStreamTransport(b)));
+    List<File> inputTgz = config.getFileGlob("input");
+    File outputTgz = config.getFile("output");
+    Log.info("reading from: " + inputTgz);
+    Log.info("writing to: " + outputTgz.getPath());
+    try (OutputStream os = Files.newOutputStream(outputTgz.toPath());
+        BufferedOutputStream bos = new BufferedOutputStream(os, 1024 * 8 * 24);
+        TarArchiver archiver = new TarArchiver(new GzipCompressorOutputStream(bos))) {
+      for (File f : inputTgz) {
+        client.ec.increment("annotate/file");
+        Log.info("processing " + f.getPath());
+        try (InputStream is = new FileInputStream(f);
+            TarGzArchiveEntryCommunicationIterator iter = new TarGzArchiveEntryCommunicationIterator(is)) {
+          while (iter.hasNext()) {
+            Communication c = iter.next();
+            Communication anno = client.annotate(c);
+            
+            if (debug) {
+              File of = File.createTempFile("fnparse-concrete-service-debug-", ".comm");
+              Log.info("writing to " + of.getPath());
+              try (BufferedOutputStream b = new BufferedOutputStream(new FileOutputStream(of))) {
+                anno.write(new TCompactProtocol(new TIOStreamTransport(b)));
+              }
+            }
+            
+            archiver.addEntry(new ArchivableCommunication(anno));
+            if (tm.enoughTimePassed(15)) {
+              Log.info("counts: " + client.ec);
+            }
+          }
+        }
       }
-      Communication anno = client.annotate(c);
-//      Communication anno = c;
-      System.out.println("read " + anno.getId());
-      File of = new File(o, anno.getId() + ".comm");
-      try (BufferedOutputStream b = new BufferedOutputStream(new FileOutputStream(of))) {
-        anno.write(new TCompactProtocol(new TIOStreamTransport(b)));
-      }
-      System.out.println("wrote " + of.getPath());
     }
   }
-  
 }
