@@ -27,6 +27,10 @@ if [[ ! -f $AWK_PRUNE_ROW ]]; then
   exit 1
 fi
 
+if [[ ! -d $TEMP_DIR ]]; then
+  mkdir -p $TEMP_DIR
+fi
+
 # Sort by row
 # Prune rows
 # Transpose (so cols look like rows)
