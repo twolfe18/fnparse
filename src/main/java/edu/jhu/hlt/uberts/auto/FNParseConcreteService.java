@@ -68,7 +68,7 @@ public class FNParseConcreteService implements AnnotateCommunicationService.Ifac
   public FNParseConcreteService(ExperimentProperties config) {
     meta = new AnnotationMetadata()
         .setKBest(1)
-        .setTool("fnparse/foo")
+        .setTool(config.getString("toolname", "fnparse"))
         .setTimestamp(System.currentTimeMillis() / 1000);
     situationType = config.getString("situationType", "fnparse/fn");
     try {
