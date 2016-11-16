@@ -6,7 +6,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -22,9 +21,6 @@ import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
-
-import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
@@ -77,8 +73,6 @@ import edu.jhu.prim.vector.IntIntHashVector;
 public class IndexCommunications implements AutoCloseable {
 
   public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-10-27_ngram5");
-//  public static final Charset UTF8 = Charset.forName("UTF-8");
-//  public static final HashFunction HASH = Hashing.murmur3_32();
   public static final MultiTimer TIMER = new MultiTimer();
 
   public static int err_head = 0;
@@ -718,27 +712,6 @@ public class IndexCommunications implements AutoCloseable {
       scorePkbDeprel /= Math.sqrt(ff.deprels.size() + 1);
       double scoreSeedDeprel = 0; // TODO
       
-//      int[] deprel = f.getDeprels();
-//      int[] ent = f.getEntities();
-//
-//      double scorePkbDeprel = dot(deprel, state.pkbRel);
-//      double scorePkbEnt = dot(ent, state.pkbEnt);
-//
-//      double scoreSeedDeprel = 0.1 * dot(deprel, state.seedRel);
-//      double scoreSeedEnt = 0.1 * dot(ent, state.seedEnt);
-//
-//      if (verbose) {
-//        Log.info("f.deprels=" + Arrays.toString(deprel));
-//        Log.info("scorePkbDeprel=" + scorePkbDeprel);
-//        Log.info("scoreSeedDeprel=" + scoreSeedDeprel);
-//
-//        Log.info("f.entities=" + Arrays.toString(ent));
-//        Log.info("scorePkbEnt=" + scorePkbEnt);
-//        Log.info("scoreSeedEnt=" + scoreSeedEnt);
-//
-//        System.out.println();
-//      }
-      
       double score = nameMatchScore
           * (scoreTfidf + scorePkbDoc
           + scorePkbDeprel + scoreSeedDeprel
@@ -747,15 +720,6 @@ public class IndexCommunications implements AutoCloseable {
           
       tm.stop("score");
       return new QResult(tokUuid, f, score);
-    }
-    
-    private static double dot(int[] feats, List<StringInt> pkbFeats) {
-      double score = 0;
-      for (StringInt f : pkbFeats)
-        for (int i = 0; i < feats.length; i++)
-          if (feats[i] == f.integer)
-            score += 1;
-      return score /= Math.sqrt(pkbFeats.size() + 1);
     }
     
     public static void main(ExperimentProperties config) throws IOException {
@@ -809,7 +773,7 @@ public class IndexCommunications implements AutoCloseable {
    */
   public static class HashDeprels {
     /**
-     * @see IndexSituations#writeDepRels(Communication, Map) for line format
+     * @see IndexDeprels#writeDepRels(Communication, Map) for line format
      */
     public static void main(ExperimentProperties config) throws IOException {
       File input = config.getExistingFile("input");
@@ -858,36 +822,231 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
+
+  /**
+   * Indexes frames (just FrameNet for now).
+   * 
+   * Produces two tables:
+   * - for retrieval: frame, hash(argHead), Tokenization UUID
+   * - for embedding: entity, frame, roleEntPlaysInFrame, roleAlt, argAltHead
+   *
+   * WAIT: (For indexing) we have two things to play with:
+   * string/outerKey/exactMatch/userQueryDirected:  entity name, e.g. "Barack_Obama", maybe "PERSON/Barack_Obama"
+   * int/innerKey/couldEnumerate/seedPkbDirected:   frame/role/argHead, e.g. "Commerce_buy/Seller/McDonalds" or "Commerce_buy/Buyer/IDENT"
+   * 
+   * As long as we can embed (matrix factorize) both [entityName, frameRoleArgHead], we can have a similarity over both.
+   * Initially I think I should ignore similarity_{entityName} and just do exact matching on the query entityName.
+   * similarity_{frameRoleArg} can be used to smooth over instances of frameRoleArgHead in the PKB/seeds
+   */
+  public static class IndexFrames implements AutoCloseable {
+
+    public static void main(ExperimentProperties config) throws Exception {
+      List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
+      File outputDir = config.getOrMakeDir("outputDirectory", new File(HOME, "frame"));
+      String nerTool = config.getString("nerTool", "Stanford CoreNLP");
+      try (IndexFrames is = new IndexFrames(nerTool,
+          new File(outputDir, "frames.forRetrieval.txt.gz"),
+          new File(outputDir, "frames.forEmbedding.txt.gz"),
+          new File(outputDir, "tokUuid_commUuid_commId.txt.gz"),
+          new File(outputDir, "hashedTerms.approx.txt.gz"))) {
+        for (File f : inputCommTgzs)
+          is.observe(f);
+      }
+    }
+
+    private String nerTool;
+    private Set<String> retrievalEntityTypes;
+    private ReversableHashWriter revAlph;
+    private BufferedWriter w_forRetrieval;
+    private BufferedWriter w_forEmbedding;
+    private BufferedWriter w_tok2comm;
+
+    // Misc
+    private TimeMarker tm;
+    private Counts<String> ec;
+    
+    public IndexFrames(String nerTool, File f_forRetrieval, File f_forEmbedding, File tok2comm, File revAlph) throws IOException {
+      Log.info("f_forRetrieval=" + f_forRetrieval.getPath());
+      Log.info("f_forEmbedding=" + f_forEmbedding.getPath());
+      Log.info("tok2comm=" + tok2comm.getPath());
+      Log.info("revAlph=" + revAlph.getPath());
+      this.w_forRetrieval = FileUtil.getWriter(f_forRetrieval);
+      this.w_forEmbedding = FileUtil.getWriter(f_forEmbedding);
+      this.w_tok2comm = FileUtil.getWriter(tok2comm);
+      this.nerTool = nerTool;
+      this.ec = new Counts<>();
+      this.tm = new TimeMarker();
+      
+      this.revAlph = new ReversableHashWriter(revAlph);
+      
+      this.retrievalEntityTypes = new HashSet<>();
+      this.retrievalEntityTypes.addAll(Arrays.asList(
+          "PERSON",
+          "LOCATION",
+          "ORGANIZATION",
+          "MISC"));
+//      415620 PERSON
+//      238344 LOCATION
+//      228197 ORGANIZATION
+//      201512 NUMBER
+//      144665 DATE
+//       61295 MISC
+//       45475 DURATION
+//       32155 ORDINAL
+//       12266 TIME
+//        1541 SET
+    }
+
+    public void observe(File commTgzArchive) throws IOException {
+      ec.increment("files");
+      Log.info("reading from " + commTgzArchive.getPath());
+      try (InputStream is = new FileInputStream(commTgzArchive);
+          TarGzArchiveEntryCommunicationIterator iter = new TarGzArchiveEntryCommunicationIterator(is)) {
+        while (iter.hasNext()) {
+          Communication c = iter.next();
+          observe(c);
+        }
+      }
+    }
+    
+    public void observe(Communication c) throws IOException {
+      ec.increment("communications");
+      Map<String, Tokenization> tmap = AddNerTypeToEntityMentions.buildTokzIndex(c);
+      writeSituations(c, tmap);
+      if (tm.enoughTimePassed(10))
+        Log.info(c.getId() + "\t" + ec + "\t" + Describe.memoryUsage());
+    }
+
+    private void writeSituations(Communication c, Map<String, Tokenization> tmap) throws IOException {
+      if (c.isSetSituationMentionSetList()) {
+        for (SituationMentionSet sms : c.getSituationMentionSetList()) {
+          if (sms.isSetMentionList()) {
+            for (SituationMention sm : sms.getMentionList()) {
+
+              TokenRefSequence sitMention = sm.getTokens();
+              assert tmap.get(sitMention.getTokenizationId().getUuidString()) != null;
+
+              int n = sm.getArgumentListSize();
+              for (int i = 0; i < n; i++) {
+                MentionArgument a = sm.getArgumentList().get(i);
+
+                // Do not output if argument doens't contain a named entity
+                TokenRefSequence argMention = a.getTokens();
+                String nerType = AddNerTypeToEntityMentions.getNerType(argMention, tmap, nerTool);
+                if ("O".equals(nerType)) {
+                  ec.increment("skip/arguments/O");
+                  continue;
+                }
+                if (nerType.split(",").length > 1) {
+                  ec.increment("skip/arguments/complexType");
+                  continue;
+                }
+
+                boolean takeNnCompounts = true;
+                boolean allowFailures = true;
+                String argHead = headword(argMention, tmap, takeNnCompounts, allowFailures);
+                if (argHead == null) {
+                  ec.increment("err/headfinder");
+                  continue;
+                }
+                assert argHead.split("\\s+").length == 1;
+                String tokId = argMention.getTokenizationId().getUuidString();
+                assert tokId.equals(sitMention.getTokenizationId().getUuidString());
+
+                // for retrieval: frame/role, hash(argHead), Tokenization UUID
+                if (retrievalEntityTypes.contains(nerType)) {
+                  w_forRetrieval.write(sm.getSituationKind()
+                      + "/" + a.getRole()
+                      //                    + "\t" + nerType
+                      + "\t" + revAlph.hash(argHead)
+                      + "\t" + tokId);
+                  w_forRetrieval.newLine();
+                  
+                  w_tok2comm.write(tokId
+                      + "\t" + c.getUuid().getUuidString()
+                      + "\t" + c.getId());
+                  w_tok2comm.newLine();
+                }
+                
+                for (int j = 0; j < n; j++) {
+                  if (j >= i) continue;
+                  MentionArgument aa = sm.getArgumentList().get(j);
+                  String argHeadAlt = headword(aa.getTokens(), tmap, takeNnCompounts, allowFailures);
+                  String nerTypeAlt = AddNerTypeToEntityMentions.getNerType(aa.getTokens(), tmap, nerTool);
+                  if ("O".equals(nerTypeAlt)) {
+                    ec.increment("skip/arguments2/O");
+                    continue;
+                  }
+                  if (nerTypeAlt.split(",").length > 1) {
+                    ec.increment("skip/arguments2/complexType");
+                    continue;
+                  }
+                  
+                  // for embedding: entity, frame, roleEntPlaysInFrame, roleAlt, argAltHead
+                  w_forEmbedding.write(sm.getSituationKind()
+                      + "\t" + nerType
+                      + "\t" + argHead
+                      + "\t" + a.getRole()
+                      + "\t" + nerTypeAlt
+                      + "\t" + argHeadAlt
+                      + "\t" + aa.getRole());
+                  w_forEmbedding.newLine();
+                }
+                
+                ec.increment("arguments");
+              }
+            }
+          }
+        }
+      }
+    }
+
+
+    @Override
+    public void close() throws Exception {
+      Log.info("closing, " + ec);
+      if (w_forRetrieval != null) {
+        w_forRetrieval.close();
+        w_forRetrieval = null;
+      }
+      if (w_forEmbedding != null) {
+        w_forEmbedding.close();
+        w_forEmbedding = null;
+      }
+      if (w_tok2comm != null) {
+        w_tok2comm.close();
+        w_tok2comm = null;
+      }
+      if (revAlph != null) {
+        revAlph.close();
+        revAlph = null;
+      }
+    }
+  }
+
   
   /**
-   * Reads every SituationMention and writes to sit_feats/situations.txt.gz and sit_feats/deprels.txt.gz
-   * 
-   * (frame, role, arg NER type, arg head word/phrase, Tokenization UUID, Communication UUID, Communication ID)
-   * No SituationMention UUID since they won't exist for dependency path relations.
+   * Extracts depenency-path relations (deprels).
    *
    * Currently (2016-11-08) setup for
    * edu.jhu.hlt.framenet.semafor.parsing.JHUParserDriver via Semafor V2.1 4.10.3-SNAPSHOT
    * /export/projects/fferraro/cag-4.6.10/processing/from-marcc/20161012-083257/gigaword-merged
    * $FNPARSE/data/concretely-annotated-gigaword/sample-with-semafor-nov08
    */
-  public static class IndexSituations implements AutoCloseable {
+  public static class IndexDeprels implements AutoCloseable {
 
     public static void main(ExperimentProperties config) throws Exception {
       List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
-      File outputDir = config.getOrMakeDir("outputDirectory", new File(HOME, "sit_feats"));
+      File outputDir = config.getOrMakeDir("outputDirectory", new File(HOME, "deprel"));
       String nerTool = config.getString("nerTool", "Stanford CoreNLP");
-      
-      boolean disableSits = config.getBoolean("disableSits", false);
-      boolean disableRels = config.getBoolean("disableRels", false);
-      Log.info("disable sit=" + disableSits + " rel=" + disableRels);
       
       // This includes the two headwords on either end of the path.
       int maxWordsOnDeprelPath = config.getInt("maxWordsOnDeprelPath", 5);
 
-      try (IndexSituations is = new IndexSituations(nerTool,
+      try (IndexDeprels is = new IndexDeprels(
+          nerTool,
           maxWordsOnDeprelPath,
-          disableSits ? null : new File(outputDir, "situation.txt.gz"),
-          disableRels ? null : new File(outputDir, "deprels.txt.gz"))) {
+          new File(outputDir, "deprels.txt.gz"))) {
         for (File f : inputCommTgzs)
           is.observe(f);
       }
@@ -897,38 +1056,21 @@ public class IndexCommunications implements AutoCloseable {
     private Set<String> deprelEntityTypeEnpoints;
     private int maxWordsOnDeprelPath;
     
-    // Both of these have the same format:
-    // frame, role, arg NER type, arg head word/phrase, Tokenization UUID, Communication UUID, Communication ID
-    private BufferedWriter w_situations;
     private BufferedWriter w_deprel;
 
     // Misc
     private TimeMarker tm;
     private Counts<String> ec;
     
-    public IndexSituations(String nerTool, int maxWordsOnDeprelPath, File f_situations, File f_deprel) {
+    public IndexDeprels(String nerTool, int maxWordsOnDeprelPath, File f_deprel) throws IOException {
       Log.info("nerTool=" + nerTool);
       Log.info("maxWordsOnDeprelPath=" + maxWordsOnDeprelPath);
       this.nerTool = nerTool;
       this.maxWordsOnDeprelPath = maxWordsOnDeprelPath;
       this.tm =  new TimeMarker();
       this.ec = new Counts<>();
-      if (f_situations != null) {
-        Log.info("writing situations to " + f_situations.getPath());
-        try {
-          w_situations = FileUtil.getWriter(f_situations);
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      }
-      if (f_deprel != null) {
-        Log.info("writing deprels to " + f_deprel.getPath());
-        try {
-          w_deprel = FileUtil.getWriter(f_deprel);
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      }
+      Log.info("writing deprels to " + f_deprel.getPath());
+      w_deprel = FileUtil.getWriter(f_deprel);
       
       this.deprelEntityTypeEnpoints = new HashSet<>();
       this.deprelEntityTypeEnpoints.addAll(Arrays.asList(
@@ -964,7 +1106,6 @@ public class IndexCommunications implements AutoCloseable {
     public void observe(Communication c) throws IOException {
       ec.increment("communications");
       Map<String, Tokenization> tmap = AddNerTypeToEntityMentions.buildTokzIndex(c);
-      writeSituations(c, tmap);
       writeDepRels(c, tmap);
       if (tm.enoughTimePassed(10))
         Log.info(c.getId() + "\t" + ec + "\t" + Describe.memoryUsage());
@@ -1132,71 +1273,17 @@ public class IndexCommunications implements AutoCloseable {
       return m;
     }
 
-    private void writeSituations(Communication c, Map<String, Tokenization> tmap) throws IOException {
-      if (c.isSetSituationMentionSetList()) {
-        for (SituationMentionSet sms : c.getSituationMentionSetList()) {
-          if (sms.isSetMentionList()) {
-            for (SituationMention sm : sms.getMentionList()) {
-
-              TokenRefSequence sitMention = sm.getTokens();
-              assert tmap.get(sitMention.getTokenizationId().getUuidString()) != null;
-
-              for (MentionArgument a : sm.getArgumentList()) {
-
-                // Do not output if argument doens't contain a named entity
-                TokenRefSequence argMention = a.getTokens();
-                String nerType = AddNerTypeToEntityMentions.getNerType(argMention, tmap, nerTool);
-                if ("O".equals(nerType)) {
-                  ec.increment("skip/argsuments/O");
-                  continue;
-                }
-                int ttypes = nerType.split(",").length;
-                if (ttypes > 1) {
-                  ec.increment("skip/argsuments/complexType");
-                  continue;
-                }
-
-                boolean takeNnCompounts = true;
-                boolean allowFailures = true;
-                String argHead = headword(argMention, tmap, takeNnCompounts, allowFailures);
-                if (argHead == null) {
-                  ec.increment("err/headfinder");
-                  continue;
-                }
-                //                      if (argHead.length() < 3 && !"a".equalsIgnoreCase(argHead) && !argHead.matches("\\d+") && !argHead.matches("[A-Z]+") && !"Count".equals(a.getRole()) && argMention.getTokenIndexListSize() > 1) {
-                //                        Log.info("why? " + argHead);
-                //                        argHead = headword(argMention, tmap, allowFailures);
-                //                      }
-                assert argHead.split("\\s+").length == 1;
-                String tokId = argMention.getTokenizationId().getUuidString();
-                assert tokId.equals(sitMention.getTokenizationId().getUuidString());
-
-                w_situations.write(sm.getSituationKind()
-                    + "\t" + a.getRole()
-                    + "\t" + nerType
-                    + "\t" + argHead
-                    + "\t" + tokId
-                    + "\t" + c.getUuid().getUuidString()
-                    + "\t" + c.getId());
-                w_situations.newLine();
-                ec.increment("arguments");
-              }
-            }
-          }
-        }
-      }
-    }
-
     @Override
     public void close() throws Exception {
       Log.info("closing, " + ec);
-      if (w_situations != null)
-        w_situations.close();
-      if (w_deprel != null)
+      if (w_deprel != null) {
         w_deprel.close();
+        w_deprel = null;
+      }
     }
   }
   
+
   /**
    * Given an (entityName, entityType, entityContextDoc) query,
    * finds mentions where:
@@ -2335,11 +2422,14 @@ public class IndexCommunications implements AutoCloseable {
     case "entitySearch":
       EntitySearch.main(config);
       break;
-    case "indexSituations":
-      IndexSituations.main(config);
+    case "indexDeprels":
+      IndexDeprels.main(config);
       break;
     case "hashDeprels":
       HashDeprels.main(config);
+      break;
+    case "indexFrames":
+      IndexFrames.main(config);
       break;
     case "situationSearch":
       SituationSearch.main(config);

@@ -36,15 +36,29 @@ class Row:
     self.line = line
     #print '[Row init]', self.__dict__
 
+  def __eq__(self, a):
+    return self.deprel == a.deprel \
+      and self.arg0 == a.arg0 \
+      and self.arg1 == a.arg1 \
+      and self.tok_uuid == a.tok_uuid \
+      and self.comm_uuid == a.comm_uuid \
+      and self.comm_id == a.comm_id
+
 def is_gz(filename):
   return filename.lower().endswith('gz')
 
-def prune_rel(input_file, output_file, min_ent_pairs=4):
+def prune_rel(input_file, output_file, output_kept_rel, min_ent_pairs=4):
   ''' expects input_file is sorted by deprel '''
   if is_gz(input_file) or is_gz(output_file):
     raise Exception('only handles txt files')
-  print '[prune_rel] input', input_file
-  print '[prune_rel] output', output_file
+  print '[prune_rel] input: ', input_file
+  print '[prune_rel] output: ', output_file
+  print '[prune_rel] output_kept_rel: ', output_kept_rel
+
+  kr = None
+  if output_kept_rel:
+    kr = codecs.open(output_kept_rel, 'w', 'utf-8')
+
   with codecs.open(input_file, 'r', 'utf-8') as f:
     with codecs.open(output_file, 'w', 'utf-8') as out:
       rows = map(Row, f)
@@ -56,13 +70,24 @@ def prune_rel(input_file, output_file, min_ent_pairs=4):
           #print 'keeping', deprel
           for r in group:
             out.write(r.line)
+          if kr:
+            kr.write("%s\n" % deprel)
 
-def prune_ent(input_file, output_file, min_rels=1):
+  if kr:
+    kr.close()
+
+def prune_ent(input_file, output_file, output_kept_ent_pairs, min_rels=2):
   ''' expects input_file is sorted by arguments '''
   if is_gz(input_file) or is_gz(output_file):
     raise Exception('only handles txt files')
   print '[prune_ent] input', input_file
   print '[prune_ent] output', output_file
+  print '[prune_ent] output_kept_ent_pairs: ', output_kept_ent_pairs
+
+  ke = None
+  if output_kept_ent_pairs:
+    ke = codecs.open(output_kept_ent_pairs, 'w', 'utf-8')
+
   with codecs.open(input_file, 'r', 'utf-8') as f:
     with codecs.open(output_file, 'w', 'utf-8') as out:
       rows = map(Row, f)
@@ -74,17 +99,23 @@ def prune_ent(input_file, output_file, min_rels=1):
           #print 'keeping', arg_pair
           for r in group:
             out.write(r.line)
+          if ke:
+            a0, a1 = arg_pair
+            ke.write("%s\t%s\t%s\t%s\n" % (a0.ner_type, a0.head, a1.ner_type, a1.head))
+
+  if ke:
+    ke.close()
 
 if __name__ == '__main__':
-  if len(sys.argv) != 4:
+  if len(sys.argv) != 5:
     sys.stderr.write('please provide:')
     sys.exit(1)
 
-  _, command, input_file, output_file = sys.argv
+  _, command, input_file, output_file, output_kept = sys.argv
   l = locals()
   if command not in l:
     sys.stderr.write('unknown command: ' + command)
     sys.exit(2)
-  l[command](input_file, output_file)
+  l[command](input_file, output_file, output_kept)
   
 

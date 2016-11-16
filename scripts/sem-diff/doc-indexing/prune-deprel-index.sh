@@ -25,22 +25,24 @@ cp $JAR $JAR_STABLE
 # 1) prune relations by number of distinct argPairs
 echo "pruning by relation... `date`"
 zcat $INPUT_FILE \
-  | sort -k1 \
+  | LC_COLLATE=C sort -t '	' -k1 \
   >$TEMP_DIR/p1.txt
 ./scripts/sem-diff/doc-indexing/prune-deprel-index-helper.py \
   prune_rel \
   $TEMP_DIR/p1.txt \
-  $TEMP_DIR/p2.txt
+  $TEMP_DIR/p2.txt \
+  $TEMP_DIR/kept-deprels.txt
 
 # 2) prune argPairs by number of distinct relations
 echo "pruning by arguments... `date`"
-sort -k2 -k3 -k4 -k5 -k6 -k7 \
+LC_COLLATE=C sort -t '	' -k2 -k3 -k4 -k5 -k6 -k7 \
   <$TEMP_DIR/p2.txt \
   >$TEMP_DIR/p3.txt
 ./scripts/sem-diff/doc-indexing/prune-deprel-index-helper.py \
   prune_ent \
   $TEMP_DIR/p3.txt \
-  $TEMP_DIR/p4.txt
+  $TEMP_DIR/p4.txt \
+  $TEMP_DIR/kept-entPairs.txt
 
 # 3) convert to (deprel, hash(role,ent), tok_uuid) format
 echo "hashing strings... `date`"
@@ -53,7 +55,7 @@ java -ea -cp $JAR_STABLE \
 
 # 4) sort the output so that StringIntUuidIndex can read in efficiently
 echo "sorting output... `date`"
-sort \
+LC_COLLATE=C sort \
   <$TEMP_DIR/p5.txt \
   >$OUTPUT_FILE
 

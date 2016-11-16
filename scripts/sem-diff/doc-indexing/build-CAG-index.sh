@@ -14,9 +14,10 @@ JAR=$3
 TEMP_DIR=$OUTPUT_DIR/tempdir
 mkdir -p $TEMP_DIR
 
-CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
+#CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
 
-SCRIPTS=/home/hltcoe/twolfe/fnparse-build/fnparse/scripts
+#SCRIPTS=/home/hltcoe/twolfe/fnparse-build/fnparse/scripts
+SCRIPTS=./scripts
 
 JAR_STABLE="$OUTPUT_DIR/fnparse.jar"
 echo "copying jar to safe place:"
@@ -24,6 +25,7 @@ echo "    $JAR"
 echo "==> $JAR_STABLE"
 cp "$JAR" "$JAR_STABLE"
 
+# Building char-ngram-tries is now done offline/AOT
     #communicationArchives "$CAG/**/nyt_eng_2007*.tar.gz" \
 #echo "counting strings... `date`"
 #mkdir -p "$OUTPUT_DIR/raw"
@@ -34,9 +36,13 @@ cp "$JAR" "$JAR_STABLE"
 #    outputTokenObs "$OUTPUT_DIR/tokenObs.jser.gz" \
 #    outputTokenObsLower "$OUTPUT_DIR/tokenObs.lower.jser.gz"
 echo "copying ngram models into place... `date`"
-cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.jser.gz"
-cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.lower.jser.gz"
+#cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.jser.gz"
+#cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.lower.jser.gz"
+cp ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-false.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.jser.gz"
+cp ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-true.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.lower.jser.gz"
 
+
+### NER/ENTITY and DOCUMENT FEATURES
 echo "extracting raw data... `date`"
 mkdir -p "$OUTPUT_DIR/raw"
 java -ea -Xmx40G -cp $JAR_STABLE \
@@ -60,37 +66,58 @@ java -ea -cp $JAR_STABLE \
 echo "building ner feature indices... `date`"
 mkdir -p "$OUTPUT_DIR/ner_feats"
 time zcat "$OUTPUT_DIR/raw/nerFeatures.txt.gz" \
-  | sort -n -k 1,2 -T "$TEMP_DIR" \
+  | LC_COLLATE=C sort -n -t '	' -k 1,2 -T "$TEMP_DIR" \
   | $SCRIPTS/sem-diff/doc-indexing/convert-ner-feature-file-format.py \
     "$OUTPUT_DIR/ner_feats"
 
 echo "compacting term-hash mapping... `date`"
 zcat "$OUTPUT_DIR/raw/termHash.approx.txt.gz" \
-  | sort -n -u -T "$TEMP_DIR" \
+  | LC_COLLATE=C sort -n -u -T "$TEMP_DIR" \
   | gzip -c >"$OUTPUT_DIR/raw/termHash.sortu.txt.gz"
 
+
+### DEPRELS
 echo "extracting situations... `date`"
 java -ea -cp $JAR_STABLE \
   edu.jhu.hlt.ikbp.tac.IndexCommunications \
-    command indexSituations \
+    command indexDeprels \
     communicationArchives "$COMM_GLOB" \
-    outputDirectory "$OUTPUT_DIR/sit_feats"
+    outputDirectory "$OUTPUT_DIR/deprel"
 
 echo "building deprel index... `date`"
-$SCRIPTS/sem-diff/doc-indexing/prune-deprel-index.sh \
-  $OUTPUT_DIR/sit_feats/deprels.txt.gz \
-  $OUTPUT_DIR/sit_feats/index_deprel/deprels.txt \
-  $OUTPUT_DIR/sit_feats/index_deprel/hashedArgs.txt.gz \
-  $OUTPUT_DIR/sit_feats/index_deprel \
-  $JAR_STABLE
+#$SCRIPTS/sem-diff/doc-indexing/prune-deprel-index.sh \
+#  $OUTPUT_DIR/deprel/deprels.txt.gz \
+#  $OUTPUT_DIR/deprel/pruned_indexed/deprels.txt \
+#  $OUTPUT_DIR/deprel/pruned_indexed/hashedArgs.txt.gz \
+#  $OUTPUT_DIR/deprel/pruned_indexed \
+#  $JAR_STABLE
+zcat $OUTPUT_DIR/deprel/deprels.txt.gz \
+  | awk -F"\t" '{printf("%s\t%s/%s_%s/%s\n", $1, $3, $4, $6, $7)}' \
+  | LC_COLLATE=C sort | uniq -c | awk '{printf("%s\t%s\t%d\n", $2, $3, $1)}' \
+  | $SCRIPTS/sem-diff/doc-indexing/prune-matrix-factorization.sh \
+    8 8 3 3 $TEMP_DIR/deprel \
+    >$OUTPUT_DIR/deprel/deprels.pruned.txt
 
+
+### FRAMES
+echo "extracting frames `date`"
+java -ea -cp $JAR_STABLE \
+  edu.jhu.hlt.ikbp.tac.IndexCommunications \
+    command indexFrames \
+    communicationArchives "$COMM_GLOB" \
+    outputDirectory "$OUTPUT_DIR/frame"
+
+
+### MISC
 echo "build unified Tokenization UUID => Communication UUID"
-echo "across [entity, deprel, situation] values... `date`"
+echo "across [entity, deprel, frame] values... `date`"
 T2C=$OUTPUT_DIR/tokUuid2commUuid.txt
 echo "writing to $T2C"
 touch $T2C
-zcat $OUTPUT_DIR/raw/emTokCommUuidId.txt.gz | awk '{printf("%s\t%s\n", $2, $3)}' | uniq >>$T2C
-cat $OUTPUT_DIR/sit_feats/index_deprel/deprels.txt | awk '{printf("%s\t%s\n", $8, $9)}' | uniq >>$T2C
+zcat $OUTPUT_DIR/raw/emTokCommUuidId.txt.gz | awk -F"\t" '{printf("%s\t%s\n", $2, $3)}' | uniq >>$T2C
+zcat $OUTPUT_DIR/deprel/deprels.txt.gz | awk -F"\t" '{printf("%s\t%s\n", $8, $9)}' | uniq >>$T2C
+zcat $OUTPUT_DIR/frame/tokUuid_commUuid_commId.txt.gz | awk -F"\t" '{printf("%s\t%s\n", $1, $2)}' | uniq >>$T2C
+
 
 echo "done. `date`"
 
