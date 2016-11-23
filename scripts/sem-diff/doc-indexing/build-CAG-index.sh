@@ -9,6 +9,15 @@ OUTPUT_DIR=$1
 COMM_GLOB=$2    # e.g. "$CAG/**/nyt_eng_2007*.tar.gz"
 JAR=$3
 
+echo "args: $@"
+
+if [[ ! -f $JAR ]]; then
+  echo "couldn't find jar: $JAR"
+  exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR"
+
 # TODO Consider doing this on NFS
 #TEMP_DIR=/state/partition1
 TEMP_DIR=$OUTPUT_DIR/tempdir
@@ -16,8 +25,8 @@ mkdir -p $TEMP_DIR
 
 #CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
 
-#SCRIPTS=/home/hltcoe/twolfe/fnparse-build/fnparse/scripts
-SCRIPTS=./scripts
+SCRIPTS=/home/hltcoe/twolfe/fnparse-build/fnparse/scripts
+#SCRIPTS=./scripts
 
 JAR_STABLE="$OUTPUT_DIR/fnparse.jar"
 echo "copying jar to safe place:"
@@ -36,10 +45,10 @@ cp "$JAR" "$JAR_STABLE"
 #    outputTokenObs "$OUTPUT_DIR/tokenObs.jser.gz" \
 #    outputTokenObsLower "$OUTPUT_DIR/tokenObs.lower.jser.gz"
 echo "copying ngram models into place... `date`"
-#cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.jser.gz"
-#cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.lower.jser.gz"
-cp ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-false.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.jser.gz"
-cp ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-true.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.lower.jser.gz"
+cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.jser.gz"
+cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.lower.jser.gz"
+#cp ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-false.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.jser.gz"
+#cp ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-true.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.lower.jser.gz"
 
 
 ### NER/ENTITY and DOCUMENT FEATURES
@@ -66,34 +75,33 @@ java -ea -cp $JAR_STABLE \
 echo "building ner feature indices... `date`"
 mkdir -p "$OUTPUT_DIR/ner_feats"
 time zcat "$OUTPUT_DIR/raw/nerFeatures.txt.gz" \
-  | LC_COLLATE=C sort -n -t '	' -k 1,2 -T "$TEMP_DIR" \
+  | LC_COLLATE=C LC_ALL=C sort -n -t '	' -k 1,2 --buffer-size=2G -T "$TEMP_DIR" \
+  | gzip -c >"$OUTPUT_DIR/ner_feats/sorted.txt.gz"
+zcat "$OUTPUT_DIR/ner_feats/sorted-all.txt.gz" \
   | $SCRIPTS/sem-diff/doc-indexing/convert-ner-feature-file-format.py \
     "$OUTPUT_DIR/ner_feats"
 
 echo "compacting term-hash mapping... `date`"
 zcat "$OUTPUT_DIR/raw/termHash.approx.txt.gz" \
-  | LC_COLLATE=C sort -n -u -T "$TEMP_DIR" \
+  | LC_COLLATE=C LC_ALL=C sort -n -u --buffer-size=2G -T "$TEMP_DIR" \
   | gzip -c >"$OUTPUT_DIR/raw/termHash.sortu.txt.gz"
 
 
 ### DEPRELS
-echo "extracting situations... `date`"
+echo "extracting deprels `date`"
 java -ea -cp $JAR_STABLE \
   edu.jhu.hlt.ikbp.tac.IndexCommunications \
     command indexDeprels \
     communicationArchives "$COMM_GLOB" \
     outputDirectory "$OUTPUT_DIR/deprel"
 
-echo "building deprel index... `date`"
-#$SCRIPTS/sem-diff/doc-indexing/prune-deprel-index.sh \
-#  $OUTPUT_DIR/deprel/deprels.txt.gz \
-#  $OUTPUT_DIR/deprel/pruned_indexed/deprels.txt \
-#  $OUTPUT_DIR/deprel/pruned_indexed/hashedArgs.txt.gz \
-#  $OUTPUT_DIR/deprel/pruned_indexed \
-#  $JAR_STABLE
+echo "building deprel index (sorting)... `date`"
 zcat $OUTPUT_DIR/deprel/deprels.txt.gz \
   | awk -F"\t" '{printf("%s\t%s/%s_%s/%s\n", $1, $3, $4, $6, $7)}' \
-  | LC_COLLATE=C sort | uniq -c | awk '{printf("%s\t%s\t%d\n", $2, $3, $1)}' \
+  | LC_COLLATE=C LC_ALL=C sort --buffer-size=2G | uniq -c | awk '{printf("%s\t%s\t%d\n", $2, $3, $1)}' \
+  | gzip -c >"$OUTPUT_DIR/deprel/sorted-all.txt.gz"
+echo "building deprel index (splitting)... `date`"
+zcat "$OUTPUT_DIR/deprel/sorted-all.txt.gz" \
   | $SCRIPTS/sem-diff/doc-indexing/prune-matrix-factorization.sh \
     8 8 3 3 $TEMP_DIR/deprel \
     >$OUTPUT_DIR/deprel/deprels.pruned.txt
