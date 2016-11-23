@@ -20,7 +20,7 @@ import edu.jhu.hlt.scion.core.accumulo.ConnectorFactory;
 import edu.jhu.hlt.scion.core.accumulo.ScionConnector;
 
 /**
- * This is for when you want {@link Communication}s and not running on the COE grid.
+ * This is for when you want {@link Communication}s and are not running on the COE grid.
  * This runs on a COE machine, e.g. test2, and talks to accumulo (arbitrary machines on the COE grid).
  * You connect to this machine via an ssh tunnel.
  */

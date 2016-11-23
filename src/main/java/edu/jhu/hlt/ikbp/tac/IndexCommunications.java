@@ -19,10 +19,12 @@ import java.util.Set;
 
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
 import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.Dependency;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.EntityMentionSet;
@@ -64,6 +66,7 @@ import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.util.Lambda.FnIntFloatToFloat;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
 import edu.jhu.prim.vector.IntIntHashVector;
+import edu.jhu.util.SlowParseyWrapper;
 
 /**
  * Produces an index of a given Concrete corpus. Writes everything to TSVs.
@@ -72,8 +75,9 @@ import edu.jhu.prim.vector.IntIntHashVector;
  */
 public class IndexCommunications implements AutoCloseable {
 
-  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-10-27_ngram5");
+  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-11-18");
   public static final MultiTimer TIMER = new MultiTimer();
+  public static final Counts<String> EC = new Counts<>();   // event counts
 
   public static int err_head = 0;
   public static int err_ner = 0;
@@ -105,9 +109,9 @@ public class IndexCommunications implements AutoCloseable {
 //      }
       Log.info("talking to server at localhost:" + localPort);
       try {
-        TTransport transport = new TSocket("localhost", localPort);
+        TTransport transport = new TFramedTransport(new TSocket("localhost", localPort), Integer.MAX_VALUE);
         transport.open();
-        TProtocol protocol = new  TCompactProtocol(transport);
+        TProtocol protocol = new TCompactProtocol(transport);
         client = new FetchCommunicationService.Client(protocol);
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -863,7 +867,6 @@ public class IndexCommunications implements AutoCloseable {
 
     // Misc
     private TimeMarker tm;
-    private Counts<String> ec;
     
     public IndexFrames(String nerTool, File f_forRetrieval, File f_forEmbedding, File tok2comm, File revAlph) throws IOException {
       Log.info("f_forRetrieval=" + f_forRetrieval.getPath());
@@ -874,7 +877,6 @@ public class IndexCommunications implements AutoCloseable {
       this.w_forEmbedding = FileUtil.getWriter(f_forEmbedding);
       this.w_tok2comm = FileUtil.getWriter(tok2comm);
       this.nerTool = nerTool;
-      this.ec = new Counts<>();
       this.tm = new TimeMarker();
       
       this.revAlph = new ReversableHashWriter(revAlph);
@@ -898,7 +900,7 @@ public class IndexCommunications implements AutoCloseable {
     }
 
     public void observe(File commTgzArchive) throws IOException {
-      ec.increment("files");
+      EC.increment("files");
       Log.info("reading from " + commTgzArchive.getPath());
       try (InputStream is = new FileInputStream(commTgzArchive);
           TarGzArchiveEntryCommunicationIterator iter = new TarGzArchiveEntryCommunicationIterator(is)) {
@@ -910,11 +912,19 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public void observe(Communication c) throws IOException {
-      ec.increment("communications");
+      EC.increment("communications");
+      try {
       Map<String, Tokenization> tmap = AddNerTypeToEntityMentions.buildTokzIndex(c);
       writeSituations(c, tmap);
       if (tm.enoughTimePassed(10))
-        Log.info(c.getId() + "\t" + ec + "\t" + Describe.memoryUsage());
+        Log.info(c.getId() + "\t" + EC + "\t" + Describe.memoryUsage());
+      } catch (Exception e) {
+        System.out.flush();
+        System.err.println("on comm=" + c.getId());
+        e.printStackTrace();
+        System.err.flush();
+        EC.increment("err/" + e.getClass());
+      }
     }
 
     private void writeSituations(Communication c, Map<String, Tokenization> tmap) throws IOException {
@@ -934,24 +944,26 @@ public class IndexCommunications implements AutoCloseable {
                 TokenRefSequence argMention = a.getTokens();
                 String nerType = AddNerTypeToEntityMentions.getNerType(argMention, tmap, nerTool);
                 if ("O".equals(nerType)) {
-                  ec.increment("skip/arguments/O");
+                  EC.increment("skip/arguments/O");
                   continue;
                 }
                 if (nerType.split(",").length > 1) {
-                  ec.increment("skip/arguments/complexType");
+                  EC.increment("skip/arguments/complexType");
                   continue;
                 }
 
-                boolean takeNnCompounts = true;
+                boolean takeNnCompounds = true;
                 boolean allowFailures = true;
-                String argHead = headword(argMention, tmap, takeNnCompounts, allowFailures);
+                String argHead = headword(argMention, tmap, takeNnCompounds, allowFailures);
                 if (argHead == null) {
-                  ec.increment("err/headfinder");
+                  EC.increment("err/headfinder");
                   continue;
                 }
                 assert argHead.split("\\s+").length == 1;
                 String tokId = argMention.getTokenizationId().getUuidString();
                 assert tokId.equals(sitMention.getTokenizationId().getUuidString());
+                
+                String target = headword(sm.getTokens(), tmap, takeNnCompounds, allowFailures);
 
                 // for retrieval: frame/role, hash(argHead), Tokenization UUID
                 if (retrievalEntityTypes.contains(nerType)) {
@@ -969,31 +981,32 @@ public class IndexCommunications implements AutoCloseable {
                 }
                 
                 for (int j = 0; j < n; j++) {
-                  if (j >= i) continue;
+                  if (j == i) continue;
                   MentionArgument aa = sm.getArgumentList().get(j);
-                  String argHeadAlt = headword(aa.getTokens(), tmap, takeNnCompounts, allowFailures);
+                  String argHeadAlt = headword(aa.getTokens(), tmap, takeNnCompounds, allowFailures);
                   String nerTypeAlt = AddNerTypeToEntityMentions.getNerType(aa.getTokens(), tmap, nerTool);
                   if ("O".equals(nerTypeAlt)) {
-                    ec.increment("skip/arguments2/O");
+                    EC.increment("skip/arguments2/O");
                     continue;
                   }
                   if (nerTypeAlt.split(",").length > 1) {
-                    ec.increment("skip/arguments2/complexType");
+                    EC.increment("skip/arguments2/complexType");
                     continue;
                   }
                   
                   // for embedding: entity, frame, roleEntPlaysInFrame, roleAlt, argAltHead
                   w_forEmbedding.write(sm.getSituationKind()
+                      + "\t" + target
+                      + "\t" + a.getRole()
                       + "\t" + nerType
                       + "\t" + argHead
-                      + "\t" + a.getRole()
+                      + "\t" + aa.getRole()
                       + "\t" + nerTypeAlt
-                      + "\t" + argHeadAlt
-                      + "\t" + aa.getRole());
+                      + "\t" + argHeadAlt);
                   w_forEmbedding.newLine();
                 }
                 
-                ec.increment("arguments");
+                EC.increment("arguments");
               }
             }
           }
@@ -1004,7 +1017,7 @@ public class IndexCommunications implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-      Log.info("closing, " + ec);
+      Log.info("closing, " + EC);
       if (w_forRetrieval != null) {
         w_forRetrieval.close();
         w_forRetrieval = null;
@@ -1060,7 +1073,6 @@ public class IndexCommunications implements AutoCloseable {
 
     // Misc
     private TimeMarker tm;
-    private Counts<String> ec;
     
     public IndexDeprels(String nerTool, int maxWordsOnDeprelPath, File f_deprel) throws IOException {
       Log.info("nerTool=" + nerTool);
@@ -1068,7 +1080,6 @@ public class IndexCommunications implements AutoCloseable {
       this.nerTool = nerTool;
       this.maxWordsOnDeprelPath = maxWordsOnDeprelPath;
       this.tm =  new TimeMarker();
-      this.ec = new Counts<>();
       Log.info("writing deprels to " + f_deprel.getPath());
       w_deprel = FileUtil.getWriter(f_deprel);
       
@@ -1092,7 +1103,7 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public void observe(File commTgzArchive) throws IOException {
-      ec.increment("files");
+      EC.increment("files");
       Log.info("reading from " + commTgzArchive.getPath());
       try (InputStream is = new FileInputStream(commTgzArchive);
           TarGzArchiveEntryCommunicationIterator iter = new TarGzArchiveEntryCommunicationIterator(is)) {
@@ -1104,11 +1115,19 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public void observe(Communication c) throws IOException {
-      ec.increment("communications");
-      Map<String, Tokenization> tmap = AddNerTypeToEntityMentions.buildTokzIndex(c);
-      writeDepRels(c, tmap);
-      if (tm.enoughTimePassed(10))
-        Log.info(c.getId() + "\t" + ec + "\t" + Describe.memoryUsage());
+      EC.increment("communications");
+      try {
+        Map<String, Tokenization> tmap = AddNerTypeToEntityMentions.buildTokzIndex(c);
+        writeDepRels(c, tmap);
+        if (tm.enoughTimePassed(10))
+          Log.info(c.getId() + "\t" + EC + "\t" + Describe.memoryUsage());
+      } catch (Exception e) {
+        System.out.flush();
+        System.err.println("on comm=" + c.getId());
+        e.printStackTrace();
+        System.err.flush();
+        EC.increment("err/" + e.getClass());
+      }
     }
     
     private void writeDepRels(Communication comm, Map<String, Tokenization> tmap) throws IOException {
@@ -1147,7 +1166,7 @@ public class IndexCommunications implements AutoCloseable {
             String a0Head = headword(a0.getTokens(), tmap, takeNnCompounts, allowFailures);
             String a1Head = headword(a1.getTokens(), tmap, takeNnCompounts, allowFailures);
             if (a0Head == null || a1Head == null) {
-              ec.increment("err/headfinder");
+              EC.increment("err/headfinder");
               continue;
             }
 
@@ -1241,10 +1260,23 @@ public class IndexCommunications implements AutoCloseable {
       }
       
       boolean allowMultipleHeads = true;
-      edu.jhu.hlt.fnparse.datatypes.DependencyParse fndp =
-          new edu.jhu.hlt.fnparse.datatypes.DependencyParse(graph, alph, 0, n, allowMultipleHeads);
-      edu.jhu.hlt.fnparse.datatypes.Sentence sent =
-          edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete("ds", "id", t);
+      edu.jhu.hlt.fnparse.datatypes.DependencyParse fndp = null;
+      edu.jhu.hlt.fnparse.datatypes.Sentence sent = null;
+      try {
+        fndp = new edu.jhu.hlt.fnparse.datatypes.DependencyParse(graph, alph, 0, n, allowMultipleHeads);
+        sent = edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete("ds", "id", t);
+      } catch (Exception e) {
+        e.printStackTrace();
+        System.err.flush();
+        System.out.flush();
+        for (Dependency dep : d.getDependencyList()) {
+          System.err.println(dep);
+        }
+        for (int i = 0; i < n; i++) {
+          System.err.println(i + "\t" + toks.get(i));
+        }
+        return null;
+      }
       Path2 path = new Path2(ha, hb, fndp, sent);
       
       if (path.connected() && path.getNumWordsOnPath() <= maxWordsOnDeprelPath) {
@@ -1275,7 +1307,7 @@ public class IndexCommunications implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-      Log.info("closing, " + ec);
+      Log.info("closing, " + EC);
       if (w_deprel != null) {
         w_deprel.close();
         w_deprel = null;
@@ -2025,13 +2057,18 @@ public class IndexCommunications implements AutoCloseable {
   
   private static DependencyParse getPreferredDependencyParse(Tokenization toks) {
     for (DependencyParse dp : toks.getDependencyParseList()) {
-      if ("parsey".equalsIgnoreCase(dp.getMetadata().getTool()))
+      if ("parsey".equalsIgnoreCase(dp.getMetadata().getTool())) {
+        EC.increment("preferredDParse/parsey");
         return dp;
+      }
     }
     for (DependencyParse dp : toks.getDependencyParseList()) {
-      if ("Stanford CoreNLP basic".equalsIgnoreCase(dp.getMetadata().getTool()))
+      if ("Stanford CoreNLP basic".equalsIgnoreCase(dp.getMetadata().getTool())) {
+        EC.increment("preferredDParse/stanfordBasic");
         return dp;
+      }
     }
+    EC.increment("preferredDParse/err");
     return null;
   }
   
@@ -2079,9 +2116,9 @@ public class IndexCommunications implements AutoCloseable {
     
     // unigram prefixes
     for (int i = 0; i < toks.length; i++) {
-      String p = tokObs == null ? toks[i] : tokObs.getPrefixOccuringAtLeast(toks[i], 10);
+//      String p = tokObs == null ? toks[i] : tokObs.getPrefixOccuringAtLeast(toks[i], 10);
       String pi = tokObsLc == null ? toksLc[i] : tokObsLc.getPrefixOccuringAtLeast(toksLc[i], 10);
-      f.add("p:" + p);
+//      f.add("p:" + p);
       f.add("pi:" + pi);
     }
     
@@ -2143,6 +2180,15 @@ public class IndexCommunications implements AutoCloseable {
       features.add("hp:" + hp);
 //      features.add("hip:" + hip);
     }
+    
+    for (String f : features) {
+      int c = f.indexOf(':');
+      if (c >= 0 && c <= 5) {
+        String p = f.substring(0, c);
+        EC.increment("mentionFeat/" + p);
+      }
+    }
+
     return features;
   }
   public static int getEntityMentionFeatureWeight(String feature) {
@@ -2352,8 +2398,9 @@ public class IndexCommunications implements AutoCloseable {
           while (iter.hasNext()) {
             Communication c = iter.next();
             ic.observe(c);
-            if (tm.enoughTimePassed(10))
-              Log.info(ic + "\t" + c.getId() + "\t" + Describe.memoryUsage());
+            if (tm.enoughTimePassed(10)) {
+              Log.info(ic + "\t" + c.getId() + "\t" + EC + "\t" + Describe.memoryUsage());
+            }
           }
         }
       }
@@ -2401,6 +2448,104 @@ public class IndexCommunications implements AutoCloseable {
     int added = addTo.size() - n0;
     Log.info("added " + added + " rows, prevSize=" + n0 + " curSize=" + addTo.size());
   }
+
+  /**
+   * Holds a query string like "PERSON works for COMPANY",
+   * finds arg0 and arg1 by looking for all uppercase words,
+   * and stores a dependency path relation, e.g. "nsubj</works/prep>/for/pobj> ".
+   */
+  public static class QueryDeprel {
+    private String[] terms;
+    private int arg0idx, arg1idx; // into terms
+    private int[] heads;
+    private String[] deps;
+    private Path2 path;
+    private String pathStr;
+    
+    public static QueryDeprel fromConllX(List<String[]> conllx) {
+      QueryDeprel q = new QueryDeprel();
+      int n = conllx.size();
+      q.terms = new String[n];
+      q.heads = new int[n];
+      q.deps = new String[n];
+      for (int i = 0; i < n; i++) {
+        String[] ar = conllx.get(i);
+        q.terms[i] = ar[SlowParseyWrapper.FORM];
+        q.heads[i] = Integer.parseInt(ar[SlowParseyWrapper.HEAD]) - 1;
+        q.deps[i] = ar[SlowParseyWrapper.DEPREL];
+        assert Integer.parseInt(ar[SlowParseyWrapper.ID]) == i+1;
+      }
+      
+      q.arg0idx = q.findArg(0);
+      assert q.arg0idx >= 0 : "no arg0? " + Arrays.toString(q.terms);
+      q.arg1idx = q.findArg(q.arg0idx + 1);
+      assert q.arg1idx >= 0 : "no arg1? " + Arrays.toString(q.terms);
+      assert q.findArg(q.arg1idx + 1) < 0 : "should only be two args!";
+      
+      q.path = new Path2(q.arg0idx, q.arg1idx,
+          edu.jhu.hlt.fnparse.datatypes.DependencyParse.fromConllx(conllx),
+          edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConllX("", "", conllx, false));
+      q.pathStr = q.path.getPath(NodeType.WORD, EdgeType.DEP, false);
+//      Log.info(Arrays.toString(q.terms));
+//      Log.info(q.path.connected());
+//      Log.info(q.path.getPath(NodeType.WORD, EdgeType.DEP, true));
+      return q;
+    }
+    
+    private int findArg(int offset) {
+      for (int i = offset; i < terms.length; i++) {
+        if (terms[i].matches("[A-Z]+")) {
+          return i;
+        }
+      }
+      return -1;
+    }
+    
+    @Override
+    public String toString() {
+      return "(QueryDeprel " + terms[arg0idx] + " " + pathStr + " " + terms[arg1idx] + ")";
+    }
+
+    public static void demo() throws Exception {
+      List<String> queries = new ArrayList<>();
+      queries.add("PERSON works for COMPANY");
+      queries.add("PERSON joined COMPANY in December");
+      queries.add("PERSON joined COMPANY");
+      queries.add("PERSON grew up in LOCATION");
+      queries.add("PERSON was born in LOCATION");
+      queries.add("PERSON , from LOCATION");
+
+      SlowParseyWrapper p = SlowParseyWrapper.buildForLaptop();
+      for (String q : queries) {
+        System.out.println(q);
+        List<String[]> conllx = p.parse(q.split("\\s+"));
+        //      for (String[] t : conllx) {
+        //        System.out.println(t[SlowParseyWrapper.ID]
+        //            + "\t" + t[SlowParseyWrapper.FORM]
+        //            + "\t" + t[SlowParseyWrapper.POSTAG]
+        //            + "\t" + t[SlowParseyWrapper.HEAD]
+        //            + "\t" + t[SlowParseyWrapper.DEPREL]);
+        //      }
+        System.out.println(QueryDeprel.fromConllX(conllx));
+        System.out.println();
+      }
+      //    QueryDeprel q = QueryDeprel.fromConllX(Arrays.asList(
+      //        "1 PERSON  _ NOUN  NN  _ 2 nsubj _ _".split("\\s+"),
+      //        "2 works _ VERB  VBZ _ 0 ROOT  _ _".split("\\s+"),
+      //        "3 for _ ADP IN  _ 2 prep  _ _".split("\\s+"),
+      //        "4 COMPANY _ NOUN  NN  _ 3 pobj  _ _".split("\\s+")));
+      //    System.out.println(q);
+    }
+
+  }
+
+  
+  /** meta, just for developing code 
+   * @throws Exception */
+  public static void develop(ExperimentProperties config) throws Exception {
+    QueryDeprel.demo();
+  }
+  
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -2435,10 +2580,18 @@ public class IndexCommunications implements AutoCloseable {
       SituationSearch.main(config);
       break;
     case "testAccumulo":
+      // Tunneling does't work.
+      // Following is localhost:8083 => clsp:??? => test2:8082
+      // Its not the double-hop that isn't working, I tested that with
+      // clsp->test1->test2, but rather the hop across JHU's networks.
+      // ssh -fNL 8083:test2b:8082 clsp
       int localPort = config.getInt("port", 7248);
       CommunicationRetrieval cr = new CommunicationRetrieval(localPort);
       cr.test("NYT_ENG_20090901.0206");
       cr.test("ef93e366-79cc-b8e5-c816-8627a2e25887");
+      break;
+    case "develop":
+      develop(config);
       break;
     default:
       Log.info("unknown command: " + c);

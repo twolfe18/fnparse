@@ -17,6 +17,10 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
 
+/**
+ * @deprecated
+ * @author travis
+ */
 public class ScanCAGForMentions {
   
   static class Matcher {
