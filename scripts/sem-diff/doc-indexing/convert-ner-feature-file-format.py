@@ -26,7 +26,7 @@ class Row:
 open_files = {}
 
 with open('/dev/stdin', 'r') as f:
-  rows = map(Row, f)
+  rows = itertools.imap(Row, f)
   for (term, ner_type), docs in itertools.groupby(rows, lambda r: (r.term, r.ner_type)):
     f = os.path.join(out, "nerFeats.%s.txt" % ner_type)
     if f not in open_files:

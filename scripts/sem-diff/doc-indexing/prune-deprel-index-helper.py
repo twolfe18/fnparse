@@ -61,7 +61,7 @@ def prune_rel(input_file, output_file, output_kept_rel, min_ent_pairs=4):
 
   with codecs.open(input_file, 'r', 'utf-8') as f:
     with codecs.open(output_file, 'w', 'utf-8') as out:
-      rows = map(Row, f)
+      rows = itertools.imap(Row, f)
       by_rel = itertools.groupby(rows, lambda r: r.deprel)
       for deprel, group in by_rel:
         group = list(group)
@@ -90,7 +90,7 @@ def prune_ent(input_file, output_file, output_kept_ent_pairs, min_rels=2):
 
   with codecs.open(input_file, 'r', 'utf-8') as f:
     with codecs.open(output_file, 'w', 'utf-8') as out:
-      rows = map(Row, f)
+      rows = itertools.imap(Row, f)
       by_arg_pair = itertools.groupby(rows, lambda r: (r.arg0, r.arg1))
       for arg_pair, group in by_arg_pair:
         group = list(group)
