@@ -85,6 +85,8 @@ java -ea -cp "$JAR" -Xmx5G \
   edu.jhu.hlt.uberts.auto.FNParseConcreteService \
     input "$INPUT_COMM_FILE" \
     output "$OUTPUT_COMM_FILE" \
+    toolname "$TOOLNAME" \
+    situationType "$SITUATION_TYPE" \
     passes 1 \
     parameterIO "$IO" \
     agendaComparator "$AGENDA_COMPARATOR" \
