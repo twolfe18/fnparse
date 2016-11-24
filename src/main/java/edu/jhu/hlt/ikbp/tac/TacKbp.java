@@ -61,9 +61,9 @@ import edu.jhu.prim.tuple.Pair;
  *
  * @author travis
  */
-public class Kbp2014 {
+public class TacKbp {
   
-  static class Query {
+  public static class KbpQuery {
     
     // Come from queries XML file
     String id;
@@ -81,7 +81,7 @@ public class Kbp2014 {
     // Come from source docs
     String sourceDoc;
     
-    public Query(String id) {
+    public KbpQuery(String id) {
       this.id = id;
       beg = end = -1;
     }
@@ -91,8 +91,8 @@ public class Kbp2014 {
       return "(Query " + id + " in " + docid + " \"" + name + "\" [" + beg + ", " + end + "])";
     }
     
-    public static List<Query> parse(File f) throws Exception {
-      List<Query> l = new ArrayList<>();
+    public static List<KbpQuery> parse(File f) throws Exception {
+      List<KbpQuery> l = new ArrayList<>();
 
       DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
       DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
@@ -102,7 +102,7 @@ public class Kbp2014 {
         Node n = nl.item(i);
         String id = n.getAttributes().getNamedItem("id").getTextContent();
 //        System.out.println(id);
-        Query q = new Query(id);
+        KbpQuery q = new KbpQuery(id);
         NodeList children = n.getChildNodes();
         for (int j = 0; j < children.getLength(); j++) {
           Node c = children.item(j);
@@ -141,20 +141,20 @@ public class Kbp2014 {
    * Build one topic per entity, each of which contains one cluster
    * which all of the relevant mentions in it.
    */
-  public static List<Topic> buildClusters(List<Query> resolvedQueries) {
-    Map<String, List<Query>> byTopic = new HashMap<>();
+  public static List<Topic> buildClusters(List<KbpQuery> resolvedQueries) {
+    Map<String, List<KbpQuery>> byTopic = new HashMap<>();
     // TODO groupby
     
     List<Topic> topics = new ArrayList<>();
-    for (Entry<String, List<Query>> x : byTopic.entrySet()) {
+    for (Entry<String, List<KbpQuery>> x : byTopic.entrySet()) {
       String entityId = x.getKey();
-      List<Query> mentions = x.getValue();
+      List<KbpQuery> mentions = x.getValue();
       List<Communication> comms = new ArrayList<>();
       Clustering clustering = new Clustering();
       
       // Add one cluster containing all mentions of this entity
       Cluster entClust = new Cluster();
-      for (Query q : mentions) {
+      for (KbpQuery q : mentions) {
         Communication c = getCommunication(q.docid);
         comms.add(c);
         
@@ -203,7 +203,7 @@ public class Kbp2014 {
       }
     }
     
-    public void add(Query q) {
+    public void add(KbpQuery q) {
       q.entity_id = q2entity_id.get(q.id);
       q.entity_type = q2entity_type.get(q.id);
       q.genre = q2genre.get(q.id);
@@ -216,7 +216,7 @@ public class Kbp2014 {
   public static class AddQueryDocumentContext {
     File home = new File("data/parma/LDC2014E81/data");
     
-    public boolean addDocumentContext(Query q) {
+    public boolean addDocumentContext(KbpQuery q) {
       assert q.sourceDoc == null;
       File f = new File(home, "source_docs/" + q.docid);
       if (!f.isFile()) {
@@ -310,27 +310,63 @@ public class Kbp2014 {
       return new Pair<>(comm, emRef);
     }
   }
+  
 
-  public static void main(String[] args) throws Exception {
-    ExperimentProperties config = ExperimentProperties.init(args);
-
-    System.setProperty("scion.accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181");
-    System.setProperty("scion.accumulo.instanceName", "minigrid");
-    System.setProperty("scion.accumulo.user", "reader");
-    System.setProperty("scion.accumulo.password", "an accumulo reader");
-
-    List<Query> queries = Query.parse(new File("data/parma/LDC2014E81/data/tac_2014_kbp_english_EDL_evaluation_queries.xml"));
+  public static List<KbpQuery> getKbp2013SfQueries() throws Exception {
+    File qxml = new File("/home/travis/code/fnparse/data/tackbp/TAC_2014_KBP_Slot_Filler_Validation_Evaluation_Queries_V1.1/"
+        + "data/LDC2014R38_TAC_2014_KBP_English_Regular_Slot_Filling_Evaluation_Queries/"
+        + "data/tac_2014_kbp_english_regular_slot_filling_evaluation_queries.xml");
     
-    /*
-     * 2016-10-25
-     * I am having problems getting the TAC KBP datasets ingested,
-     * so I'm going to generate queries by searching through CAG.
-     */
+    List<KbpQuery> queries = new ArrayList<>();
+    
+    DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+    DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+    Document root = dBuilder.parse(qxml);
+    NodeList nl = root.getElementsByTagName("query");
+    for (int i = 0; i < nl.getLength(); i++) {
+      Node n = nl.item(i);
+      String id = n.getAttributes().getNamedItem("id").getTextContent();
+//      System.out.println(id);
+      KbpQuery q = new KbpQuery(id);
+      NodeList c = n.getChildNodes();
+      for (int j = 0; j < c.getLength(); j++) {
+        Node cc = c.item(j);
+//        System.out.println(cc.getNodeName() + "\t" + cc.getTextContent());
+        switch (cc.getNodeName()) {
+        case "name":
+          q.name = cc.getTextContent();
+          break;
+        case "enttype":
+          q.entity_type = cc.getTextContent();
+          break;
+        case "docid":
+          q.docid = cc.getTextContent();
+          break;
+        case "beg":
+          q.beg = Integer.parseInt(cc.getTextContent());
+          break;
+        case "end":
+          q.end = Integer.parseInt(cc.getTextContent());
+          break;
+        default:
+          break;
+        }
+      }
+      
+      System.out.println(q);
+      queries.add(q);
+    }
+
+    return queries;
+  }
+  
+  public static List<KbpQuery> getKbp2014EdlQueries() throws Exception {
+    List<KbpQuery> queries = KbpQuery.parse(new File("data/parma/LDC2014E81/data/tac_2014_kbp_english_EDL_evaluation_queries.xml"));
 
     // 1) Read in the query context documents
     AddQueryDocumentContext a = new AddQueryDocumentContext();
-    List<Query> keep = new ArrayList<>();
-    for (Query q : queries) {
+    List<KbpQuery> keep = new ArrayList<>();
+    for (KbpQuery q : queries) {
       if (a.addDocumentContext(q))
         keep.add(q);
     }
@@ -338,11 +374,25 @@ public class Kbp2014 {
 
     // 2) Figure out what the nerType is for each query
     AddKbLinks k = new AddKbLinks();
-    for (Query q : queries) {
+    for (KbpQuery q : queries) {
       k.add(q);
     }
+    return queries;
+  }
 
-    // 3) Search CAG for mentions of each query
+  public static void main(String[] args) throws Exception {
+    ExperimentProperties config = ExperimentProperties.init(args);
+
+    // This will only work on the grid.
+    System.setProperty("scion.accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181");
+    System.setProperty("scion.accumulo.instanceName", "minigrid");
+    System.setProperty("scion.accumulo.user", "reader");
+    System.setProperty("scion.accumulo.password", "an accumulo reader");
+
+    // 1) Parse queries
+    List<KbpQuery> queries = getKbp2014EdlQueries();
+
+    // 2) Search CAG for mentions of each query
     // Write out text results as well as communications they live in
     IndexCommunications.EntitySearch s = IndexCommunications.EntitySearch.build(config);  // Long load time!
     MentionFetcher v = new MentionFetcher();  // Make sure you use this right away, will timeout after 30s
@@ -360,7 +410,7 @@ public class Kbp2014 {
           "query_name",
       }));
       w.newLine();
-      for (Query q : queries) {
+      for (KbpQuery q : queries) {
         String nerType = tacNerTypesToStanfordNerType(q.entity_type);
         String[] heads = q.name.split("\\s+");
         List<Result> rr = s.search(q.name, nerType, heads, q.sourceDoc);
@@ -376,7 +426,8 @@ public class Kbp2014 {
           w.write(StringUtils.join("\t", new String[] {
               q.id, q.entity_id, q.entity_type,
               String.valueOf(r.score),
-              r.entityMentionUuid, r.communicationUuid, r.communicationId,
+//              r.entityMentionUuid, r.communicationUuid, r.communicationId,
+              r.tokenizationUuid, r.communicationUuid, r.communicationId,
               q.name,
           }));
           w.newLine();
@@ -386,7 +437,8 @@ public class Kbp2014 {
 
           boolean showMention = true;
           Pair<Communication, EntityMention> p =
-              v.fetch(r.entityMentionUuid, r.communicationId, showMention);
+//              v.fetch(r.entityMentionUuid, r.communicationId, showMention);
+              v.fetch(r.tokenizationUuid, r.communicationId, showMention);
           if (commsWritten.add(r.communicationId)) {
             Log.info("finding+saving " + r.communicationId);
             try {

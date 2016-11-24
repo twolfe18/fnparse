@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-# Pipe in "<termId><tab><nerType><tab><uuid>" terms sorted by (nertype, termId)
-# Provide an output directory where nerFeats.<nerType>.txt files will be written
-# Output format is "<termId>(<tab><uuid>)+"
+# Pipe in tab-separated (termId, nerType, commUuid, tokUuid) tuples sorted by (nerType, termId).
+# Provide an output directory where nerFeats.<nerType>.txt files will be written.
+# Output format is "<termId>(<tab><tokUuid>)+"
 
 import sys, os, itertools
 

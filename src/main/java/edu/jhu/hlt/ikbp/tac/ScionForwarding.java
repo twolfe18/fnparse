@@ -18,6 +18,7 @@ import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.scion.concrete.server.FetchCommunicationServiceImpl;
 import edu.jhu.hlt.scion.core.accumulo.ConnectorFactory;
 import edu.jhu.hlt.scion.core.accumulo.ScionConnector;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 
 /**
  * This is for when you want {@link Communication}s and are not running on the COE grid.
@@ -94,8 +95,9 @@ public class ScionForwarding {
 
   
   public static void main(String[] args) throws Exception {
+    ExperimentProperties config = ExperimentProperties.init(args);
     Forward forward = new Forward();
-    int localPort = 34343;
+    int localPort = config.getInt("port", 34343);
     Runner runner = new Runner(forward, localPort);
     Thread t = new Thread(runner);
     t.start();

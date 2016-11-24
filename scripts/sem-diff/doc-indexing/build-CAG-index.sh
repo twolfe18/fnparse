@@ -76,7 +76,7 @@ echo "building ner feature indices... `date`"
 mkdir -p "$OUTPUT_DIR/ner_feats"
 time zcat "$OUTPUT_DIR/raw/nerFeatures.txt.gz" \
   | LC_COLLATE=C LC_ALL=C sort -n -t '	' -k 1,2 --buffer-size=2G -T "$TEMP_DIR" \
-  | gzip -c >"$OUTPUT_DIR/ner_feats/sorted.txt.gz"
+  | gzip -c >"$OUTPUT_DIR/ner_feats/sorted-all.txt.gz"
 zcat "$OUTPUT_DIR/ner_feats/sorted-all.txt.gz" \
   | $SCRIPTS/sem-diff/doc-indexing/convert-ner-feature-file-format.py \
     "$OUTPUT_DIR/ner_feats"
@@ -95,12 +95,19 @@ java -ea -cp $JAR_STABLE \
     communicationArchives "$COMM_GLOB" \
     outputDirectory "$OUTPUT_DIR/deprel"
 
-echo "building deprel index (sorting)... `date`"
+#echo "building deprel inverted index... `date`"
+#zcat $OUTPUT_DIR/deprel/deprels.txt.gz \
+#  | awk -F"\t" '{printf("%s\t%s/%s_%s/%s\n", $1, $3, $4, $6, $7)}' \
+#  | gzip -c >"$OUTPUT_DIR/deprel/rel-arg-tok.txt.gz"
+
+echo "building deprel matrix (sorting)... `date`"
 zcat $OUTPUT_DIR/deprel/deprels.txt.gz \
   | awk -F"\t" '{printf("%s\t%s/%s_%s/%s\n", $1, $3, $4, $6, $7)}' \
-  | LC_COLLATE=C LC_ALL=C sort --buffer-size=2G | uniq -c | awk '{printf("%s\t%s\t%d\n", $2, $3, $1)}' \
+  | LC_COLLATE=C LC_ALL=C sort --buffer-size=2G \
+  | uniq -c \
+  | awk '{printf("%s\t%s\t%d\n", $2, $3, $1)}' \
   | gzip -c >"$OUTPUT_DIR/deprel/sorted-all.txt.gz"
-echo "building deprel index (splitting)... `date`"
+echo "building deprel matrix (splitting)... `date`"
 zcat "$OUTPUT_DIR/deprel/sorted-all.txt.gz" \
   | $SCRIPTS/sem-diff/doc-indexing/prune-matrix-factorization.sh \
     8 8 3 3 $TEMP_DIR/deprel \

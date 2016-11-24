@@ -19,7 +19,8 @@ PRUNE_COL_SUM=$3
 PRUNE_COL_NNZ=$4
 TEMP_DIR=$5
 
-AWK_PRUNE_ROW=./scripts/sem-diff/doc-indexing/prune-matrix-by-row.awk
+#AWK_PRUNE_ROW=./scripts/sem-diff/doc-indexing/prune-matrix-by-row.awk
+AWK_PRUNE_ROW=~/code/fnparse/scripts/sem-diff/doc-indexing/prune-matrix-by-row.awk
 
 if [[ ! -f $AWK_PRUNE_ROW ]]; then
   echo "can't find awk script: $AWK_PRUNE_ROW"
