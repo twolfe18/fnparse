@@ -24,7 +24,6 @@ import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
-import dk.ange.octave.util.StringUtil;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Dependency;
 import edu.jhu.hlt.concrete.DependencyParse;
@@ -46,7 +45,6 @@ import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.Path2;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.fnparse.util.LearningRateSchedule.Exp;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
 import edu.jhu.hlt.tutils.Counts;
@@ -61,6 +59,7 @@ import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.StringInt;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
@@ -94,6 +93,68 @@ public class IndexCommunications implements AutoCloseable {
   // May be used by any class in this module, but plays no role by default
   static IntObjectHashMap<String> INVERSE_HASH = null;
   
+  public static class ShowResult {
+    private KbpQuery query;
+    private QResult res;
+    private Communication comm;   // borrowed from res
+    
+    public ShowResult(KbpQuery q, QResult r) {
+      this.query = q;
+      this.res = r;
+      this.comm = r.comm;
+      if (comm == null)
+        throw new IllegalArgumentException();
+      if (findTok(res.tokUuid, comm) == null)
+        throw new IllegalArgumentException("tokUuid=" + res.tokUuid);
+    }
+    
+    public void show(List<TermVec> pkbDocs) {
+      int termCharLimit = 120;
+
+      System.out.println("####################################################################################################");
+      System.out.println(query + "\tres.tokUuid=" + res.tokUuid + " in " + comm.getId());
+      System.out.println();
+      
+      // Query features
+      System.out.println("pkbDocs.size=" + pkbDocs.size());
+      for (TermVec queryDoc : pkbDocs)
+        System.out.println("queryDoc: " + queryDoc.showTerms(termCharLimit));
+      System.out.println();
+
+      // Result features
+      System.out.println(res.featsResult.show(termCharLimit));
+      
+      // score = weights * (featQuery outerProd featResult)... or something like that
+      for (Feat f : res.scoreDerivation)
+        System.out.println(f);
+      System.out.println();
+      
+      // Words/Tokenization
+      Tokenization tokenization = findTok(res.tokUuid, comm);
+      List<Token> toks = tokenization.getTokenList().getTokenList();
+      System.out.println("tokens:");
+      for (Token t : toks) {
+//        System.out.printf("%-24s%16s%32s%48s\n", query.name, t.getText(), comm.getId(), res.tokUuid);
+        System.out.print(" " + t.getText());
+      }
+      System.out.println();
+    }
+    
+    private static Tokenization findTok(String tokUuid, Communication comm) {
+      Tokenization t = null;
+      for (Section section : comm.getSectionList()) {
+        for (Sentence sentence : section.getSentenceList()) {
+          Tokenization tok = sentence.getTokenization();
+          String tid = tok.getUuid().getUuidString();
+          if (tid.equals(tokUuid)) {
+            assert t == null;
+            t = tok;
+          }
+        }
+      }
+      return t;
+    }
+  }
 
   /**
    * I'm going to have to do some kind of deduplication or clustering
@@ -101,6 +162,7 @@ public class IndexCommunications implements AutoCloseable {
    * This reads in those queries, searches over an index, and spits out results.
    */
   public static class KbpDirectedEntitySearch {
+    static boolean DEBUG = false;
     
     public static void main(ExperimentProperties config) throws Exception {
       
@@ -109,30 +171,45 @@ public class IndexCommunications implements AutoCloseable {
       
       List<KbpQuery> queries = TacKbp.getKbp2013SfQueries();
       
-      int scionFwdLocalPort = config.getInt("scionFwdLocalPort", 8088);
+      // Go to test1b, start edu.jhu.hlt.ikbp.tac.ScionForwarding on port 34343
+      // Locally, run ssh -fNL 8089:test1:34343 test1b
+      int scionFwdLocalPort = config.getInt("scionFwdLocalPort", 8089);
       CommunicationRetrieval commRet = new CommunicationRetrieval(scionFwdLocalPort);
       commRet.test("NYT_ENG_20090901.0206");
 
       Pair<SituationSearch, TfIdfDocumentStore> ss = SituationSearch.build(config);
       IntDoubleHashMap idfs = ss.get2().getIdfs();
-      KbpDirectedEntitySearch k = new KbpDirectedEntitySearch(ss.get1(), commRet, idfs);
+      KbpDirectedEntitySearch k = new KbpDirectedEntitySearch(ss.get1(), commRet, idfs, commUuid2CommId);
       
-      int limit = config.getInt("limit", 100);
+      int limit = config.getInt("limit", 10);
       for (KbpQuery q : queries) {
-        Log.info(q);
-        List<QResult> results = k.search(q, limit);
+//        Log.info(q);
+
+        boolean clearPkb = false;
+        List<QResult> results = k.search(q, limit, clearPkb);
         EC.increment("kbpQuery");
         if (results.isEmpty())
           EC.increment("kbpQuery/failConvert");
-        for (QResult s : results) {
-          System.out.println(s);
+
+        for (QResult r : results) {
           EC.increment("kbpQuery/result");
+//          System.out.println(s);
           
-//          String comm = s.comm.getId();
-          String commUuid = s.feats.getCommunicationUuidString();
-          String commId = commUuid2CommId.get1(commUuid);
-          System.out.println("query=" + q.id + " tokenization=" + s.tokUuid + " commUuid=" + commUuid + " commId=" + commId);
+          // Make sure we have a communication
+          Communication comm = r.comm;
+          assert comm != null;
+          
+          if (DEBUG) {
+            System.out.println("event counts: " + EC);
+            System.out.println(TIMER);
+          }
+          
+          // Show the result
+          ShowResult s = new ShowResult(q, r);
+          s.show(k.search.state.pkbDocs);
         }
+        
+        k.search.clearState();
       }
       
       System.out.println(EC);
@@ -143,6 +220,9 @@ public class IndexCommunications implements AutoCloseable {
     private IntDoubleHashMap idf;
     private CommunicationRetrieval commRet;
     
+    // scion/accumulo needs ids rather than UUIDs
+    private StringTable commUuid2CommId;
+    
     // Borrowed
     private TokenObservationCounts tokObs;
     private TokenObservationCounts tokObsLc;
@@ -151,10 +231,15 @@ public class IndexCommunications implements AutoCloseable {
      * @param search
      * @param idfs is a two-column TSV of (term:int, idf:double), e.g. doc/idf.txt
      */
-    public KbpDirectedEntitySearch(SituationSearch search, CommunicationRetrieval commRet, IntDoubleHashMap idfs) throws IOException {
+    public KbpDirectedEntitySearch(
+        SituationSearch search,
+        CommunicationRetrieval commRet,
+        IntDoubleHashMap idfs,
+        StringTable commUuid2CommId) throws IOException {
       this.search = search;
       this.idf = idfs;
       this.commRet = commRet;
+      this.commUuid2CommId = commUuid2CommId;
 
       // TODO this means that any features which are count/case sensitive won't fire!
       this.tokObs = null;
@@ -169,12 +254,14 @@ public class IndexCommunications implements AutoCloseable {
      */
     public List<QResult> buildQuerySeed(KbpQuery sfQuery) {
       SentFeats sf = new SentFeats();
-      QResult seed = new QResult(null, sf, 1);
+      QResult seed = new QResult(null, sf, Collections.emptyList());
       
+      // Get the Communication used by the query
       assert seed.comm == null;
       seed.comm = commRet.get(sfQuery.docid);
       if (seed.comm == null) {
-        Log.info("couldn't find communication for " + sfQuery.docid);
+        EC.increment("buildQuerySeed/noQueryComm");
+        Log.info("couldn't find communication for query: " + sfQuery);
         return Collections.emptyList();
       }
       sf.setCommunicationUuid(seed.comm.getUuid().getUuidString());
@@ -209,15 +296,33 @@ public class IndexCommunications implements AutoCloseable {
       return Arrays.asList(seed);
     }
     
-    public List<QResult> search(KbpQuery sfQuery, int limit) {
+    public List<QResult> search(KbpQuery sfQuery, int limit, boolean clearPkb) {
       List<QResult> seeds = buildQuerySeed(sfQuery);
+      if (seeds.isEmpty()) {
+        Log.warn("no seeds for " + sfQuery);
+        EC.increment("kbpDirEntSearch/noSeeds");
+        return Collections.emptyList();
+      }
       for (QResult s : seeds)
         search.addToPkb(s);
       
       String entityName = sfQuery.name;
       String entityType = TacKbp.tacNerTypesToStanfordNerType(sfQuery.entity_type);
       List<QResult> res = search.query(entityName, entityType, limit);
-      search.clearState();
+      if (clearPkb)
+        search.clearState();
+      
+      // Convert comm uuid => id (for retrieving Communications)
+      for (QResult qr : res) {
+        String uuid = qr.featsResult.getCommunicationUuidString();
+        assert uuid != null && !uuid.isEmpty();
+        String id = commUuid2CommId.get1(uuid);
+        assert id != null && !id.isEmpty();
+        qr.setCommunicationId(id);
+      }
+      // Resolve Communications
+      commRet.fetch(res);
+      
       return res;
     }
   }
@@ -227,21 +332,9 @@ public class IndexCommunications implements AutoCloseable {
    * Given a bunch of query results, fetch their {@link Communication}s from scion/accumulo.
    */
   public static class CommunicationRetrieval {
-//    private FetchCommunicationServiceImpl impl;
     private FetchCommunicationService.Client client;
     
     public CommunicationRetrieval(int localPort) {
-//      System.setProperty("scion.accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181");
-//      System.setProperty("scion.accumulo.instanceName", "minigrid");
-//      System.setProperty("scion.accumulo.user", "reader");
-//      System.setProperty("scion.accumulo.password", "an accumulo reader");
-//      try {
-//        ConnectorFactory cf = new ConnectorFactory();
-//        ScionConnector sc = cf.getConnector();
-//        impl = new FetchCommunicationServiceImpl(sc);
-//      } catch (Exception e) {
-//        throw new RuntimeException(e);
-//      }
       Log.info("talking to localhost:" + localPort + " which should be"
           + " forwarded to something which implements FetchCommunicationService, e.g. ScionForwarding");
       try {
@@ -255,11 +348,11 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public void test(String commId) {
+      Log.info("trying to fetch " + commId);
       FetchRequest fr = new FetchRequest();
       fr.addToCommunicationIds(commId);
       Log.info(fr);
       try {
-//        FetchResult res = impl.fetch(fr);
         FetchResult res = client.fetch(fr);
         if (res.getCommunicationsSize() == 0) {
           Log.info("no results!");
@@ -274,16 +367,20 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public Communication get(String commId) {
+      TIMER.start("commRet/get");
       FetchRequest fr = new FetchRequest();
       fr.addToCommunicationIds(commId);
       try {
         FetchResult res = client.fetch(fr);
         if (res.getCommunicationsSize() == 0) {
-          Log.info("no results!");
+          Log.info("no results for comm id=" + commId);
+          EC.increment("commRet/get/noResults");
+          TIMER.stop("commRet/get");
           return null;
         }
         Communication c = res.getCommunications().get(0);
         assert res.getCommunicationsSize() == 1;
+        TIMER.stop("commRet/get");
         return c;
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -291,25 +388,58 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public void fetch(List<QResult> needComms) {
+      if (needComms.isEmpty()) {
+        EC.increment("commRet/emptyFetch");
+        return;
+      }
+      TIMER.start("commRet/fetch");
       
       // TODO Break up request if there are too many?
       // TODO Have option to do one-at-a-time retrieval?
       FetchRequest fr = new FetchRequest();
-      for (QResult r : needComms)
-        fr.addToCommunicationIds(r.feats.getCommunicationUuidString());
+      for (QResult r : needComms) {
+        if (r.getCommunicationId() == null)
+          throw new IllegalArgumentException("no comm id provided");
+        if (r.comm != null) {
+          // TODO need for resolving a subset of comms?
+          throw new IllegalArgumentException("already resolved!");
+        }
+        fr.addToCommunicationIds(r.getCommunicationId());
+      }
       
       FetchResult res = null;
       try {
-//        res = impl.fetch(fr);
         res = client.fetch(fr);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
       
-      assert res.getCommunicationsSize() == needComms.size();
+      IndexCommsById ic = new IndexCommsById(res.getCommunications());
       for (int i = 0; i < needComms.size(); i++) {
-        needComms.get(i).setCommunication(res.getCommunications().get(i));
+        String id = needComms.get(i).getCommunicationId();
+        Communication comm = ic.getCommunication(id);
+        if (comm == null) {
+          Log.info("could not resolve Communication id=" + id + " to a UUID!");
+          EC.increment("commRet/missingId");
+        } else {
+          needComms.get(i).setCommunication(comm);
+        }
       }
+      TIMER.stop("commRet/fetch");
+    }
+  }
+  
+  private static class IndexCommsById {
+    private Map<String, Communication> byId;
+    public IndexCommsById(Iterable<Communication> res) {
+      this.byId = new HashMap<>();
+      for (Communication c : res) {
+        Object old = this.byId.put(c.getId(), c);
+        assert old == null : "duplicate id? " + c.getId();
+      }
+    }
+    public Communication getCommunication(String id) {
+      return byId.get(id);
     }
   }
   
@@ -405,6 +535,10 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public String show() {
+      return show(0);
+    }
+
+    public String show(int termCharLimit) {
       StringBuilder sb = new StringBuilder();
       sb.append("comm=" + getCommunicationUuidString() + "\n");
 
@@ -439,11 +573,7 @@ public class IndexCommunications implements AutoCloseable {
       }
       sb.append('\n');
       
-      sb.append("terms:");
-      for (int i = 0; i < tfidf.numTerms(); i++) {
-        sb.append(' ');
-        sb.append(INVERSE_HASH.get(tfidf.terms[i]));
-      }
+      sb.append("terms: " + tfidf.showTerms(termCharLimit));
       sb.append('\n');
       
       return sb.toString();
@@ -465,18 +595,73 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
+  public static class Feat {
+    String name;
+    double weight;
+    List<String> justifications;    // details which are nice to include, arbitrary values
+    
+    public Feat(String name) {
+      this.name = name;
+    }
+    
+    public Feat rescale(String reason, double factor) {
+      this.weight *= factor;
+      addJustification(String.format("rescale[%s]=%.2g", reason, factor));
+      return this;
+    }
+    
+    public Feat setWeight(double w) {
+      this.weight = w;
+      return this;
+    }
+    
+    public Feat addJustification(Object... terms) {
+      String j = StringUtils.join(" ", terms);
+      if (justifications == null)
+        justifications = new ArrayList<>();
+      justifications.add(j);
+      return this;
+    }
+    
+    @Override
+    public String toString() {
+      String s = String.format("%-20s %.1f", name, weight);
+      if (justifications == null)
+        return s;
+      String j = StringUtils.join(", ", justifications);
+      return String.format("%-26s b/c %s", s, j);
+    }
+  }
+  
   public static class QResult {
     public final String tokUuid;
-    public final SentFeats feats;
-    public final double score;
+    public final SentFeats featsResult;
+    private List<Feat> scoreDerivation;
 
-    // Can be set later, not stored in memory
+    // Can be set later, not stored in memory by main pipeline (use scion/accumulo).
     private Communication comm;
+    
+    // SentFeats/etc store a UUID rather than an id. scion/accumulo needs an id.
+    private String commId;
 
-    public QResult(String tokUuid, SentFeats feats, double score) {
+    public QResult(String tokUuid, SentFeats featsResult, List<Feat> score) {
       this.tokUuid = tokUuid;
-      this.feats = feats;
-      this.score = score;
+      this.featsResult = featsResult;
+      this.scoreDerivation = score;
+    }
+    
+    public String getCommunicationId() {
+      if (commId == null && comm == null) {
+        return null;
+      }
+      if (commId != null)
+        return commId;
+      return comm.getId();
+    }
+    
+    public void setCommunicationId(String commId) {
+      assert comm == null || comm.getId().equals(commId);
+      this.commId = commId;
     }
     
     public Communication setCommunication(Communication c) {
@@ -489,15 +674,22 @@ public class IndexCommunications implements AutoCloseable {
       return comm;
     }
     
+    public double getScore() {
+      double s = 0;
+      for (Feat f : scoreDerivation)
+        s += f.weight;
+      return s;
+    }
+    
     @Override
     public String toString() {
-      return String.format("(QResult score=%.3f tok=%s has_comm=%s feats=%s)", score, tokUuid, comm!=null, feats);
+      return String.format("(QResult score=%.3f tok=%s has_comm=%s feats=%s)", getScore(), tokUuid, comm!=null, featsResult);
     }
     
     public String show() {
       StringBuilder sb = new StringBuilder();
-      sb.append(String.format("(QResult score=%.3f tok=%s\n", score, tokUuid));
-      sb.append(feats.show());
+      sb.append(String.format("(QResult score=%.3f tok=%s\n", getScore(), tokUuid));
+      sb.append(featsResult.show());
       sb.append(')');
       return sb.toString();
     }
@@ -505,9 +697,11 @@ public class IndexCommunications implements AutoCloseable {
     public static final Comparator<QResult> BY_SCORE_DESC = new Comparator<QResult>() {
       @Override
       public int compare(QResult o1, QResult o2) {
-        if (o1.score > o2.score)
+        double s1 = o1.getScore();
+        double s2 = o2.getScore();
+        if (s1 > s2)
           return -1;
-        if (o1.score < o2.score)
+        if (s1 < s2)
           return +1;
         return 0;
       }
@@ -726,9 +920,9 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public void addToPkb(QResult response) {
-      Log.info("response: " + response);
+//      Log.info("response: " + response);
       
-      SentFeats f = response.feats;
+      SentFeats f = response.featsResult;
       FeaturePacker.Unpacked ff = FeaturePacker.unpack(f.featBuf);
       
       assert f.tfidf != null;
@@ -748,6 +942,8 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     /**
+     * Doesn't resolve {@link Communication}s for the results.
+     *
      * @param entityName e.g. "President Barack_Obama"
      * @param entityType e.g. "PERSON"
      * @param limit is how many items to return (max)
@@ -761,11 +957,8 @@ public class IndexCommunications implements AutoCloseable {
       TokenObservationCounts tokObsLc = null;
       String[] entToks = entityName.split(" ");
       String[] headwords = new String[] {entToks[entToks.length - 1]};    // TODO
-//      List<String> entFeats = getEntityMentionFeatures(entityName, headwords, entityType, tokObs, tokObsLc);
       // Lookup mentions for the query entity
       List<Result> toks = entity.findMentionsMatching(entityName, entityType, headwords, tokObs, tokObsLc);
-//      int entityNameHash = ReversableHashWriter.onewayHash("h:" + entityName);
-//      List<String> toks = entity.get(entityType, entityNameHash);
       
       List<Result> ts = toks.size() > 20 ? toks.subList(0, 20) : toks;
       Log.info("entity results initial (" + toks.size() + "): " + ts);
@@ -773,7 +966,6 @@ public class IndexCommunications implements AutoCloseable {
       // Re-score mentions based on seeds/PKB
       List<QResult> scored = new ArrayList<>();
       for (Result t : toks) {
-//        String tokUuid = t.entityMentionUuid; // NOTE, this is right! old code had this as EM UUIDs instead of Tokenization UUIDs
         String tokUuid = t.tokenizationUuid;
         if (state.pkbTokUuid.contains(tokUuid)) {
           Log.info("skipping tok=" + t + " because it is already in the PKB");
@@ -788,6 +980,11 @@ public class IndexCommunications implements AutoCloseable {
       
       if (limit > 0 && scored.size() > limit)
         scored = scored.subList(0, limit);
+      
+      if (scored.isEmpty()) {
+        EC.increment("sitSearch/noResults");
+        Log.info("no result for " + entityName + ":" + entityType);
+      }
 
       tm.stop("query");
       return scored;
@@ -817,46 +1014,40 @@ public class IndexCommunications implements AutoCloseable {
         Log.info("f.comm=" + f.getCommunicationUuidString());
       }
       
-      double scoreTfidf = 0;
-      double scorePkbDoc = 0;
-      double maxTfidf = 0;
+      Feat tfidfAvg = new Feat("tfidf/avg");
+      Feat tfidfMax = new Feat("tfidf/max");
+      Feat pkbDocMatch = new Feat("pkbDocMatch");
       for (TermVec d : state.pkbDocs) {
         double t = TermVec.tfidf(f.tfidf, d);
-        scoreTfidf += t;
+        tfidfAvg.weight += t;
         if (f.tfidf == d)
-          scorePkbDoc += 1;
-        if (t > maxTfidf)
-          maxTfidf = t;
+          pkbDocMatch.weight += 1;
+        if (t > tfidfMax.weight)
+          tfidfMax.weight = t;
       }
       double z = Math.sqrt(state.pkbDocs.size() + 1);
-      scoreTfidf /= z;
-      scorePkbDoc /= z;
-      
-      if (verbose) {
-        Log.info("nameMatchScore=" + nameMatchScore);
-        Log.info("maxTfIdf=" + maxTfidf);
-        Log.info("pkbDocs.size=" + state.pkbDocs.size());
-        Log.info("scoreTfidf=" + scoreTfidf);
-        Log.info("scorePkbdoc=" + scorePkbDoc);
-      }
+      tfidfAvg.rescale("nPkbDoc=" + state.pkbDocs.size(), 1/z).rescale("weight", 100);
+      pkbDocMatch.rescale("nPkbDoc=" + state.pkbDocs.size(), 1/z).rescale("weight", 10);
       
       // TODO Currently we measure a hard "this entity/deprel/situation/etc
       // showed up in the result and the PKB/seed", but we should generalize
       // this to be similarity of the embeddings.
       
-      double scoreSeedEnt = 0;  // TODO
-      double scorePkbEnt = 0;
+      Feat entSeed = new Feat("ent/seed").addJustification("TODO(impl)");
+      Feat entPkb = new Feat("ent/pkb");
       for (IntPair et : ff.entities) {
         if (state.containsPkbEntity(et.first, et.second))
-          scorePkbEnt += 1;
+          entPkb.weight += 1;
       }
-      scorePkbEnt /= Math.sqrt(ff.entities.size() + 1);
+      z = Math.sqrt(ff.entities.size() + 1);
+      entPkb.rescale("nEnt=" + ff.entities.size(), 1/z);
       
       // TODO
-      double scoreSeedSit = 0;
-      double scorePkbSit = 0;
+      Feat scoreSeedSit = new Feat("sit/seed").addJustification("TODO(impl)");
+      Feat scorePkbSit = new Feat("sit/pkb").addJustification("TODO(impl)");
       
-      double scorePkbDeprel = 0;
+      Feat deprelSeed = new Feat("deprel/seed").addJustification("TODO(impl)");
+      Feat deprelPkb = new Feat("deprel/pkb");
       for (IntTrip d : ff.deprels) {
         int deprel = d.first;
         int arg0 = d.second;
@@ -864,22 +1055,29 @@ public class IndexCommunications implements AutoCloseable {
         if (state.containsPkbDeprel(deprel)) {
           boolean ca0 = state.containsEntity(arg0);
           boolean ca1 = state.containsEntity(arg1);
-          if (ca0 && ca1)
-            scorePkbDeprel += 3;
-          if (ca0 || ca1)
-            scorePkbDeprel += 1;
+          if (ca0 && ca1) {
+            deprelPkb.addJustification("both/deprel=" + deprel, "both/arg0=" + arg0, "both/arg1=" + arg1);
+            deprelPkb.weight += 3;
+          }
+          if (ca0 || ca1) {
+            int a = ca0 ? arg0 : arg1;
+            deprelPkb.addJustification("one/deprel=" + deprel, "one/arg=" + a, "one/arg0?=" + ca0);
+            deprelPkb.weight += 1;
+          }
         }
       }
-      scorePkbDeprel /= Math.sqrt(ff.deprels.size() + 1);
-      double scoreSeedDeprel = 0; // TODO
-      
-      double score = nameMatchScore
-          * (scoreTfidf + scorePkbDoc
-          + scorePkbDeprel + scoreSeedDeprel
-          + scorePkbSit + scoreSeedSit
-          + scorePkbEnt + scoreSeedEnt);
+      z = Math.sqrt(ff.deprels.size() + 1);
+      deprelPkb.rescale("nDeprel=" + ff.deprels.size(), 1/z);
           
+      
+      Feat nm = new Feat("name").setWeight(nameMatchScore);
+
       tm.stop("score");
+      List<Feat> score = Arrays.asList(nm,
+          tfidfAvg, pkbDocMatch,
+          deprelPkb, deprelSeed,
+          scorePkbSit, scoreSeedSit,
+          entPkb, entSeed);
       return new QResult(tokUuid, f, score);
     }
     
@@ -1750,6 +1948,7 @@ public class IndexCommunications implements AutoCloseable {
         System.out.println(x);
     }
     
+    public boolean verbose = false;
     
     public NerFeatureInvertedIndex(List<Pair<String, File>> featuresByNerType) throws IOException {
       super();
@@ -1776,7 +1975,8 @@ public class IndexCommunications implements AutoCloseable {
     public List<Result> findMentionsMatching(String entityName, String entityType, String[] headwords,
         TokenObservationCounts tokenObs, TokenObservationCounts tokenObsLc) {
       TIMER.start("find/nerFeatures");
-      Log.info("entityName=" + entityName + " nerType=" + entityType);
+      if (verbose)
+        Log.info("entityName=" + entityName + " nerType=" + entityType);
       
       // Find out which EntityMentions contain the query ngrams
       List<String> features = getEntityMentionFeatures(entityName, headwords, entityType, tokenObs, tokenObsLc);
@@ -1871,6 +2071,23 @@ public class IndexCommunications implements AutoCloseable {
       
       TIMER.stop("tfidf");
       return s;
+    }
+    
+    public String showTerms(int termCharLimit) {
+      StringBuilder sb = new StringBuilder();
+      int tc = 0;
+      int nt = numTerms();
+      for (int i = 0; i < nt; i++) {
+        String term = INVERSE_HASH.get(terms[i]);
+        sb.append(' ');
+        sb.append(term);
+        tc += term.length() + 1;
+        if (termCharLimit > 0 && tc >= termCharLimit) {
+          sb.append(" ...and " + (nt-(i+1)) + " more terms");
+          break;
+        }
+      }
+      return sb.toString();
     }
   }
 

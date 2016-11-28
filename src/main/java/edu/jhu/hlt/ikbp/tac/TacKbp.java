@@ -78,7 +78,7 @@ public class TacKbp {
     String genre;
     String web_search, wiki_text, unknown;
     
-    // Come from source docs
+    // Space-separated document representation, comes from source docs
     String sourceDoc;
     
     public KbpQuery(String id) {

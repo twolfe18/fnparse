@@ -19,6 +19,7 @@ import edu.jhu.hlt.scion.concrete.server.FetchCommunicationServiceImpl;
 import edu.jhu.hlt.scion.core.accumulo.ConnectorFactory;
 import edu.jhu.hlt.scion.core.accumulo.ScionConnector;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Log;
 
 /**
  * This is for when you want {@link Communication}s and are not running on the COE grid.
@@ -67,6 +68,7 @@ public class ScionForwarding {
     private final TNonblockingServer.Args servArgs;
 
     public Runner(FetchCommunicationService.Iface impl, int port) throws TException {
+      Log.info("starting on port " + port);
       this.serverXport = new TNonblockingServerSocket(port);
       FetchCommunicationService.Processor<FetchCommunicationService.Iface> proc = new FetchCommunicationService.Processor<>(impl);
       TFramedTransport.Factory transFactory = new TFramedTransport.Factory(Integer.MAX_VALUE);
