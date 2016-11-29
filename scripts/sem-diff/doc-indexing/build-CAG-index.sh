@@ -6,8 +6,10 @@
 set -eu
 
 OUTPUT_DIR=$1
-COMM_GLOB=$2    # e.g. "$CAG/**/nyt_eng_2007*.tar.gz"
-JAR=$3
+COMM_GLOB=$2    # e.g. "/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford/**/nyt_eng_2007*.tar.gz"
+TOK_OBS=$3      # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz
+TOK_OBS_LC=$4   # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz
+JAR=$5
 
 echo "args: $@"
 
@@ -23,10 +25,24 @@ mkdir -p "$OUTPUT_DIR"
 TEMP_DIR=$OUTPUT_DIR/tempdir
 mkdir -p $TEMP_DIR
 
-#CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
-
-SCRIPTS=/home/hltcoe/twolfe/fnparse-build/fnparse/scripts
+#SCRIPTS=/home/hltcoe/twolfe/fnparse-build/fnparse/scripts
 #SCRIPTS=./scripts
+THIS_SCRIPT_DIR=`dirname $(readlink -f $0)`
+SCRIPTS=$THIS_SCRIPT_DIR/../..
+echo "SCRIPTS=$SCRIPTS"
+
+if [[ ! -f $TOK_OBS ]]; then
+  echo "TOK_OBS=$TOK_OBS is not a file"
+  exit 1
+fi
+if [[ ! -f $TOK_OBS_LC ]]; then
+  echo "TOK_OBS_LC=$TOK_OBS_LC is not a file"
+  exit 2
+fi
+if [[ ! -f $JAR ]]; then
+  echo "JAR=$JAR is not a file"
+  exit 3
+fi
 
 JAR_STABLE="$OUTPUT_DIR/fnparse.jar"
 echo "copying jar to safe place:"
@@ -34,21 +50,9 @@ echo "    $JAR"
 echo "==> $JAR_STABLE"
 cp "$JAR" "$JAR_STABLE"
 
-# Building char-ngram-tries is now done offline/AOT
-    #communicationArchives "$CAG/**/nyt_eng_2007*.tar.gz" \
-#echo "counting strings... `date`"
-#mkdir -p "$OUTPUT_DIR/raw"
-#java -ea -Xmx32G -cp $JAR \
-#  edu.jhu.hlt.ikbp.tac.IndexCommunications \
-#    command tokenObs \
-#    communicationArchives "$CAG/**/*.tar.gz" \
-#    outputTokenObs "$OUTPUT_DIR/tokenObs.jser.gz" \
-#    outputTokenObsLower "$OUTPUT_DIR/tokenObs.lower.jser.gz"
 echo "copying ngram models into place... `date`"
-cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.jser.gz"
-cp /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.lower.jser.gz"
-#cp ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-false.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.jser.gz"
-#cp ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-true.reverse-false.minCount3.jser.gz "$OUTPUT_DIR/tokenObs.lower.jser.gz"
+cp $TOK_OBS "$OUTPUT_DIR/tokenObs.jser.gz"
+cp $TOK_OBS_LC "$OUTPUT_DIR/tokenObs.lower.jser.gz"
 
 
 ### NER/ENTITY and DOCUMENT FEATURES

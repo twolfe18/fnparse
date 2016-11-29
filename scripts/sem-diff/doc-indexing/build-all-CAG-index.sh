@@ -7,6 +7,10 @@ set -eu
 OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-11-28
 mkdir -p "$OUTPUT_DIR"
 
+# Locally, see ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-*-false.minCount3.jser.gz
+TOK_OBS=/home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz
+TOK_OBS_LC=/home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz
+
 #CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
 CAG=/export/projects/fferraro/cag-4.6.10/processing/from-marcc/20161012-083257/gigaword-merged
 
