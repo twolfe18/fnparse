@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiPredicate;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.TokenRefSequence;
@@ -190,8 +191,27 @@ public class Sentence implements HasId, Serializable {
 
     return s;
   }
+
+  public static BiPredicate<String, String> takeParseyOr(BiPredicate<String, String> tieBreaker) {
+    return (firstTool, secondTool) -> {
+      if (firstTool.toLowerCase().contains("parsey"))
+        return false;
+      if (secondTool.toLowerCase().contains("parsey"))
+        return true;
+      return tieBreaker.test(firstTool, secondTool);
+    };
+  }
+  public static final BiPredicate<String, String> KEEP_FIRST = (firstTool, secondTool) -> {
+    return false;
+  };
+  public static final BiPredicate<String, String> KEEP_LAST = (firstTool, secondTool) -> {
+    return true;
+  };
   
-  public static Sentence convertFromConcrete(String dataset, String id, Tokenization tokz) {
+  public static Sentence convertFromConcrete(String dataset, String id, Tokenization tokz,
+      BiPredicate<String, String> posTiebreaker,
+      BiPredicate<String, String> lemmaTiebreaker,
+      BiPredicate<String, String> nerTiebreaker) {
     int n = tokz.getTokenList().getTokenListSize();
     String[] tokens = new String[n];
     String[] pos = new String[n];
@@ -202,16 +222,20 @@ public class Sentence implements HasId, Serializable {
     TokenTagging ttLemma = null;
     TokenTagging ttNer = null;
     for (TokenTagging tt : tokz.getTokenTaggingList()) {
+      String tool = tt.getMetadata().getTool();
       String ttt = tt.getTaggingType();
       if ("lemma".equalsIgnoreCase(ttt)) {
-        assert ttLemma == null;
-        ttLemma = tt;
+        if (ttLemma == null || lemmaTiebreaker.test(ttLemma.getMetadata().getTool(), tool)) {
+          ttLemma = tt;
+        }
       } else if ("pos".equalsIgnoreCase(ttt)) {
-        assert ttPos == null;
-        ttPos = tt;
+        if (ttPos == null || posTiebreaker.test(ttPos.getMetadata().getTool(), tool)) {
+          ttPos = tt;
+        }
       } else if ("ner".equalsIgnoreCase(ttt)) {
-        assert ttNer == null;
-        ttNer = tt;
+        if (ttNer == null || nerTiebreaker.test(ttNer.getMetadata().getTool(), tool)) {
+          ttNer = tt;
+        }
       }
     }
     

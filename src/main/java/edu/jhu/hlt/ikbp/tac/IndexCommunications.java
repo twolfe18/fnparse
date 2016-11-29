@@ -1926,7 +1926,10 @@ public class IndexCommunications implements AutoCloseable {
       edu.jhu.hlt.fnparse.datatypes.Sentence sent = null;
       try {
         fndp = new edu.jhu.hlt.fnparse.datatypes.DependencyParse(graph, alph, 0, n, allowMultipleHeads);
-        sent = edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete("ds", "id", t);
+        sent = edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete("ds", "id", t,
+            edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST),
+            edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST),
+            edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST));
       } catch (Exception e) {
         e.printStackTrace();
         System.err.flush();
