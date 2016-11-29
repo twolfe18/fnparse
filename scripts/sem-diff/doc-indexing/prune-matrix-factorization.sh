@@ -19,16 +19,18 @@ PRUNE_COL_SUM=$3
 PRUNE_COL_NNZ=$4
 TEMP_DIR=$5
 
+THIS_SCRIPT_DIR=`dirname $(readlink -f $0)`
 #AWK_PRUNE_ROW=./scripts/sem-diff/doc-indexing/prune-matrix-by-row.awk
-AWK_PRUNE_ROW=~/code/fnparse/scripts/sem-diff/doc-indexing/prune-matrix-by-row.awk
+#AWK_PRUNE_ROW=~/code/fnparse/scripts/sem-diff/doc-indexing/prune-matrix-by-row.awk
+AWK_PRUNE_ROW=$THIS_SCRIPT_DIR/prune-matrix-by-row.awk
 
 if [[ ! -f $AWK_PRUNE_ROW ]]; then
-  echo "can't find awk script: $AWK_PRUNE_ROW"
-  echo "did you run from $$FNPARSE?"
+  echo "can't find awk script: $AWK_PRUNE_ROW" >&2
   exit 1
 fi
 
 if [[ ! -d $TEMP_DIR ]]; then
+  echo "making temp dir: $TEMP_DIR" >&2
   mkdir -p $TEMP_DIR
 fi
 
