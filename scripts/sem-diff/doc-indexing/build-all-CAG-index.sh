@@ -3,7 +3,8 @@
 set -eu
 
 #OUTPUT_DIR=/export/projects/twolfe/cag-indexing
-OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-11-23
+#OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-11-23
+OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-11-28
 mkdir -p "$OUTPUT_DIR"
 
 #CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
