@@ -45,8 +45,14 @@ import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.Path2;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
+import edu.jhu.hlt.ikbp.CreateParmaTrainingData;
+import edu.jhu.hlt.ikbp.DataUtil;
+import edu.jhu.hlt.ikbp.data.FeatureType;
+import edu.jhu.hlt.ikbp.data.Id;
+import edu.jhu.hlt.ikbp.features.ConcreteMentionFeatureExtractor;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw.QResultCluster;
 import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
+import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.EfficientUuidList;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -78,7 +84,8 @@ import edu.jhu.util.SlowParseyWrapper;
  */
 public class IndexCommunications implements AutoCloseable {
 
-  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-11-18");
+//  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-11-18");
+  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE");
   public static final MultiTimer TIMER = new MultiTimer();
   public static final Counts<String> EC = new Counts<>();   // event counts
   
@@ -92,7 +99,271 @@ public class IndexCommunications implements AutoCloseable {
 
   // May be used by any class in this module, but plays no role by default
   static IntObjectHashMap<String> INVERSE_HASH = null;
+
   
+  /**
+   * Determines whether two {@link QResult}s are duplicates by looking at
+   * all pairs of entities and situations which appear in pairs of results.
+   *
+   * Proof of concept to show how to train/predict with the features
+   * implemented in {@link CreateParmaTrainingData}.
+   * 
+   * Models are trained in with VW in data/parma/training_files/Makefile
+   */
+  public static class ParmaVw implements AutoCloseable {
+    private ConcreteMentionFeatureExtractor featEx;
+    private VwWrapper classifier;
+    
+    // These are the tool names which generated the entity/situation
+    // mentions which are being featurized.
+    private String situationMentionToolName;
+    private String entityMentionToolName;
+    
+    private IntDoubleHashMap idf;
+    
+    public boolean verbose = false;
+    
+    /**
+     * @param modelFile should be trained by VW,
+     * e.g. data/parma/training_files/ecbplus/model_neg4.vw
+     * see data/parma/training_files/Makefile
+     */
+    public ParmaVw(File modelFile, IntDoubleHashMap idf, ExperimentProperties config) throws IOException {
+      this.idf = idf;
+
+      // TODO When you add situation indexing, choose a tool and pass it in here.
+      situationMentionToolName = null;
+//      situationMentionToolName = config.getString("sitTool", "");
+      entityMentionToolName = config.getString("entTool", "Stanford Coref");
+      
+      // Problem is this:
+      // when I pass in "Stanford Coref" for the situationMentionTool it tries to add to a (em:UUID <=> tutils.Document.Constituent) bijection
+      // on the side, ConcreteMentionFeatureExtractor also has readConcreteStanford (for coref), which also adds em:UUID mappings, but with other cons, thus breaking the bijection
+      
+      // Question 1: Why are we reading concrete-stanford input in ConcreteMentionFeatureExtractor?
+      
+      
+      featEx = new ConcreteMentionFeatureExtractor(
+          situationMentionToolName, null, Collections.emptyList());
+//          situationMentionToolName, entityMentionToolName, Collections.emptyList());
+      
+      int port = config.getInt("vw.port", 8094);
+      try {
+        classifier = new VwWrapper(modelFile, port);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    
+    public void setIdf(IntDoubleHashMap idf) {
+      this.idf = idf;
+    }
+    
+    public boolean coref(QResult a, QResult b) {
+      // TODO right now it computes features by UNIONING over all mentions
+      // in either Tokenization, then computes score/prob of coreference.
+      // PERHAPS I SHOULD compute the score for every pair and then combine in a principled manner.
+
+      // First, the tf-idf score for the two documents must exceed a threshold
+      double tfidfThresh = 0.7;
+      double sim = TermVec.tfidfCosineSim(a.featsResult.tfidf, b.featsResult.tfidf, idf);
+      if (verbose)
+        System.out.println("[coref] tfidfCosineSim=" + sim);
+      if (sim < tfidfThresh)
+        return false;
+      EC.increment("parma/tfidfThreshMet");
+      
+      // Get features from a
+      List<edu.jhu.hlt.ikbp.data.Id> aFeat = new ArrayList<>();
+      edu.jhu.hlt.ikbp.data.Node aNode = convert(a);
+      featEx.extractSafe(aNode, aFeat);
+      
+      // Get features from b
+      List<edu.jhu.hlt.ikbp.data.Id> bFeat = new ArrayList<>();
+      edu.jhu.hlt.ikbp.data.Node bNode = convert(b);
+      featEx.extractSafe(bNode, bFeat);
+      
+      // Get pairwise features
+      // I'm abusing featEx.pairwiseFeats a bit, normally it takes nodes
+      // corresponding to a (situation|entity) mention, not a tokenization.
+      // Here I call it repeatedly on all pairs.
+      List<Id> aMentions = DataUtil.filterByFeatureType(aNode.getFeatures(), FeatureType.CONCRETE_UUID);
+      List<Id> bMentions = DataUtil.filterByFeatureType(bNode.getFeatures(), FeatureType.CONCRETE_UUID);
+      List<String> pws = new ArrayList<>();
+      for (Id am : aMentions) {
+        for (Id bm : bMentions) {
+          // TODO Filter pairs which have the same mention type
+          List<String> f = featEx.pairwiseFeats(am, bm);
+          pws.addAll(f);
+        }
+      }
+      List<Id> pw = CreateParmaTrainingData.upconvert(pws);
+      
+      String x = CreateParmaTrainingData.buildLine("0", "none", aFeat, bFeat, pw);
+      double y = classifier.predict(x);
+      if (verbose)
+        System.out.println("[coref] y: " + y + " x: " + StringUtils.trim(x, 120));
+      return y > 0;
+    }
+    
+    /**
+     * Finds all {@link EntityMention}s and {@link SituationMention}s which
+     * appear in the {@link Tokenization} specified by the given {@link QResult}.
+     */
+    private edu.jhu.hlt.ikbp.data.Node convert(QResult a) {
+      if (a.comm == null)
+        throw new IllegalArgumentException();
+      
+      edu.jhu.hlt.ikbp.data.Node n = new edu.jhu.hlt.ikbp.data.Node();
+      
+      // Node's id is the Tokenization UUID of the result
+      n.setId(new Id()
+          .setType(FeatureType.CONCRETE_UUID.getValue())
+          .setName(a.tokUuid));
+      
+      if (a.comm.isSetEntityMentionSetList()) {
+        for (EntityMentionSet ems : a.comm.getEntityMentionSetList()) {
+          if (entityMentionToolName.equals(ems.getMetadata().getTool())) {
+            for (EntityMention em : ems.getMentionList()) {
+              String t = em.getTokens().getTokenizationId().getUuidString();
+              if (!a.tokUuid.equals(t))
+                continue;
+              Id id = new Id()
+                  .setType(FeatureType.CONCRETE_UUID.getValue())
+                  .setName(em.getUuid().getUuidString());
+              n.addToFeatures(id);
+            }
+          }
+        }
+      }
+
+      if (a.comm.isSetSituationMentionSetList()) {
+        for (SituationMentionSet sms : a.comm.getSituationMentionSetList()) {
+          if (situationMentionToolName.equals(sms.getMetadata().getTool())) {
+            for (SituationMention sm : sms.getMentionList()) {
+              String t = sm.getTokens().getTokenizationId().getUuidString();
+              if (!a.tokUuid.equals(t))
+                continue;
+              Id id = new Id()
+                  .setType(FeatureType.CONCRETE_UUID.getValue())
+                  .setName(sm.getUuid().getUuidString());
+              n.addToFeatures(id);
+            }
+          }
+        }
+      }
+      
+      return n;
+    }
+    
+    private void setTopicForResults(List<QResult> results) {
+      Set<String> commIds = new HashSet<>();
+      List<Communication> comms = new ArrayList<>();
+      for (QResult r : results) {
+        if (r.comm == null)
+          throw new IllegalArgumentException();
+        if (commIds.add(r.getCommunicationId()))
+          comms.add(r.comm);
+      }
+      if (verbose)
+        Log.info("setting topic, nComms=" + comms.size() + " nResults=" + results.size());
+      
+      
+      // Feature extractor needs parsey, which may not be available,
+      // fall back on stanford
+      String sourceTool = "Stanford CoreNLP basic";
+      String destTool = "parsey";
+      boolean allowFail = false;
+      for (Communication c : comms)
+        ConcreteToolAliaser.DParse.copyIfNotPresent(c, sourceTool, destTool, allowFail);
+      
+      // FOR DEBUGGING
+      FileUtil.serialize(comms, new File("/tmp/dbg-topic-comms-list.jser"));
+      
+      featEx.set(comms);
+    }
+    
+    public static class QResultCluster {
+      public final QResult canonical;
+      private List<QResult> redundant;    // canonical doesn't appear in this list
+      
+      public QResultCluster(QResult canonical) {
+        this.canonical = canonical;
+        this.redundant = new ArrayList<>();
+      }
+      
+      public void addRedundant(QResult r) {
+        redundant.add(r);
+      }
+    }
+
+    /**
+     * Resulting list contains (canonicalResult, otherResultsInSameCluster) entries.
+     * The canonicalResult will not appear in the second list.
+     */
+    public List<QResultCluster> dedup(List<QResult> results) {
+      if (results.isEmpty())
+        return Collections.emptyList();
+
+      // Tell the feature extractor about the relevant Communications
+      setTopicForResults(results);
+
+      // Greedily take results, deduping as you go
+      List<QResultCluster> d = new ArrayList<>();
+      d.add(new QResultCluster(results.get(0)));
+      int n = results.size();
+      for (int i = 1; i < n; i++) {
+        EC.increment("parma/mention");
+        QResult b = results.get(i);
+        boolean dup  = false;
+        for (int j = 0; j < d.size() && !dup; j++) {
+          QResultCluster m = d.get(j);
+          boolean c = coref(b, m.canonical);
+          dup |= c;
+          if (c) {
+            m.addRedundant(b);
+            EC.increment("parma/dup");
+            if (verbose) {
+              int termCharLimit = 120;
+              System.out.println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+              System.out.println("COREF:");
+              ShowResult.showQResult(b, b.comm, termCharLimit);
+              System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+              ShowResult.showQResult(m.canonical, m.canonical.comm, termCharLimit);
+              System.out.println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
+            }
+          }
+        }
+        if (!dup)
+          d.add(new QResultCluster(b));
+      }
+      
+      if (verbose)
+        Log.info("filtered " + results.size() + " results down to " + d.size());
+
+      return d;
+    }
+
+    @Override
+    public void close() throws Exception {
+      classifier.close();
+    }
+    
+    /**
+     * Trains and serializes a model.
+     */
+    public static void main(ExperimentProperties config) throws Exception {
+      File modelFile = config.getFile("dedup.model");
+      IntDoubleHashMap idf = null;
+      try (ParmaVw p = new ParmaVw(modelFile, idf, config)) {
+      }
+    }
+  }
+  
+  
+  /**
+   * Shows {@link QResult}s in a human readable form.
+   */
   public static class ShowResult {
     private KbpQuery query;
     private QResult res;
@@ -121,6 +392,10 @@ public class IndexCommunications implements AutoCloseable {
         System.out.println("queryDoc: " + queryDoc.showTerms(termCharLimit));
       System.out.println();
 
+      showQResult(res, comm, termCharLimit);
+    }
+    
+    public static void showQResult(QResult res, Communication comm, int termCharLimit) {
       // Result features
       System.out.println(res.featsResult.show(termCharLimit));
       
@@ -132,11 +407,12 @@ public class IndexCommunications implements AutoCloseable {
       // Words/Tokenization
       Tokenization tokenization = findTok(res.tokUuid, comm);
       List<Token> toks = tokenization.getTokenList().getTokenList();
-      System.out.println("tokens:");
+      System.out.print("tokens:");
       for (Token t : toks) {
 //        System.out.printf("%-24s%16s%32s%48s\n", query.name, t.getText(), comm.getId(), res.tokUuid);
         System.out.print(" " + t.getText());
       }
+      System.out.println();
       System.out.println();
     }
     
@@ -156,6 +432,7 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
 
+
   /**
    * I'm going to have to do some kind of deduplication or clustering
    * of mentions, and the TAC KBP 2013/2014 give me a set of entities to care about.
@@ -166,6 +443,10 @@ public class IndexCommunications implements AutoCloseable {
     
     public static void main(ExperimentProperties config) throws Exception {
       
+      File f = new File("data/parma/training_files/ecbplus/model_neg4.vw");
+      File parmaModelFile = config.getExistingFile("dedup.model", f);
+      try (ParmaVw parma = new ParmaVw(parmaModelFile, null, config)) {
+      
       StringTable commUuid2CommId = new StringTable();
       commUuid2CommId.add(new File(HOME, "raw/emTokCommUuidId.txt.gz"), 2, 3, "\t", true);
       
@@ -173,25 +454,30 @@ public class IndexCommunications implements AutoCloseable {
       
       // Go to test1b, start edu.jhu.hlt.ikbp.tac.ScionForwarding on port 34343
       // Locally, run ssh -fNL 8089:test1:34343 test1b
-      int scionFwdLocalPort = config.getInt("scionFwdLocalPort", 8089);
+      int scionFwdLocalPort = config.getInt("scionFwdLocalPort", 8088);
       CommunicationRetrieval commRet = new CommunicationRetrieval(scionFwdLocalPort);
       commRet.test("NYT_ENG_20090901.0206");
 
       Pair<SituationSearch, TfIdfDocumentStore> ss = SituationSearch.build(config);
       IntDoubleHashMap idfs = ss.get2().getIdfs();
+      parma.setIdf(idfs);
       KbpDirectedEntitySearch k = new KbpDirectedEntitySearch(ss.get1(), commRet, idfs, commUuid2CommId);
       
-      int limit = config.getInt("limit", 10);
+      int limit = config.getInt("limit", 20);
       for (KbpQuery q : queries) {
+        EC.increment("kbpQuery");
 //        Log.info(q);
 
         boolean clearPkb = false;
         List<QResult> results = k.search(q, limit, clearPkb);
-        EC.increment("kbpQuery");
         if (results.isEmpty())
           EC.increment("kbpQuery/failConvert");
+        
+        // DEDUP
+        List<QResultCluster> deduped = parma.dedup(results);
 
-        for (QResult r : results) {
+        for (QResultCluster clust : deduped) {
+          QResult r = clust.canonical;
           EC.increment("kbpQuery/result");
 //          System.out.println(s);
           
@@ -211,12 +497,14 @@ public class IndexCommunications implements AutoCloseable {
         
         k.search.clearState();
       }
+      }
       
       System.out.println(EC);
       Log.info("done");
     }
     
     private SituationSearch search;
+    private ParmaVw dedup;
     private IntDoubleHashMap idf;
     private CommunicationRetrieval commRet;
     
@@ -635,7 +923,7 @@ public class IndexCommunications implements AutoCloseable {
   
   public static class QResult {
     public final String tokUuid;
-    public final SentFeats featsResult;
+    public final SentFeats featsResult; // features on the result represented by this QResult (as opposed to the query)
     private List<Feat> scoreDerivation;
 
     // Can be set later, not stored in memory by main pipeline (use scion/accumulo).
@@ -771,6 +1059,8 @@ public class IndexCommunications implements AutoCloseable {
 //    private StringIntUuidIndex entity;      // NER type, hash(entity word), Tokenization UUID+
     private NerFeatureInvertedIndex entity;      // NER type, hash(entity word), Tokenization UUID+
     
+    private IntDoubleHashMap idf;
+    
     private MultiTimer tm;
 
     /**
@@ -778,6 +1068,8 @@ public class IndexCommunications implements AutoCloseable {
      */
     public SituationSearch(File tokUuid2commUuid, TfIdfDocumentStore docVecs) throws IOException {
       tm = new MultiTimer();
+      
+      idf = docVecs.getIdfs();
       
       INVERSE_HASH = new IntObjectHashMap<>();
       readInverseHash(new File(HOME, "raw/termHash.sortu.txt.gz"), INVERSE_HASH);
@@ -1018,7 +1310,7 @@ public class IndexCommunications implements AutoCloseable {
       Feat tfidfMax = new Feat("tfidf/max");
       Feat pkbDocMatch = new Feat("pkbDocMatch");
       for (TermVec d : state.pkbDocs) {
-        double t = TermVec.tfidf(f.tfidf, d);
+        double t = TermVec.tfidfCosineSim(f.tfidf, d, idf);
         tfidfAvg.weight += t;
         if (f.tfidf == d)
           pkbDocMatch.weight += 1;
@@ -1850,7 +2142,7 @@ public class IndexCommunications implements AutoCloseable {
         r.communicationId = tokUuid2commId.get(r.tokenizationUuid);
         r.debug("queryNgramOverlap", r.score);
         assert r.communicationUuid != null : "no comm uuid for em uuid: " + r.tokenizationUuid;
-        double scoreContext = tfidf.tfidf(contextVec, r.communicationUuid);
+        double scoreContext = tfidf.tfidfCosineSim(contextVec, r.communicationUuid);
         double scoreMention = Math.min(1, r.score / entityName.length());
         r.score = scoreContext * scoreMention;
         r.debug("scoreContext", scoreContext);
@@ -2046,10 +2338,9 @@ public class IndexCommunications implements AutoCloseable {
       counts[index] = (short) count;
     }
 
-    public static double tfidf(TermVec x, TermVec y) {
+    public static double tfidfCosineSim(TermVec x, TermVec y, IntDoubleHashMap idf) {
       TIMER.start("tfidf");
 
-      // a = query.tf * idf
       int sizeGuess = y.numTerms() + x.numTerms();
       double missingEntry = 0;
       IntDoubleHashMap a = new IntDoubleHashMap(sizeGuess, missingEntry);
@@ -2058,19 +2349,39 @@ public class IndexCommunications implements AutoCloseable {
         a.put(y.terms[i], s);
       }
       
-      // a *= comm.tf, reduceSum
-      double s = 0;
+      double dot = 0;
       for (int i = 0; i < x.numTerms(); i++) {
-        double pre = a.getWithDefault(x.terms[i], 0);
-        assert Double.isFinite(pre);
-        assert !Double.isNaN(pre);
-        s += pre * x.tfLowerBound(i);
-        assert Double.isFinite(s);
-        assert !Double.isNaN(s);
+        double w = idf.getWithDefault(x.terms[i], 0);
+
+        // y.tf(w) * idf(w)
+        double left = a.getWithDefault(x.terms[i], 0) * w;
+        
+        // x.tf(w) * idf(w)
+        double right = x.tfLowerBound(i) * w;
+        
+        dot += left * right;
+
+        assert Double.isFinite(dot);
+        assert !Double.isNaN(dot);
       }
       
+      double xnorm = tfidfL2Norm(x, idf);
+      double ynorm = tfidfL2Norm(y, idf);
+      double cos = dot / (xnorm * ynorm);
+      
       TIMER.stop("tfidf");
-      return s;
+      return cos;
+    }
+    
+    public static double tfidfL2Norm(TermVec x, IntDoubleHashMap idf) {
+      double d = 0;
+      for (int i = 0; i < x.numTerms(); i++) {
+        double tf = x.tfLowerBound(i);
+        double w = idf.getWithDefault(x.terms[i], 0);
+        double e = tf * w;
+        d += e * e;
+      }
+      return Math.sqrt(d);
     }
     
     public String showTerms(int termCharLimit) {
@@ -2148,9 +2459,9 @@ public class IndexCommunications implements AutoCloseable {
       return vecMaxLen;
     }
     
-    public double tfidf(TermVec query, String commUuid) {
+    public double tfidfCosineSim(TermVec query, String commUuid) {
       TermVec comm = comm2vec.get(commUuid);
-      return TermVec.tfidf(query, comm);
+      return TermVec.tfidfCosineSim(query, comm, idf);
     }
     
     public static TermVec build(String[] document, int numTermsInPack, IntDoubleHashMap idf) {
@@ -3086,6 +3397,9 @@ public class IndexCommunications implements AutoCloseable {
       break;
     case "kbpDirectedEntitySearch":
       KbpDirectedEntitySearch.main(config);
+      break;
+    case "trainDedup":
+      ParmaVw.main(config);
       break;
     default:
       Log.info("unknown command: " + c);

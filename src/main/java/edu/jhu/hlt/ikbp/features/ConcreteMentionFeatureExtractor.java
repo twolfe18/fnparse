@@ -85,6 +85,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     c2d.readParsey();
     c2d.situationMentionToolAuto = situationMentionToolName;
     c2d.corefMentionToolAuto = entityMentionToolName;
+//    c2d.debug = true;
 
     alph = new MultiAlphabet();
     
@@ -107,33 +108,60 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
       ConcreteDocumentMapping m = c2d.communication2Document(c, docIndex, alph, lang);
       
       // Add SituationMentions
-      SituationMentionSet sms = findS(c2d.situationMentionToolAuto, c);
-//      Log.info("sms=" + sms + " smss=" + c.getSituationMentionSetList());
-      for (SituationMention sm : sms.getMentionList()) {
-        if (DEBUG)
-          System.out.println("adding SituationMention.uuid=" + sm.getUuid().getUuidString());
-        int consId = m.get(sm.getUuid()).getIndex();
-        IntPair location = new IntPair(docIndex, consId);
-        String key = sm.getUuid().getUuidString();
-        Object old = mentionLocations.put(key, location);
-        assert old == null : "key=" + key + " old=" + old + " new=" + location;
-        events.increment("mention/situation");
-      }
-      
-      // Add EntityMentions
-      EntityMentionSet ems = findE(c2d.corefMentionToolAuto, c);
-      if (ems == null) {
-        Log.info("WARNING: skipping, no EntityMentionSet matching " + c2d.corefMentionToolAuto);
-      } else {
-        for (EntityMention em : ems.getMentionList()) {
-          int consId = m.get(em.getUuid()).getIndex();
-          IntPair location = new IntPair(docIndex, consId);
-          String key = em.getUuid().getUuidString();
-          Object old = mentionLocations.put(key, location);
-          assert old == null : "key=" + key + " old=" + old + " new=" + location;
-          events.increment("mention/entity");
+      if (c.isSetSituationMentionSetList()) {
+        for (SituationMentionSet sms : c.getSituationMentionSetList()) {
+          for (SituationMention sm : sms.getMentionList()) {
+            int consId = m.get(sm.getUuid()).getIndex();
+            IntPair location = new IntPair(docIndex, consId);
+            String key = sm.getUuid().getUuidString();
+            Object old = mentionLocations.put(key, location);
+            assert old == null : "key=" + key + " old=" + old + " new=" + location;
+            events.increment("mention/situation");
+          }
         }
       }
+//      SituationMentionSet sms = findS(c2d.situationMentionToolAuto, c);
+//      if (sms == null) {
+//        Log.info("WARNING: skipping, no SituationMentionSet");
+//      } else {
+//        for (SituationMention sm : sms.getMentionList()) {
+//          if (DEBUG)
+//            System.out.println("adding SituationMention.uuid=" + sm.getUuid().getUuidString());
+//          int consId = m.get(sm.getUuid()).getIndex();
+//          IntPair location = new IntPair(docIndex, consId);
+//          String key = sm.getUuid().getUuidString();
+//          Object old = mentionLocations.put(key, location);
+//          assert old == null : "key=" + key + " old=" + old + " new=" + location;
+//          events.increment("mention/situation");
+//        }
+//      }
+      
+      // Add EntityMentions
+      if (c.isSetEntityMentionSetList()) {
+        for (EntityMentionSet ems : c.getEntityMentionSetList()) {
+          for (EntityMention em : ems.getMentionList()) {
+            int consId = m.get(em.getUuid()).getIndex();
+            IntPair location = new IntPair(docIndex, consId);
+            String key = em.getUuid().getUuidString();
+            Object old = mentionLocations.put(key, location);
+            assert old == null : "key=" + key + " old=" + old + " new=" + location;
+            events.increment("mention/entity");
+          }
+        }
+      }
+//      EntityMentionSet ems = findE(c2d.corefMentionToolAuto, c);
+//      if (ems == null) {
+//        Log.info("WARNING: skipping, no EntityMentionSet matching " + c2d.corefMentionToolAuto);
+//      } else {
+//        for (EntityMention em : ems.getMentionList()) {
+//          int consId = m.get(em.getUuid()).getIndex();
+//          IntPair location = new IntPair(docIndex, consId);
+//          String key = em.getUuid().getUuidString();
+//          Object old = mentionLocations.put(key, location);
+//          assert old == null : "key=" + key + " old=" + old + " new=" + location;
+//          events.increment("mention/entity");
+//        }
+//      }
       
       cdocs.add(m);
     }
@@ -162,6 +190,10 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     }
   }
   
+  /**
+   * @param concreteMention1 should refer to an (entity|situation) mention by UUID (the Id's name)
+   * @param concreteMention2 should refer to an (entity|situation) mention by UUID (the Id's name)
+   */
   public List<String> pairwiseFeats(Id concreteMention1, Id concreteMention2) {
     List<String> f = new ArrayList<>();
     boolean verbose = false;
@@ -369,6 +401,13 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
         .replaceAll("\\}", "#right_curly_brace#");
   }
 
+  public void extractSafe(Node n, List<Id> addTo) {
+    try {
+      extract(n, addTo);
+    } catch (Exception e) {
+    }
+  }
+
   @Override
   public void extract(Node n, List<Id> addTo) {
     
@@ -455,10 +494,12 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
 
   private SituationMentionSet findS(String tool, Communication c) {
     SituationMentionSet m = null;
-    for (SituationMentionSet sms : c.getSituationMentionSetList()) {
-      if (sms.getMetadata().getTool().equals(tool)) {
-        assert m == null;
-        m = sms;
+    if (c.isSetSituationMentionSetList()) {
+      for (SituationMentionSet sms : c.getSituationMentionSetList()) {
+        if (sms.getMetadata().getTool().equals(tool)) {
+          assert m == null;
+          m = sms;
+        }
       }
     }
     if (m == null)
@@ -470,10 +511,12 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     if (tool == null)
       return null;
     EntityMentionSet m = null;
-    for (EntityMentionSet ems : c.getEntityMentionSetList()) {
-      if (ems.getMetadata().getTool().equals(tool)) {
-        assert m == null;
-        m = ems;
+    if (c.isSetEntityMentionSetList()) {
+      for (EntityMentionSet ems : c.getEntityMentionSetList()) {
+        if (ems.getMetadata().getTool().equals(tool)) {
+          assert m == null;
+          m = ems;
+        }
       }
     }
     if (m == null)
