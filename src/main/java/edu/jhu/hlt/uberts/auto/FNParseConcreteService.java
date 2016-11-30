@@ -206,10 +206,10 @@ public class FNParseConcreteService implements AnnotateCommunicationService.Ifac
     ExperimentProperties config = ExperimentProperties.init(as);
     
     boolean debug = config.getBoolean("debug", false);
-    if (debug) {
-      foo();
-      return;
-    }
+//    if (debug) {
+//      foo();
+//      return;
+//    }
     
 //    serve(config);
     TimeMarker tm = new TimeMarker();

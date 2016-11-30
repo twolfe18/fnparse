@@ -488,23 +488,32 @@ public class Pred2ArgPaths {
    */
   public static class ArgCandidates {
     public static boolean DEBUG = false;
-    public static boolean USE_PARSEY = true;
     public static boolean EXTRA_SPANS = true;
 
     public static Counts<String> EVENTS = null; // = new Counts<>();
     public static TimeMarker tm = null; //new TimeMarker();
+    
+    private boolean noParsey;
 
     private Trie<String> pathThenRole;
     private DependencyHeadFinder hf;
 
     public ArgCandidates(File f) throws IOException {
       Log.info(f.getPath());
+      
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      noParsey = config.getBoolean("tackstromArgsNoParsey");
+      Log.info("noParsey=" + noParsey);
+
       pathThenRole = getPathTrie(f, true);
-      hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
+      if (noParsey)
+        hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.BASIC);
+      else
+        hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
     }
 
     public List<Pair<Span, String>> getArgCandidates2(int predicate, Sentence sent) {
-      List<Span> spans = getArgCandidates(predicate, sent);
+      List<Span> spans = getArgCandidates(predicate, sent, noParsey);
       List<Pair<Span, String>> spansWithRoles = new ArrayList<>();
       DependencyParse deps = hf.getDeps(sent);
       for (Span s : spans) {
@@ -563,12 +572,12 @@ public class Pred2ArgPaths {
      * Returns a uniq set of argument candidates for a predicate headed at the
      * given position, not including Span.nullSpan.
      */
-    public static List<Span> getArgCandidates(int predicate, Sentence sent) {
+    public static List<Span> getArgCandidates(int predicate, Sentence sent, boolean noParsey) {
       if (EVENTS != null)
         EVENTS.increment("calls");
-      DependencyParse d = USE_PARSEY ? sent.getParseyDeps() : sent.getBasicDeps();
+      DependencyParse d = noParsey ? sent.getBasicDeps() : sent.getParseyDeps();
+      assert d != null;
       if (DEBUG) {
-        System.out.println("looking for arguments, USE_PARSEY=" + USE_PARSEY);
         System.out.println(Describe.spanWithPos(Span.widthOne(predicate), sent, 3));
         System.out.println(Describe.sentenceWithDeps(sent, d));
         System.currentTimeMillis();

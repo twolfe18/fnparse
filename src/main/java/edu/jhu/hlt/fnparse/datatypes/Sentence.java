@@ -88,10 +88,7 @@ public class Sentence implements HasId, Serializable {
    */
   public int tutilsSentenceConsIdx = -1;
   
-  public static Sentence convertFromConllX(String dataset, String id, List<String[]> conllx, boolean takeDeps) {
-    if (takeDeps)
-      throw new RuntimeException("implement me");
-    
+  public static Sentence convertFromConllX(String dataset, String id, List<String[]> conllx, boolean takeDepsAsParsey) {
     int n = conllx.size();
     String[] token = new String[n];
     String[] pos = new String[n];
@@ -115,7 +112,12 @@ public class Sentence implements HasId, Serializable {
       lemma[i] = t[2];
     }
     
-    return new Sentence(dataset, id, token, pos, lemma);
+    Sentence s = new Sentence(dataset, id, token, pos, lemma);
+    if (takeDepsAsParsey) {
+      DependencyParse deps = DependencyParse.fromConllx(conllx);
+      s.setParseyDeps(deps);
+    }
+    return s;
   }
 
   /**
