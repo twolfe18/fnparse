@@ -62,6 +62,8 @@ IO="$IO,argument4NilSpan+fixed+read:$INPUT_MODEL_DIR/argument4NilSpan.model"
 IO="$IO,${GF}+fixed+read:$INPUT_MODEL_DIR/${GF}.model"
 
 #echo "
+#tackstromArgsFromVerbTargets true
+#tackstromArgsNoParsey true
 #input '$INPUT_COMM_FILE'
 #output '$OUTPUT_COMM_FILE'
 #passes 1
@@ -83,6 +85,8 @@ IO="$IO,${GF}+fixed+read:$INPUT_MODEL_DIR/${GF}.model"
 
 java -ea -cp "$JAR" -Xmx5G \
   edu.jhu.hlt.uberts.auto.FNParseConcreteService \
+    tackstromArgsFromVerbTargets true \
+    tackstromArgsNoParsey true \
     input "$INPUT_COMM_FILE" \
     output "$OUTPUT_COMM_FILE" \
     toolname "$TOOLNAME" \

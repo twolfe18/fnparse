@@ -302,6 +302,7 @@ public class DeterministicRolePruning implements Serializable {
 //            //sent.setBasicDeps(parser.getBasicDParse(sent));
 //          }
 
+          boolean noParsey = false;
           if (sent.getParseyDeps() == null)
             throw new RuntimeException("no parsey deps?");
           DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
@@ -313,7 +314,7 @@ public class DeterministicRolePruning implements Serializable {
               System.out.println(Describe.sentenceWithDeps(sent, hf.getDeps(sent)));
               predicate = fi.getTarget().end - 1;
             }
-            List<Span> args = Pred2ArgPaths.ArgCandidates.getArgCandidates(predicate, sent);
+            List<Span> args = Pred2ArgPaths.ArgCandidates.getArgCandidates(predicate, sent, noParsey);
             args.add(Span.nullSpan);
 
             FrameInstance key = FrameInstance.frameMention(

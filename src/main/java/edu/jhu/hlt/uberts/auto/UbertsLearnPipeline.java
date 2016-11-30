@@ -992,13 +992,10 @@ public class UbertsLearnPipeline extends UbertsPipeline {
 
     // Find args
     DependencyHeadFinder hf = new DependencyHeadFinder(DependencyHeadFinder.Mode.PARSEY);
-    Relation ev1 = u.getEdgeType("event1");
     Set<LabeledSpanPair> added = null;
     if (this.mode == Mode.TRAIN && includeGoldArgsAtTrain)
       added = new HashSet<>();
-    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1, false)) {
-      assert target.getEdge().getNumTails() == 1;
-      Span t = Span.inverseShortString((String) target.getEdge().getTail(0).getValue());
+    for (Span t : getTargetsForTackstromArgs()) {
       int thead = hf.headSafe(t, sent);
       List<Pair<Span, String>> rss = tackstromArgs.getArgCandidates2(thead, sent);
       for (Pair<Span, String> rs : rss) {
@@ -1025,6 +1022,34 @@ public class UbertsLearnPipeline extends UbertsPipeline {
         }
       }
     }
+  }
+
+  private List<Span> getTargetsForTackstromArgs() {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    if (config.getBoolean("tackstromArgsFromVerbTargets"))
+      return getTargetsForTackstromArgs_fromVerbs();
+    return getTargetsForTackstromArgs_fromGoldEvent1();
+  }
+  
+  private List<Span> getTargetsForTackstromArgs_fromVerbs() {
+    List<Span> targets = new ArrayList<>();
+    Sentence s = u.dbgSentenceCache;
+    for (int i = 0; i < s.size(); i++) {
+      String pos = s.getPos(i);
+      if (pos.startsWith("V"))
+        targets.add(Span.widthOne(i));
+    }
+    return targets;
+  }
+  
+  private List<Span> getTargetsForTackstromArgs_fromGoldEvent1() {
+    List<Span> targets = new ArrayList<>();
+    Relation ev1 = u.getEdgeType("event1");
+    for (HashableHypEdge target : u.getLabels().getGoldEdges(ev1, false)) {
+      Span t = EdgeUtils.target(target.getEdge());
+      targets.add(t);
+    }
+    return targets;
   }
 
   private Pred2ArgPaths.DepDecompArgCandidiates depDecompArgs;
@@ -2332,7 +2357,8 @@ public class UbertsLearnPipeline extends UbertsPipeline {
           assert t.width() == 1;
           boolean orig = Pred2ArgPaths.ArgCandidates.DEBUG;
           Pred2ArgPaths.ArgCandidates.DEBUG = true;
-          Pred2ArgPaths.ArgCandidates.getArgCandidates(t.start, u.dbgSentenceCache);
+          boolean noParsey = false;
+          Pred2ArgPaths.ArgCandidates.getArgCandidates(t.start, u.dbgSentenceCache, noParsey);
           Pred2ArgPaths.ArgCandidates.DEBUG = orig;
         }
       }
