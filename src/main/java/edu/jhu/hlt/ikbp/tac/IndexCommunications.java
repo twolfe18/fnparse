@@ -39,6 +39,7 @@ import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
+import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.access.FetchCommunicationService;
 import edu.jhu.hlt.concrete.access.FetchRequest;
@@ -3421,6 +3422,36 @@ public class IndexCommunications implements AutoCloseable {
       while (itr.hasNext()) {
         Communication c = itr.next();
         System.out.println(c.getId());
+        if (c.isSetSectionList()) {
+          for (Section section : c.getSectionList()) {
+            System.out.println("section:" + section.getUuid());
+            for (Sentence sentence : section.getSentenceList()) {
+              System.out.println("sentence:" + sentence.getUuid());
+              Tokenization t = sentence.getTokenization();
+              if (t != null) {
+                System.out.println("tok:" + t.getUuid());
+                if (t.isSetDependencyParseList()) {
+                  for (DependencyParse dp : t.getDependencyParseList())
+                    System.out.println("dparse:" + dp.getMetadata());
+                }
+                if (t.isSetTokenTaggingList()) {
+                  for (TokenTagging tt : t.getTokenTaggingList())
+                    System.out.println("toktag:" + tt.getMetadata());
+                }
+              }
+            }
+          }
+        }
+        if (c.isSetSituationMentionSetList()) {
+          for (SituationMentionSet sms : c.getSituationMentionSetList())
+            System.out.println("sms: " + sms.getMetadata());
+        }
+        if (c.isSetEntityMentionSetList()) {
+          for (EntityMentionSet ems : c.getEntityMentionSetList())
+            System.out.println("ems:" + ems.getMetadata());
+        }
+        
+        System.out.println();
       }
     }
     
