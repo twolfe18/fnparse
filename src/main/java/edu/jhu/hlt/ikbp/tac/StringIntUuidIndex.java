@@ -133,6 +133,9 @@ public class StringIntUuidIndex implements Serializable, Iterable<StrIntUuidEntr
    * <string> <tab> <int> (<tab> <uuid>)+
    */
   public void addStringIntLines(File f) throws IOException {
+    Log.info("reading lines from " + f.getPath());
+    int read = 0;
+    TimeMarker tm = new TimeMarker();
     try (BufferedReader r = FileUtil.getReader(f)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         // string, int, uuid+
@@ -151,8 +154,15 @@ public class StringIntUuidIndex implements Serializable, Iterable<StrIntUuidEntr
         }
         for (int j = 2; j < ar.length; j++)
           l.add(ar[j]);
+        n_values++;
+        read++;
+        if (tm.enoughTimePassed(5)) {
+          Log.info("read " + read + " lines, nStrKeys=" + str2int2uuids.size()
+            + "\t" + Describe.memoryUsage());
+        }
       }
     }
+    Log.info("done, read " + read + " lines from " + f.getPath());
   }
   
   /**

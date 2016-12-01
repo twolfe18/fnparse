@@ -16,6 +16,11 @@
   <dependencies>
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
+      <artifactId>scion-concrete</artifactId>
+      <version>0.48.0</version>
+    </dependency>
+    <dependency>
+      <groupId>edu.jhu.hlt</groupId>
       <artifactId>scion-core</artifactId>
       <version>0.48.0</version>
     </dependency>

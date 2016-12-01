@@ -14,6 +14,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -23,6 +24,8 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Dependency;
@@ -53,6 +56,12 @@ import edu.jhu.hlt.ikbp.features.ConcreteMentionFeatureExtractor;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw.QResultCluster;
 import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
+import edu.jhu.hlt.scion.concrete.AccumuloCommunicationIterator;
+import edu.jhu.hlt.scion.concrete.SequentialQueryRunner;
+import edu.jhu.hlt.scion.concrete.analytics.Analytics;
+import edu.jhu.hlt.scion.concrete.datasets.ConcreteDataSets;
+import edu.jhu.hlt.scion.core.accumulo.ConnectorFactory;
+import edu.jhu.hlt.scion.core.accumulo.ScionConnector;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.EfficientUuidList;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -69,6 +78,7 @@ import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
+import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
@@ -220,6 +230,8 @@ public class IndexCommunications implements AutoCloseable {
       n.setId(new Id()
           .setType(FeatureType.CONCRETE_UUID.getValue())
           .setName(a.tokUuid));
+      
+      n.setFeatures(new ArrayList<>());
       
       if (a.comm.isSetEntityMentionSetList()) {
         for (EntityMentionSet ems : a.comm.getEntityMentionSetList()) {
@@ -376,7 +388,7 @@ public class IndexCommunications implements AutoCloseable {
       if (comm == null)
         throw new IllegalArgumentException();
       if (findTok(res.tokUuid, comm) == null)
-        throw new IllegalArgumentException("tokUuid=" + res.tokUuid);
+        throw new IllegalArgumentException("couldn't find tokUuid=" + res.tokUuid + " in " + comm.getId());
     }
     
     public void show(List<TermVec> pkbDocs) {
@@ -468,10 +480,14 @@ public class IndexCommunications implements AutoCloseable {
         EC.increment("kbpQuery");
 //        Log.info(q);
 
+        try {
         boolean clearPkb = false;
         List<QResult> results = k.search(q, limit, clearPkb);
         if (results.isEmpty())
           EC.increment("kbpQuery/failConvert");
+        
+        // Add in NLSF
+        k.nlsf.rescore(results);
         
         // DEDUP
         List<QResultCluster> deduped = parma.dedup(results);
@@ -494,6 +510,9 @@ public class IndexCommunications implements AutoCloseable {
           ShowResult s = new ShowResult(q, r);
           s.show(k.search.state.pkbDocs);
         }
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
         
         k.search.clearState();
       }
@@ -507,6 +526,7 @@ public class IndexCommunications implements AutoCloseable {
     private ParmaVw dedup;
     private IntDoubleHashMap idf;
     private CommunicationRetrieval commRet;
+    private NaturalLanguageRescoring nlsf;
     
     // scion/accumulo needs ids rather than UUIDs
     private StringTable commUuid2CommId;
@@ -532,6 +552,8 @@ public class IndexCommunications implements AutoCloseable {
       // TODO this means that any features which are count/case sensitive won't fire!
       this.tokObs = null;
       this.tokObsLc = null;
+      
+      this.nlsf = new NaturalLanguageRescoring();
     }
     
     /**
@@ -591,6 +613,8 @@ public class IndexCommunications implements AutoCloseable {
         EC.increment("kbpDirEntSearch/noSeeds");
         return Collections.emptyList();
       }
+      // TODO Add all tokenizations in the query document
+      // so that none of those results are returned
       for (QResult s : seeds)
         search.addToPkb(s);
       
@@ -612,6 +636,91 @@ public class IndexCommunications implements AutoCloseable {
       commRet.fetch(res);
       
       return res;
+    }
+  }
+  
+  
+  public static class NaturalLanguageRescoring {
+    private NaturalLanguageSlotFill nlsf;
+    private String entityMentionToolName;
+    
+    public NaturalLanguageRescoring() {
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      nlsf = NaturalLanguageSlotFill.build(config);
+      
+      entityMentionToolName = "foo";  // TODO
+    }
+    
+    public void rescore(List<QResult> results) {
+      
+      // Turn this one when you're ready
+      boolean passageMST = false;
+      
+      for (QResult r : results) {
+        if (r.comm == null)
+          throw new IllegalArgumentException();
+        
+        Tokenization t = r.getTokenization();
+        edu.jhu.hlt.fnparse.datatypes.Sentence s = null;
+        if (t == null) {
+          Log.info("couldn't lookup tokUuid=" + r.tokUuid + " in " + r.commId + ", aka " + r.getCommunicationId());
+          continue;
+        } else {
+        try {
+        s = edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete("", r.tokUuid, t,
+            edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST),
+            edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST),
+            edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST));
+        } catch (Exception e) {
+          e.printStackTrace();
+          Feat f = new Feat("exception/nlsf/tokSent");
+          f.weight = -1;
+          f.addJustification(e.getMessage());
+          r.scoreDerivation.add(f);
+          continue;
+        }
+        }
+        
+        edu.jhu.hlt.fnparse.datatypes.DependencyParse deps = null;
+        if (passageMST) {
+//          deps = s.getBasicDeps();
+          deps = s.getParseyDeps();
+          assert deps != null;
+        }
+        
+        // These are the entities which appear in this result
+        List<EntityMention> em = null;
+        if (passageMST)
+          em = r.findMentions(entityMentionToolName);
+
+        List<NaturalLanguageSlotFill.Match> matches = nlsf.scoreAll(s);
+        if (!matches.isEmpty()) {
+          Feat f = new Feat("nlsf");
+          for (NaturalLanguageSlotFill.Match m : matches) {
+            f.weight += 1;
+            f.addJustification(m.getRelation() + "/" + m.alignmentScript());
+
+            if (passageMST) {
+              // Compute MST over all of the aligned words in the result (wrt an NL-SF).
+              // Take this as the max over all entities
+              double ms = Double.NEGATIVE_INFINITY;
+              for (EntityMention e : em) {
+                int eHead = head(e);
+                double af = nlsf.passageSpanningTreeFeature(m, deps, eHead);
+                if (af > ms)
+                  ms = af;
+              }
+              f.weight += ms;
+              f.addJustification(m.getRelation() + "/nlsfMST=" + ms);
+            }
+          }
+          r.scoreDerivation.add(f);
+        }
+      }
+    }
+    
+    private int head(EntityMention e) {
+      throw new RuntimeException("implement me");
     }
   }
 
@@ -938,6 +1047,26 @@ public class IndexCommunications implements AutoCloseable {
       this.scoreDerivation = score;
     }
     
+    public List<EntityMention> findMentions(String entityMentionToolName) {
+      throw new RuntimeException("implement me");
+    }
+    
+    public Tokenization getTokenization() {
+      if (comm == null)
+        throw new RuntimeException();
+      Tokenization tok = null;
+      for (Section section : comm.getSectionList()) {
+        for (Sentence sentence : section.getSentenceList()) {
+          Tokenization t = sentence.getTokenization();
+          if (tokUuid.equals(t.getUuid().getUuidString())) {
+            assert tok == null;
+            tok = t;
+          }
+        }
+      }
+      return tok;
+    }
+    
     public String getCommunicationId() {
       if (commId == null && comm == null) {
         return null;
@@ -1054,22 +1183,37 @@ public class IndexCommunications implements AutoCloseable {
     
     // These let you look up Tokenizations given some features
     // which may appear in a seed or a query.
-    private StringIntUuidIndex deprel;      // dependency path string, hash("entityWord"), Tokenization UUID+
-    private StringIntUuidIndex situation;   // SituationMention kind, hash("role/entityWord"), Tokenization UUID+
-//    private StringIntUuidIndex entity;      // NER type, hash(entity word), Tokenization UUID+
-    private NerFeatureInvertedIndex entity;      // NER type, hash(entity word), Tokenization UUID+
+    private StringIntUuidIndex deprel;        // dependency path string, hash("entityWord"), Tokenization UUID+
+    private StringIntUuidIndex situation;     // SituationMention kind, hash("role/entityWord"), Tokenization UUID+
+    private NerFeatureInvertedIndex entity;   // NER type, hash(entity word), Tokenization UUID+
     
+    // Pretty small, used for cosine similarity
     private IntDoubleHashMap idf;
     
+    // These are optional, talk to scion/accumulo server
+//    private CommunicationRetrieval commRet;   // get the Communication => Sentence for NaturalLanguageSlotFill
+//    private NaturalLanguageSlotFill nlsf;     // re-score sentences based on alignment to seed expressions
+    
+    // Misc
     private MultiTimer tm;
+
 
     /**
      * @param tokUuid2commUuid has lines like: <tokenizationUuid> <tab> <communicationUuid>
+     * @param commRet may be null (optional). If non-null, resolve {@link CommunicationRetrieval}s
+     *        during scoring, enables {@link NaturalLanguageSlotFill}.
      */
     public SituationSearch(File tokUuid2commUuid, TfIdfDocumentStore docVecs) throws IOException {
-      tm = new MultiTimer();
+//    public SituationSearch(File tokUuid2commUuid, TfIdfDocumentStore docVecs, CommunicationRetrieval commRet) throws IOException {
+      TimeMarker tmk = new TimeMarker();
+      this.tm = new MultiTimer();
+      this.idf = docVecs.getIdfs();
       
-      idf = docVecs.getIdfs();
+//      if (commRet != null) {
+//        this.commRet = commRet;
+//        ExperimentProperties config = ExperimentProperties.getInstance();
+//        this.nlsf = NaturalLanguageSlotFill.build(config);
+//      }
       
       INVERSE_HASH = new IntObjectHashMap<>();
       readInverseHash(new File(HOME, "raw/termHash.sortu.txt.gz"), INVERSE_HASH);
@@ -1078,7 +1222,6 @@ public class IndexCommunications implements AutoCloseable {
       // TODO Populate [deprel, situation, entity] => Tokenization UUID maps
       tm.start("load/PERSON");
       entity = new NerFeatureInvertedIndex(Collections.emptyList());
-//      entity = new StringIntUuidIndex();
       entity.putIntLines("PERSON", new File(HOME, "ner_feats/nerFeats.PERSON.txt"));
       tm.stop("load/PERSON");
       
@@ -1108,6 +1251,8 @@ public class IndexCommunications implements AutoCloseable {
 //        ec.increment("feat/deprel");
 //      }
       File f = new File(HOME, "deprel/deprels.txt.gz");
+      Log.info("loading deprel features from " + f.getPath());
+      int read = 0;
       try (BufferedReader r = FileUtil.getReader(f)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
           String[] ar = line.split("\t");
@@ -1137,18 +1282,30 @@ public class IndexCommunications implements AutoCloseable {
           assert sf != null;
           int hd = ReversableHashWriter.onewayHash(deprel);
           FeaturePacker.writeDeprel(hd, arg0, arg1, sf);
+          
+          read++;
+          if (tmk.enoughTimePassed(5)) {
+            Log.info("read " + read + " deprel features");
+          }
         }
       }
       tm.stop("load/feats/deprel");
       
+
       // Entities
       tm.start("load/feats/entity");
+      Log.info("copying entity features from index into SentFeats... (n=" + entity.getNumEntries() + ")");
+      read = 0;
       for (StrIntUuidEntry x : entity) {
         SentFeats sf = getOrPutNew(x.uuid);
 //        sf.addEntity(x.integer);
         byte nerType = 0;    // TODO
         FeaturePacker.writeEntity(x.integer, nerType, sf);
         EC.increment("feat/entity");
+        read++;
+        if (tmk.enoughTimePassed(5)) {
+          Log.info("converted " + read + " entity features\t" + Describe.memoryUsage());
+        }
       }
       tm.stop("load/feats/entity");
 
@@ -1160,6 +1317,8 @@ public class IndexCommunications implements AutoCloseable {
       Log.info("we know about " + tok2feats.size() + " Tokenizations,"
           + " looking for the docVecs for them in " + tokUuid2commUuid.getPath());
       tm.start("load/docVec/link");
+      read = 0;
+      int nd = 0;
       try (BufferedReader r = FileUtil.getReader(tokUuid2commUuid)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
           String[] ar = line.split("\t");
@@ -1171,12 +1330,19 @@ public class IndexCommunications implements AutoCloseable {
           String tokUuid = ar[0];
           SentFeats sf = tok2feats.get(tokUuid);
           if (sf != null) {
+            nd++;
             sf.setCommunicationUuid(ar[1]);
             sf.tfidf = docVecs.get(ar[1]);
             assert sf.tfidf != null;
             EC.increment("docVec");
           } else {
             EC.increment("skip/docVec");
+          }
+          
+          read++;
+          if (tmk.enoughTimePassed(5)) {
+            Log.info("read " + read + " (Tokenization UUID, Communication UUID) pairs"
+                + " and built the TermVecs for " + nd + " docs");
           }
         }
       }
@@ -1360,23 +1526,33 @@ public class IndexCommunications implements AutoCloseable {
       }
       z = Math.sqrt(ff.deprels.size() + 1);
       deprelPkb.rescale("nDeprel=" + ff.deprels.size(), 1/z);
-          
       
       Feat nm = new Feat("name").setWeight(nameMatchScore);
+      
+      
+//      // Natural language expressions for slot filling relations
+//      if (this.commRet != null) {
+//        String commId = fuck i have no way to get from comm uuid to id.
+//        commRet.get(commId);
+//        Sentence passage = convert(f);
+//        List<NaturalLanguageSlotFill.Match> matches = nlsf.scoreAll(passage);
+//      }
+      
 
       tm.stop("score");
-      List<Feat> score = Arrays.asList(nm,
+      List<Feat> score = new ArrayList<>();
+      score.addAll(Arrays.asList(nm,
           tfidfAvg, pkbDocMatch,
           deprelPkb, deprelSeed,
           scorePkbSit, scoreSeedSit,
-          entPkb, entSeed);
+          entPkb, entSeed));
       return new QResult(tokUuid, f, score);
     }
     
     public static Pair<SituationSearch, TfIdfDocumentStore> build(ExperimentProperties config) throws IOException {
       File tokUuid2commUuid = config.getExistingFile("tok2comm", new File(HOME, "tokUuid2commUuid.txt"));
 
-      File docVecs = config.getExistingFile("docVecs", new File(HOME, "doc/docVecs." + N_DOC_TERMS + ".txt"));
+      File docVecs = config.getExistingFile("docVecs", new File(HOME, "doc/docVecs." + N_DOC_TERMS + ".txt.gz"));
       File idf = config.getExistingFile("idf", new File(HOME, "doc/idf.txt"));
       TfIdfDocumentStore docs = new TfIdfDocumentStore(docVecs, idf);
 
@@ -1574,7 +1750,7 @@ public class IndexCommunications implements AutoCloseable {
       try {
       Map<String, Tokenization> tmap = AddNerTypeToEntityMentions.buildTokzIndex(c);
       writeSituations(c, tmap);
-      if (tm.enoughTimePassed(10))
+      if (tm.enoughTimePassed(5))
         Log.info(c.getId() + "\t" + EC + "\t" + Describe.memoryUsage());
       } catch (Exception e) {
         System.out.flush();
@@ -1783,7 +1959,7 @@ public class IndexCommunications implements AutoCloseable {
       try {
         Map<String, Tokenization> tmap = AddNerTypeToEntityMentions.buildTokzIndex(c);
         writeDepRels(c, tmap);
-        if (tm.enoughTimePassed(10))
+        if (tm.enoughTimePassed(5))
           Log.info(c.getId() + "\t" + EC + "\t" + Describe.memoryUsage());
       } catch (Exception e) {
         System.out.flush();
@@ -2565,7 +2741,7 @@ public class IndexCommunications implements AutoCloseable {
           }
           termDocCounts.add(term, 1);
           
-          if (tm.enoughTimePassed(10)) {
+          if (tm.enoughTimePassed(5)) {
             Log.info("nDoc=" + nDoc + " termDocCounts.size=" + termDocCounts.size()
                 + "\t" + Describe.memoryUsage());
           }
@@ -2688,7 +2864,7 @@ public class IndexCommunications implements AutoCloseable {
           curTerms.add(new Pair<>(key, count * idf(term)));
           
           n++;
-          if (tm.enoughTimePassed(10)) {
+          if (tm.enoughTimePassed(5)) {
             Log.info("processed " + n + " documents\t" + Describe.memoryUsage());
           }
         }
@@ -3207,12 +3383,94 @@ public class IndexCommunications implements AutoCloseable {
           while (iter.hasNext()) {
             Communication c = iter.next();
             ic.observe(c);
-            if (tm.enoughTimePassed(10)) {
+            if (tm.enoughTimePassed(5)) {
               Log.info(ic + "\t" + c.getId() + "\t" + EC + "\t" + Describe.memoryUsage());
             }
           }
         }
       }
+    }
+  }
+  
+  public static Iterator<Communication> getCommunicationsForIngest(ExperimentProperties config) {
+    // TODO switch between file and scion based iterators
+      throw new RuntimeException("implement me");
+  }
+
+  public static class ScionBasedCommIter implements Iterator<Communication> {
+    
+    public static void main(ExperimentProperties config) throws Exception {
+      
+      Iterator<Communication> itr;
+      boolean fromChandler = config.getBoolean("fromChandler", true);
+      if (fromChandler) {
+//        ConcreteDataSets corpus = ConcreteDataSets.getEnumeration(TwitterConfig.CORPUS_NAME);
+        ConcreteDataSets corpus = ConcreteDataSets.GIGAWORD;
+        ConnectorFactory cf = new ConnectorFactory();
+        ScionConnector sc = cf.getConnector();
+        itr = fromChandler(sc, corpus, null, null);
+      } else {
+        // TODO
+        itr = null;
+      }
+      
+      while (itr.hasNext()) {
+        Communication c = itr.next();
+        System.out.println(c.getId());
+      }
+    }
+    
+    public static Iterator<Communication> fromChandler(
+        ScionConnector sc, 
+        ConcreteDataSets corpus,
+        String beginRangePrefix,
+        String endRangePrefix) {
+
+      SequentialQueryRunner.Builder qrb = new SequentialQueryRunner.Builder();
+      qrb.setDataSet(corpus);
+      qrb.setConnector(sc);
+
+      List<String> analyticList = new ArrayList<String>();
+      analyticList.add("Section");
+      analyticList.add("Sentence");
+//      analyticList.add("TweetInfo");
+//      analyticList.add("Tift TwitterTokenizer 4.10.0 Tweet Tags-1");
+//      analyticList.add("Tift TwitterTokenizer 4.10.0-1");
+//      analyticList.add("Twitter LID-1");
+      qrb.addAllAnalytics(new Analytics(sc).createAnalytics(analyticList));
+
+      if (beginRangePrefix != null) {
+        qrb.setBeginningRange(beginRangePrefix);
+      }   
+      if (endRangePrefix != null) {
+        qrb.setEngingRange(endRangePrefix);
+      }   
+
+      SequentialQueryRunner qr = qrb.build();
+      AutoCloseableIterator<byte[]> i = qr.query();
+      Iterator<Communication> itr = new AccumuloCommunicationIterator(i);
+      return itr;
+    }
+
+    
+    @Override
+    public boolean hasNext() {
+      throw new RuntimeException("implement me");
+    }
+    @Override
+    public Communication next() {
+      throw new RuntimeException("implement me");
+    }
+  }
+  
+  public static class FileBasedCommIter implements Iterator<Communication> {
+    @Override
+    public boolean hasNext() {
+      throw new RuntimeException("implement me");
+    }
+    @Override
+    public Communication next() {
+      throw new RuntimeException("implement me");
     }
   }
   
@@ -3403,6 +3661,9 @@ public class IndexCommunications implements AutoCloseable {
       break;
     case "trainDedup":
       ParmaVw.main(config);
+      break;
+    case "scionDev":
+      ScionBasedCommIter.main(config);
       break;
     default:
       Log.info("unknown command: " + c);
