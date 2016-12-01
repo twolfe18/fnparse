@@ -28,6 +28,8 @@ qsub -cwd -l 'h_rt=72:00:00,num_proc=1,mem_free=44G' \
   ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
     "$OUTPUT_DIR/nyt_eng_2007" \
     "$CAG/**/nyt_eng_2007*.tar.gz" \
+    "$TOK_OBS" \
+    "$TOK_OBS_LC" \
     "$JAR"
 
 mkdir -p "$OUTPUT_DIR/apw_eng_2XXX"
@@ -36,6 +38,8 @@ qsub -cwd -N "cag-index-med" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
   ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
     "$OUTPUT_DIR/apw_eng_2XXX" \
     "$CAG/**/apw_eng_2*.tar.gz" \
+    "$TOK_OBS" \
+    "$TOK_OBS_LC" \
     "$JAR"
 
 mkdir -p "$OUTPUT_DIR/full"
@@ -44,5 +48,7 @@ qsub -cwd -N "cag-index-full" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
   ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
     "$OUTPUT_DIR/full" \
     "$CAG/**/*.tar.gz" \
+    "$TOK_OBS" \
+    "$TOK_OBS_LC" \
     "$JAR"
 
