@@ -3397,6 +3397,10 @@ public class IndexCommunications implements AutoCloseable {
       throw new RuntimeException("implement me");
   }
 
+  /**
+   * Note, you need:
+   * -Dscion.accumulo.user=reader -Dscion.accumulo.password='an accumulo reader'
+   */
   public static class ScionBasedCommIter implements Iterator<Communication> {
     
     public static void main(ExperimentProperties config) throws Exception {
@@ -3431,12 +3435,18 @@ public class IndexCommunications implements AutoCloseable {
       qrb.setConnector(sc);
 
       List<String> analyticList = new ArrayList<String>();
-      analyticList.add("Section");
-      analyticList.add("Sentence");
+//      analyticList.add("Section");
+//      analyticList.add("Sentence");
 //      analyticList.add("TweetInfo");
 //      analyticList.add("Tift TwitterTokenizer 4.10.0 Tweet Tags-1");
 //      analyticList.add("Tift TwitterTokenizer 4.10.0-1");
 //      analyticList.add("Twitter LID-1");
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      for (String a : config.getStrings("analytics")) {
+        Log.info("adding analytic: " + a);
+        analyticList.add(a);
+      }
+
       qrb.addAllAnalytics(new Analytics(sc).createAnalytics(analyticList));
 
       if (beginRangePrefix != null) {
