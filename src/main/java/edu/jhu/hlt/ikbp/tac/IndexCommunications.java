@@ -3517,12 +3517,9 @@ public class IndexCommunications implements AutoCloseable {
   public static class ScionBasedCommIter implements AutoCloseableIterator<Communication> {
     
     public static void main(ExperimentProperties config) throws Exception {
-      DataProfile p = DataProfile.valueOf(
-          config.getString("dataProfile", DataProfile.CAG_FULL.name()));
-      Log.info("dataProfile=" + p.name());
-      try (ScionBasedCommIter s = new ScionBasedCommIter(p)) {
-        while (s.hasNext()) {
-          Communication c = s.next();
+      try (AutoCloseableIterator<Communication> iter = getCommunicationsForIngest(config)) {
+        while (iter.hasNext()) {
+          Communication c = iter.next();
           showComm(c);
         }
       }
@@ -3536,7 +3533,9 @@ public class IndexCommunications implements AutoCloseable {
           for (Sentence sentence : section.getSentenceList()) {
             System.out.println("sentence:" + sentence.getUuid());
             Tokenization t = sentence.getTokenization();
-            if (t != null) {
+            if (t == null) {
+              System.out.println("NULL TOK!");
+            } else {
               System.out.println("tok:" + t.getUuid());
               if (t.isSetDependencyParseList()) {
                 for (DependencyParse dp : t.getDependencyParseList())
@@ -3668,7 +3667,7 @@ public class IndexCommunications implements AutoCloseable {
 
     @Override
     public boolean hasNext() {
-      return iter.hasNext();
+      return iter != null && iter.hasNext();
     }
 
     @Override
