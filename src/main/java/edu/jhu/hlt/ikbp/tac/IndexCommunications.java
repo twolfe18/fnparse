@@ -3568,10 +3568,12 @@ public class IndexCommunications implements AutoCloseable {
         }
       }
       if (c.isSetSituationMentionSetList()) {
+        System.out.println("sms is set");
         for (SituationMentionSet sms : c.getSituationMentionSetList())
           System.out.println("sms: " + sms.getMetadata());
       }
       if (c.isSetEntityMentionSetList()) {
+        System.out.println("ems is set");
         for (EntityMentionSet ems : c.getEntityMentionSetList())
           System.out.println("ems:" + ems.getMetadata());
       }
@@ -3591,11 +3593,11 @@ public class IndexCommunications implements AutoCloseable {
       qrb.setConnector(sc);
 
       List<String> analyticList = new ArrayList<String>();
+      analyticList.add("Stanford Coref-1");                 // EntitySet (and hopefully EntityMentionSet)
       analyticList.add("Section");
       analyticList.add("Sentence");
-      analyticList.add("Original Word Segmentation-1");     // Tokenization
+      analyticList.add("Stanford CoreNLP PTB-1");           // Tokenization
       analyticList.add("Stanford CoreNLP basic-1");         // DependencyParse
-      analyticList.add("Stanford Coref-1");                 // EntitySet (and hopefully EntityMentionSet)
       analyticList.add("Stanford CoreNLP-1");               // TokenTaggings for POS, NER, lemma
       
       ExperimentProperties config = ExperimentProperties.getInstance();
