@@ -9,7 +9,8 @@ OUTPUT_DIR=$1
 COMM_GLOB=$2    # e.g. "/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford/**/nyt_eng_2007*.tar.gz"
 TOK_OBS=$3      # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz
 TOK_OBS_LC=$4   # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz
-JAR=$5
+SCRIPTS=$5      # e.g. ~/fnparse-build/fnparse/scripts
+JAR=$6
 
 echo "args: $@"
 
@@ -27,8 +28,8 @@ mkdir -p $TEMP_DIR
 
 #SCRIPTS=/home/hltcoe/twolfe/fnparse-build/fnparse/scripts
 #SCRIPTS=./scripts
-THIS_SCRIPT_DIR=`dirname $(readlink -f $0)`
-SCRIPTS=$THIS_SCRIPT_DIR/../..
+#THIS_SCRIPT_DIR=`dirname $(readlink -f $0)`
+#SCRIPTS=$THIS_SCRIPT_DIR/../..
 echo "SCRIPTS=$SCRIPTS"
 
 if [[ ! -f $TOK_OBS ]]; then

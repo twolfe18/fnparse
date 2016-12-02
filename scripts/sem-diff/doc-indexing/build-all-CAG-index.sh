@@ -14,6 +14,14 @@ TOK_OBS_LC=/home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower
 #CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
 CAG=/export/projects/fferraro/cag-4.6.10/processing/from-marcc/20161012-083257/gigaword-merged
 
+THIS_SCRIPT_DIR=`dirname $(readlink -f $0)`
+SCRIPTS=`readlink -f $THIS_SCRIPT_DIR/../..`
+echo "SCRIPTS=$SCRIPTS"
+if [[ ! -d $SCRIPTS ]]; then
+  echo "can't find SCRIPTS=$SCRIPTS"
+  exit 2
+fi
+
 JAR="`pwd`/target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar"
 #make jar
 if [[ ! -f $JAR ]]; then
@@ -30,6 +38,7 @@ qsub -cwd -l 'h_rt=72:00:00,num_proc=1,mem_free=44G' \
     "$CAG/**/nyt_eng_2007*.tar.gz" \
     "$TOK_OBS" \
     "$TOK_OBS_LC" \
+    "$SCRIPTS" \
     "$JAR"
 
 mkdir -p "$OUTPUT_DIR/apw_eng_2XXX"
@@ -40,6 +49,7 @@ qsub -cwd -N "cag-index-med" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
     "$CAG/**/apw_eng_2*.tar.gz" \
     "$TOK_OBS" \
     "$TOK_OBS_LC" \
+    "$SCRIPTS" \
     "$JAR"
 
 mkdir -p "$OUTPUT_DIR/full"
@@ -50,5 +60,6 @@ qsub -cwd -N "cag-index-full" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
     "$CAG/**/*.tar.gz" \
     "$TOK_OBS" \
     "$TOK_OBS_LC" \
+    "$SCRIPTS" \
     "$JAR"
 
