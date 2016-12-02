@@ -13,6 +13,9 @@ TOK_OBS_LC=$5   # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twol
 SCRIPTS=$6      # e.g. ~/fnparse-build/fnparse/scripts
 JAR=$7
 
+ACCUMULO_USER="reader"
+ACCUMULO_PASSWORD="an accumulo reader"
+
 echo "args: $@"
 
 if [[ ! -f $JAR ]]; then
@@ -61,6 +64,7 @@ cp $TOK_OBS_LC "$OUTPUT_DIR/tokenObs.lower.jser.gz"
 echo "extracting raw data... `date`"
 mkdir -p "$OUTPUT_DIR/raw"
 java -ea -Xmx40G -cp $JAR_STABLE \
+  -Dscion.accumulo.user="$ACCUMULO_USER" -Dscion.accumulo.password="$ACCUMULO_PASSWORD" \
   edu.jhu.hlt.ikbp.tac.IndexCommunications \
     command extractBasicData \
     dataProfile "$DATA_PROFILE" \
@@ -97,6 +101,7 @@ zcat "$OUTPUT_DIR/raw/termHash.approx.txt.gz" \
 ### DEPRELS
 echo "extracting deprels `date`"
 java -ea -cp $JAR_STABLE \
+  -Dscion.accumulo.user="$ACCUMULO_USER" -Dscion.accumulo.password="$ACCUMULO_PASSWORD" \
   edu.jhu.hlt.ikbp.tac.IndexCommunications \
     command indexDeprels \
     dataProfile "$DATA_PROFILE" \
@@ -125,6 +130,7 @@ zcat "$OUTPUT_DIR/deprel/sorted-all.txt.gz" \
 ### FRAMES
 echo "extracting frames `date`"
 java -ea -cp $JAR_STABLE \
+  -Dscion.accumulo.user="$ACCUMULO_USER" -Dscion.accumulo.password="$ACCUMULO_PASSWORD" \
   edu.jhu.hlt.ikbp.tac.IndexCommunications \
     command indexFrames \
     dataProfile "$DATA_PROFILE" \
