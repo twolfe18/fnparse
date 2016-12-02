@@ -4,7 +4,8 @@ set -eu
 
 #OUTPUT_DIR=/export/projects/twolfe/cag-indexing
 #OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-11-23
-OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-11-28
+#OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-11-28
+OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-12-02
 mkdir -p "$OUTPUT_DIR"
 
 # Locally, see ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-*-false.minCount3.jser.gz
@@ -13,6 +14,8 @@ TOK_OBS_LC=/home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower
 
 #CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
 CAG=/export/projects/fferraro/cag-4.6.10/processing/from-marcc/20161012-083257/gigaword-merged
+#DATA_PROVIDER="disk:$CAG"
+DATA_PROVIDER="scion"
 
 JAR="`pwd`/target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar"
 #make jar
@@ -22,32 +25,38 @@ if [[ ! -f $JAR ]]; then
 fi
 echo "jar: $JAR"
 
+#"$CAG/**/nyt_eng_2007*.tar.gz"
 mkdir -p "$OUTPUT_DIR/nyt_eng_2007"
 qsub -cwd -l 'h_rt=72:00:00,num_proc=1,mem_free=44G' \
   -N "cag-index-sml" -j y -o "$OUTPUT_DIR/nyt_eng_2007" \
   ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
     "$OUTPUT_DIR/nyt_eng_2007" \
-    "$CAG/**/nyt_eng_2007*.tar.gz" \
+    CAG_SMALL \
+    "$DATA_PROVIDER" \
     "$TOK_OBS" \
     "$TOK_OBS_LC" \
     "$JAR"
 
+#"$CAG/**/apw_eng_2*.tar.gz"
 mkdir -p "$OUTPUT_DIR/apw_eng_2XXX"
 qsub -cwd -N "cag-index-med" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
   -j y -o "$OUTPUT_DIR/apw_eng_2XXX" \
   ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
     "$OUTPUT_DIR/apw_eng_2XXX" \
-    "$CAG/**/apw_eng_2*.tar.gz" \
+    CAG_MEDIUM \
+    "$DATA_PROVIDER" \
     "$TOK_OBS" \
     "$TOK_OBS_LC" \
     "$JAR"
 
+#"$CAG/**/*.tar.gz"
 mkdir -p "$OUTPUT_DIR/full"
 qsub -cwd -N "cag-index-full" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
   -j y -o "$OUTPUT_DIR/full" \
   ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
     "$OUTPUT_DIR/full" \
-    "$CAG/**/*.tar.gz" \
+    CAG_FULL \
+    "$DATA_PROVIDER" \
     "$TOK_OBS" \
     "$TOK_OBS_LC" \
     "$JAR"

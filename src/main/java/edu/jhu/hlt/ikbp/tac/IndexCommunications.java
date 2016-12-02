@@ -7,6 +7,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -17,6 +18,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import org.apache.thrift.protocol.TCompactProtocol;
@@ -24,8 +26,6 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Dependency;
@@ -57,6 +57,7 @@ import edu.jhu.hlt.ikbp.features.ConcreteMentionFeatureExtractor;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw.QResultCluster;
 import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
+import edu.jhu.hlt.scion.ScionException;
 import edu.jhu.hlt.scion.concrete.AccumuloCommunicationIterator;
 import edu.jhu.hlt.scion.concrete.SequentialQueryRunner;
 import edu.jhu.hlt.scion.concrete.analytics.Analytics;
@@ -110,6 +111,61 @@ public class IndexCommunications implements AutoCloseable {
 
   // May be used by any class in this module, but plays no role by default
   static IntObjectHashMap<String> INVERSE_HASH = null;
+
+
+  enum DataProfile {
+    CAG_TINY {
+      @Override
+      public boolean keep(String commId) {
+        return commId.toUpperCase().startsWith("NYT_ENG_200909");
+      }
+      @Override
+      public Optional<Pair<String, String>> scionBoundaries() {
+        return Optional.of(
+            new Pair<>(
+                "NYT_ENG_20090901.0001",
+                "NYT_ENG_20090931.9999"));
+      }
+    },
+    CAG_SMALL {
+      @Override
+      public boolean keep(String commId) {
+        return commId.toUpperCase().startsWith("NYT_ENG_2007");
+      }
+      @Override
+      public Optional<Pair<String, String>> scionBoundaries() {
+        return Optional.of(
+            new Pair<>(
+                "NYT_ENG_20070101.0001",
+                "NYT_ENG_20071231.9999"));
+      }
+    },
+    CAG_MEDIUM {
+      @Override
+      public boolean keep(String commId) {
+        return commId.toUpperCase().startsWith("APW_ENG_2");
+      }
+      @Override
+      public Optional<Pair<String, String>> scionBoundaries() {
+        return Optional.of(
+            new Pair<>(
+                "APW_ENG_20000101.0001",
+                "APW_ENG_29991231.9999"));
+      }
+    },
+    CAG_FULL {
+      @Override
+      public boolean keep(String commId) {
+        return true;
+      }
+    };
+
+    public abstract boolean keep(String commId);
+
+    public Optional<Pair<String, String>> scionBoundaries() {
+      return Optional.empty();
+    }
+  }
 
   
   /**
@@ -1680,16 +1736,18 @@ public class IndexCommunications implements AutoCloseable {
   public static class IndexFrames implements AutoCloseable {
 
     public static void main(ExperimentProperties config) throws Exception {
-      List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
       File outputDir = config.getOrMakeDir("outputDirectory", new File(HOME, "frame"));
       String nerTool = config.getString("nerTool", "Stanford CoreNLP");
       try (IndexFrames is = new IndexFrames(nerTool,
           new File(outputDir, "frames.forRetrieval.txt.gz"),
           new File(outputDir, "frames.forEmbedding.txt.gz"),
           new File(outputDir, "tokUuid_commUuid_commId.txt.gz"),
-          new File(outputDir, "hashedTerms.approx.txt.gz"))) {
-        for (File f : inputCommTgzs)
-          is.observe(f);
+          new File(outputDir, "hashedTerms.approx.txt.gz"));
+          AutoCloseableIterator<Communication> iter = getCommunicationsForIngest(config)) {
+        while (iter.hasNext()) {
+          Communication c = iter.next();
+          is.observe(c);
+        }
       }
     }
 
@@ -1884,7 +1942,6 @@ public class IndexCommunications implements AutoCloseable {
   public static class IndexDeprels implements AutoCloseable {
 
     public static void main(ExperimentProperties config) throws Exception {
-      List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
       File outputDir = config.getOrMakeDir("outputDirectory", new File(HOME, "deprel"));
       String nerTool = config.getString("nerTool", "Stanford CoreNLP");
       
@@ -1896,9 +1953,12 @@ public class IndexCommunications implements AutoCloseable {
           maxWordsOnDeprelPath,
           new File(outputDir, "hashedArgs.approx.txt.gz"),
           new File(outputDir, "deprels.txt.gz"),
-          new File(outputDir, "rel-arg-tok.txt.gz"))) {
-        for (File f : inputCommTgzs)
-          is.observe(f);
+          new File(outputDir, "rel-arg-tok.txt.gz"));
+          AutoCloseableIterator<Communication> iter = getCommunicationsForIngest(config)) {
+        while (iter.hasNext()) {
+          Communication c = iter.next();
+          is.observe(c);
+        }
       }
     }
     
@@ -3341,27 +3401,23 @@ public class IndexCommunications implements AutoCloseable {
         n_doc, n_tok, n_ent, err_ner, n_termHashes, n_termWrites);
   }
   
-  public static void mainTokenObs(ExperimentProperties config) throws IOException {
-    List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
-    File output = config.getFile("outputTokenObs", new File(HOME, "tokenObs.jser.gz"));
-    File outputLower = config.getFile("outputTokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
-    TokenObservationCounts t = new TokenObservationCounts();
-    TokenObservationCounts tLower = new TokenObservationCounts();
-    TokenObservationCounts b = null;
-    TokenObservationCounts bLower = null;
-    TokenObservationCounts.trainOnCommunications(inputCommTgzs, t, tLower, b, bLower);
-    FileUtil.serialize(t, output);
-    FileUtil.serialize(tLower, outputLower);
-  }
+//  public static void mainTokenObs(ExperimentProperties config) throws IOException {
+//    List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
+//    File output = config.getFile("outputTokenObs", new File(HOME, "tokenObs.jser.gz"));
+//    File outputLower = config.getFile("outputTokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
+//    TokenObservationCounts t = new TokenObservationCounts();
+//    TokenObservationCounts tLower = new TokenObservationCounts();
+//    TokenObservationCounts b = null;
+//    TokenObservationCounts bLower = null;
+//    TokenObservationCounts.trainOnCommunications(inputCommTgzs, t, tLower, b, bLower);
+//    FileUtil.serialize(t, output);
+//    FileUtil.serialize(tLower, outputLower);
+//  }
   
   public static void extractBasicData(ExperimentProperties config) throws Exception {
-//    File commDir = config.getExistingDir("communicationsDirectory", new File(HOME, "../source-docs"));
-    List<File> inputCommTgzs = config.getFileGlob("communicationArchives");
     File outputDir = config.getOrMakeDir("outputDirectory", new File(HOME, "raw"));
     File tokObsFile = config.getExistingFile("tokenObs", new File(HOME, "tokenObs.jser.gz"));
     File tokObsLowerFile = config.getExistingFile("tokenObsLower", new File(HOME, "tokenObs.lower.jser.gz"));
-    
-    Log.info("provided " + inputCommTgzs.size() + " communication archive files to scan");
     
     Log.info("loading TokenObservationCounts from " + tokObsFile.getPath() + "\t" + Describe.memoryUsage());
     TokenObservationCounts t = (TokenObservationCounts) FileUtil.deserialize(tokObsFile);
@@ -3376,145 +3432,265 @@ public class IndexCommunications implements AutoCloseable {
 
     TimeMarker tm = new TimeMarker();
     try (IndexCommunications ic = new IndexCommunications(t, tl,
-        nerFeatures, termDoc, termHash, mentionLocs, tok2comm)) {
-      for (File f : inputCommTgzs) {
-        Log.info("reading " + f.getName());
-        try (InputStream is = new FileInputStream(f);
-            TarGzArchiveEntryCommunicationIterator iter = new TarGzArchiveEntryCommunicationIterator(is)) {
-          while (iter.hasNext()) {
-            Communication c = iter.next();
-            ic.observe(c);
-            if (tm.enoughTimePassed(5)) {
-              Log.info(ic + "\t" + c.getId() + "\t" + EC + "\t" + Describe.memoryUsage());
-            }
-          }
+        nerFeatures, termDoc, termHash, mentionLocs, tok2comm);
+        AutoCloseableIterator<Communication> iter = getCommunicationsForIngest(config)) {
+      while (iter.hasNext()) {
+        Communication c = iter.next();
+        ic.observe(c);
+        if (tm.enoughTimePassed(5)) {
+          Log.info(ic + "\t" + c.getId() + "\t" + EC + "\t" + Describe.memoryUsage());
         }
       }
     }
   }
-  
-  public static Iterator<Communication> getCommunicationsForIngest(ExperimentProperties config) {
-    // TODO switch between file and scion based iterators
-      throw new RuntimeException("implement me");
-  }
+
 
   /**
-   * Note, you need:
-   * -Dscion.accumulo.user=reader -Dscion.accumulo.password='an accumulo reader'
+   * Queries two keys:
+   * 1) dataProfile, see {@link DataProfile}
+   * 2) dataProvider which is either
+   *    "scion"
+   *    "disk:/path/to/CAG/root"
    */
-  public static class ScionBasedCommIter implements Iterator<Communication> {
+  public static AutoCloseableIterator<Communication> getCommunicationsForIngest(ExperimentProperties config) {
+    
+    DataProfile p = DataProfile.valueOf(
+        config.getString("dataProfile", DataProfile.CAG_FULL.name()));
+    Log.info("dataProfile=" + p.name());
+    
+    String method = config.getString("dataProvider");
+    if (method.equals("scion")) {
+      // scion
+      try {
+        Log.info("using scion");
+        return new ScionBasedCommIter(p);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    
+    if (method.startsWith("disk:")) {
+      // disk:/path/to/cag/root
+      Log.info("using tgz files");
+      File cagRoot = new File(method.substring("disk:".length()));
+      if (!cagRoot.isDirectory())
+        throw new RuntimeException("not a dir: " + cagRoot.getPath());
+      List<File> archives = dataProfileCagFileFilter(cagRoot, p);
+      return new FileBasedCommIter(archives);
+    }
+
+    throw new RuntimeException("can't parse: " + method);
+  }
+
+//  /**
+//   * If "communicationArchives" is provided, this is taken to be CAG root,
+//   * and tgz files are used for iteration. Otherwise it is assumed that we
+//   * are running on the COE and scion may be used to connect to accumulo.
+//   */
+//  public static AutoCloseableIterator<Communication> getCommunicationsForIngest(ExperimentProperties config) {
+//    
+//    DataProfile p = DataProfile.valueOf(
+//        config.getString("dataProfile", DataProfile.CAG_FULL.name()));
+//    Log.info("dataProfile=" + p.name());
+//    
+//    String key = "communicationArchives";
+//    if (config.containsKey(key)) {
+//      Log.info("using tgz files");
+//      File cagRoot = config.getExistingDir(key);
+//      List<File> archives = dataProfileCagFileFilter(cagRoot, p);
+//      return new FileBasedCommIter(archives);
+//    }
+//    try {
+//      Log.info("using scion");
+//      return new ScionBasedCommIter();
+//    } catch (Exception e) {
+//      throw new RuntimeException(e);
+//    }
+//  }
+
+
+  /**
+   * Note:
+   * 1) This must run on the COE (talks to seemingly arbitrary grid machines, difficult to tunnel)
+   * 2) -Dscion.accumulo.user=reader -Dscion.accumulo.password='an accumulo reader'
+   */
+  public static class ScionBasedCommIter implements AutoCloseableIterator<Communication> {
     
     public static void main(ExperimentProperties config) throws Exception {
-      
-      Iterator<Communication> itr;
-      boolean fromChandler = config.getBoolean("fromChandler", true);
-      if (fromChandler) {
-//        ConcreteDataSets corpus = ConcreteDataSets.getEnumeration(TwitterConfig.CORPUS_NAME);
-        ConcreteDataSets corpus = ConcreteDataSets.GIGAWORD;
-        ConnectorFactory cf = new ConnectorFactory();
-        ScionConnector sc = cf.getConnector();
-        itr = fromChandler(sc, corpus, null, null);
-      } else {
-        // TODO
-        itr = null;
+      DataProfile p = DataProfile.valueOf(
+          config.getString("dataProfile", DataProfile.CAG_FULL.name()));
+      Log.info("dataProfile=" + p.name());
+      try (ScionBasedCommIter s = new ScionBasedCommIter(p)) {
+        while (s.hasNext()) {
+          Communication c = s.next();
+          showComm(c);
+        }
       }
-      
-      while (itr.hasNext()) {
-        Communication c = itr.next();
-        System.out.println(c.getId());
-        if (c.isSetSectionList()) {
-          for (Section section : c.getSectionList()) {
-            System.out.println("section:" + section.getUuid());
-            for (Sentence sentence : section.getSentenceList()) {
-              System.out.println("sentence:" + sentence.getUuid());
-              Tokenization t = sentence.getTokenization();
-              if (t != null) {
-                System.out.println("tok:" + t.getUuid());
-                if (t.isSetDependencyParseList()) {
-                  for (DependencyParse dp : t.getDependencyParseList())
-                    System.out.println("dparse:" + dp.getMetadata());
-                }
-                if (t.isSetTokenTaggingList()) {
-                  for (TokenTagging tt : t.getTokenTaggingList())
-                    System.out.println("toktag:" + tt.getMetadata());
-                }
+    }
+    
+    public static void showComm(Communication c) {
+      System.out.println(c.getId());
+      if (c.isSetSectionList()) {
+        for (Section section : c.getSectionList()) {
+          System.out.println("section:" + section.getUuid());
+          for (Sentence sentence : section.getSentenceList()) {
+            System.out.println("sentence:" + sentence.getUuid());
+            Tokenization t = sentence.getTokenization();
+            if (t != null) {
+              System.out.println("tok:" + t.getUuid());
+              if (t.isSetDependencyParseList()) {
+                for (DependencyParse dp : t.getDependencyParseList())
+                  System.out.println("dparse:" + dp.getMetadata());
+              }
+              if (t.isSetTokenTaggingList()) {
+                for (TokenTagging tt : t.getTokenTaggingList())
+                  System.out.println("toktag:" + tt.getMetadata());
               }
             }
           }
         }
-        if (c.isSetSituationMentionSetList()) {
-          for (SituationMentionSet sms : c.getSituationMentionSetList())
-            System.out.println("sms: " + sms.getMetadata());
-        }
-        if (c.isSetEntityMentionSetList()) {
-          for (EntityMentionSet ems : c.getEntityMentionSetList())
-            System.out.println("ems:" + ems.getMetadata());
-        }
-        
-        System.out.println();
       }
+      if (c.isSetSituationMentionSetList()) {
+        for (SituationMentionSet sms : c.getSituationMentionSetList())
+          System.out.println("sms: " + sms.getMetadata());
+      }
+      if (c.isSetEntityMentionSetList()) {
+        for (EntityMentionSet ems : c.getEntityMentionSetList())
+          System.out.println("ems:" + ems.getMetadata());
+      }
+      System.out.println();
     }
+
+    private AutoCloseableIterator<byte[]> i;
+    private Iterator<Communication> itr;
     
-    public static Iterator<Communication> fromChandler(
-        ScionConnector sc, 
-        ConcreteDataSets corpus,
-        String beginRangePrefix,
-        String endRangePrefix) {
+    public ScionBasedCommIter(DataProfile filter) throws ScionException {
+      ConcreteDataSets corpus = ConcreteDataSets.GIGAWORD;
+      ConnectorFactory cf = new ConnectorFactory();
+      ScionConnector sc = cf.getConnector();
 
       SequentialQueryRunner.Builder qrb = new SequentialQueryRunner.Builder();
       qrb.setDataSet(corpus);
       qrb.setConnector(sc);
 
       List<String> analyticList = new ArrayList<String>();
-//      analyticList.add("Section");
-//      analyticList.add("Sentence");
+      analyticList.add("Section");
+      analyticList.add("Sentence");
+      analyticList.add("Stanford CoreNLP basic-1"); // DependencyParse
+      analyticList.add("Stanford Coref-1");         // EntitySet (and hopefully EntityMentionSet)
 //      analyticList.add("TweetInfo");
 //      analyticList.add("Tift TwitterTokenizer 4.10.0 Tweet Tags-1");
 //      analyticList.add("Tift TwitterTokenizer 4.10.0-1");
 //      analyticList.add("Twitter LID-1");
-      ExperimentProperties config = ExperimentProperties.getInstance();
-      for (String a : config.getStrings("analytics")) {
-        Log.info("adding analytic: " + a);
-        analyticList.add(a);
+
+//      ExperimentProperties config = ExperimentProperties.getInstance();
+//      for (String a : config.getStrings("analytics")) {
+//        Log.info("adding analytic: " + a);
+//        analyticList.add(a);
+//      }
+
+      Analytics a = new Analytics(sc);
+      qrb.addAllAnalytics(a.createAnalytics(analyticList));
+
+      // How to list all available analytics
+//      for (AnalyticViaUser as : a.createAllAvailableAnalytics())
+//        System.out.println("name=\"" + as.getName() + "\"\t" + as);
+
+      if (filter != null) {
+        Log.info("filter: " + filter);
+        Optional<Pair<String, String>> b = filter.scionBoundaries();
+        if (b.isPresent()) {
+          Log.info("setting beg/end to: " + b.get());
+          qrb.setBeginningRange(b.get().get1());
+          qrb.setEngingRange(b.get().get2());
+        }
       }
 
-      qrb.addAllAnalytics(new Analytics(sc).createAnalytics(analyticList));
-
-      if (beginRangePrefix != null) {
-        qrb.setBeginningRange(beginRangePrefix);
-      }   
-      if (endRangePrefix != null) {
-        qrb.setEngingRange(endRangePrefix);
-      }   
-
       SequentialQueryRunner qr = qrb.build();
-      AutoCloseableIterator<byte[]> i = qr.query();
-      Iterator<Communication> itr = new AccumuloCommunicationIterator(i);
-      return itr;
+      i = qr.query();
+      itr = new AccumuloCommunicationIterator(i);
     }
 
+    @Override
+    public boolean hasNext() {
+      return itr.hasNext();
+    }
+    @Override
+    public Communication next() {
+      return itr.next();
+    }
+
+    @Override
+    public void close() throws Exception {
+      Log.info("closing");
+      i.close();
+    }
+  }
+
+  
     
+  /** Relies on the fact that CAG tgz files have prefixes which are the same as {@link Communication} id prefixes */
+  public static List<File> dataProfileCagFileFilter(File cagRoot, DataProfile filter) {
+    List<File> all = FileUtil.find(cagRoot, "glob:**/*");
+    List<File> keep = new ArrayList<>();
+    for (File f : all)
+      if (filter.keep(f.getName()))
+        keep.add(f);
+    Log.info("kept k=" + keep.size() + " of n=" + all.size()
+      + " files matching dataProfile=" + filter.name() +  " in cagRoot=" + cagRoot.getPath());
+    return keep;
+  }
+
+   
+  /**
+   * Iterates over tgz archives.
+   */
+  public static class FileBasedCommIter implements AutoCloseableIterator<Communication> {
+    private ArrayDeque<File> inputCommTgzs;
+    private TarGzArchiveEntryCommunicationIterator iter;
+
+    public FileBasedCommIter(List<File> inputCommTgzs) {
+      this.inputCommTgzs = new ArrayDeque<>();
+      this.inputCommTgzs.addAll(inputCommTgzs);
+      Log.info("numFiles=" + inputCommTgzs.size() + " first=" + this.inputCommTgzs.peek().getPath());
+      advance();
+    }
+    
+    private void advance() {
+      File f = inputCommTgzs.pop();
+      Log.info("reading " + f.getName());
+      try {
+        iter = new TarGzArchiveEntryCommunicationIterator(new FileInputStream(f));
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
     @Override
     public boolean hasNext() {
-      throw new RuntimeException("implement me");
+      return iter.hasNext();
     }
+
     @Override
     public Communication next() {
-      throw new RuntimeException("implement me");
+      Communication c = iter.next();
+      if (!iter.hasNext()) {
+        iter.close();
+        iter = null;
+        if (!inputCommTgzs.isEmpty())
+          advance();
+      }
+      return c;
+    }
+
+    @Override
+    public void close() throws Exception {
+      if (iter != null)
+        iter.close();
     }
   }
   
-  public static class FileBasedCommIter implements Iterator<Communication> {
-    @Override
-    public boolean hasNext() {
-      throw new RuntimeException("implement me");
-    }
-    @Override
-    public Communication next() {
-      throw new RuntimeException("implement me");
-    }
-  }
-  
+
   public static void addInverseHash(String s, IntObjectHashMap<String> addTo) {
     int h = ReversableHashWriter.onewayHash(s);
     String ss = addTo.get(h);
@@ -3658,11 +3834,11 @@ public class IndexCommunications implements AutoCloseable {
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     Log.info("starting, args: " + Arrays.toString(args));
-    String c = config.getString("command");
-    switch (c) {
-    case "tokenObs":
-      mainTokenObs(config);
-      break;
+    String command = config.getString("command");
+    switch (command) {
+//    case "tokenObs":
+//      mainTokenObs(config);
+//      break;
     case "extractBasicData":
       extractBasicData(config);
       break;
@@ -3707,7 +3883,7 @@ public class IndexCommunications implements AutoCloseable {
       ScionBasedCommIter.main(config);
       break;
     default:
-      Log.info("unknown command: " + c);
+      Log.info("unknown command: " + command);
       break;
     }
     

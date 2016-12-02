@@ -6,9 +6,10 @@
 set -eu
 
 OUTPUT_DIR=$1
-COMM_GLOB=$2    # e.g. "/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford/**/nyt_eng_2007*.tar.gz"
-TOK_OBS=$3      # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz
-TOK_OBS_LC=$4   # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz
+DATA_PROFILE=$2   # e.g. "CAG_SMALL"
+DATA_PROVIDER=$3  # either "scion" or "disk:/path/to/CAG/root"
+TOK_OBS=$4      # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz
+TOK_OBS_LC=$5   # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz
 JAR=$5
 
 echo "args: $@"
@@ -61,7 +62,8 @@ mkdir -p "$OUTPUT_DIR/raw"
 java -ea -Xmx40G -cp $JAR_STABLE \
   edu.jhu.hlt.ikbp.tac.IndexCommunications \
     command extractBasicData \
-    communicationArchives "$COMM_GLOB" \
+    dataProfile "$DATA_PROFILE" \
+    dataProvider "$DATA_PROVIDER" \
     outputDirectory "$OUTPUT_DIR/raw" \
     tokenObs "$OUTPUT_DIR/tokenObs.jser.gz" \
     tokenObsLower "$OUTPUT_DIR/tokenObs.lower.jser.gz"
@@ -96,7 +98,8 @@ echo "extracting deprels `date`"
 java -ea -cp $JAR_STABLE \
   edu.jhu.hlt.ikbp.tac.IndexCommunications \
     command indexDeprels \
-    communicationArchives "$COMM_GLOB" \
+    dataProfile "$DATA_PROFILE" \
+    dataProvider "$DATA_PROVIDER" \
     outputDirectory "$OUTPUT_DIR/deprel"
 
 #echo "building deprel inverted index... `date`"
@@ -123,7 +126,8 @@ echo "extracting frames `date`"
 java -ea -cp $JAR_STABLE \
   edu.jhu.hlt.ikbp.tac.IndexCommunications \
     command indexFrames \
-    communicationArchives "$COMM_GLOB" \
+    dataProfile "$DATA_PROFILE" \
+    dataProvider "$DATA_PROVIDER" \
     outputDirectory "$OUTPUT_DIR/frame"
 
 
