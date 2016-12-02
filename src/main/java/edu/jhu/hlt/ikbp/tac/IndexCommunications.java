@@ -11,6 +11,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -26,6 +27,8 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
+
+import com.google.common.collect.Multimap;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Dependency;
@@ -3515,8 +3518,21 @@ public class IndexCommunications implements AutoCloseable {
    * 2) -Dscion.accumulo.user=reader -Dscion.accumulo.password='an accumulo reader'
    */
   public static class ScionBasedCommIter implements AutoCloseableIterator<Communication> {
-    
+
     public static void main(ExperimentProperties config) throws Exception {
+
+      // Show what we can pull out
+      ConnectorFactory cf = new ConnectorFactory();
+      ScionConnector sc = cf.getConnector();
+      Analytics a = new Analytics(sc);
+      Multimap<String, String> mm = a.getAvailableAnalytics();
+      for (Map.Entry<String, Collection<String>> e : mm.asMap().entrySet()) {
+        System.out.println("Analytic: " + e.getKey());
+        System.out.println("\tContains analytic layers: " + e.getValue().toString());
+        System.out.println();
+      }
+      System.out.println();
+      
       try (AutoCloseableIterator<Communication> iter = getCommunicationsForIngest(config)) {
         while (iter.hasNext()) {
           Communication c = iter.next();
@@ -3530,20 +3546,22 @@ public class IndexCommunications implements AutoCloseable {
       if (c.isSetSectionList()) {
         for (Section section : c.getSectionList()) {
           System.out.println("section:" + section.getUuid());
-          for (Sentence sentence : section.getSentenceList()) {
-            System.out.println("sentence:" + sentence.getUuid());
-            Tokenization t = sentence.getTokenization();
-            if (t == null) {
-              System.out.println("NULL TOK!");
-            } else {
-              System.out.println("tok:" + t.getUuid());
-              if (t.isSetDependencyParseList()) {
-                for (DependencyParse dp : t.getDependencyParseList())
-                  System.out.println("dparse:" + dp.getMetadata());
-              }
-              if (t.isSetTokenTaggingList()) {
-                for (TokenTagging tt : t.getTokenTaggingList())
-                  System.out.println("toktag:" + tt.getMetadata());
+          if (section.isSetSentenceList()) {
+            for (Sentence sentence : section.getSentenceList()) {
+              System.out.println("sentence:" + sentence.getUuid());
+              Tokenization t = sentence.getTokenization();
+              if (t == null) {
+                System.out.println("NULL TOK!");
+              } else {
+                System.out.println("tok:" + t.getUuid());
+                if (t.isSetDependencyParseList()) {
+                  for (DependencyParse dp : t.getDependencyParseList())
+                    System.out.println("dparse:" + dp.getMetadata());
+                }
+                if (t.isSetTokenTaggingList()) {
+                  for (TokenTagging tt : t.getTokenTaggingList())
+                    System.out.println("toktag:" + tt.getMetadata());
+                }
               }
             }
           }
@@ -3575,6 +3593,7 @@ public class IndexCommunications implements AutoCloseable {
       List<String> analyticList = new ArrayList<String>();
       analyticList.add("Section");
       analyticList.add("Sentence");
+      analyticList.add("Stanford CoreNLP-1");       // Tokenization ???
       analyticList.add("Stanford CoreNLP basic-1"); // DependencyParse
       analyticList.add("Stanford Coref-1");         // EntitySet (and hopefully EntityMentionSet)
 //      analyticList.add("TweetInfo");
