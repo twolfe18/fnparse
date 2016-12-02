@@ -3593,13 +3593,17 @@ public class IndexCommunications implements AutoCloseable {
       List<String> analyticList = new ArrayList<String>();
       analyticList.add("Section");
       analyticList.add("Sentence");
-      analyticList.add("Stanford CoreNLP-1");       // Tokenization ???
-      analyticList.add("Stanford CoreNLP basic-1"); // DependencyParse
-      analyticList.add("Stanford Coref-1");         // EntitySet (and hopefully EntityMentionSet)
-//      analyticList.add("TweetInfo");
-//      analyticList.add("Tift TwitterTokenizer 4.10.0 Tweet Tags-1");
-//      analyticList.add("Tift TwitterTokenizer 4.10.0-1");
-//      analyticList.add("Twitter LID-1");
+      analyticList.add("Original Word Segmentation-1");     // Tokenization
+      analyticList.add("Stanford CoreNLP basic-1");         // DependencyParse
+      analyticList.add("Stanford Coref-1");                 // EntitySet (and hopefully EntityMentionSet)
+      analyticList.add("Stanford CoreNLP-1");               // TokenTaggings for POS, NER, lemma
+      
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      if (config.containsKey("analytics")) {
+        String[] as = config.getStrings("analytics");
+        analyticList = Arrays.asList(as);
+        Log.info("over-riding analyticsList=" + analyticList);
+      }
 
 //      ExperimentProperties config = ExperimentProperties.getInstance();
 //      for (String a : config.getStrings("analytics")) {
