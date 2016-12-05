@@ -42,6 +42,8 @@ public class DependencyHeadFinder implements HeadFinder {
   public int head(Span s, Sentence sent) {
     if (s.start < 0 || s.end > sent.size())
       throw new IllegalArgumentException(s.shortString() + " is not in [" + sent.size() + "]");
+    if (s.width() == 1)
+      return s.start;
     DependencyParse deps = getDeps(sent);
     int h = -1;
     int hd = 0;
@@ -55,6 +57,8 @@ public class DependencyHeadFinder implements HeadFinder {
         hd = d;
       }
     }
+    if (h < 0)
+      return s.end-1;
     return h;
   }
 }
