@@ -98,13 +98,15 @@ public class AddNerTypeToEntityMentions {
 
   public static Map<String, Tokenization> buildTokzIndex(Communication c) {
     Map<String, Tokenization> m = new HashMap<>();
-    for (Section section : c.getSectionList()) {
-      if (!section.isSetSentenceList())
-        continue;
-      for (Sentence sentence : section.getSentenceList()) {
-        Tokenization t = sentence.getTokenization();
-        Object old = m.put(t.getUuid().getUuidString(), t);
-        assert old == null;
+    if (c.isSetSectionList()) {
+      for (Section section : c.getSectionList()) {
+        if (section.isSetSentenceList()) {
+          for (Sentence sentence : section.getSentenceList()) {
+            Tokenization t = sentence.getTokenization();
+            Object old = m.put(t.getUuid().getUuidString(), t);
+            assert old == null;
+          }
+        }
       }
     }
     return m;

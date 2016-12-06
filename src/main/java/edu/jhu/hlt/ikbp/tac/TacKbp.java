@@ -81,6 +81,11 @@ public class TacKbp {
     // Space-separated document representation, comes from source docs
     String sourceDoc;
     
+    // Not set by methods in this module
+    Communication sourceComm;
+    // Points into sourceComm to the entity described by this query.
+    EntityMention entityMention;
+    
     public KbpQuery(String id) {
       this.id = id;
       beg = end = -1;
@@ -133,6 +138,7 @@ public class TacKbp {
     }
   }
   
+  // TODO See CommunicationRetrieval
   static Communication getCommunication(String id) {
     throw new RuntimeException("implement me");
   }

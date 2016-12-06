@@ -21,7 +21,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
@@ -78,6 +81,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.OrderStatistics;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringInt;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
@@ -91,6 +95,7 @@ import edu.jhu.prim.util.Lambda.FnIntFloatToFloat;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
 import edu.jhu.prim.vector.IntIntHashVector;
 import edu.jhu.util.SlowParseyWrapper;
+import edu.jhu.util.TokenizationIter;
 
 /**
  * Produces an index of a given Concrete corpus. Writes everything to TSVs.
@@ -99,8 +104,8 @@ import edu.jhu.util.SlowParseyWrapper;
  */
 public class IndexCommunications implements AutoCloseable {
 
-//  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-11-18");
-  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE");
+  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-11-18");
+//  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE");
   public static final MultiTimer TIMER = new MultiTimer();
   public static final Counts<String> EC = new Counts<>();   // event counts
   
@@ -451,6 +456,85 @@ public class IndexCommunications implements AutoCloseable {
         throw new IllegalArgumentException("couldn't find tokUuid=" + res.tokUuid + " in " + comm.getId());
     }
     
+    public static String[] getMturkCorefHitHeader() {
+      return new String[] {"hitId", "sourceDocId", "targetDocId", "sourceMentionHtml", "targetMentionHtml"};
+    }
+
+    /**
+     * Outputs (hitId, sourceDocId, targetDocId, score, sourceHtml, targetHtml)
+     * Currently score is a placeholder.
+     */
+    public String[] emitMturkCorefHit(QResult r) {
+      // How do I highlight an entity
+      // Which ent to highlight!
+
+      // Where do I get the source comm from?
+      if (query.sourceComm == null || query.entityMention == null)
+        throw new IllegalStateException("must resolve Communication/EntityMention for query");
+
+      EntityMention s = query.entityMention;
+      Tokenization st = findTok(s.getTokens().getTokenizationId().getUuidString(), query.sourceComm);
+      Span ss = convert(s.getTokens());
+      
+      // Target: You have a Tokenization, need to decide what to show.
+      // Heuristic: just highlight according to NER TokenTagging?
+      Tokenization t = r.getTokenization();
+      if (t == null)
+        throw new RuntimeException("couldn't resolve result Tokenization for: " + r);
+      Span ts = getEntitySpanFor(r, t);
+      
+      String hitId = query.id + "___rTokUuid:" + r.tokUuid;
+      
+      String sourceHtml = formatHighlightedSpanInHtml(st, ss);
+      String targetHtml = formatHighlightedSpanInHtml(t, ts);
+      
+      return new String[] {
+          hitId,
+          query.sourceComm.getId(),
+          r.getCommunication().getId(),
+          "1.0",
+          sourceHtml,
+          targetHtml,
+      };
+    }
+    
+    /** TODO figure out how not to do this. */
+    public static Span getEntitySpanFor(QResult r, Tokenization rt) {
+      
+      List<Token> t = rt.getTokenList().getTokenList();
+//      List<TaggedToken> ner = rt.getTag
+
+//      throw new RuntimeException("implement me");
+      return Span.widthOne(0);
+    }
+    
+    public static Span convert(TokenRefSequence trs) {
+      int min = Integer.MAX_VALUE;
+      int max = -1;
+      for (int i : trs.getTokenIndexList()) {
+        min = Math.min(min, i);
+        max = Math.max(max, i);
+      }
+      return Span.getSpan(min, max+1);
+    }
+    
+    public static String formatHighlightedSpanInHtml(Tokenization words, Span highlight) {
+      StringBuilder sb = new StringBuilder();
+      List<Token> t = words.getTokenList().getTokenList();
+      int n = t.size();
+      assert highlight.start >= 0 && highlight.start < highlight.end && highlight.end < n;
+      for (int i = 0; i < n; i++) {
+        if (i > 0)
+          sb.append(' ');
+        if (i == highlight.start) // assumption: start is inclusive
+          sb.append("<span class=\"entity\">");
+        if (i == highlight.end)   // assumption: end is exclusive
+          sb.append("</span>");
+        sb.append(t.get(i).getText());
+      }
+      return sb.toString();
+    }
+    
     public void show(List<TermVec> pkbDocs) {
       int termCharLimit = 120;
 
@@ -515,30 +599,60 @@ public class IndexCommunications implements AutoCloseable {
     
     public static void main(ExperimentProperties config) throws Exception {
       
+      // Where to output coref HITs
+      File mturkCorefCsv = config.getFile("mturkCorefCsv");
+      String[] mturkCorefCsvCols = ShowResult.getMturkCorefHitHeader();
+      CSVFormat csvFormat = CSVFormat.DEFAULT.withHeader(mturkCorefCsvCols);
+      Log.info("writing to mturkCorefCsv=" + mturkCorefCsv
+          + " with cols: " + Arrays.toString(mturkCorefCsvCols)
+          + " and format: " + csvFormat);
+      
+      // Go to test1b, start edu.jhu.hlt.ikbp.tac.ScionForwarding on port 34343
+      // Locally, run ssh -fNL 8089:test1:34343 test1b
+      int scionFwdLocalPort = config.getInt("scionFwdLocalPort", 8088);
+      CommunicationRetrieval commRet;
+      try {
+        commRet = new CommunicationRetrieval(scionFwdLocalPort);
+        commRet.test("NYT_ENG_20090901.0206");
+      } catch (Exception e) {
+        throw new RuntimeException("did you start up an ssh tunnel on " + scionFwdLocalPort + "?", e);
+      }
+
+      // Finds EntityMentions for query documents which just come with char offsets.
+      TacQueryEntityMentionResolver findEntityMention =
+          new TacQueryEntityMentionResolver("tacQuery");
+
       File f = new File("data/parma/training_files/ecbplus/model_neg4.vw");
       File parmaModelFile = config.getExistingFile("dedup.model", f);
-      try (ParmaVw parma = new ParmaVw(parmaModelFile, null, config)) {
+      try (ParmaVw parma = new ParmaVw(parmaModelFile, null, config);
+          BufferedWriter mturkCsvW = FileUtil.getWriter(mturkCorefCsv);
+          CSVPrinter mturkCorefCsvW = new CSVPrinter(mturkCsvW, csvFormat)) {
       
       StringTable commUuid2CommId = new StringTable();
       commUuid2CommId.add(new File(HOME, "raw/emTokCommUuidId.txt.gz"), 2, 3, "\t", true);
       
       List<KbpQuery> queries = TacKbp.getKbp2013SfQueries();
       
-      // Go to test1b, start edu.jhu.hlt.ikbp.tac.ScionForwarding on port 34343
-      // Locally, run ssh -fNL 8089:test1:34343 test1b
-      int scionFwdLocalPort = config.getInt("scionFwdLocalPort", 8088);
-      CommunicationRetrieval commRet = new CommunicationRetrieval(scionFwdLocalPort);
-      commRet.test("NYT_ENG_20090901.0206");
-
       Pair<SituationSearch, TfIdfDocumentStore> ss = SituationSearch.build(config);
       IntDoubleHashMap idfs = ss.get2().getIdfs();
       parma.setIdf(idfs);
       KbpDirectedEntitySearch k = new KbpDirectedEntitySearch(ss.get1(), commRet, idfs, commUuid2CommId);
       
-      int limit = config.getInt("limit", 20);
+      // How many results per KBP query (before dedup).
+      // Higher values are noticeably slower.
+      int limit = config.getInt("limit", 10);
+
       for (KbpQuery q : queries) {
         EC.increment("kbpQuery");
 //        Log.info(q);
+        
+        q.sourceComm = commRet.get(q.docid);
+        if (q.sourceComm == null) {
+          EC.increment("kbpQuery/failResolveSourceDoc");
+          continue;
+        }
+        boolean addEmToCommIfMissing = true;
+        findEntityMention.resolve(q, addEmToCommIfMissing);
 
         try {
         boolean clearPkb = false;
@@ -549,26 +663,22 @@ public class IndexCommunications implements AutoCloseable {
         // Add in NLSF
         k.nlsf.rescore(results);
         
-        // DEDUP
+        // Deduplicate with parma
         List<QResultCluster> deduped = parma.dedup(results);
 
+        // Display results
         for (QResultCluster clust : deduped) {
-          QResult r = clust.canonical;
           EC.increment("kbpQuery/result");
-//          System.out.println(s);
-          
-          // Make sure we have a communication
-          Communication comm = r.comm;
-          assert comm != null;
-          
-          if (DEBUG) {
-            System.out.println("event counts: " + EC);
-            System.out.println(TIMER);
-          }
-          
-          // Show the result
+          QResult r = clust.canonical;
           ShowResult s = new ShowResult(q, r);
           s.show(k.search.state.pkbDocs);
+
+          String[] csv = s.emitMturkCorefHit(r);
+          System.out.println("mturk coref csv: " + Arrays.toString(csv));
+//          mturkCsvW.write("foo");
+//          mturkCsvW.newLine();
+          mturkCorefCsvW.printRecord(csv);
+          mturkCorefCsvW.flush();
         }
         } catch (Exception e) {
           e.printStackTrace();
@@ -790,6 +900,9 @@ public class IndexCommunications implements AutoCloseable {
    */
   public static class CommunicationRetrieval {
     private FetchCommunicationService.Client client;
+
+    // If true, prints the Communication ids of any documents it can't find
+    public boolean logFailures = true;
     
     public CommunicationRetrieval(int localPort) {
       Log.info("talking to localhost:" + localPort + " which should be"
@@ -812,6 +925,8 @@ public class IndexCommunications implements AutoCloseable {
       try {
         FetchResult res = client.fetch(fr);
         if (res.getCommunicationsSize() == 0) {
+          if (logFailures)
+            Log.info("failed to retrieve: " + commId);
           Log.info("no results!");
         } else {
           Communication c = res.getCommunications().get(0);
@@ -830,7 +945,8 @@ public class IndexCommunications implements AutoCloseable {
       try {
         FetchResult res = client.fetch(fr);
         if (res.getCommunicationsSize() == 0) {
-          Log.info("no results for comm id=" + commId);
+          if (logFailures)
+            Log.info("failed to retrieve: " + commId);
           EC.increment("commRet/get/noResults");
           TIMER.stop("commRet/get");
           return null;
@@ -876,7 +992,8 @@ public class IndexCommunications implements AutoCloseable {
         String id = needComms.get(i).getCommunicationId();
         Communication comm = ic.getCommunication(id);
         if (comm == null) {
-          Log.info("could not resolve Communication id=" + id + " to a UUID!");
+          if (logFailures)
+            Log.info("failed to retrieve: " + id);
           EC.increment("commRet/missingId");
         } else {
           needComms.get(i).setCommunication(comm);
@@ -1107,8 +1224,22 @@ public class IndexCommunications implements AutoCloseable {
       this.scoreDerivation = score;
     }
     
+    /** Searches across all tools */
+    public List<EntityMention> findMentions() {
+      return findMentions(null);
+    }
     public List<EntityMention> findMentions(String entityMentionToolName) {
-      throw new RuntimeException("implement me");
+//      FeaturePacker.Unpacked u = FeaturePacker.unpack(featsResult);
+//      u.entities  // int pairs!
+      if (comm == null)
+        throw new IllegalStateException("need to resolve the Communication first");
+      List<EntityMention> e = new ArrayList<>();
+      for (EntityMentionSet ems : comm.getEntityMentionSetList()) {
+        if (entityMentionToolName == null || entityMentionToolName.equals(ems.getMetadata().getTool())) {
+          e.addAll(ems.getMentionList());
+        }
+      }
+      return e;
     }
     
     public Tokenization getTokenization() {
