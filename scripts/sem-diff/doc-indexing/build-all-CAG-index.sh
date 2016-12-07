@@ -5,7 +5,8 @@ set -eu
 #OUTPUT_DIR=/export/projects/twolfe/cag-indexing
 #OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-11-23
 #OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-11-28
-OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-12-02
+#OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-12-02
+OUTPUT_DIR=/export/projects/twolfe/cag-indexing/2016-12-06
 mkdir -p "$OUTPUT_DIR"
 
 # Locally, see ~/code/fnparse/data/character-sequence-counts/charCounts.apw_eng_2000on.lower-*-false.minCount3.jser.gz
@@ -13,9 +14,9 @@ TOK_OBS=/home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-fa
 TOK_OBS_LC=/home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz
 
 #CAG=/export/common/data/processed/concrete/concretely-annotated/gigaword/stanford
-CAG=/export/projects/fferraro/cag-4.6.10/processing/from-marcc/20161012-083257/gigaword-merged
+CAG=/export/projects/fferraro/cag-4.6.10/processing/from-marcc/20161012-083257/gigaword-merged/tgz
 #DATA_PROVIDER="disk:$CAG"
-DATA_PROVIDER="scion"
+#DATA_PROVIDER="scion"
 
 THIS_SCRIPT_DIR=`dirname $(readlink -f $0)`
 SCRIPTS=`readlink -f $THIS_SCRIPT_DIR/../..`
@@ -26,19 +27,25 @@ if [[ ! -d $SCRIPTS ]]; then
 fi
 
 JAR="`pwd`/target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar"
-#make jar
 if [[ ! -f $JAR ]]; then
   echo "couldn't find jar: $JAR"
   exit 1
 fi
 echo "jar: $JAR"
 
-#"$CAG/**/nyt_eng_2007*.tar.gz"
-mkdir -p "$OUTPUT_DIR/nyt_eng_2007"
-qsub -cwd -l 'h_rt=72:00:00,num_proc=1,mem_free=44G' \
-  -N "cag-index-sml" -j y -o "$OUTPUT_DIR/nyt_eng_2007" \
+for DATA_PROVIDER in "scion" "disk:$CAG"; do
+
+SCION_STR="disk"
+if [[ $DATA_PROVIDER == "scion" ]]; then
+SCION_STR="scion"
+continue
+fi
+
+OD="$OUTPUT_DIR/nyt_eng_2007-$SCION_STR"
+mkdir -p "$OD"
+qsub -cwd -N "cag-index-sml-$SCION_STR" -l 'h_rt=72:00:00,num_proc=1,mem_free=44G' -j y -o "$OD" \
   ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
-    "$OUTPUT_DIR/nyt_eng_2007" \
+    "$OD" \
     CAG_SMALL \
     "$DATA_PROVIDER" \
     "$TOK_OBS" \
@@ -46,12 +53,11 @@ qsub -cwd -l 'h_rt=72:00:00,num_proc=1,mem_free=44G' \
     "$SCRIPTS" \
     "$JAR"
 
-#"$CAG/**/apw_eng_2*.tar.gz"
-mkdir -p "$OUTPUT_DIR/apw_eng_2XXX"
-qsub -cwd -N "cag-index-med" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
-  -j y -o "$OUTPUT_DIR/apw_eng_2XXX" \
+OD="$OUTPUT_DIR/apw_eng_2XXX-$SCION_STR"
+mkdir -p "$OD"
+qsub -cwd -N "cag-index-med-$SCION_STR" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" -j y -o "$OD" \
   ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
-    "$OUTPUT_DIR/apw_eng_2XXX" \
+    "$OD" \
     CAG_MEDIUM \
     "$DATA_PROVIDER" \
     "$TOK_OBS" \
@@ -59,16 +65,17 @@ qsub -cwd -N "cag-index-med" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
     "$SCRIPTS" \
     "$JAR"
 
-#"$CAG/**/*.tar.gz"
-mkdir -p "$OUTPUT_DIR/full"
-qsub -cwd -N "cag-index-full" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" \
-  -j y -o "$OUTPUT_DIR/full" \
+OD="$OUTPUT_DIR/full-$SCION_STR"
+mkdir -p "$OD"
+qsub -cwd -N "cag-index-full-$SCION_STR" -l "h_rt=72:00:00,num_proc=1,mem_free=44G" -j y -o "$OD" \
   ./scripts/sem-diff/doc-indexing/build-CAG-index.sh \
-    "$OUTPUT_DIR/full" \
+    "$OD" \
     CAG_FULL \
     "$DATA_PROVIDER" \
     "$TOK_OBS" \
     "$TOK_OBS_LC" \
     "$SCRIPTS" \
     "$JAR"
+
+done
 
