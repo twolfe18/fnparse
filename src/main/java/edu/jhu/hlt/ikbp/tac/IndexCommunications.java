@@ -95,7 +95,6 @@ import edu.jhu.prim.util.Lambda.FnIntFloatToFloat;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
 import edu.jhu.prim.vector.IntIntHashVector;
 import edu.jhu.util.SlowParseyWrapper;
-import edu.jhu.util.TokenizationIter;
 
 /**
  * Produces an index of a given Concrete corpus. Writes everything to TSVs.
@@ -640,7 +639,7 @@ public class IndexCommunications implements AutoCloseable {
       
       // How many results per KBP query (before dedup).
       // Higher values are noticeably slower.
-      int limit = config.getInt("limit", 10);
+      int limit = config.getInt("limit", 100);
 
       for (KbpQuery q : queries) {
         EC.increment("kbpQuery");
@@ -675,6 +674,7 @@ public class IndexCommunications implements AutoCloseable {
 
           String[] csv = s.emitMturkCorefHit(r);
           System.out.println("mturk coref csv: " + Arrays.toString(csv));
+          System.out.println("mturk targetMentionHtml: " + csv[csv.length-1]);
 //          mturkCsvW.write("foo");
 //          mturkCsvW.newLine();
           mturkCorefCsvW.printRecord(csv);

@@ -119,6 +119,12 @@
       <version>${concrete-util-version}</version>
     </dependency>
 
+    <dependency>
+      <groupId>edu.jhu.hlt</groupId>
+      <artifactId>concrete-safe</artifactId>
+      <version>${concrete-util-version}</version>
+    </dependency>
+
     <!-- For ingesting propbank data -->
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
