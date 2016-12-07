@@ -6,7 +6,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,6 +25,7 @@ import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.FileBasedCommIter;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
@@ -362,13 +362,11 @@ public class SituationTopDownClustering {
     // for the node. when you consider splitting rows:int[] based on a feature,
     // you only need to compute a cavity based on intersection(invIdx(feature), node.rows)
     public SplitScore scoreSplitCavity(int feature, IntArrayList nodeRows, VarianceView all) {
-      int minObs = 60;
-
       IntArrayList containsFeat = invertedIndex.get(feature);
       IntArrayList left = new IntArrayList();
       intersectSortedLists(containsFeat, nodeRows, left);
       int n_left = left.size();
-      if (n_left < minObs) {
+      if (n_left < minRowsPerNode) {
         ec.increment("scoreSplit/minObs");
         return new SplitScore(feature, Double.NEGATIVE_INFINITY);
       }
@@ -376,7 +374,7 @@ public class SituationTopDownClustering {
       VarianceView lv = buildVarianceView(left);
 
       int n_right = nodeRows.size() - n_left;
-      if (n_left < minObs || n_right < minObs) {
+      if (n_left < minRowsPerNode || n_right < minRowsPerNode) {
         ec.increment("scoreSplit/minObs2");
         return new SplitScore(feature, Double.NEGATIVE_INFINITY);
       }
@@ -408,10 +406,9 @@ public class SituationTopDownClustering {
         return new SplitScore(feature, Double.NEGATIVE_INFINITY);
       }
       
-      int minObs = 60;
       IntArrayList left_list = invertedIndex.get(feature);
       int n_left_aot = left_list == null ? 0 : left_list.size();
-      if (n_left_aot < minObs) {
+      if (n_left_aot < minRowsPerNode) {
         ec.increment("scoreSplit/minObs");
         return new SplitScore(feature, Double.NEGATIVE_INFINITY);
       }
@@ -464,7 +461,7 @@ public class SituationTopDownClustering {
           sum_sq[rowF[i]] += v * v;
         }
       }
-      if (n_left < minObs || n_right < minObs) {
+      if (n_left < minRowsPerNode || n_right < minRowsPerNode) {
         ec.increment("scoreSplit/minObs2");
         return new SplitScore(feature, Double.NEGATIVE_INFINITY);
       }
@@ -570,9 +567,18 @@ public class SituationTopDownClustering {
   private Node root;
   private Counts<String> ec;
   
+  // TODO instead of pruning cooc features by frequency,
+  // I should prune by PMI with the predicate word
+  private IntPair coocFeatWordCountRange;
   private TokenObservationCounts tc;
   
-  public SituationTopDownClustering() {
+  private int minRowsPerNode;
+  
+  public SituationTopDownClustering(int minRowsPerNode, IntPair coocFeatWordCountRange) {
+    Log.info("coocFeatWordCountRange=" + coocFeatWordCountRange);
+    Log.info("minRowsPerNode=" + minRowsPerNode);
+    this.coocFeatWordCountRange = coocFeatWordCountRange;
+    this.minRowsPerNode = minRowsPerNode;
     rows = new ArrayList<>();
     invertedIndex = new IntObjectHashMap<>();
     root = new Node();
@@ -713,8 +719,10 @@ public class SituationTopDownClustering {
     return best;
   }
   
-  public void bfsSplit() {
-    int k = 20;
+  /**
+   * @param k How many items to sample from a node when it is popped.
+   */
+  public void bfsSplit(int k) {
     Random r = new Random(9001);
     Deque<Node> q = new ArrayDeque<>();
     q.push(root);
@@ -809,14 +817,17 @@ public class SituationTopDownClustering {
       }
     }
     
-//    Set<String> uniq = new HashSet<>();
-//    for (Token tok : words) {
-//      if (!observed.get(tok.getTokenIndex())) {
-//        String tt = norm(tok.getText());
-//        if (uniq.add(tt))
-//          f.add("cooc(" + tt + ")");
-//      }
-//    }
+    Set<String> uniq = new HashSet<>();
+    for (Token tok : words) {
+      if (!observed.get(tok.getTokenIndex())) {
+        String tt = norm(tok.getText());
+        if (!uniq.add(tt))
+          continue;
+        int c = tc.getCount(tt);
+        if (coocFeatWordCountRange.first <= c && c <= coocFeatWordCountRange.second)
+          f.add("cooc(" + tt + ")");
+      }
+    }
 
     return f;
   }
@@ -830,16 +841,20 @@ public class SituationTopDownClustering {
   }
 
   public static void main(String[] args) throws Exception {
+    ExperimentProperties config = ExperimentProperties.init(args);
     
-    StringAlph.test();
+    int coocFeatWordCountMin = config.getInt("coocFeatWordCountMin", 10);
+    int coocFeatWordCountMax = config.getInt("coocFeatWordCountMax", 1000);
 
-    SituationTopDownClustering s = new SituationTopDownClustering();
+    int minRowsPerNode = config.getInt("minRowsPerNode", 60);
+    SituationTopDownClustering s = new SituationTopDownClustering(
+        minRowsPerNode, new IntPair(coocFeatWordCountMin, coocFeatWordCountMax));
 
     Set<String> predEdges = new HashSet<>();
     predEdges.addAll(Arrays.asList("nsubj", "nsubjpass", "agent", "ccomp", "csubj", "csubjpass"));
 //    predEdges.addAll(Arrays.asList("nsubj", "nsubjpass", "agent"));
     
-    int maxSentenceLength = 50;
+    int maxSentenceLength = config.getInt("maxSentenceLength", 50);
     @SuppressWarnings("unchecked")
     List<Dependency>[] children = new List[maxSentenceLength];
     @SuppressWarnings("unchecked")
@@ -849,13 +864,20 @@ public class SituationTopDownClustering {
       parents[i] = new ArrayList<>();
     }
     
-    File cc = new File("data/character-sequence-counts/charCounts.nyt_eng_2007.lower-true.reverse-false.minCount5.jser.gz");
+    File cc = config.getExistingFile("tokObsLc", new File("data/character-sequence-counts/charCounts.nyt_eng_2007.lower-true.reverse-false.minCount5.jser.gz"));
+//    File cc = new File("data/character-sequence-counts/charCounts.nyt_eng_2007.lower-true.reverse-false.minCount5.jser.gz");
 //    File cc = new File("data/character-sequence-counts/charCounts.apw_eng_2000on.lower-true.reverse-false.minCount5.jser.gz");
     s.tc = (TokenObservationCounts) FileUtil.deserialize(cc);
     
     TimeMarker tm = new TimeMarker();
 //    List<File> f = Arrays.asList(new File("data/concretely-annotated-gigaword/sample-frank-oct16/nyt_eng_200909.tar.gz"));
-    List<File> f = FileUtil.find(new File("data/concretely-annotated-gigaword/sample-med"), "glob:**/*.tar.gz");
+//    List<File> f = FileUtil.find(new File("data/concretely-annotated-gigaword/sample-med"), "glob:**/*.tar.gz");
+    List<File> f = config.getFileGlob("communications");
+    
+    // How many predicates to extract features on
+//    int maxRows = config.getInt("maxRows", 1_000_000);
+    int maxRows = config.getInt("maxRows", 150_000);
+    
     try (FileBasedCommIter iter = new FileBasedCommIter(f)) {
       reading:
       while (iter.hasNext()) {
@@ -887,49 +909,18 @@ public class SituationTopDownClustering {
           
           if (tm.enoughTimePassed(5)) {
             Log.info("working on " + comm.getId() + ", populated " + s.rows.size() + " rows, alph.size=" + s.alph.size());
-//            if (tm.secondsSinceFirstMark() > 1)
-//              break reading;
           }
-//          if (s.rows.size() >= 150_000)
-//            break reading;
-          if (s.rows.size() >= 1_000_000)
+          if (s.rows.size() >= maxRows)
             break reading;
         }
       }
     }
     
-    int minObs = 4;
+    int minObs = config.getInt("minFeatureObs", 5);
     s.prune(minObs);
-
-//    s.split(s.root);
     
-    s.bfsSplit();
-
-    /*
-    s.root.createChildren(s.alph.lookupIndex("pos(VBD)"));
-
-    
-//    s.split(s.root.left); // pos(VBD)
-//    s.split(s.root.right); // !pos(VBD)
-    
-    s.root.left.createChildren(s.alph.lookupIndex("word(said)"));
-
-//    s.split(s.root.left.left);  // pos(VBD) & word(said), next up would be nsubj(X,he)
-//    s.split(s.root.left.right);  // pos(VBD) & !word(said), next up would be mark(X,that)
-    
-    s.root.left.left.createChildren(s.alph.lookupIndex("nsubj(X,he)"));
-
-//    Log.info("PATHS:");
-//    Log.info(s.root.path());
-//    Log.info(s.root.left.path());
-//    Log.info(s.root.right.path());
-//    Log.info(s.root.left.left.path());
-//    Log.info(s.root.left.left.right.path());
-//    Log.info(s.root.left.left.left.path());
-//    System.out.println();
-    
-    s.split(s.root.left.left.left); // pos(VBD) & word(said) & nsubj(X,he), next up would be ccomp(said,X)
-    */
+    int numRowPerNodeToShow = config.getInt("numRowPerNodeToShow", 30);
+    s.bfsSplit(numRowPerNodeToShow);
 
     Log.info("done");
   }
