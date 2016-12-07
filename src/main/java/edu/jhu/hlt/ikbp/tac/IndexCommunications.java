@@ -103,8 +103,8 @@ import edu.jhu.util.SlowParseyWrapper;
  */
 public class IndexCommunications implements AutoCloseable {
 
-  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-11-18");
-//  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE");
+//  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-11-18");
+  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE");
   public static final MultiTimer TIMER = new MultiTimer();
   public static final Counts<String> EC = new Counts<>();   // event counts
   

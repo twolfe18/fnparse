@@ -15,6 +15,9 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
+import org.apache.directory.server.kerberos.shared.crypto.encryption.DesCbcCrcEncryption;
+import org.junit.runner.Describable;
+
 import com.google.common.collect.Iterators;
 
 import edu.jhu.hlt.concrete.Communication;
@@ -22,7 +25,10 @@ import edu.jhu.hlt.concrete.Dependency;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.Token;
+import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.FileBasedCommIter;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -39,7 +45,7 @@ import edu.jhu.prim.set.IntHashSet;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.TokenizationIter;
 
-public class SituationTopDownClustering {
+public class TopDownClustering {
   
   static class StringAlph {
     public static final Charset UTF8 = Charset.forName("UTF8");
@@ -574,7 +580,7 @@ public class SituationTopDownClustering {
   
   private int minRowsPerNode;
   
-  public SituationTopDownClustering(int minRowsPerNode, IntPair coocFeatWordCountRange) {
+  public TopDownClustering(int minRowsPerNode, IntPair coocFeatWordCountRange) {
     Log.info("coocFeatWordCountRange=" + coocFeatWordCountRange);
     Log.info("minRowsPerNode=" + minRowsPerNode);
     this.coocFeatWordCountRange = coocFeatWordCountRange;
@@ -752,6 +758,16 @@ public class SituationTopDownClustering {
     int minCount = 10;
     return tc.getPrefixOccuringAtLeast(s, minCount);
   }
+  
+  private static String ner(int i, TokenTagging ner) {
+    TaggedToken tt = ner.getTaggedTokenList().get(i);
+    String tag = tt.getTag();
+    if (tag.equalsIgnoreCase("O"))
+      return null;
+    if (tag.length() >= 3 && tag.charAt(1) == '-')
+      return tag.substring(2);
+    return tag;
+  }
 
   private List<String> featurize(int predicate, List<Dependency>[] parents, List<Dependency>[] children, Tokenization t) {
     List<TaggedToken> pos = t.getTokenTaggingList().get(1).getTaggedTokenList(); // TODO
@@ -765,10 +781,16 @@ public class SituationTopDownClustering {
     observed.set(predicate);
 
     String w = norm(words.get(predicate).getText());
+    String e = ner(predicate, getNerTags(t));
     String p = pos.get(predicate).getTag();
     f.add("word(" + w + ")");
     f.add("pos(" + p + ")");
     f.add("wordpos(" + w + "." + p + ")");
+    if (e != null) {
+      f.add("ner(" + e + ")");
+      String s = PosPatternGenerator.shapeNormalize(words.get(predicate).getText());
+      f.add("shape(" + s + ")");
+    }
 
     for (Dependency d : children[predicate]) {
       // children
@@ -839,20 +861,55 @@ public class SituationTopDownClustering {
       a[i] = new ArrayList<>();
     a[i].add(d);
   }
+  
+  /** TODO find by tool name */
+  private static DependencyParse getDeps(Tokenization t) {
+    return t.getDependencyParseList().get(2);
+  }
+  
+  private static TokenTagging getNerTags(Tokenization t) {
+    TokenTagging ner = null;
+    for (TokenTagging tt : t.getTokenTaggingList()) {
+      if (tt.getTaggingType().equalsIgnoreCase("NER")) {
+        assert ner == null;
+        ner = tt;
+      }
+    }
+    return ner;
+  }
+  
+  public static boolean isHead(List<Dependency> parents) {
+    if (parents.isEmpty())
+      return false;
+    for (Dependency d : parents) {
+      String e = d.getEdgeType();
+      if (e.equals("nn"))
+        return false;
+      if (e.equals("det"))
+        return false;
+    }
+    return true;
+  }
 
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
+    
+    boolean situations = config.getBoolean("situations", true);
+    Log.info("extracting=" + (situations ? "situations" : "entities"));
     
     int coocFeatWordCountMin = config.getInt("coocFeatWordCountMin", 10);
     int coocFeatWordCountMax = config.getInt("coocFeatWordCountMax", 1000);
 
     int minRowsPerNode = config.getInt("minRowsPerNode", 60);
-    SituationTopDownClustering s = new SituationTopDownClustering(
+    TopDownClustering s = new TopDownClustering(
         minRowsPerNode, new IntPair(coocFeatWordCountMin, coocFeatWordCountMax));
 
     Set<String> predEdges = new HashSet<>();
     predEdges.addAll(Arrays.asList("nsubj", "nsubjpass", "agent", "ccomp", "csubj", "csubjpass"));
 //    predEdges.addAll(Arrays.asList("nsubj", "nsubjpass", "agent"));
+    
+    Set<String> nerTypes = new HashSet<>();
+    nerTypes.addAll(Arrays.asList("PERSON", "ORGANIZATION", "LOCATION", "MISC"));
     
     int maxSentenceLength = config.getInt("maxSentenceLength", 50);
     @SuppressWarnings("unchecked")
@@ -875,8 +932,7 @@ public class SituationTopDownClustering {
     List<File> f = config.getFileGlob("communications");
     
     // How many predicates to extract features on
-//    int maxRows = config.getInt("maxRows", 1_000_000);
-    int maxRows = config.getInt("maxRows", 150_000);
+    int maxRows = config.getInt("maxRows", 1_000_000);
     
     try (FileBasedCommIter iter = new FileBasedCommIter(f)) {
       reading:
@@ -887,28 +943,46 @@ public class SituationTopDownClustering {
           if (n > maxSentenceLength)
             continue;
 
-          BitSet preds = new BitSet();
-          DependencyParse d = t.getDependencyParseList().get(2);  // TODO
-
+          DependencyParse d = getDeps(t);
           for (int i = 0; i < n; i++) {
             parents[i].clear();
             children[i].clear();
           }
           for (Dependency dep : d.getDependencyList()) {
-            if (predEdges.contains(dep.getEdgeType()))
-              preds.set(dep.getGov());
-            if ("root".equals(dep.getEdgeType()))
-              preds.set(dep.getDep());
             add(children, dep.getGov(), dep);
             add(parents, dep.getDep(), dep);
           }
-          for (int p = preds.nextSetBit(0); p >= 0; p = preds.nextSetBit(p+1)) {
+
+          BitSet instances = new BitSet();
+          if (situations) {
+            // Find the predicates in this sentence
+            for (Dependency dep : d.getDependencyList()) {
+              if (predEdges.contains(dep.getEdgeType()))
+                instances.set(dep.getGov());
+              if ("root".equals(dep.getEdgeType()))
+                instances.set(dep.getDep());
+            }
+          } else {
+            // Alternatively, do this for all named entities
+            TokenTagging ner = getNerTags(t);
+            for (int i = 0; i < n; i++) {
+              String nerTag = ner.getTaggedTokenList().get(i).getTag();
+              if (nerTypes.contains(nerTag)) {
+                if (isHead(parents[i])) {
+                  instances.set(i);
+                }
+              }
+            }
+          }
+
+          for (int p = instances.nextSetBit(0); p >= 0; p = instances.nextSetBit(p+1)) {
             List<String> feats = s.featurize(p, parents, children, t);
             s.add(feats);
           }
           
           if (tm.enoughTimePassed(5)) {
-            Log.info("working on " + comm.getId() + ", populated " + s.rows.size() + " rows, alph.size=" + s.alph.size());
+            Log.info("working on " + comm.getId() + ", populated " + s.rows.size()
+              + " rows, alph.size=" + s.alph.size() + "\t" + Describe.memoryUsage());
           }
           if (s.rows.size() >= maxRows)
             break reading;
