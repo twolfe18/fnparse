@@ -19,8 +19,11 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 public class SimpleAccumuloConfig implements Serializable {
   private static final long serialVersionUID = 6363692365193204723L;
 
+  // TODO support dev/production split
+  public static final String HOST_TABLE = "simple_accumulo_dev";
+
   public final String namespace;      // used as column family
-  public final String table;          // e.g. twolfe_dev
+  public final String table;          // e.g. HOST_TABLE
   public final String instanceName;   // e.g. "minigrid"
   public final String zookeepers;     // e.g. "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181"
   
@@ -44,7 +47,7 @@ public class SimpleAccumuloConfig implements Serializable {
   public static SimpleAccumuloConfig fromConfig(ExperimentProperties config) {
     return new SimpleAccumuloConfig(
         config.getString("accumulo.namespace"),
-        "twolfe_dev",   // TODO support dev/production split
+        HOST_TABLE,
         config.getString("accumulo.instance", "minigrid"),
         config.getString("accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181"));
   }

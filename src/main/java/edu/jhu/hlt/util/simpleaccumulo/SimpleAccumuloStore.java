@@ -18,6 +18,7 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.access.StoreCommunicationService;
 import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Log;
 
 /**
  * Simple single-table {@link StoreCommunicationService} using a user-specified column family for isolation.
@@ -70,12 +71,15 @@ public class SimpleAccumuloStore extends SimpleAccumulo implements StoreCommunic
     ExperimentProperties config = ExperimentProperties.init(args);
     SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);    
     int nt = config.getInt("numThreads", 4);
+    int port = config.getInt("port", 9090);
+    Log.info("listening on port=" + port);
+    Log.info("using numThreads=" + nt);
     try (SimpleAccumuloStore serv = new SimpleAccumuloStore(saConf, nt)) {
       serv.connect(
           config.getString("accumulo.user"),
           new PasswordToken(config.getString("accumulo.password")));  // TODO better security
       
-      TServerTransport serverTransport = new TServerSocket(9090);
+      TServerTransport serverTransport = new TServerSocket(port);
       TServer server = new TSimpleServer(new Args(serverTransport)
           .processor(new StoreCommunicationService.Processor<>(serv)));
 
