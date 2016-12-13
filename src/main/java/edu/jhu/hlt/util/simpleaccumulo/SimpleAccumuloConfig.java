@@ -20,7 +20,9 @@ public class SimpleAccumuloConfig implements Serializable {
   private static final long serialVersionUID = 6363692365193204723L;
 
   // TODO support dev/production split
-  public static final String HOST_TABLE = "simple_accumulo_dev";
+  public static final String DEFAULT_TABLE = "simple_accumulo_dev";
+  public static final String DEFAULT_INSTANCE = "minigrid";
+  public static final String DEFAULT_ZOOKEEPERS = "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181";
 
   public final String namespace;      // used as column family
   public final String table;          // e.g. HOST_TABLE
@@ -53,8 +55,8 @@ public class SimpleAccumuloConfig implements Serializable {
   public static SimpleAccumuloConfig fromConfig(ExperimentProperties config) {
     return new SimpleAccumuloConfig(
         config.getString("accumulo.namespace"),
-        HOST_TABLE,
-        config.getString("accumulo.instance", "minigrid"),
-        config.getString("accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181"));
+        DEFAULT_TABLE,
+        config.getString("accumulo.instance", DEFAULT_INSTANCE),
+        config.getString("accumulo.zookeepers", DEFAULT_ZOOKEEPERS));
   }
 }

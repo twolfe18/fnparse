@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.apache.accumulo.core.data.Range;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 import org.apache.thrift.protocol.TCompactProtocol;
@@ -86,6 +87,8 @@ import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
+import edu.jhu.hlt.util.simpleaccumulo.SimpleAccumulo;
+import edu.jhu.hlt.util.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.map.IntObjectHashMap;
@@ -129,7 +132,7 @@ public class IndexCommunications implements AutoCloseable {
         return commId.toUpperCase().startsWith("NYT_ENG_200909");
       }
       @Override
-      public Optional<Pair<String, String>> scionBoundaries() {
+      public Optional<Pair<String, String>> commIdBoundaries() {
         return Optional.of(
             new Pair<>(
                 "NYT_ENG_20090901.0001",
@@ -142,7 +145,7 @@ public class IndexCommunications implements AutoCloseable {
         return commId.toUpperCase().startsWith("NYT_ENG_2007");
       }
       @Override
-      public Optional<Pair<String, String>> scionBoundaries() {
+      public Optional<Pair<String, String>> commIdBoundaries() {
         return Optional.of(
             new Pair<>(
                 "NYT_ENG_20070101.0001",
@@ -155,7 +158,7 @@ public class IndexCommunications implements AutoCloseable {
         return commId.toUpperCase().startsWith("APW_ENG_2");
       }
       @Override
-      public Optional<Pair<String, String>> scionBoundaries() {
+      public Optional<Pair<String, String>> commIdBoundaries() {
         return Optional.of(
             new Pair<>(
                 "APW_ENG_20000101.0001",
@@ -171,7 +174,7 @@ public class IndexCommunications implements AutoCloseable {
 
     public abstract boolean keep(String commId);
 
-    public Optional<Pair<String, String>> scionBoundaries() {
+    public Optional<Pair<String, String>> commIdBoundaries() {
       return Optional.empty();
     }
   }
@@ -3692,7 +3695,7 @@ public class IndexCommunications implements AutoCloseable {
     Log.info("dataProfile=" + p.name());
     
     String method = config.getString("dataProvider");
-    if (method.equals("scion")) {
+    if (method.equalsIgnoreCase("scion")) {
       // scion
       try {
         Log.info("using scion");
@@ -3702,7 +3705,20 @@ public class IndexCommunications implements AutoCloseable {
       }
     }
     
-    if (method.startsWith("disk:")) {
+    String saPref = "simpleAccumulo:".toLowerCase();
+    if (method.toLowerCase().startsWith(saPref)) {
+      // simpleAccumulo:<namespace>
+      String namespace = method.substring(saPref.length());
+      Log.info("using simpleAccumulo, namespace=" + namespace);
+      SimpleAccumuloConfig saConf = new SimpleAccumuloConfig(
+          namespace, // e.g. twolfe-cag1
+          SimpleAccumuloConfig.DEFAULT_TABLE,
+          SimpleAccumuloConfig.DEFAULT_INSTANCE,
+          SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
+      return new SimpleAccumuloCommIter(saConf, p);
+    }
+    
+    if (method.toLowerCase().startsWith("disk:")) {
       // disk:/path/to/cag/root
       Log.info("using tgz files");
       File cagRoot = new File(method.substring("disk:".length()));
@@ -3741,6 +3757,45 @@ public class IndexCommunications implements AutoCloseable {
 //    }
 //  }
 
+  public static class SimpleAccumuloCommIter implements AutoCloseableIterator<Communication> {
+    private AutoCloseableIterator<Communication> iter;
+
+    public SimpleAccumuloCommIter(SimpleAccumuloConfig saConf, DataProfile p) {
+//    public SimpleAccumuloCommIter(ExperimentProperties config, DataProfile p) {
+//      SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);
+      Log.info("using " + saConf);
+
+      Optional<Pair<String, String>> b = p.commIdBoundaries();
+      Range r = null;
+      if (b.isPresent()) {
+        r = new Range(b.get().get1(), true, b.get().get2(), true);
+        Log.info("with range " + r);
+        Log.info("aka " + b.get());
+      }
+
+      SimpleAccumulo sa = new SimpleAccumulo(saConf);
+      try {
+        iter = sa.scan(r);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    @Override
+    public void close() throws Exception {
+      iter.close();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return iter.hasNext();
+    }
+
+    @Override
+    public Communication next() {
+      return iter.next();
+    }
+  }
 
   /**
    * Note:
@@ -3852,7 +3907,7 @@ public class IndexCommunications implements AutoCloseable {
 
       if (filter != null) {
         Log.info("filter: " + filter);
-        Optional<Pair<String, String>> b = filter.scionBoundaries();
+        Optional<Pair<String, String>> b = filter.commIdBoundaries();
         if (b.isPresent()) {
           Log.info("setting beg/end to: " + b.get());
           qrb.setBeginningRange(b.get().get1());

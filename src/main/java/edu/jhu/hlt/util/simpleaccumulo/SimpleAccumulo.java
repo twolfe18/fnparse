@@ -1,14 +1,25 @@
 package edu.jhu.hlt.util.simpleaccumulo;
 
+import java.util.Iterator;
+import java.util.Map.Entry;
+
 import org.apache.accumulo.core.client.Connector;
+import org.apache.accumulo.core.client.Scanner;
+import org.apache.accumulo.core.client.TableNotFoundException;
 import org.apache.accumulo.core.client.security.tokens.AuthenticationToken;
+import org.apache.accumulo.core.data.Key;
+import org.apache.accumulo.core.data.Range;
+import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.security.Authorizations;
 import org.apache.hadoop.io.Text;
 import org.apache.thrift.TDeserializer;
 import org.apache.thrift.TException;
 import org.apache.thrift.TSerializer;
 import org.apache.thrift.protocol.TCompactProtocol;
 
+import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
+import edu.jhu.hlt.utilt.AutoCloseableIterator;
 
 /**
  * Super-class for this module's server implementations.
@@ -52,6 +63,39 @@ public class SimpleAccumulo {
    */
   public void connect(String username, AuthenticationToken password) throws Exception {
     conn = config.connect(username, password);  
+  }
+  
+  // More of a demo than a useful method
+  public AutoCloseableIterator<Communication> scan() throws TableNotFoundException {
+    return scan(null);
+  }
+  public AutoCloseableIterator<Communication> scan(Range rows) throws TableNotFoundException {
+    Scanner s = conn.createScanner(config.table, new Authorizations());
+    if (rows != null)
+      s.setRange(rows);
+    return new AutoCloseableIterator<Communication>() {
+      Iterator<Entry<Key, Value>> entries = s.iterator();
+      @Override
+      public void close() throws Exception {
+        s.close();
+      }
+      @Override
+      public boolean hasNext() {
+        return entries.hasNext();
+      }
+      @Override
+      public Communication next() {
+        Communication c = new Communication();
+        Entry<Key, Value> e = entries.next();
+        byte[] bytes = e.getValue().get();
+        try {
+          commDeser.deserialize(c, bytes);
+        } catch (Exception ex) {
+          throw new RuntimeException(ex);
+        }
+        return c;
+      }
+    };
   }
 
   public ServiceInfo about() throws TException {
