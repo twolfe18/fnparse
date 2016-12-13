@@ -52,6 +52,8 @@ import edu.jhu.hlt.concrete.access.FetchCommunicationService;
 import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
 import edu.jhu.hlt.concrete.serialization.iterators.TarGzArchiveEntryCommunicationIterator;
+import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
+import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.Path2;
@@ -88,8 +90,6 @@ import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
-import edu.jhu.hlt.util.simpleaccumulo.SimpleAccumulo;
-import edu.jhu.hlt.util.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.map.IntObjectHashMap;
@@ -3759,11 +3759,9 @@ public class IndexCommunications implements AutoCloseable {
 //  }
 
   public static class SimpleAccumuloCommIter implements AutoCloseableIterator<Communication> {
-    private AutoCloseableIterator<Communication> iter;
+    private edu.jhu.hlt.concrete.simpleaccumulo.AutoCloseableIterator<Communication> iter;
 
     public SimpleAccumuloCommIter(SimpleAccumuloConfig saConf, DataProfile p) {
-//    public SimpleAccumuloCommIter(ExperimentProperties config, DataProfile p) {
-//      SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);
       Log.info("using " + saConf);
 
       Optional<Pair<String, String>> b = p.commIdBoundaries();

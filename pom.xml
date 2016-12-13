@@ -72,6 +72,12 @@
       <artifactId>lucene-core</artifactId>
       <version>6.2.0</version>
     </dependency>
+    <dependency>
+      <groupId>edu.jhu.hlt</groupId>
+      <artifactId>concrete-simpleaccumulo</artifactId>
+      <version>4.11.3-SNAPSHOT</version>
+    </dependency>
+
 
     <!-- https://mvnrepository.com/artifact/com.ximpleware/vtd-xml -->
     <dependency>
