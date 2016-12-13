@@ -61,10 +61,13 @@ public class StringIntUuidIndex implements Serializable, Iterable<StrIntUuidEntr
   public int getNumEntries() {
     return n_values;
   }
-  public int getNumEntries(String string) {
-    throw new RuntimeException("implement me");
+  public int getNumKeys(String string) {
+    IntObjectHashMap<?> m = str2int2uuids.get(string);
+    if (m == null)
+      return 0;
+    return m.size();
   }
-  public int getNumEntries(String string, int i) {
+  public int getNumValues(String string, int i) {
     IntObjectHashMap<EfficientUuidList> m = str2int2uuids.get(string);
     if (m == null)
       return 0;

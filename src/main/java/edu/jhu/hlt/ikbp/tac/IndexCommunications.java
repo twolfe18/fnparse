@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -104,7 +103,10 @@ import edu.jhu.util.SlowParseyWrapper;
 public class IndexCommunications implements AutoCloseable {
 
 //  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-11-18");
-  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE");
+//  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE"); // disk
+//  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE-scion");
+  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/apw_eng_2XXX-scion");
+
   public static final MultiTimer TIMER = new MultiTimer();
   public static final Counts<String> EC = new Counts<>();   // event counts
   
@@ -176,7 +178,7 @@ public class IndexCommunications implements AutoCloseable {
 
   
   /**
-   * Determines whether two {@link QResult}s are duplicates by looking at
+   * Determines whether two {@link SitSearchResult}s are duplicates by looking at
    * all pairs of entities and situations which appear in pairs of results.
    *
    * Proof of concept to show how to train/predict with the features
@@ -233,7 +235,7 @@ public class IndexCommunications implements AutoCloseable {
       this.idf = idf;
     }
     
-    public boolean coref(QResult a, QResult b) {
+    public boolean coref(SitSearchResult a, SitSearchResult b) {
       // TODO right now it computes features by UNIONING over all mentions
       // in either Tokenization, then computes score/prob of coreference.
       // PERHAPS I SHOULD compute the score for every pair and then combine in a principled manner.
@@ -247,6 +249,7 @@ public class IndexCommunications implements AutoCloseable {
         return false;
       EC.increment("parma/tfidfThreshMet");
       
+      TIMER.start("parmaVW/featEx");
       // Get features from a
       List<edu.jhu.hlt.ikbp.data.Id> aFeat = new ArrayList<>();
       edu.jhu.hlt.ikbp.data.Node aNode = convert(a);
@@ -274,6 +277,7 @@ public class IndexCommunications implements AutoCloseable {
       List<Id> pw = CreateParmaTrainingData.upconvert(pws);
       
       String x = CreateParmaTrainingData.buildLine("0", "none", aFeat, bFeat, pw);
+      TIMER.stop("parmaVW/featEx");
       double y = classifier.predict(x);
       if (verbose)
         System.out.println("[coref] y: " + y + " x: " + StringUtils.trim(x, 120));
@@ -282,9 +286,9 @@ public class IndexCommunications implements AutoCloseable {
     
     /**
      * Finds all {@link EntityMention}s and {@link SituationMention}s which
-     * appear in the {@link Tokenization} specified by the given {@link QResult}.
+     * appear in the {@link Tokenization} specified by the given {@link SitSearchResult}.
      */
-    private edu.jhu.hlt.ikbp.data.Node convert(QResult a) {
+    private edu.jhu.hlt.ikbp.data.Node convert(SitSearchResult a) {
       if (a.comm == null)
         throw new IllegalArgumentException();
       
@@ -332,10 +336,11 @@ public class IndexCommunications implements AutoCloseable {
       return n;
     }
     
-    private void setTopicForResults(List<QResult> results) {
+    private void setTopicForResults(List<SitSearchResult> results) {
+      TIMER.start("parmaVW/setTopic");
       Set<String> commIds = new HashSet<>();
       List<Communication> comms = new ArrayList<>();
-      for (QResult r : results) {
+      for (SitSearchResult r : results) {
         if (r.comm == null)
           throw new IllegalArgumentException();
         if (commIds.add(r.getCommunicationId()))
@@ -354,21 +359,22 @@ public class IndexCommunications implements AutoCloseable {
         ConcreteToolAliaser.DParse.copyIfNotPresent(c, sourceTool, destTool, allowFail);
       
       // FOR DEBUGGING
-      FileUtil.serialize(comms, new File("/tmp/dbg-topic-comms-list.jser"));
+//      FileUtil.serialize(comms, new File("/tmp/dbg-topic-comms-list.jser"));
       
       featEx.set(comms);
+      TIMER.stop("parmaVW/setTopic");
     }
     
     public static class QResultCluster {
-      public final QResult canonical;
-      private List<QResult> redundant;    // canonical doesn't appear in this list
+      public final SitSearchResult canonical;
+      private List<SitSearchResult> redundant;    // canonical doesn't appear in this list
       
-      public QResultCluster(QResult canonical) {
+      public QResultCluster(SitSearchResult canonical) {
         this.canonical = canonical;
         this.redundant = new ArrayList<>();
       }
       
-      public void addRedundant(QResult r) {
+      public void addRedundant(SitSearchResult r) {
         redundant.add(r);
       }
     }
@@ -377,9 +383,10 @@ public class IndexCommunications implements AutoCloseable {
      * Resulting list contains (canonicalResult, otherResultsInSameCluster) entries.
      * The canonicalResult will not appear in the second list.
      */
-    public List<QResultCluster> dedup(List<QResult> results) {
+    public List<QResultCluster> dedup(List<SitSearchResult> results) {
       if (results.isEmpty())
         return Collections.emptyList();
+      TIMER.start("parmaVW/dedup");
 
       // Tell the feature extractor about the relevant Communications
       setTopicForResults(results);
@@ -390,7 +397,7 @@ public class IndexCommunications implements AutoCloseable {
       int n = results.size();
       for (int i = 1; i < n; i++) {
         EC.increment("parma/mention");
-        QResult b = results.get(i);
+        SitSearchResult b = results.get(i);
         boolean dup  = false;
         for (int j = 0; j < d.size() && !dup; j++) {
           QResultCluster m = d.get(j);
@@ -417,6 +424,7 @@ public class IndexCommunications implements AutoCloseable {
       if (verbose)
         Log.info("filtered " + results.size() + " results down to " + d.size());
 
+      TIMER.stop("parmaVW/dedup");
       return d;
     }
 
@@ -436,16 +444,12 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
-  
-  /**
-   * Shows {@link QResult}s in a human readable form.
-   */
-  public static class ShowResult {
+  public static class MturkCorefHit {
     private KbpQuery query;
-    private QResult res;
+    private SitSearchResult res;
     private Communication comm;   // borrowed from res
     
-    public ShowResult(KbpQuery q, QResult r) {
+    public MturkCorefHit(KbpQuery q, SitSearchResult r) {
       this.query = q;
       this.res = r;
       this.comm = r.comm;
@@ -454,7 +458,7 @@ public class IndexCommunications implements AutoCloseable {
       if (findTok(res.tokUuid, comm) == null)
         throw new IllegalArgumentException("couldn't find tokUuid=" + res.tokUuid + " in " + comm.getId());
     }
-    
+
     public static String[] getMturkCorefHitHeader() {
       return new String[] {"hitId", "sourceDocId", "targetDocId", "sourceMentionHtml", "targetMentionHtml"};
     }
@@ -463,7 +467,7 @@ public class IndexCommunications implements AutoCloseable {
      * Outputs (hitId, sourceDocId, targetDocId, score, sourceHtml, targetHtml)
      * Currently score is a placeholder.
      */
-    public String[] emitMturkCorefHit(QResult r) {
+    public String[] emitMturkCorefHit(SitSearchResult r) {
       // How do I highlight an entity
       // Which ent to highlight!
 
@@ -498,7 +502,7 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     /** TODO figure out how not to do this. */
-    public static Span getEntitySpanFor(QResult r, Tokenization rt) {
+    public static Span getEntitySpanFor(SitSearchResult r, Tokenization rt) {
       
       List<Token> t = rt.getTokenList().getTokenList();
 //      List<TaggedToken> ner = rt.getTag
@@ -534,6 +538,26 @@ public class IndexCommunications implements AutoCloseable {
       return sb.toString();
     }
     
+  }
+  
+  /**
+   * Shows {@link SitSearchResult}s in a human readable form.
+   */
+  public static class ShowResult {
+    private KbpQuery query;
+    private SitSearchResult res;
+    private Communication comm;   // borrowed from res
+    
+    public ShowResult(KbpQuery q, SitSearchResult r) {
+      this.query = q;
+      this.res = r;
+      this.comm = r.comm;
+      if (comm == null)
+        throw new IllegalArgumentException();
+      if (findTok(res.tokUuid, comm) == null)
+        throw new IllegalArgumentException("couldn't find tokUuid=" + res.tokUuid + " in " + comm.getId());
+    }
+    
     public void show(List<TermVec> pkbDocs) {
       int termCharLimit = 120;
 
@@ -550,19 +574,31 @@ public class IndexCommunications implements AutoCloseable {
       showQResult(res, comm, termCharLimit);
     }
     
-    public static void showQResult(QResult res, Communication comm, int termCharLimit) {
+    public static void showQResult(SitSearchResult res, Communication comm, int termCharLimit) {
       // Result features
+      System.out.println("result featurs:");
       System.out.println(res.featsResult.show(termCharLimit));
       
+      // Query entity features
+      System.out.println("query entity features:");
+      if (res.entSearchResult == null) {
+        System.out.println("NONE");
+      } else {
+        for (String f : res.entSearchResult.queryEntityFeatures)
+          System.out.println("\t" + f);
+      }
+      System.out.println();
+      
       // score = weights * (featQuery outerProd featResult)... or something like that
+      System.out.println("score derivation:");
       for (Feat f : res.scoreDerivation)
-        System.out.println(f);
+        System.out.println("\t" + f);
       System.out.println();
       
       // Words/Tokenization
       Tokenization tokenization = findTok(res.tokUuid, comm);
       List<Token> toks = tokenization.getTokenList().getTokenList();
-      System.out.print("tokens:");
+      System.out.printf("result tokens (in comm=%s tok=%s)\n", comm.getId(), res.tokUuid);
       for (Token t : toks) {
 //        System.out.printf("%-24s%16s%32s%48s\n", query.name, t.getText(), comm.getId(), res.tokUuid);
         System.out.print(" " + t.getText());
@@ -570,21 +606,21 @@ public class IndexCommunications implements AutoCloseable {
       System.out.println();
       System.out.println();
     }
+  }
     
-    private static Tokenization findTok(String tokUuid, Communication comm) {
-      Tokenization t = null;
-      for (Section section : comm.getSectionList()) {
-        for (Sentence sentence : section.getSentenceList()) {
-          Tokenization tok = sentence.getTokenization();
-          String tid = tok.getUuid().getUuidString();
-          if (tid.equals(tokUuid)) {
-            assert t == null;
-            t = tok;
-          }
+  private static Tokenization findTok(String tokUuid, Communication comm) {
+    Tokenization t = null;
+    for (Section section : comm.getSectionList()) {
+      for (Sentence sentence : section.getSentenceList()) {
+        Tokenization tok = sentence.getTokenization();
+        String tid = tok.getUuid().getUuidString();
+        if (tid.equals(tokUuid)) {
+          assert t == null;
+          t = tok;
         }
       }
-      return t;
     }
+    return t;
   }
 
 
@@ -600,7 +636,7 @@ public class IndexCommunications implements AutoCloseable {
       
       // Where to output coref HITs
       File mturkCorefCsv = config.getFile("mturkCorefCsv");
-      String[] mturkCorefCsvCols = ShowResult.getMturkCorefHitHeader();
+      String[] mturkCorefCsvCols = MturkCorefHit.getMturkCorefHitHeader();
       CSVFormat csvFormat = CSVFormat.DEFAULT.withHeader(mturkCorefCsvCols);
       Log.info("writing to mturkCorefCsv=" + mturkCorefCsv
           + " with cols: " + Arrays.toString(mturkCorefCsvCols)
@@ -639,11 +675,12 @@ public class IndexCommunications implements AutoCloseable {
       
       // How many results per KBP query (before dedup).
       // Higher values are noticeably slower.
-      int limit = config.getInt("limit", 100);
+      int limit = config.getInt("limit", 20);
 
       for (KbpQuery q : queries) {
         EC.increment("kbpQuery");
-//        Log.info(q);
+        System.out.println(TIMER);
+        Log.info(q);
         
         q.sourceComm = commRet.get(q.docid);
         if (q.sourceComm == null) {
@@ -655,7 +692,7 @@ public class IndexCommunications implements AutoCloseable {
 
         try {
         boolean clearPkb = false;
-        List<QResult> results = k.search(q, limit, clearPkb);
+        List<SitSearchResult> results = k.search(q, limit, clearPkb);
         if (results.isEmpty())
           EC.increment("kbpQuery/failConvert");
         
@@ -668,15 +705,14 @@ public class IndexCommunications implements AutoCloseable {
         // Display results
         for (QResultCluster clust : deduped) {
           EC.increment("kbpQuery/result");
-          QResult r = clust.canonical;
+          SitSearchResult r = clust.canonical;
           ShowResult s = new ShowResult(q, r);
           s.show(k.search.state.pkbDocs);
 
-          String[] csv = s.emitMturkCorefHit(r);
+          MturkCorefHit mtc = new MturkCorefHit(q, r);
+          String[] csv = mtc.emitMturkCorefHit(r);
           System.out.println("mturk coref csv: " + Arrays.toString(csv));
           System.out.println("mturk targetMentionHtml: " + csv[csv.length-1]);
-//          mturkCsvW.write("foo");
-//          mturkCsvW.newLine();
           mturkCorefCsvW.printRecord(csv);
           mturkCorefCsvW.flush();
         }
@@ -728,13 +764,13 @@ public class IndexCommunications implements AutoCloseable {
     
     /**
      * Convert from a KBP (SF) query which only provides an entity and NER type
-     * to a {@link QResult} which can be put into the PKB for searching.
+     * to a {@link SitSearchResult} which can be put into the PKB for searching.
      * Among other things, this seed contains a document providence which is
      * useful for disambiguation.
      */
-    public List<QResult> buildQuerySeed(KbpQuery sfQuery) {
+    public List<SitSearchResult> buildQuerySeed(KbpQuery sfQuery) {
       SentFeats sf = new SentFeats();
-      QResult seed = new QResult(null, sf, Collections.emptyList());
+      SitSearchResult seed = new SitSearchResult(null, sf, Collections.emptyList());
       
       // Get the Communication used by the query
       assert seed.comm == null;
@@ -776,8 +812,8 @@ public class IndexCommunications implements AutoCloseable {
       return Arrays.asList(seed);
     }
     
-    public List<QResult> search(KbpQuery sfQuery, int limit, boolean clearPkb) {
-      List<QResult> seeds = buildQuerySeed(sfQuery);
+    public List<SitSearchResult> search(KbpQuery sfQuery, int limit, boolean clearPkb) {
+      List<SitSearchResult> seeds = buildQuerySeed(sfQuery);
       if (seeds.isEmpty()) {
         Log.warn("no seeds for " + sfQuery);
         EC.increment("kbpDirEntSearch/noSeeds");
@@ -785,17 +821,20 @@ public class IndexCommunications implements AutoCloseable {
       }
       // TODO Add all tokenizations in the query document
       // so that none of those results are returned
-      for (QResult s : seeds)
+      for (SitSearchResult s : seeds)
         search.addToPkb(s);
       
+      // TODO Remove headwords, switch to purely a key-word based retrieval model.
+      // NOTE that headwords must match the headwords extracted during the indexing phrase.
+      String[] headwords = new String[] {};
       String entityName = sfQuery.name;
       String entityType = TacKbp.tacNerTypesToStanfordNerType(sfQuery.entity_type);
-      List<QResult> res = search.query(entityName, entityType, limit);
+      List<SitSearchResult> res = search.query(entityName, entityType, headwords, limit);
       if (clearPkb)
         search.clearState();
       
       // Convert comm uuid => id (for retrieving Communications)
-      for (QResult qr : res) {
+      for (SitSearchResult qr : res) {
         String uuid = qr.featsResult.getCommunicationUuidString();
         assert uuid != null && !uuid.isEmpty();
         String id = commUuid2CommId.get1(uuid);
@@ -821,12 +860,13 @@ public class IndexCommunications implements AutoCloseable {
       entityMentionToolName = "foo";  // TODO
     }
     
-    public void rescore(List<QResult> results) {
+    public void rescore(List<SitSearchResult> results) {
+      TIMER.start("nlsi/rescore");
       
       // Turn this one when you're ready
       boolean passageMST = false;
       
-      for (QResult r : results) {
+      for (SitSearchResult r : results) {
         if (r.comm == null)
           throw new IllegalArgumentException();
         
@@ -887,6 +927,7 @@ public class IndexCommunications implements AutoCloseable {
           r.scoreDerivation.add(f);
         }
       }
+      TIMER.stop("nlsi/rescore");
     }
     
     private int head(EntityMention e) {
@@ -960,7 +1001,7 @@ public class IndexCommunications implements AutoCloseable {
       }
     }
     
-    public void fetch(List<QResult> needComms) {
+    public void fetch(List<SitSearchResult> needComms) {
       if (needComms.isEmpty()) {
         EC.increment("commRet/emptyFetch");
         return;
@@ -970,7 +1011,7 @@ public class IndexCommunications implements AutoCloseable {
       // TODO Break up request if there are too many?
       // TODO Have option to do one-at-a-time retrieval?
       FetchRequest fr = new FetchRequest();
-      for (QResult r : needComms) {
+      for (SitSearchResult r : needComms) {
         if (r.getCommunicationId() == null)
           throw new IllegalArgumentException("no comm id provided");
         if (r.comm != null) {
@@ -1207,7 +1248,7 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
-  public static class QResult {
+  public static class SitSearchResult {
     public final String tokUuid;
     public final SentFeats featsResult; // features on the result represented by this QResult (as opposed to the query)
     private List<Feat> scoreDerivation;
@@ -1217,8 +1258,11 @@ public class IndexCommunications implements AutoCloseable {
     
     // SentFeats/etc store a UUID rather than an id. scion/accumulo needs an id.
     private String commId;
+    
+    // Features from the EntityRetrieval module
+    Result entSearchResult;
 
-    public QResult(String tokUuid, SentFeats featsResult, List<Feat> score) {
+    public SitSearchResult(String tokUuid, SentFeats featsResult, List<Feat> score) {
       this.tokUuid = tokUuid;
       this.featsResult = featsResult;
       this.scoreDerivation = score;
@@ -1302,9 +1346,9 @@ public class IndexCommunications implements AutoCloseable {
       return sb.toString();
     }
     
-    public static final Comparator<QResult> BY_SCORE_DESC = new Comparator<QResult>() {
+    public static final Comparator<SitSearchResult> BY_SCORE_DESC = new Comparator<SitSearchResult>() {
       @Override
-      public int compare(QResult o1, QResult o2) {
+      public int compare(SitSearchResult o1, SitSearchResult o2) {
         double s1 = o1.getScore();
         double s2 = o2.getScore();
         if (s1 > s2)
@@ -1388,6 +1432,7 @@ public class IndexCommunications implements AutoCloseable {
     // Misc
     private MultiTimer tm;
 
+    boolean showResultsBeforeRescoring = false;
 
     /**
      * @param tokUuid2commUuid has lines like: <tokenizationUuid> <tab> <communicationUuid>
@@ -1395,7 +1440,6 @@ public class IndexCommunications implements AutoCloseable {
      *        during scoring, enables {@link NaturalLanguageSlotFill}.
      */
     public SituationSearch(File tokUuid2commUuid, TfIdfDocumentStore docVecs) throws IOException {
-//    public SituationSearch(File tokUuid2commUuid, TfIdfDocumentStore docVecs, CommunicationRetrieval commRet) throws IOException {
       TimeMarker tmk = new TimeMarker();
       this.tm = new MultiTimer();
       this.idf = docVecs.getIdfs();
@@ -1568,7 +1612,7 @@ public class IndexCommunications implements AutoCloseable {
       state.seedRel.add(h(s));
     }
     
-    public void addToPkb(QResult response) {
+    public void addToPkb(SitSearchResult response) {
 //      Log.info("response: " + response);
       
       SentFeats f = response.featsResult;
@@ -1597,24 +1641,39 @@ public class IndexCommunications implements AutoCloseable {
      * @param entityType e.g. "PERSON"
      * @param limit is how many items to return (max)
      */
-    public List<QResult> query(String entityName, String entityType, int limit) {
+    public List<SitSearchResult> query(String entityName, String entityType, String[] headwords, int limit) {
       tm.start("query");
       Log.info("entityName=" + entityName + " entityType=" + entityType);
       
       // TODO
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
-      String[] entToks = entityName.split(" ");
-      String[] headwords = new String[] {entToks[entToks.length - 1]};    // TODO
       // Lookup mentions for the query entity
       List<Result> toks = entity.findMentionsMatching(entityName, entityType, headwords, tokObs, tokObsLc);
+
+      // Prune the results which are almost certainly wrong
+      double minNameMatchScore = 0.01;
+      for (int i = 0; i < toks.size(); i++) {
+        if (toks.get(i).score < minNameMatchScore) {
+          Log.info("pruning the top=" + i + " results of=" + toks.size() + " minNameMatchScore=" + minNameMatchScore);
+          toks = toks.subList(0, i);
+          break;
+        }
+      }
       
       List<Result> ts = toks.size() > 20 ? toks.subList(0, 20) : toks;
       Log.info("entity results initial (" + toks.size() + "): " + ts);
       
       // Re-score mentions based on seeds/PKB
-      List<QResult> scored = new ArrayList<>();
-      for (Result t : toks) {
+      List<SitSearchResult> scored = new ArrayList<>();
+      for (int i = 0; i < toks.size(); i++) {
+        Result t = toks.get(i);
+        
+        if (showResultsBeforeRescoring) {
+          System.out.printf("[SS query] entityName=\"%s\" entityType=%s limit=%d resultIdx=%d resultTok=%s\n",
+              entityName, entityType, limit, i, t.tokenizationUuid);
+        }
+
         String tokUuid = t.tokenizationUuid;
         if (state.pkbTokUuid.contains(tokUuid)) {
           Log.info("skipping tok=" + t + " because it is already in the PKB");
@@ -1622,10 +1681,11 @@ public class IndexCommunications implements AutoCloseable {
         }
         
         double nameMatchScore = t.score;
-        QResult r = score(tokUuid, nameMatchScore);
+        SitSearchResult r = score(tokUuid, nameMatchScore);
+        r.entSearchResult = t;
         scored.add(r);
       }
-      Collections.sort(scored, QResult.BY_SCORE_DESC);
+      Collections.sort(scored, SitSearchResult.BY_SCORE_DESC);
       
       if (limit > 0 && scored.size() > limit)
         scored = scored.subList(0, limit);
@@ -1642,7 +1702,7 @@ public class IndexCommunications implements AutoCloseable {
     /**
      * Score a retrieved sentence/tokenization against seed and PKB items.
      */
-    private QResult score(String tokUuid, double nameMatchScore) {
+    private SitSearchResult score(String tokUuid, double nameMatchScore) {
       tm.start("score");
       boolean verbose = false;
       
@@ -1675,8 +1735,8 @@ public class IndexCommunications implements AutoCloseable {
           tfidfMax.weight = t;
       }
       double z = Math.sqrt(state.pkbDocs.size() + 1);
-      tfidfAvg.rescale("nPkbDoc=" + state.pkbDocs.size(), 1/z).rescale("weight", 100);
-      pkbDocMatch.rescale("nPkbDoc=" + state.pkbDocs.size(), 1/z).rescale("weight", 10);
+      tfidfAvg.rescale("nPkbDoc=" + state.pkbDocs.size(), 1/z).rescale("weight", 20);
+      pkbDocMatch.rescale("nPkbDoc=" + state.pkbDocs.size(), 1/z).rescale("weight", 2);
       
       // TODO Currently we measure a hard "this entity/deprel/situation/etc
       // showed up in the result and the PKB/seed", but we should generalize
@@ -1737,7 +1797,7 @@ public class IndexCommunications implements AutoCloseable {
           deprelPkb, deprelSeed,
           scorePkbSit, scoreSeedSit,
           entPkb, entSeed));
-      return new QResult(tokUuid, f, score);
+      return new SitSearchResult(tokUuid, f, score);
     }
     
     public static Pair<SituationSearch, TfIdfDocumentStore> build(ExperimentProperties config) throws IOException {
@@ -1765,7 +1825,7 @@ public class IndexCommunications implements AutoCloseable {
       ss.seed("conj>");
 
       int responseLim = 20;
-      List<QResult> results = ss.query("Barack_Obama", "PERSON", responseLim);
+      List<SitSearchResult> results = ss.query("Barack_Obama", "PERSON", new String[] {"Obama"}, responseLim);
       for (int i = 0; i < results.size(); i++) {
         System.out.println("res1[" + i + "]: " + results.get(i).show());
       }
@@ -1775,11 +1835,11 @@ public class IndexCommunications implements AutoCloseable {
       
       // Lets suppose that the user like the second response
       // Add it to the PKB and see if we can get the PKB/tfidf features to fire
-      QResult userLiked = results.get(1);
+      SitSearchResult userLiked = results.get(1);
       ss.addToPkb(userLiked);
       
       // Lets just re-do the same query
-      List<QResult> results2 = ss.query("Barack_Obama", "PERSON", responseLim);
+      List<SitSearchResult> results2 = ss.query("Barack_Obama", "PERSON", new String[] {"Obama"}, responseLim);
       for (int i = 0; i < results2.size(); i++) {
         System.out.println("res2[" + i + "]: " + results2.get(i).show());
       }
@@ -2532,7 +2592,6 @@ public class IndexCommunications implements AutoCloseable {
   }
 
   public static class Result {
-//    String entityMentionUuid;
     String tokenizationUuid;
     String communicationUuid;
     double score;
@@ -2543,7 +2602,10 @@ public class IndexCommunications implements AutoCloseable {
     String queryEntityName;
     String queryEntityType;
     
+    // Debugging
     Map<String, String> debugValues;
+    List<String> queryEntityFeatures;
+
     public String debug(String key) {
       return debugValues.get(key);
     }
@@ -2592,29 +2654,45 @@ public class IndexCommunications implements AutoCloseable {
   public static class NerFeatureInvertedIndex extends StringIntUuidIndex {
     private static final long serialVersionUID = -8638109659685198036L;
 
-    public static void main(ExperimentProperties config) throws IOException {
-      File input = config.getExistingFile("input", new File(HOME, "raw/nerFeatures.txt.gz"));
+    public static void main(ExperimentProperties config) throws Exception {
+//      File input = config.getExistingFile("input", new File(HOME, "raw/nerFeatures.txt.gz"));
+      File input = config.getExistingFile("input", new File(HOME, "ner_feats/nerFeats.PERSON.txt"));
 
 //      NerFeatureInvertedIndex n = new NerFeatureInvertedIndex(input);
       NerFeatureInvertedIndex n = new NerFeatureInvertedIndex(Arrays.asList(new Pair<>("PERSON", input)));
+      
+      n.showFeatureExtraction = false;
+      List<KbpQuery> qs = TacKbp.getKbp2013SfQueries();
+      for (KbpQuery q : qs) {
+        System.out.println(q);
+        String entityType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
+        List<Result> rs = n.findMentionsMatching(q.name, entityType, new String[] {});
+        int nn = Math.min(300, rs.size());
+        for (int i = 0; i < nn; i++)
+          System.out.println(i + "\t" + rs.get(i));
+        if (nn < rs.size())
+          System.out.println("and " + (rs.size() - nn) + " more");
+        System.out.println();
+      }
 
-      for (Result x : n.findMentionsMatching("Barack Obama", "PERSON", new String[] {"Obama"}))
-        System.out.println(x);
-
-      for (Result x : n.findMentionsMatching("OBAMA", "PERSON", new String[] {"OBAMA"}))
-        System.out.println(x);
-
-      for (Result x : n.findMentionsMatching("barry", "PERSON", new String[] {"barry"}))
-        System.out.println(x);
-
-      for (Result x : n.findMentionsMatching("UN", "ORGANIZATION", new String[] {"UN"}))
-        System.out.println(x);
-
-      for (Result x : n.findMentionsMatching("United Nations", "ORGANIZATION", new String[] {"Nations"}))
-        System.out.println(x);
+//      for (Result x : n.findMentionsMatching("Barack Obama", "PERSON", new String[] {"Obama"}))
+//        System.out.println(x);
+//
+//      for (Result x : n.findMentionsMatching("OBAMA", "PERSON", new String[] {"OBAMA"}))
+//        System.out.println(x);
+//
+//      for (Result x : n.findMentionsMatching("barry", "PERSON", new String[] {"barry"}))
+//        System.out.println(x);
+//
+//      for (Result x : n.findMentionsMatching("UN", "ORGANIZATION", new String[] {"UN"}))
+//        System.out.println(x);
+//
+//      for (Result x : n.findMentionsMatching("United Nations", "ORGANIZATION", new String[] {"Nations"}))
+//        System.out.println(x);
     }
     
-    public boolean verbose = false;
+    boolean verbose = true;
+    boolean showFeatureExtraction = true;
     
     public NerFeatureInvertedIndex(List<Pair<String, File>> featuresByNerType) throws IOException {
       super();
@@ -2647,14 +2725,20 @@ public class IndexCommunications implements AutoCloseable {
       // Find out which EntityMentions contain the query ngrams
       List<String> features = getEntityMentionFeatures(entityName, headwords, entityType, tokenObs, tokenObsLc);
       int n = features.size();
-      Counts<String> emNgramOverlap = new Counts<>();
+      Counts.Pseudo<String> emNgramOverlap = new Counts.Pseudo<>();
+      double D = getNumKeys(entityType);
       for (int i = 0; i < n; i++) {
-//        int term = HASH.hashString(features.get(i), UTF8).asInt();
         int term = ReversableHashWriter.onewayHash(features.get(i));
-        int weight = getEntityMentionFeatureWeight(features.get(i));
+//        int weight = getEntityMentionFeatureWeight(features.get(i));
         List<String> emsContainingTerm = get(entityType, term);
+//        double weight = 4d / (3 + emsContainingTerm.size());
+//        double weight = (1d/n) * Math.log(D / emsContainingTerm.size());
+        double weight = (1d/n) * Math.pow(D / emsContainingTerm.size(), 0.25d);
+        if (verbose) {
+          System.out.printf("[NerInvIdx ment.match] entityName=\"%s\" entityType=%s feature=%s featureTokObs=%d featureWeight=%.3f D=%d\n",
+              entityName, entityType, features.get(i), emsContainingTerm.size(), weight, (long)D);
+        }
         for (String em : emsContainingTerm) {
-//          emNgramOverlap.increment(em);
           emNgramOverlap.update(em, weight);
         }
       }
@@ -2667,8 +2751,23 @@ public class IndexCommunications implements AutoCloseable {
 //        r.entityMentionUuid = em;
         r.tokenizationUuid = em;
         r.communicationUuid = null;
-        r.score = emNgramOverlap.getCount(em);  // TODO length normalization, tf-idf weights
+        r.score = emNgramOverlap.getCount(em);
+        r.queryEntityFeatures = features;
         rr.add(r);
+      }
+      
+      // Sort results by score (decreasing)
+      Collections.sort(rr, Result.BY_SCORE_DESC);
+      
+      if (showFeatureExtraction) {
+        int nn = Math.min(300, rr.size());
+        for (int i = 0; i < nn; i++) {
+          System.out.printf("[NerInvIdx ment.match] entityName=\"%s\" entityType=%s headwords=%s resIdx=%d resTok=%s resScore=%.3f\n",
+              entityName, entityType, Arrays.toString(headwords), i, rr.get(i).tokenizationUuid, rr.get(i).score);
+        }
+        if (nn < rr.size())
+          System.out.println("and " + (rr.size() - nn) + " more");
+        System.out.println();
       }
 
       TIMER.stop("find/nerFeatures");
