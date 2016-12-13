@@ -74,6 +74,7 @@ public class SimpleAccumuloStore extends SimpleAccumulo implements StoreCommunic
     int port = config.getInt("port", 9090);
     Log.info("listening on port=" + port);
     Log.info("using numThreads=" + nt);
+    Log.info("using " + saConf);
     try (SimpleAccumuloStore serv = new SimpleAccumuloStore(saConf, nt)) {
       serv.connect(
           config.getString("accumulo.user"),

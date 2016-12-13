@@ -7,6 +7,7 @@ import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications;
+import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
@@ -28,7 +29,12 @@ public class SimpleAccumuloIngester {
     ExperimentProperties config = ExperimentProperties.init(args);
     TimeMarker tm = new TimeMarker();
     int stored = 0;
+    int storedPrev = 0;
+    double interval = 5;
+    Average rateAvgLocal = new Average.Exponential(0.9);
+//    Average rateAvgGlobal = new Average.Uniform();
     SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);    
+    Log.info("using " + saConf);
     int numThreads = config.getInt("numThreads", 1);
     try (SimpleAccumuloStore ingester = new SimpleAccumuloStore(saConf, numThreads);
         AutoCloseableIterator<Communication> comms = getCommunicationsToIngest(config)) {
@@ -39,8 +45,16 @@ public class SimpleAccumuloIngester {
         Communication c = comms.next();
         ingester.store(c);
         stored++;
-        if (tm.enoughTimePassed(5))
-          Log.info("stored=" + stored + " communications cur_row=" + c.getId());
+        if (tm.enoughTimePassed(interval)) {
+          double rate = (stored - storedPrev) / interval;
+          rateAvgLocal.add(rate);
+//          rateAvgGlobal.add(rate);
+          double rateAvgGlobal = stored / tm.secondsSinceFirstMark();
+          storedPrev = stored;
+          Log.info(String.format(
+              "stored=%d communications cur_row=%s\trateRecent=%.1f comm/sec rateAll=%.1f comm/sec",
+              stored, c.getId(), rateAvgLocal.getAverage(), rateAvgGlobal));
+        }
       }
     }
     Log.info("done, stored=" + stored);

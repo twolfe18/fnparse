@@ -104,6 +104,7 @@ public class SimpleAccumuloFetch extends SimpleAccumulo implements FetchCommunic
     int port = config.getInt("port", 9090);
     Log.info("listening on port=" + port);
     Log.info("using numThreads=" + nt);
+    Log.info("using " + saConf);
     try (SimpleAccumuloFetch serv = new SimpleAccumuloFetch(saConf, nt)) {
       serv.connect(
           config.getString("accumulo.user"),

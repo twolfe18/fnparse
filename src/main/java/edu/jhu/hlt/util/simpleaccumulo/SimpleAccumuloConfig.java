@@ -33,6 +33,12 @@ public class SimpleAccumuloConfig implements Serializable {
     this.instanceName = instanceName;
     this.zookeepers = zookeepers;
   }
+  
+  @Override
+  public String toString() {
+    return String.format("(SimpleAccumuloConfig namespace=%s table=%s instance=%s zookeepers=%s)",
+        namespace, table, instanceName, zookeepers);
+  }
 
   /**
    * @param username e.g. "reader"
