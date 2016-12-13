@@ -42,7 +42,7 @@ public class SimpleAccumuloStore extends SimpleAccumulo implements StoreCommunic
       BatchWriterConfig bwConfig = new BatchWriterConfig();
       bwConfig.setMaxWriteThreads(numThreads);
       try {
-        writer = conn.createBatchWriter(config.table, bwConfig);
+        writer = getConnector().createBatchWriter(config.table, bwConfig);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

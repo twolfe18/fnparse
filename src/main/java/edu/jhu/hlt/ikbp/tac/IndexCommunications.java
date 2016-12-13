@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.accumulo.core.data.Range;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -3774,7 +3775,12 @@ public class IndexCommunications implements AutoCloseable {
       }
 
       SimpleAccumulo sa = new SimpleAccumulo(saConf);
+      
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      String username = config.getString("scion.accumulo.user", "reader");
+      String password = config.getString("scion.accumulo.password", "an accumulo reader");
       try {
+        sa.connect(username, new PasswordToken(password));
         iter = sa.scan(r);
       } catch (Exception e) {
         throw new RuntimeException(e);

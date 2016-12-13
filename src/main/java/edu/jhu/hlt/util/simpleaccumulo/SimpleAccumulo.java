@@ -17,6 +17,8 @@ import org.apache.thrift.TException;
 import org.apache.thrift.TSerializer;
 import org.apache.thrift.protocol.TCompactProtocol;
 
+import com.esotericsoftware.minlog.Log;
+
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
@@ -40,7 +42,7 @@ public class SimpleAccumulo {
   protected SimpleAccumuloConfig config;
   
   // State
-  protected Connector conn;
+  private Connector conn;
   
   protected TSerializer commSer;
   protected TDeserializer commDeser;
@@ -62,7 +64,14 @@ public class SimpleAccumulo {
    * @param password e.g. new PasswordToken("an accumulo reader")
    */
   public void connect(String username, AuthenticationToken password) throws Exception {
+    Log.info("connecting to=" + config + " with username=" + username);
     conn = config.connect(username, password);  
+  }
+  
+  public Connector getConnector() {
+    if (conn == null)
+      throw new IllegalStateException("you must call connect first!");
+    return conn;
   }
   
   // More of a demo than a useful method
@@ -70,7 +79,7 @@ public class SimpleAccumulo {
     return scan(null);
   }
   public AutoCloseableIterator<Communication> scan(Range rows) throws TableNotFoundException {
-    Scanner s = conn.createScanner(config.table, new Authorizations());
+    Scanner s = getConnector().createScanner(config.table, new Authorizations());
     if (rows != null)
       s.setRange(rows);
     return new AutoCloseableIterator<Communication>() {

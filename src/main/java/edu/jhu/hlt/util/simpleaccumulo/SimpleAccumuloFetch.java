@@ -56,7 +56,7 @@ public class SimpleAccumuloFetch extends SimpleAccumulo implements FetchCommunic
     try {
       if (n == 1) {
         if (reader == null)
-          reader = conn.createScanner(config.table, auths);
+          reader = getConnector().createScanner(config.table, auths);
         reader.setRange(Range.exact(fr.getCommunicationIds().get(0)));
         Entry<Key, Value> e = reader.iterator().next();
         byte[] commBytes = e.getValue().get();
@@ -65,7 +65,7 @@ public class SimpleAccumuloFetch extends SimpleAccumulo implements FetchCommunic
         r.addToCommunications(c);
       } else {
         if (readerB == null)
-          readerB = conn.createBatchScanner(config.table, auths, numThreads);
+          readerB = getConnector().createBatchScanner(config.table, auths, numThreads);
         List<Range> ids = new ArrayList<>(n);
         for (String c : fr.getCommunicationIds())
           ids.add(Range.exact(c));
