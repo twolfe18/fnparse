@@ -108,8 +108,8 @@ public class IndexCommunications implements AutoCloseable {
 
 //  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/2016-11-18");
 //  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE"); // disk
-//  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE-scion");
-  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/apw_eng_2XXX-scion");
+  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE-scion");
+//  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/apw_eng_2XXX-scion");
 
   public static final MultiTimer TIMER = new MultiTimer();
   public static final Counts<String> EC = new Counts<>();   // event counts
@@ -647,7 +647,7 @@ public class IndexCommunications implements AutoCloseable {
           + " and format: " + csvFormat);
       
       // Go to test1b, start edu.jhu.hlt.ikbp.tac.ScionForwarding on port 34343
-      // Locally, run ssh -fNL 8089:test1:34343 test1b
+      // Locally, run ssh -fNL 8088:test1:34343 test1b
       int scionFwdLocalPort = config.getInt("scionFwdLocalPort", 8088);
       CommunicationRetrieval commRet;
       try {
@@ -1417,6 +1417,14 @@ public class IndexCommunications implements AutoCloseable {
     // PKB, seeds, etc.
     private transient State state;
     
+    
+    // Should I just be constructing tok2feats on the fly?
+    // As in I find some tokenizations to score using the inverted indices,
+    // fetch the Communication, then re-extract features?
+    // There is a distinction between feature EXTRACTION (parma) and building features from inverted indices (used in SituationSearch.score).
+    // Right now I pay the cost of feature extraction 
+    
+    
     // Contains ~200M entries? ~20GB?
     private Map<String, SentFeats> tok2feats;  // keys are Tokenization UUID
     
@@ -1448,12 +1456,6 @@ public class IndexCommunications implements AutoCloseable {
       this.tm = new MultiTimer();
       this.idf = docVecs.getIdfs();
       
-//      if (commRet != null) {
-//        this.commRet = commRet;
-//        ExperimentProperties config = ExperimentProperties.getInstance();
-//        this.nlsf = NaturalLanguageSlotFill.build(config);
-//      }
-      
       INVERSE_HASH = new IntObjectHashMap<>();
       readInverseHash(new File(HOME, "raw/termHash.sortu.txt.gz"), INVERSE_HASH);
       readInverseHash(new File(HOME, "deprel/hashedArgs.approx.txt.gz"), INVERSE_HASH);
@@ -1478,17 +1480,6 @@ public class IndexCommunications implements AutoCloseable {
       // Deprels
       tm.start("load/feats/deprel");
       tok2feats = new HashMap<>();
-//      for (StrIntUuidEntry x : deprel) {
-//        SentFeats f = tok2feats.get(x.uuid);
-//        if (f == null) {
-//          f = new SentFeats();
-//          tok2feats.put(x.uuid, f);
-//          ec.increment("tokenization");
-//        }
-//        int hs = ReversableHashWriter.onewayHash(x.string);
-//        f.addDeprel(hs, x.integer);
-//        ec.increment("feat/deprel");
-//      }
       File f = new File(HOME, "deprel/deprels.txt.gz");
       Log.info("loading deprel features from " + f.getPath());
       int read = 0;
@@ -1658,6 +1649,7 @@ public class IndexCommunications implements AutoCloseable {
       // Prune the results which are almost certainly wrong
       double minNameMatchScore = 0.01;
       for (int i = 0; i < toks.size(); i++) {
+        assert i == 0 || toks.get(i-1).score <= toks.get(i).score : "should be non-increasing";
         if (toks.get(i).score < minNameMatchScore) {
           Log.info("pruning the top=" + i + " results of=" + toks.size() + " minNameMatchScore=" + minNameMatchScore);
           toks = toks.subList(0, i);
@@ -2718,7 +2710,7 @@ public class IndexCommunications implements AutoCloseable {
     }
 
     /**
-     * Returns a list of (EntityMention UUID, score) pairs.
+     * Returns a list of (Tokenization UUID, score) pairs.
      */
     public List<Result> findMentionsMatching(String entityName, String entityType, String[] headwords,
         TokenObservationCounts tokenObs, TokenObservationCounts tokenObsLc) {
@@ -2752,7 +2744,6 @@ public class IndexCommunications implements AutoCloseable {
         Result r = new Result();
         r.queryEntityName = entityName;
         r.queryEntityType = entityType;
-//        r.entityMentionUuid = em;
         r.tokenizationUuid = em;
         r.communicationUuid = null;
         r.score = emNgramOverlap.getCount(em);
@@ -3621,6 +3612,14 @@ public class IndexCommunications implements AutoCloseable {
       }
     }
     return t;
+  }
+  
+  static Counts<String> terms2(Communication c) {
+    List<String> cc = terms(c);
+    Counts<String> cn = new Counts<>();
+    for (String w : cc)
+      cn.increment(w);
+    return cn;
   }
 
   @Override
