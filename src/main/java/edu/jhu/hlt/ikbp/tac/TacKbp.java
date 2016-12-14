@@ -319,7 +319,10 @@ public class TacKbp {
   
 
   public static List<KbpQuery> getKbp2013SfQueries() throws Exception {
-    File qxml = new File("/home/travis/code/fnparse/data/tackbp/TAC_2014_KBP_Slot_Filler_Validation_Evaluation_Queries_V1.1/"
+    //File qxml = new File("/home/travis/code/fnparse/data/tackbp/TAC_2014_KBP_Slot_Filler_Validation_Evaluation_Queries_V1.1/"
+    //    + "data/LDC2014R38_TAC_2014_KBP_English_Regular_Slot_Filling_Evaluation_Queries/"
+    //    + "data/tac_2014_kbp_english_regular_slot_filling_evaluation_queries.xml");
+    File qxml = new File("data/tackbp/TAC_2014_KBP_Slot_Filler_Validation_Evaluation_Queries_V1.1/"
         + "data/LDC2014R38_TAC_2014_KBP_English_Regular_Slot_Filling_Evaluation_Queries/"
         + "data/tac_2014_kbp_english_regular_slot_filling_evaluation_queries.xml");
     
