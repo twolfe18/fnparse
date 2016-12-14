@@ -774,18 +774,45 @@ public class AccumuloIndex {
 
   public static class ComputeFeatureFrequencies {
     public static void main(ExperimentProperties config) throws Exception {
+      File out = config.getFile("output");
+      Log.info("writing <feature> <tab> <tokFrequency> to " + out.getPath());
+      TimeMarker tm = new TimeMarker();
+      double interval = config.getDouble("interval", 10);
       Instance inst = new ZooKeeperInstance(
           config.getString("instanceName"),
           config.getString("zookeepers"));
       Connector conn = inst.getConnector(
           config.getString("username"),
           new PasswordToken(config.getString("password")));
-      Scanner s = conn.createScanner(T_f2t.toString(), new Authorizations());
-      for (Entry<Key, Value> e : s) {
-        // TODO keep a running count of how many entries you've seen for this row (either feature or word)
-        throw new RuntimeException("implement me");
+      Counts<String> ec = new Counts<>();
+      try (Scanner s = conn.createScanner(T_f2t.toString(), new Authorizations());
+          BufferedWriter w = FileUtil.getWriter(out)) {
+        Text prevRow = null;
+        int prevCount = 0;
+        for (Entry<Key, Value> e : s) {
+          ec.increment("entries");
+          Text row = e.getKey().getRow();
+          if (!row.equals(prevRow)) {
+            ec.increment("rows");
+            if (prevCount > 10) ec.increment("bigrow10");
+            if (prevCount > 100) ec.increment("bigrow100");
+            if (prevCount > 1000) ec.increment("bigrow1000");
+            if (prevCount > 10000) ec.increment("bigrow10000");
+
+            if (row != null)
+              w.write(row.toString() + "\t" + prevCount);
+            prevRow = row;
+            prevCount = 0;
+          }
+          prevCount++;
+          
+          if (tm.enoughTimePassed(interval))
+            Log.info(ec + "\t" + Describe.memoryUsage());
+        }
+        if (prevRow != null)
+          w.write(prevRow.toString() + "\t" + prevCount);
       }
-      Log.info("done");
+      Log.info("done\t" + ec);
     }
   }
 
