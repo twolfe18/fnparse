@@ -839,6 +839,9 @@ public class IndexCommunications implements AutoCloseable {
       
       // Convert comm uuid => id (for retrieving Communications)
       for (SitSearchResult qr : res) {
+        // TODO Can't I just get this from the Communication rather than commUuid2CommId?
+        assert false;
+
         String uuid = qr.featsResult.getCommunicationUuidString();
         assert uuid != null && !uuid.isEmpty();
         String id = commUuid2CommId.get1(uuid);
@@ -3264,7 +3267,7 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
-  private static String headword(TokenRefSequence trs, Map<String, Tokenization> tokMap, boolean takeNnCompounds, boolean allowFailures) {
+  static String headword(TokenRefSequence trs, Map<String, Tokenization> tokMap, boolean takeNnCompounds, boolean allowFailures) {
     Tokenization t = tokMap.get(trs.getTokenizationId().getUuidString());
     if (t == null) {
       if (!allowFailures)
