@@ -5,6 +5,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -55,6 +56,7 @@ import edu.jhu.hlt.fnparse.rl.full.GroupBy;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.CommunicationRetrieval;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.ShowResult;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SituationSearch;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
@@ -69,6 +71,7 @@ import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.HPair;
 import edu.jhu.util.TokenizationIter;
+
 
 /**
  * Mimics the functionality in {@link IndexCommunications}, but while being backed by accumulo.
@@ -118,7 +121,10 @@ public class AccumuloIndex {
   }
 
   public static int decodeCount(byte[] count) {
-    throw new RuntimeException("implement me");
+    assert count.length == 1;
+    int c = (int) count[0];
+    assert c > 0;
+    return c;
   }
 
   
@@ -356,7 +362,7 @@ public class AccumuloIndex {
       double nb = b.getTotalCount();
       double dot = 0;
       for (Entry<String, Integer> word : a) {
-        double sa = tfa_idf.get(word.getKey());
+        double sa = tfa_idf.getOrDefault(word.getKey(), 0d);
         double idf = Math.sqrt(idf(word.getKey()));
         double tfb = word.getValue() / nb;
         double sb = tfb * idf;
@@ -461,13 +467,18 @@ public class AccumuloIndex {
     }
     
     public Communication get(String commId) {
+      TIMER.start("accCommRet");
       FetchRequest fr = new FetchRequest();
       fr.addToCommunicationIds(commId);;
       try {
         FetchResult r = fetch.fetch(fr);
+        TIMER.stop("accCommRet");
+        if (!r.isSetCommunications() || r.getCommunicationsSize() == 0)
+          return null;
         return r.getCommunications().get(0);
       } catch (Exception e) {
         e.printStackTrace();
+        TIMER.stop("accCommRet");
         return null;
       }
     }
@@ -480,15 +491,22 @@ public class AccumuloIndex {
    */
   public static class Search {
     private String username;
-    private PasswordToken password;
+    private AuthenticationToken password;
     private Authorizations auths;
     private int numQueryThreads;
-    
-//    private SimpleAccumuloConfig conf_f2t;
     private Connector conn;
 
-//    public List<SitSearchResult> search(List<String> triageFeats, TermVec docContext) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+    public Search(String instanceName, String zks, String username, AuthenticationToken password) throws Exception {
+      this.username = username;
+      this.password = password;
+      this.auths = new Authorizations();
+      this.numQueryThreads = 1;
+      Instance inst = new ZooKeeperInstance(instanceName, zks);
+      this.conn = inst.getConnector(username, password);
+    }
+
     public List<SitSearchResult> search(List<String> triageFeats, StringTermVec docContext, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      Log.info("starting, triageFeats=" + triageFeats);
       /*
        * 1) use a batch scan over f2t to find plausible t's
        * 2) use a batch scan over t2f with t's from prev step, figure out how to do early stopping on this
@@ -501,21 +519,25 @@ public class AccumuloIndex {
        */
       
       // Make a batch scanner to retrieve all tokenization which contain any triageFeats
-      BatchScanner bs_f2t = conn.createBatchScanner(T_f2t.toString(), auths, numQueryThreads);
-      List<Range> triageFeatRows = convert(triageFeats);
-      bs_f2t.setRanges(triageFeatRows);
-      // Results will be in sorted order, keep running tally of score(tokenization)
+      TIMER.start("f2t/triage");
       Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
-      GroupBy<Entry<Key, Value>, HPair<String, String>> gb = new GroupBy<>(bs_f2t.iterator(), Search::kf);
-      while (gb.hasNext()) {
-        // This is a list of all Tokenizations which contain a given feature (key)
-        List<Entry<Key, Value>> perFeat = gb.next();
-        double p = 2d / (1 + perFeat.size());
-        for (Entry<Key, Value> e : perFeat) {
-          String tokUuid = e.getKey().getColumnQualifier().toString();
-          tokUuid2score.update(tokUuid, p);
+      try (BatchScanner bs_f2t = conn.createBatchScanner(T_f2t.toString(), auths, numQueryThreads)) {
+        List<Range> triageFeatRows = convert(triageFeats);
+        bs_f2t.setRanges(triageFeatRows);
+        // Results will be in sorted order, keep running tally of score(tokenization)
+        GroupBy<Entry<Key, Value>, HPair<String, String>> gb = new GroupBy<>(bs_f2t.iterator(), Search::kf);
+        while (gb.hasNext()) {
+          // This is a list of all Tokenizations which contain a given feature (key)
+          List<Entry<Key, Value>> perFeat = gb.next();
+          double p = 2d / (1 + perFeat.size());
+          for (Entry<Key, Value> e : perFeat) {
+            String tokUuid = e.getKey().getColumnQualifier().toString();
+            tokUuid2score.update(tokUuid, p);
+          }
         }
+        Log.info("found " + tokUuid2score.numNonZero() + " tokUuids to retrieve");
       }
+      TIMER.stop("f2t/triage");
 
       // Now we have scores for every tokenization
       // Need to add in the document tf-idf score
@@ -528,74 +550,107 @@ public class AccumuloIndex {
       
       // 3) Go through each tok and re-score
       List<SitSearchResult> res = new ArrayList<>();
-      for (Entry<String, Double> r : tokUuid2score.entrySet()) {
-        String tokUuid = r.getKey();
+      //for (Entry<String, Double> r : tokUuid2score.entrySet()) {
+      //  String tokUuid = r.getKey();
+      for (Entry<String, String> tc : tokUuid2commUuid.entrySet()) {
+        String tokUuid = tc.getKey();
+        String commUuid = tc.getValue();
         List<Feat> score = new ArrayList<>();
         SitSearchResult ss = new SitSearchResult(tokUuid, null, score);
+        // TODO Switch commUuid with commId
         
-        String commUuid = tokUuid2commUuid.get(tokUuid);
+        //String commUuid = tokUuid2commUuid.get(tokUuid);
         StringTermVec commVec = commUuid2terms.get(commUuid);
-//        IntDoubleHashMap idf = null;  // TODO
-//        double tfidf = TermVec.tfidfCosineSim(docContext, commVec, idf);
-        double tfidf = df.tfIdfCosineSim(docContext, commVec);
-        
-        score.add(new Feat("entMatch").setWeight(r.getValue()));
+        double tfidf = -10;
+        if (commVec == null) {
+          Log.info("WARNING: could not lookup words for commUuid=" + commUuid);
+        } else {
+          tfidf = df.tfIdfCosineSim(docContext, commVec);
+        }
         score.add(new Feat("tfidf").setWeight(tfidf));
+        
+        //score.add(new Feat("entMatch").setWeight(r.getValue()));
+        double entMatchScore = tokUuid2score.getCount(tokUuid);
+        score.add(new Feat("entMatch").setWeight(entMatchScore));
         
         res.add(ss);
       }
+
+      // 4) Sort results by final score
+      Collections.sort(res, SitSearchResult.BY_SCORE_DESC);
       
       return res;
     }
     
     /** returned map is tokUuid -> commUuid */
     private Map<String, String> getCommIdsFor(Counts.Pseudo<String> tokUuid2score) throws TableNotFoundException {
-      List<Range> rows = new ArrayList<>();
-      for (Entry<String, Double> x : tokUuid2score.entrySet())
-        rows.add(Range.exact(x.getKey()));
+      TIMER.start("t2c/getCommIdsFor");
+
       // TODO Consider filtering based on score?
-      int numQueryThreads = 4;
-      BatchScanner bs = conn.createBatchScanner(T_t2c.toString(), auths, numQueryThreads);
-      bs.setRanges(rows);
-      Map<String, String> t2c = new HashMap<>();
-      for (Entry<Key, Value> e : bs) {
-        String tokUuid = e.getKey().getRow().toString();
-        String commUuid = e.getValue().toString();
-        Object old = t2c.put(tokUuid, commUuid);
-        assert old == null;
+      int maxToks = 300;
+      List<String> bestToks = tokUuid2score.getKeysSortedByCount(true);
+      if (bestToks.size() > maxToks) {
+        Log.info("only taking the " + maxToks + " highest scoring of " + bestToks.size() + " tokenizations");
+        bestToks = bestToks.subList(0, maxToks);
       }
+
+      List<Range> rows = new ArrayList<>();
+      //for (Entry<String, Double> x : tokUuid2score.entrySet())
+      //  rows.add(Range.exact(x.getKey()));
+      for (String s : bestToks)
+        rows.add(Range.exact(s));
+
+      int numQueryThreads = 4;
+      Map<String, String> t2c = new HashMap<>();
+      try (BatchScanner bs = conn.createBatchScanner(T_t2c.toString(), auths, numQueryThreads)) {
+        bs.setRanges(rows);
+        for (Entry<Key, Value> e : bs) {
+          String tokUuid = e.getKey().getRow().toString();
+          String commUuid = e.getValue().toString();
+          Object old = t2c.put(tokUuid, commUuid);
+          assert old == null;
+        }
+      }
+      TIMER.stop("t2c/getCommIdsFor");
       return t2c;
     }
     
     /** keys of returned map are comm uuids */
     private Map<String, StringTermVec> getWordsForComms(Iterable<String> commUuidsNonUniq) throws TableNotFoundException {
+      TIMER.start("c2w/getWordsForComms");
       // Collect the ids of all the comm keys which need to be retrieved in c2w
+      int nt = 0;
       List<Range> rows = new ArrayList<>();
       Set<String> uniq = new HashSet<>();
-      for (String commUuid : commUuidsNonUniq)
+      for (String commUuid : commUuidsNonUniq) {
+        nt++;
         if (uniq.add(commUuid))
           rows.add(Range.exact(commUuid));
-      int numQueryThreads = 4;
-      BatchScanner bs = conn.createBatchScanner(T_c2w.toString(), auths, numQueryThreads);
-      bs.setRanges(rows);
-      Map<String, StringTermVec> c2tv = new HashMap<>();
-      // Group by commUuid (row in c2w)
-      Function<Entry<Key, Value>, String> keyFunction = e -> e.getKey().getRow().toString();
-      GroupBy<Entry<Key, Value>, String> gb = new GroupBy<>(bs.iterator(), keyFunction);
-      while (gb.hasNext()) {
-        List<Entry<Key, Value>> wordsForComm = gb.next();
-        String commUuid = wordsForComm.get(0).getKey().getRow().toString();
-        int n = wordsForComm.size();
-        StringTermVec tv = new StringTermVec();
-        for (int i = 0; i < n; i++) {
-          Entry<Key, Value> e = wordsForComm.get(i);
-          String word = e.getKey().getColumnQualifier().toString();
-          int count = decodeCount(e.getValue().get());
-          tv.add(word, count);
-        }
-        Object old = c2tv.put(commUuid, tv);
-        assert old == null;
       }
+      Log.info("found " + rows.size() + " commUuids containing all " + nt + " tokUuids");
+      int numQueryThreads = 4;
+      Map<String, StringTermVec> c2tv = new HashMap<>();
+      try (BatchScanner bs = conn.createBatchScanner(T_c2w.toString(), auths, numQueryThreads)) {
+        bs.setRanges(rows);
+        // Group by commUuid (row in c2w)
+        Function<Entry<Key, Value>, String> keyFunction = e -> e.getKey().getRow().toString();
+        GroupBy<Entry<Key, Value>, String> gb = new GroupBy<>(bs.iterator(), keyFunction);
+        while (gb.hasNext()) {
+          List<Entry<Key, Value>> wordsForComm = gb.next();
+          String commUuid = wordsForComm.get(0).getKey().getRow().toString();
+          int n = wordsForComm.size();
+          StringTermVec tv = new StringTermVec();
+          for (int i = 0; i < n; i++) {
+            Entry<Key, Value> e = wordsForComm.get(i);
+            String word = e.getKey().getColumnQualifier().toString();
+            int count = decodeCount(e.getValue().get());
+            tv.add(word, count);
+          }
+          Object old = c2tv.put(commUuid, tv);
+          assert old == null;
+        }
+      }
+      TIMER.stop("c2w/getWordsForComms");
       return c2tv;
     }
     
@@ -659,7 +714,11 @@ public class AccumuloIndex {
         new TacQueryEntityMentionResolver("tacQuery");
     
     AccumuloCommRetrieval commRet = new AccumuloCommRetrieval(config);
-    Search search = new Search();
+    Search search = new Search(
+      config.getString("instanceName"),
+      config.getString("zookeepers"),
+      config.getString("username"),
+      new PasswordToken(config.getString("password")));
 //    TfIdf df = new TfIdf(config.getExistingFile("wordDocFreq"));
     ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
 
@@ -700,9 +759,17 @@ public class AccumuloIndex {
       
       // 3) Search and show results
       List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
+      TIMER.start("showResults");
       for (SitSearchResult r : res) {
-        System.out.println(r);
+        if (r.getCommunication() == null) {
+          System.out.println("WARNING: start setting SitSearchResult's comm!");
+          System.out.println(r);
+        } else {
+          ShowResult sr = new ShowResult(q, r);
+          sr.show(Collections.emptyList());
+        }
       }
+      TIMER.stop("showResults");
     }
   }
   
