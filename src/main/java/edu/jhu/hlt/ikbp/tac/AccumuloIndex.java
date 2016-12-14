@@ -543,27 +543,27 @@ public class AccumuloIndex {
       // Need to add in the document tf-idf score
       
       // 1) Make a batch scanner to retrieve all the commUuids from t2c
-      Map<String, String> tokUuid2commUuid = getCommIdsFor(tokUuid2score);
+      Map<String, String> tokUuid2commId = getCommIdsFor(tokUuid2score);
       
       // 2) Make a batch scanner to retrieve the words from the most promising comms, look in c2w
-      Map<String, StringTermVec> commUuid2terms = getWordsForComms(tokUuid2commUuid.values());
+      Map<String, StringTermVec> commId2terms = getWordsForComms(tokUuid2commId.values());
       
       // 3) Go through each tok and re-score
       List<SitSearchResult> res = new ArrayList<>();
       //for (Entry<String, Double> r : tokUuid2score.entrySet()) {
       //  String tokUuid = r.getKey();
-      for (Entry<String, String> tc : tokUuid2commUuid.entrySet()) {
+      for (Entry<String, String> tc : tokUuid2commId.entrySet()) {
         String tokUuid = tc.getKey();
-        String commUuid = tc.getValue();
+        String commId = tc.getValue();
         List<Feat> score = new ArrayList<>();
         SitSearchResult ss = new SitSearchResult(tokUuid, null, score);
-        // TODO Switch commUuid with commId
+        ss.setCommunicationId(commId);
         
         //String commUuid = tokUuid2commUuid.get(tokUuid);
-        StringTermVec commVec = commUuid2terms.get(commUuid);
+        StringTermVec commVec = commId2terms.get(commId);
         double tfidf = -10;
         if (commVec == null) {
-          Log.info("WARNING: could not lookup words for commUuid=" + commUuid);
+          Log.info("WARNING: could not lookup words for commId=" + commId);
         } else {
           tfidf = df.tfIdfCosineSim(docContext, commVec);
         }
@@ -582,7 +582,7 @@ public class AccumuloIndex {
       return res;
     }
     
-    /** returned map is tokUuid -> commUuid */
+    /** returned map is tokUuid -> commId */
     private Map<String, String> getCommIdsFor(Counts.Pseudo<String> tokUuid2score) throws TableNotFoundException {
       TIMER.start("t2c/getCommIdsFor");
 
@@ -595,8 +595,6 @@ public class AccumuloIndex {
       }
 
       List<Range> rows = new ArrayList<>();
-      //for (Entry<String, Double> x : tokUuid2score.entrySet())
-      //  rows.add(Range.exact(x.getKey()));
       for (String s : bestToks)
         rows.add(Range.exact(s));
 
@@ -606,8 +604,8 @@ public class AccumuloIndex {
         bs.setRanges(rows);
         for (Entry<Key, Value> e : bs) {
           String tokUuid = e.getKey().getRow().toString();
-          String commUuid = e.getValue().toString();
-          Object old = t2c.put(tokUuid, commUuid);
+          String commId = e.getValue().toString();
+          Object old = t2c.put(tokUuid, commId);
           assert old == null;
         }
       }
@@ -615,17 +613,17 @@ public class AccumuloIndex {
       return t2c;
     }
     
-    /** keys of returned map are comm uuids */
-    private Map<String, StringTermVec> getWordsForComms(Iterable<String> commUuidsNonUniq) throws TableNotFoundException {
+    /** keys of returned map are comm ids */
+    private Map<String, StringTermVec> getWordsForComms(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
       TIMER.start("c2w/getWordsForComms");
       // Collect the ids of all the comm keys which need to be retrieved in c2w
       int nt = 0;
       List<Range> rows = new ArrayList<>();
       Set<String> uniq = new HashSet<>();
-      for (String commUuid : commUuidsNonUniq) {
+      for (String commId : commIdsNonUniq) {
         nt++;
-        if (uniq.add(commUuid))
-          rows.add(Range.exact(commUuid));
+        if (uniq.add(commId))
+          rows.add(Range.exact(commId));
       }
       Log.info("found " + rows.size() + " commUuids containing all " + nt + " tokUuids");
       int numQueryThreads = 4;
@@ -637,7 +635,7 @@ public class AccumuloIndex {
         GroupBy<Entry<Key, Value>, String> gb = new GroupBy<>(bs.iterator(), keyFunction);
         while (gb.hasNext()) {
           List<Entry<Key, Value>> wordsForComm = gb.next();
-          String commUuid = wordsForComm.get(0).getKey().getRow().toString();
+          String commId = wordsForComm.get(0).getKey().getRow().toString();
           int n = wordsForComm.size();
           StringTermVec tv = new StringTermVec();
           for (int i = 0; i < n; i++) {
@@ -646,7 +644,7 @@ public class AccumuloIndex {
             int count = decodeCount(e.getValue().get());
             tv.add(word, count);
           }
-          Object old = c2tv.put(commUuid, tv);
+          Object old = c2tv.put(commId, tv);
           assert old == null;
         }
       }
