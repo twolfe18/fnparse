@@ -78,8 +78,8 @@ import edu.jhu.util.TokenizationIter;
  * ----------------------------------------------------------------------------------
  * f2t              feat          featType          tokUuid           tf(feat,tok)*idf(feat)        # find ways to filter this table? this was what was unsuccessful in scripts/sem-diff/pruning/prune_int_uuid_index_by_count.py
  * t2f              tokUuid       featType          feat              tf(feat,tok)*idf(feat)        # for re-scoring after triage
- * t2c              tokUuid       NA                NA                commUuid
- * c2w              commUuid      NA                word              tf(word,doc)*idf(word)
+ * t2c              tokUuid       NA                NA                commId
+ * c2w              commId        NA                word              tf(word,doc)*idf(word)
  * 
  * w2df             word          NA                NA                df(word)    # use org.apache.accumulo.core.iterators.user.SummingCombiner
  *
@@ -706,6 +706,24 @@ public class AccumuloIndex {
     }
   }
   
+
+  public static class ComputeFeatureFrequencies {
+    public static void main(ExperimentProperties config) throws Exception {
+      Instance inst = new ZooKeeperInstance(
+          config.getString("instanceName"),
+          config.getString("zookeepers"));
+      Connector conn = inst.getConnector(
+          config.getString("username"),
+          new PasswordToken(config.getString("password")));
+      Scanner s = conn.createScanner(T_f2t.toString(), new Authorizations());
+      for (Entry<Key, Value> e : s) {
+        // TODO keep a running count of how many entries you've seen for this row (either feature or word)
+        throw new RuntimeException("implement me");
+      }
+      Log.info("done");
+    }
+  }
+
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
