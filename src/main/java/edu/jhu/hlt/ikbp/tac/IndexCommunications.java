@@ -567,6 +567,9 @@ public class IndexCommunications implements AutoCloseable {
 
       System.out.println("####################################################################################################");
       System.out.println(query + "\tres.tokUuid=" + res.tokUuid + " in " + comm.getId());
+      if (res.getCommunicationId().equals(query.docid))
+        System.out.println("FOUND QUERY DOCUMENT, this result will be filtered out later");
+
       System.out.println();
       
       // Query features
@@ -580,8 +583,12 @@ public class IndexCommunications implements AutoCloseable {
     
     public static void showQResult(SitSearchResult res, Communication comm, int termCharLimit) {
       // Result features
-      System.out.println("result featurs:");
-      System.out.println(res.featsResult.show(termCharLimit));
+      System.out.println("result features:");
+      if (res.featsResult == null)
+        System.out.println("SentFeats for result are null!");
+      else
+        System.out.println(res.featsResult.show(termCharLimit));
+      System.out.println("important terms: " + res.importantTerms);
       
       // Query entity features
       System.out.println("query entity features:");
@@ -1268,6 +1275,8 @@ public class IndexCommunications implements AutoCloseable {
     
     // Features from the EntityRetrieval module
     Result entSearchResult;
+
+    public List<String> importantTerms;
 
     public SitSearchResult(String tokUuid, SentFeats featsResult, List<Feat> score) {
       this.tokUuid = tokUuid;

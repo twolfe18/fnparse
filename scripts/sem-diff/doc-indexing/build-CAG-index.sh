@@ -7,7 +7,7 @@ set -eu
 
 OUTPUT_DIR=$1
 DATA_PROFILE=$2   # e.g. "CAG_SMALL"
-DATA_PROVIDER=$3  # either "scion" or "disk:/path/to/CAG/root"
+DATA_PROVIDER=$3  # either "scion" or "disk:/path/to/CAG/root" or "simpleAccumulo:twolfe-cag1"
 TOK_OBS=$4      # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-false.reverse-false.minCount3.jser.gz
 TOK_OBS_LC=$5   # see tutils.TokenObservationCounts, data e.g. /home/hltcoe/twolfe/character-sequence-counts/pruned/charCounts.lower-true.reverse-false.minCount3.jser.gz
 SCRIPTS=$6      # e.g. ~/fnparse-build/fnparse/scripts

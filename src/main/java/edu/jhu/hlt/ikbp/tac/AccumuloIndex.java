@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -342,6 +343,32 @@ public class AccumuloIndex {
       long c = termFreq.getOrDefault(t, 1L);
       return Math.log(numDocs / c);
     }
+
+    public List<String> importantTerms(StringTermVec a, int k) {
+      List<Pair<String, Double>> t = new ArrayList<>();
+      for (Entry<String, Integer> tf : a) {
+        double s = tf.getValue() * idf(tf.getKey());
+        t.add(new Pair<>(tf.getKey(), s));
+      }
+      Collections.sort(t, new Comparator<Pair<String, Double>>() {
+        @Override
+        public int compare(Pair<String, Double> a, Pair<String, Double> b) {
+          double s1 = a.get2();
+          double s2 = b.get2();
+          if (s1 > s2)
+            return -1;
+          if (s1 < s2)
+            return +1;
+          return 0;
+        }
+      });
+      if (k > t.size())
+        k = t.size();
+      List<String> p = new ArrayList<>(k);
+      for (int i = 0; i < k; i++)
+        p.add(t.get(i).get1());
+      return p;
+    }
     
     public double tfIdfCosineSim(StringTermVec a, StringTermVec b) {
       
@@ -361,7 +388,7 @@ public class AccumuloIndex {
       double ssb = 0;
       double nb = b.getTotalCount();
       double dot = 0;
-      for (Entry<String, Integer> word : a) {
+      for (Entry<String, Integer> word : b) {
         double sa = tfa_idf.getOrDefault(word.getKey(), 0d);
         double idf = Math.sqrt(idf(word.getKey()));
         double tfb = word.getValue() / nb;
@@ -517,6 +544,19 @@ public class AccumuloIndex {
        * argmax_t p(t|f) = p(t,f) / p(f)
        * argmax_t g(t,f) = p(f|t) * idf(f)
        */
+
+
+
+/*
+ * TODO This batch scan can be very costly if there are really common features
+ * I'm getting a virtual hang on:
+ * triageFeats=[pi:association, pi:of, pi:chinese, pi:american, pi:scientists, pi:and, pi:engineers, pb:BBBB_association, pb:association_of, pb:of_chinese, pb:chinese_american, pb:american_scientists, pb:scientists_and, pb:and_engineers, pb:engineers_AAAA]
+ *
+ * I could build a bloom filter for all of the feature which are really costly, and prune them
+ * Or I could just have another table...
+ * I think BF is the way to go
+ */
+
       
       // Make a batch scanner to retrieve all tokenization which contain any triageFeats
       TIMER.start("f2t/triage");
@@ -566,12 +606,17 @@ public class AccumuloIndex {
           Log.info("WARNING: could not lookup words for commId=" + commId);
         } else {
           tfidf = df.tfIdfCosineSim(docContext, commVec);
+          ss.importantTerms = df.importantTerms(commVec, 20);
         }
         score.add(new Feat("tfidf").setWeight(tfidf));
         
         //score.add(new Feat("entMatch").setWeight(r.getValue()));
         double entMatchScore = tokUuid2score.getCount(tokUuid);
         score.add(new Feat("entMatch").setWeight(entMatchScore));
+
+        // Filtering
+        if (tfidf < 0.05 || entMatchScore < 0.05)
+          continue;
         
         res.add(ss);
       }
@@ -759,10 +804,13 @@ public class AccumuloIndex {
       List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
       TIMER.start("showResults");
       for (SitSearchResult r : res) {
-        if (r.getCommunication() == null) {
-          System.out.println("WARNING: start setting SitSearchResult's comm!");
+        // Retrieve the comm for this result
+        Communication c = commRet.get(r.getCommunicationId());
+        if (c == null) {
+          System.out.println("WARNING: could not find comm!");
           System.out.println(r);
         } else {
+          r.setCommunication(c);
           ShowResult sr = new ShowResult(q, r);
           sr.show(Collections.emptyList());
         }
