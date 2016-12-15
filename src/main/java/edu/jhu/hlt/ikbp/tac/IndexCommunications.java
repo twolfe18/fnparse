@@ -3445,13 +3445,29 @@ public class IndexCommunications implements AutoCloseable {
       if (headwords[i] == null)
         continue;
       String h = headwords[i];
+
+      // NOTE: There are a lot of features which have lots of numbers in them
+      // This will not normalize any words with 3 or fewer numbers
+      int numeric = 0;
+      for (int j = 0; j < h.length(); j++) {
+        if (Character.isDigit(h.codePointAt(j)))
+          numeric++;
+        if (numeric == 4) {
+          h = h.replaceAll("\\d", "0");
+          break;
+        }
+      }
+
       String hi = headwords[i].toLowerCase();
       String hp = tokObs == null ? headwords[i] : tokObs.getPrefixOccuringAtLeast(headwords[i], 5);
 //      String hip = tokObsLc.getPrefixOccuringAtLeast(headwords[i].toLowerCase(), 5);
       features.add("h:" + h);
-      features.add("hi:" + hi);
-      features.add("hp:" + hp);
-//      features.add("hip:" + hip);
+      if (!hi.equals(h))
+        features.add("hi:" + hi);
+      if (!hp.equals(h))
+        features.add("hp:" + hp);
+//      if (!hip.equals(h))
+//        features.add("hip:" + hip);
     }
     
     for (String f : features) {

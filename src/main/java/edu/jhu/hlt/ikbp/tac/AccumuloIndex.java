@@ -800,7 +800,7 @@ public class AccumuloIndex {
             if (prevCount > 10000) ec.increment("bigrow10000");
 
             if (row != null)
-              w.write(row.toString() + "\t" + prevCount);
+              w.write(row.toString() + "\t" + prevCount + "\n");
             prevRow = row;
             prevCount = 0;
           }
@@ -810,7 +810,7 @@ public class AccumuloIndex {
             Log.info(ec + "\t" + Describe.memoryUsage());
         }
         if (prevRow != null)
-          w.write(prevRow.toString() + "\t" + prevCount);
+          w.write(prevRow.toString() + "\t" + prevCount + "\n");
       }
       Log.info("done\t" + ec);
     }
