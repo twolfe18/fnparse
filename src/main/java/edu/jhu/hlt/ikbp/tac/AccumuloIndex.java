@@ -100,7 +100,7 @@ public class AccumuloIndex {
   public final static MultiTimer TIMER = new MultiTimer();
 
   public final static byte[] NA = new byte[0];
-  public final static String TABLE_NAMESPACE = "twolfe_cag1_index1";
+  public final static String TABLE_NAMESPACE = "twolfe_cag1_index2";
   
   // These have to be made by hand ahead of time
   public final static Text T_f2t = new Text(TABLE_NAMESPACE + "_f2t");
@@ -800,7 +800,7 @@ public class AccumuloIndex {
             if (prevCount > 10000) ec.increment("bigrow10000");
 
             if (row != null)
-              w.write(row.toString() + "\t" + prevCount);
+              w.write(row.toString() + "\t" + prevCount + "\n");
             prevRow = row;
             prevCount = 0;
           }
@@ -810,7 +810,7 @@ public class AccumuloIndex {
             Log.info(ec + "\t" + Describe.memoryUsage());
         }
         if (prevRow != null)
-          w.write(prevRow.toString() + "\t" + prevCount);
+          w.write(prevRow.toString() + "\t" + prevCount + "\n");
       }
       Log.info("done\t" + ec);
     }
@@ -827,8 +827,10 @@ public class AccumuloIndex {
       BuildIndexRegular.main(config);
     } else if (c.equalsIgnoreCase("computeIdf")) {
       ComputeIdf.main(config);
-    } else if (c.equals("kbpSearch")) {
+    } else if (c.equalsIgnoreCase("kbpSearch")) {
       kbpSearching(config);
+    } else if (c.equalsIgnoreCase("featureFrequency")) {
+      ComputeFeatureFrequencies.main(config);
     } else {
       Log.info("unknown command: " + c);
     }
