@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -44,6 +45,9 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.thrift.TDeserializer;
+
+import com.google.common.hash.BloomFilter;
+import com.google.common.hash.Funnels;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.EntityMention;
@@ -129,6 +133,7 @@ public class AccumuloIndex {
   }
 
   
+  /** Returns the set of inserts for this comm, all things we are indexing (across all tables) */
   public static List<Pair<Text, Mutation>> buildMutations(Communication comm) {
     List<Pair<Text, Mutation>> mut = new ArrayList<>();
     CharSequence c = comm.getId();
@@ -189,29 +194,6 @@ public class AccumuloIndex {
     return mut;
   }
 
-  
-  /**
-   * Expects {key=commUuid, value=comm} input.
-   */
-  public static class BuildIndexReducer extends Reducer<WritableComparable<?>, Writable, Text, Mutation> {
-    public final static TDeserializer deser = new TDeserializer(SimpleAccumulo.COMM_SERIALIZATION_PROTOCOL);
-    
-    public void reduce(WritableComparable<?> key, Iterable<Text> values, Context ctx) {
-      for (Text v : values) {
-        Communication comm = new Communication();
-        try {
-          deser.deserialize(comm, v.getBytes());
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
-        for (Pair<Text, Mutation> m : buildMutations(comm)) {
-          try {
-            ctx.write(m.get1(), m.get2());
-          } catch (Exception e) {}
-        }
-      }
-    }
-  }
   
   
   /**
@@ -278,6 +260,29 @@ public class AccumuloIndex {
     }
   }
   
+  
+  /**
+   * Expects {key=commUuid, value=comm} input.
+   */
+  public static class BuildIndexReducer extends Reducer<WritableComparable<?>, Writable, Text, Mutation> {
+    public final static TDeserializer deser = new TDeserializer(SimpleAccumulo.COMM_SERIALIZATION_PROTOCOL);
+    
+    public void reduce(WritableComparable<?> key, Iterable<Text> values, Context ctx) {
+      for (Text v : values) {
+        Communication comm = new Communication();
+        try {
+          deser.deserialize(comm, v.getBytes());
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+        for (Pair<Text, Mutation> m : buildMutations(comm)) {
+          try {
+            ctx.write(m.get1(), m.get2());
+          } catch (Exception e) {}
+        }
+      }
+    }
+  }
   
   /**
    * Doesn't work.
@@ -511,6 +516,116 @@ public class AccumuloIndex {
     }
   }
 
+  
+  /**
+   * Some features appear in a ton of mentions/tokenizations. This really slow down retrieval
+   * and are not informative. This class makes a pass over the f2t table and builds a bloom
+   * filter for features which return more than K tokenizations. You can do what you like with
+   * these features given the BF (e.g. eliminating them may not be a good idea, but using them
+   * as a last resort if more selective features don't return a good result is an option).
+   */
+  public static class BuildBigFeatureBloomFilters {
+    
+    public static void main(ExperimentProperties config) throws Exception {
+      File writeTo = config.getFile("output");
+      Log.info("writing bloom filter to " + writeTo.getPath());
+      int minToks = config.getInt("minToks", 1000);
+      int minDocs = config.getInt("minDocs", 1000);
+      BuildBigFeatureBloomFilters bbfbf = new BuildBigFeatureBloomFilters(minToks, minDocs, writeTo);
+      bbfbf.count(
+          config.getString("username"),
+          new PasswordToken(config.getString("password")),
+          config.getString("instanceName"),
+          config.getString("zookeepers"));
+      Log.info("done");
+    }
+
+    // If either of these trip, then this is a "big feature"
+    private int minToks;
+    private int minDocs;
+    private BloomFilter<String> bf;
+    private File writeTo;
+    
+    // Meta/debugging
+    Counts<String> ec;
+
+    public BuildBigFeatureBloomFilters(int minToks, int minDocs, File writeTo) {
+      this.minDocs = minDocs;
+      this.minToks = minToks;
+      int expectedInsertions = 20 * 1000;
+      double fpp = 0.01;
+      bf = BloomFilter.create(Funnels.stringFunnel(Charset.forName("UTF8")), expectedInsertions, fpp);
+      ec = new Counts<>();
+      Log.info("minToks=" + minDocs + " minDocs=" + minDocs + "expectedInserts=" + expectedInsertions + " fpp=" + fpp);
+    }
+    
+    /**
+     * Assumes key.row are "documents" for computing numDocs.
+     * In a sense we must make this assumption to have O(1) memory (accumulo only sorts by row) for counting.
+     */
+    public void count(
+        String username, AuthenticationToken password,
+        String instanceName, String zookeepers) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      Log.info("starting, username=" + username);
+
+      TimeMarker tm = new TimeMarker();
+      Instance inst = new ZooKeeperInstance(instanceName, zookeepers);
+      Connector conn = inst.getConnector(username, password);
+      Scanner s = conn.createScanner(T_f2t.toString(), new Authorizations());
+
+      // Statistics tracked for each row
+      String prevFeat = null;
+      int prevToks = 0;
+      HashSet<String> prevDocs = new HashSet<>();   // determined by tokUuid 32-bit prefix
+
+      for (Entry<Key, Value> e : s) {
+        ec.increment("entry");
+        String feat = e.getKey().getRow().toString();
+        String tokUuid = e.getKey().getColumnQualifier().toString();
+        String commUuid = tokUuid.substring(0, (8+1)+1);  // 8 hex = 4 bytes = 32 bits, +1 for a dash, +1 for exclusive end
+        
+        if (!feat.equals(prevFeat)) {
+          output(prevFeat, prevToks, prevDocs);
+          prevFeat = feat;
+          prevToks = 0;
+          prevDocs.clear();
+        }
+
+        prevToks++;
+        prevDocs.add(commUuid);
+
+        if (tm.enoughTimePassed(10))
+          Log.info(ec + " curFeat=" + feat + "\t" + Describe.memoryUsage());
+      }
+      output(prevFeat, prevToks, prevDocs);
+
+      Log.info("done, " + ec);
+      writeToDisk();
+    }
+    
+    private TimeMarker _outputTM = new TimeMarker();
+    private void output(String feat, int numToks, Set<String> docs) {
+      ec.increment("feat");
+      boolean a = numToks > minToks;
+      boolean b = docs.size() > minDocs;
+      if (a || b) {
+        bf.put(feat);
+        ec.increment("feat/kept");
+        if (a && b) ec.increment("feat/kept/both");
+        else if (a) ec.increment("feat/kept/toks");
+        else if (b) ec.increment("feat/kept/docs");
+
+        if (_outputTM.enoughTimePassed(10 * 60))
+          writeToDisk();
+      }
+    }
+    
+    private void writeToDisk() {
+      Log.info("serializing to " + writeTo.getPath());
+      FileUtil.serialize(bf, writeTo);
+    }
+  }
+  
 
   /**
    * Roughly equivalent to {@link SituationSearch}
@@ -522,6 +637,8 @@ public class AccumuloIndex {
     private Authorizations auths;
     private int numQueryThreads;
     private Connector conn;
+    
+    private BloomFilter<String> expensiveFeaturesBF;
 
     public Search(String instanceName, String zks, String username, AuthenticationToken password) throws Exception {
       this.username = username;
@@ -530,6 +647,16 @@ public class AccumuloIndex {
       this.numQueryThreads = 1;
       Instance inst = new ZooKeeperInstance(instanceName, zks);
       this.conn = inst.getConnector(username, password);
+    }
+    
+    /**
+     * Exclude certain common and un-informative features from triage search.
+     * @param bfFile is created by {@link BuildBigFeatureBloomFilters}
+     */
+    @SuppressWarnings("unchecked")
+    public void ignoreFeaturesViaBF(File bfFile) {
+      Log.info("deserializing bloom filter from " + bfFile.getPath());
+      expensiveFeaturesBF = (BloomFilter<String>) FileUtil.deserialize(bfFile);
     }
 
     public List<SitSearchResult> search(List<String> triageFeats, StringTermVec docContext, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
@@ -545,6 +672,18 @@ public class AccumuloIndex {
        * argmax_t g(t,f) = p(f|t) * idf(f)
        */
 
+      if (expensiveFeaturesBF != null) {
+        List<String> pruned = new ArrayList<>(triageFeats.size());
+        for (String f : triageFeats) {
+          if (expensiveFeaturesBF.mightContain(f)) {
+            System.out.println("\tpruning expensive feature: " + f);
+          } else {
+            pruned.add(f);
+          }
+        }
+        Log.info("kept " + pruned.size() + " of " + triageFeats.size() + " features");
+        triageFeats = pruned;
+      }
 
 
 /*
@@ -762,7 +901,11 @@ public class AccumuloIndex {
       config.getString("zookeepers"),
       config.getString("username"),
       new PasswordToken(config.getString("password")));
-//    TfIdf df = new TfIdf(config.getExistingFile("wordDocFreq"));
+    
+    File bf = config.getFile("expensiveFeatureBloomFilter", null);
+    if (bf != null)
+      search.ignoreFeaturesViaBF(bf);
+
     ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
 
     List<KbpQuery> queries = TacKbp.getKbp2013SfQueries();
@@ -789,6 +932,7 @@ public class AccumuloIndex {
 
       // 1c) Build the context vector
       StringTermVec queryContext = new StringTermVec(q.sourceComm);
+      q.docCtxImportantTerms = df.importantTerms(queryContext, 20);
       
       // 2) Extract entity mention features
       // TODO Remove headwords, switch to purely a key-word based retrieval model.

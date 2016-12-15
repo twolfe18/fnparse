@@ -574,6 +574,8 @@ public class IndexCommunications implements AutoCloseable {
       
       // Query features
       System.out.println("pkbDocs.size=" + pkbDocs.size());
+      if (query.docCtxImportantTerms != null)
+        System.out.println("queryDocCtxImportantTerms: " + query.docCtxImportantTerms);
       for (TermVec queryDoc : pkbDocs)
         System.out.println("queryDoc: " + queryDoc.showTerms(termCharLimit));
       System.out.println();
@@ -584,9 +586,7 @@ public class IndexCommunications implements AutoCloseable {
     public static void showQResult(SitSearchResult res, Communication comm, int termCharLimit) {
       // Result features
       System.out.println("result features:");
-      if (res.featsResult == null)
-        System.out.println("SentFeats for result are null!");
-      else
+      if (res.featsResult != null)
         System.out.println(res.featsResult.show(termCharLimit));
       System.out.println("important terms: " + res.importantTerms);
       

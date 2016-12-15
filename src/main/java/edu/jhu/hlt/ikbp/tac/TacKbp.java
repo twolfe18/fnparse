@@ -86,6 +86,11 @@ public class TacKbp {
     // Points into sourceComm to the entity described by this query.
     EntityMention entityMention;
     
+
+    // computed from sourceComm, typically top 20 tf-idf words, circa AccumuloIndex, StringTermDoc
+    List<String> docCtxImportantTerms;
+    
+    
     public KbpQuery(String id) {
       this.id = id;
       beg = end = -1;
