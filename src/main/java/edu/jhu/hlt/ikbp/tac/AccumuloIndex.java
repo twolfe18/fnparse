@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import org.apache.accumulo.core.client.AccumuloException;
@@ -636,16 +637,20 @@ public class AccumuloIndex {
     private String username;
     private AuthenticationToken password;
     private Authorizations auths;
-    private int numQueryThreads;
     private Connector conn;
+
+    int numQueryThreads;
+    int batchTimeoutSeconds = 60;
     
+    /** @deprecated should have just used batchTimeout... */
     private BloomFilter<String> expensiveFeaturesBF;
 
-    public Search(String instanceName, String zks, String username, AuthenticationToken password) throws Exception {
+    public Search(String instanceName, String zks, String username, AuthenticationToken password, int nThreads) throws Exception {
+      Log.info("instanceName=" + instanceName + " username=" + username + " nThreads=" + nThreads + " zks=" + zks);
       this.username = username;
       this.password = password;
       this.auths = new Authorizations();
-      this.numQueryThreads = 1;
+      this.numQueryThreads = nThreads;
       Instance inst = new ZooKeeperInstance(instanceName, zks);
       this.conn = inst.getConnector(username, password);
     }
@@ -703,6 +708,8 @@ public class AccumuloIndex {
       Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
       try (BatchScanner bs_f2t = conn.createBatchScanner(T_f2t.toString(), auths, numQueryThreads)) {
         List<Range> triageFeatRows = convert(triageFeats);
+        if (batchTimeoutSeconds > 0)
+          bs_f2t.setBatchTimeout(batchTimeoutSeconds, TimeUnit.SECONDS);
         bs_f2t.setRanges(triageFeatRows);
         // Results will be in sorted order, keep running tally of score(tokenization)
         GroupBy<Entry<Key, Value>, HPair<String, String>> gb = new GroupBy<>(bs_f2t.iterator(), Search::kf);
@@ -892,16 +899,22 @@ public class AccumuloIndex {
 //      System.out.println(e.getKey().getRow().toString());
 //    }
     
+    // One file per query goes into this folder, each containing a:
+    // Pair<KbpQuery, List<SitSearchResult>>
+    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir");
+    
     // Finds EntityMentions for query documents which just come with char offsets.
     TacQueryEntityMentionResolver findEntityMention =
         new TacQueryEntityMentionResolver("tacQuery");
     
     AccumuloCommRetrieval commRet = new AccumuloCommRetrieval(config);
+
     Search search = new Search(
       config.getString("instanceName"),
       config.getString("zookeepers"),
       config.getString("username"),
-      new PasswordToken(config.getString("password")));
+      new PasswordToken(config.getString("password")),
+      config.getInt("nThreadsSearch", 1));
     
     File bf = config.getFile("expensiveFeatureBloomFilter", null);
     if (bf != null)
@@ -911,9 +924,8 @@ public class AccumuloIndex {
 
     List<KbpQuery> queries = TacKbp.getKbp2013SfQueries();
 
-    // How many results per KBP query (before dedup).
-    // Higher values are noticeably slower.
-    int limit = config.getInt("limit", 20);
+    // How many results per KBP query.
+    int limit = config.getInt("limit", 1000);
 
     for (KbpQuery q : queries) {
       EC.increment("kbpQuery");
@@ -945,8 +957,14 @@ public class AccumuloIndex {
       TokenObservationCounts tokObsLc = null;
       List<String> triageFeats = IndexCommunications.getEntityMentionFeatures(entityName, headwords, entityType, tokObs, tokObsLc);
       
-      // 3) Search and show results
+      // 3) Search
       List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
+
+      // 4) Prune and show results
+      if (limit > 20 && res.size() > limit) {
+        Log.info("pruning " + res.size() + " queries down to " + limit);
+        res = res.subList(0, limit);
+      }
       TIMER.start("showResults");
       for (SitSearchResult r : res) {
         // Retrieve the comm for this result
@@ -961,6 +979,14 @@ public class AccumuloIndex {
         }
       }
       TIMER.stop("showResults");
+      
+      // 5) Serialize results
+      TIMER.start("serializeResults");
+      Pair<KbpQuery, List<SitSearchResult>> toSer = new Pair<>(q, res);
+      File toSerTo = new File(dirForSerializingResults, q.name + ".qrs.jser");
+      FileUtil.VERBOSE = true;
+      FileUtil.serialize(toSer, toSerTo);
+      TIMER.stop("serializeResults");
     }
   }
   

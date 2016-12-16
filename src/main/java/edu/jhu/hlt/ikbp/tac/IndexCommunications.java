@@ -7,6 +7,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1095,7 +1096,9 @@ public class IndexCommunications implements AutoCloseable {
    * If I include the pointer to TermDoc and ignore the cost of the actual vectors
    * 8+47 = 55, which is still under the 64 byte budget.
    */
-  public static class SentFeats {
+  public static class SentFeats implements Serializable {
+    private static final long serialVersionUID = 7940630194450897925L;
+
     // Use this to track down the Communication to show to the user
     long comm_uuid_lo, comm_uuid_hi;
     
@@ -1226,7 +1229,9 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
-  public static class Feat {
+  public static class Feat implements Serializable {
+    private static final long serialVersionUID = -2723964704627341786L;
+
     String name;
     double weight;
     List<String> justifications;    // details which are nice to include, arbitrary values
@@ -1264,7 +1269,9 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
-  public static class SitSearchResult {
+  public static class SitSearchResult implements Serializable {
+    private static final long serialVersionUID = -2345944595589887531L;
+
     public final String tokUuid;
     public final SentFeats featsResult; // features on the result represented by this QResult (as opposed to the query)
     private List<Feat> scoreDerivation;
@@ -2785,7 +2792,9 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
-  public static class TermVec {
+  public static class TermVec implements Serializable {
+    private static final long serialVersionUID = -6978085630850790443L;
+
     int totalCount = -1;        // sum(counts)
     int totalCountNoAppox = -1; // sum(counts) if counts didn't have to truncate
     int[] terms;

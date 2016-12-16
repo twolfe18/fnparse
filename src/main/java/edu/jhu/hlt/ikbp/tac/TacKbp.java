@@ -5,6 +5,7 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -63,8 +64,9 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class TacKbp {
   
-  public static class KbpQuery {
-    
+  public static class KbpQuery implements Serializable {
+    private static final long serialVersionUID = -1221032572787969942L;
+
     // Come from queries XML file
     String id;
     String name;
