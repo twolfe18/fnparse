@@ -529,8 +529,8 @@ public class AccumuloIndex {
     public static void main(ExperimentProperties config) throws Exception {
       File writeTo = config.getFile("output");
       Log.info("writing bloom filter to " + writeTo.getPath());
-      int minToks = config.getInt("minToks", 1000);
-      int minDocs = config.getInt("minDocs", 1000);
+      int minToks = config.getInt("minToks", 32000);
+      int minDocs = config.getInt("minDocs", 16000);
       BuildBigFeatureBloomFilters bbfbf = new BuildBigFeatureBloomFilters(minToks, minDocs, writeTo);
       bbfbf.count(
           config.getString("username"),
@@ -550,9 +550,10 @@ public class AccumuloIndex {
     Counts<String> ec;
 
     public BuildBigFeatureBloomFilters(int minToks, int minDocs, File writeTo) {
+      this.writeTo = writeTo;
       this.minDocs = minDocs;
       this.minToks = minToks;
-      int expectedInsertions = 20 * 1000;
+      int expectedInsertions = 10 * 1000 * 1000;
       double fpp = 0.01;
       bf = BloomFilter.create(Funnels.stringFunnel(Charset.forName("UTF8")), expectedInsertions, fpp);
       ec = new Counts<>();
@@ -615,7 +616,7 @@ public class AccumuloIndex {
         else if (a) ec.increment("feat/kept/toks");
         else if (b) ec.increment("feat/kept/docs");
 
-        if (_outputTM.enoughTimePassed(10 * 60))
+        if (_outputTM.enoughTimePassed(1 * 60))
           writeToDisk();
       }
     }
@@ -1023,6 +1024,8 @@ public class AccumuloIndex {
       kbpSearching(config);
     } else if (c.equalsIgnoreCase("featureFrequency")) {
       ComputeFeatureFrequencies.main(config);
+    } else if (c.equalsIgnoreCase("buildBigFeatureBloomFilters")) {
+      BuildBigFeatureBloomFilters.main(config);
     } else {
       Log.info("unknown command: " + c);
     }

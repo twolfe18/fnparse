@@ -89,6 +89,9 @@ public class TacKbp {
 
     // computed from sourceComm, typically top 20 tf-idf words, circa AccumuloIndex, StringTermDoc
     List<String> docCtxImportantTerms;
+
+    // See AccumuloIndex for creating this
+    List<String> features;
     
     
     public KbpQuery(String id) {

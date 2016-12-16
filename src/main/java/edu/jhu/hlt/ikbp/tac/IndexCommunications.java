@@ -578,6 +578,10 @@ public class IndexCommunications implements AutoCloseable {
         System.out.println("queryDocCtxImportantTerms: " + query.docCtxImportantTerms);
       for (TermVec queryDoc : pkbDocs)
         System.out.println("queryDoc: " + queryDoc.showTerms(termCharLimit));
+      if (query.features != null) {
+        for (String f : query.features)
+          System.out.println("\tqf: " + f);
+      }
       System.out.println();
 
       showQResult(res, comm, termCharLimit);
@@ -592,11 +596,9 @@ public class IndexCommunications implements AutoCloseable {
       
       // Query entity features
       System.out.println("query entity features:");
-      if (res.entSearchResult == null) {
-        System.out.println("NONE");
-      } else {
+      if (res.entSearchResult != null) {
         for (String f : res.entSearchResult.queryEntityFeatures)
-          System.out.println("\t" + f);
+          System.out.println("\tes: " + f);
       }
       System.out.println();
       
@@ -1277,6 +1279,7 @@ public class IndexCommunications implements AutoCloseable {
     Result entSearchResult;
 
     public List<String> importantTerms;
+
 
     public SitSearchResult(String tokUuid, SentFeats featsResult, List<Feat> score) {
       this.tokUuid = tokUuid;
