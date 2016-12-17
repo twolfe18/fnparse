@@ -1261,7 +1261,7 @@ public class IndexCommunications implements AutoCloseable {
     
     @Override
     public String toString() {
-      String s = String.format("%-20s %.1f", name, weight);
+      String s = String.format("%-20s %.2f", name, weight);
       if (justifications == null)
         return s;
       String j = StringUtils.join(", ", justifications);
