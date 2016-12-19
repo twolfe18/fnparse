@@ -85,10 +85,10 @@ import edu.jhu.util.TokenizationIter;
  * Tables:
  * name             row           col_fam           col_qual          value
  * ----------------------------------------------------------------------------------
- * f2t              feat          featType          tokUuid           tf(feat,tok)*idf(feat)        # find ways to filter this table? this was what was unsuccessful in scripts/sem-diff/pruning/prune_int_uuid_index_by_count.py
- * t2f              tokUuid       featType          feat              tf(feat,tok)*idf(feat)        # for re-scoring after triage
+ * f2t              feat          featType          tokUuid           tf(feat,tok)
+ * t2f              tokUuid       featType          feat              tf(feat,tok)
  * t2c              tokUuid       NA                NA                commId
- * c2w              commId        NA                word              tf(word,doc)*idf(word)
+ * c2w              commId        NA                word              tf(word,doc)*idf(word) ???
  * 
  * w2df             word          NA                NA                df(word)    # use org.apache.accumulo.core.iterators.user.SummingCombiner
  *
@@ -237,7 +237,7 @@ public class AccumuloIndex {
       SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);
       Log.info("starting with " + saConf);
       SimpleAccumulo sa = new SimpleAccumulo(saConf);
-      sa.connect(config.getString("username"), new PasswordToken(config.getString("password")));
+      sa.connect(config.getString("accumulo.username"), new PasswordToken(config.getString("accumulo.password")));
       Connector conn = sa.getConnector();
       TimeMarker tm = new TimeMarker();
       Counts<String> writes = new Counts<>();
@@ -294,14 +294,14 @@ public class AccumuloIndex {
       Job job = Job.getInstance();
       job.setJobName(config.getString("jobname", "buildAccIndex"));
       ClientConfiguration cc = new ClientConfiguration()
-          .withInstance(config.getString("instanceName"))
-          .withZkHosts(config.getString("zookeepers"));
+          .withInstance(config.getString("accumulo.instance"))
+          .withZkHosts(config.getString("accumulo.zookeepers"));
 
       job.setMapperClass(Mapper.class); // identity mapper
       job.setReducerClass(BuildIndexReducer.class);
       
-      String principal = config.getString("username");
-      AuthenticationToken token = new PasswordToken(config.getProperty("password"));
+      String principal = config.getString("accumulo.username");
+      AuthenticationToken token = new PasswordToken(config.getProperty("accumulo.password"));
 
       job.setInputFormatClass(AccumuloInputFormat.class);
       AccumuloInputFormat.setZooKeeperInstance(job, cc);
@@ -422,6 +422,7 @@ public class AccumuloIndex {
           termFreq.put(tc[0], c);
         }
       }
+      Log.info("done");
     }
     
     /**
@@ -473,10 +474,10 @@ public class AccumuloIndex {
       Function<Entry<Key, Value>, String> k_c2w = e -> e.getKey().getColumnQualifier().toString();
       File f = config.getFile("output");
       Log.info("going through accumulo to compute idf");
-      String username = config.getString("username");
-      AuthenticationToken password = new PasswordToken(config.getString("password"));
-      String instanceName = config.getString("instanceName");
-      String zookeepers = config.getString("zookeepers");
+      String username = config.getString("accumulo.username");
+      AuthenticationToken password = new PasswordToken(config.getString("accumulo.password"));
+      String instanceName = config.getString("accumulo.instance");
+      String zookeepers = config.getString("accumulo.zookeepers");
       idf.count(T_c2w.toString(), k_c2w, username, password, instanceName, zookeepers);
       idf.saveToDisk(f);
       Log.info("done");
@@ -495,8 +496,8 @@ public class AccumuloIndex {
       SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);
       fetch = new SimpleAccumuloFetch(saConf, numThreads);
       fetch.connect(
-          config.getString("username"),
-          new PasswordToken(config.getString("password")));
+          config.getString("accumulo.username"),
+          new PasswordToken(config.getString("accumulo.password")));
     }
     
     public Communication get(String commId) {
@@ -534,10 +535,10 @@ public class AccumuloIndex {
       int minDocs = config.getInt("minDocs", 16000);
       BuildBigFeatureBloomFilters bbfbf = new BuildBigFeatureBloomFilters(minToks, minDocs, writeTo);
       bbfbf.count(
-          config.getString("username"),
-          new PasswordToken(config.getString("password")),
-          config.getString("instanceName"),
-          config.getString("zookeepers"));
+          config.getString("accumulo.username"),
+          new PasswordToken(config.getString("accumulo.password")),
+          config.getString("accumulo.instance"),
+          config.getString("accumulo.zookeepers"));
       Log.info("done");
     }
 
@@ -627,6 +628,21 @@ public class AccumuloIndex {
       FileUtil.serialize(bf, writeTo);
     }
   }
+
+
+  public static String getCommUuidPrefixFromTokUuid(String tokUuid) {
+    int bytes = 4;    // 32 bits
+    int chars = 0;
+    StringBuilder out = new StringBuilder();
+    for (int i = 0; i < tokUuid.length() && chars < 2*bytes; i++) {
+      char c = tokUuid.charAt(i);
+      if (Character.isLetterOrDigit(c)) {
+        out.append(c);
+        chars++;
+      }
+    }
+    return out.toString();
+  }
   
 
   /**
@@ -641,12 +657,23 @@ public class AccumuloIndex {
 
     int numQueryThreads;
     int batchTimeoutSeconds = 60;
+
+    int maxToksPreDocRetrieval = 10 * 1000;
+    double triageFeatNBPrior = 50;    // higher values penalize very frequent features less
     
     /** @deprecated should have just used batchTimeout... */
     private BloomFilter<String> expensiveFeaturesBF;
 
-    public Search(String instanceName, String zks, String username, AuthenticationToken password, int nThreads) throws Exception {
-      Log.info("instanceName=" + instanceName + " username=" + username + " nThreads=" + nThreads + " zks=" + zks);
+    public Search(String instanceName, String zks, String username, AuthenticationToken password,
+        int nThreads, int maxToksPreDocRetrieval, double triageFeatNBPrior) throws Exception {
+      Log.info("maxToksPreDocRetrieval=" + maxToksPreDocRetrieval
+          + " triageFeatNBPrior=" + triageFeatNBPrior
+          + " instanceName=" + instanceName
+          + " username=" + username
+          + " nThreads=" + nThreads
+          + " zks=" + zks);
+      this.maxToksPreDocRetrieval = maxToksPreDocRetrieval;
+      this.triageFeatNBPrior = triageFeatNBPrior;
       this.username = username;
       this.password = password;
       this.auths = new Authorizations();
@@ -667,6 +694,14 @@ public class AccumuloIndex {
 
     public List<SitSearchResult> search(List<String> triageFeats, StringTermVec docContext, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
       Log.info("starting, triageFeats=" + triageFeats);
+      if (batchTimeoutSeconds > 0)
+        Log.info("using a timeout of " + batchTimeoutSeconds + " seconds for f2t query");
+
+      if (triageFeats.size() > 8) {
+        Log.info("WARNING! something is broken when there are too many features (" + triageFeats.size() + "), skipping");
+        return Collections.emptyList();
+      }
+
       /*
        * 1) use a batch scan over f2t to find plausible t's
        * 2) use a batch scan over t2f with t's from prev step, figure out how to do early stopping on this
@@ -702,10 +737,58 @@ public class AccumuloIndex {
  * I think BF is the way to go
  */
 
+
+/*
+ * I have made a huge mistake, BatchScanner makes no gaurantees that rows will be
+ * returned in sorted order....
+ * They also say that its not good if there may be a lot of entries in any of the ranges
+ * I'm going to switch to a loop with a regular Scanner over one feature in the loop
+ */
+
+
+
       
       // Make a batch scanner to retrieve all tokenization which contain any triageFeats
       TIMER.start("f2t/triage");
       Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
+
+
+      // ALT: Don't use batch scanner, isntead one sanner per feature
+      // TODO Consider the ordering over features, most discriminative to least
+      for (String f : triageFeats) {
+        try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
+          f2tScanner.setRange(Range.exact(f));
+
+          // Collect all of the tokenizations which this feature co-occurs with
+          List<String> toks = new ArrayList<>();
+          Set<String> commUuidPrefixes = new HashSet<>();
+          for (Entry<Key, Value> e : f2tScanner) {
+            String tokUuid = e.getKey().getColumnQualifier().toString();
+            toks.add(tokUuid);
+            commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
+          }
+
+          // Compute a score based on how selective this feature is
+          int numToks = toks.size();
+          int numDocs = commUuidPrefixes.size();
+          double freq = (2d * numToks * numDocs) / (numToks + numDocs);
+          double p = (triageFeatNBPrior + 1) / (triageFeatNBPrior + freq);
+          System.out.println("triage:"
+              + " feat=" + f
+              + " numToks=" + numToks
+              + " numDocs=" + numDocs
+              + " freq=" + freq
+              + " triageFeatNBPrior=" + triageFeatNBPrior
+              + " p=" + p);
+
+          // Update the running score for all tokenizations
+          for (String t : toks)
+            tokUuid2score.update(t, p);
+        }
+        // NOTE: If you do a good job of sorting features you can break out of this loop
+        // after a certain amount of score has already been dolled out.
+      }
+/*
       try (BatchScanner bs_f2t = conn.createBatchScanner(T_f2t.toString(), auths, numQueryThreads)) {
         List<Range> triageFeatRows = convert(triageFeats);
         if (batchTimeoutSeconds > 0)
@@ -713,10 +796,44 @@ public class AccumuloIndex {
         bs_f2t.setRanges(triageFeatRows);
         // Results will be in sorted order, keep running tally of score(tokenization)
         GroupBy<Entry<Key, Value>, HPair<String, String>> gb = new GroupBy<>(bs_f2t.iterator(), Search::kf);
+        int gbi = 0;
         while (gb.hasNext()) {
+
           // This is a list of all Tokenizations which contain a given feature (key)
           List<Entry<Key, Value>> perFeat = gb.next();
-          double p = 2d / (1 + perFeat.size());
+
+          String feat = perFeat.get(0).getKey().getRow().toString();
+
+          for (Entry<Key, Value> pf : perFeat) {
+            System.out.printf("gbi=%d row=%s colf=%s colq=%s val=%s\n",
+                gbi,
+                pf.getKey().getRow(),
+                pf.getKey().getColumnFamily(),
+                pf.getKey().getColumnQualifier(),
+                pf.getValue());
+          }
+          gbi++;
+
+          // Count how many documents are in this set of tokenizations
+          // (document frequency instead of tokenization frequency for this feature)
+          Set<String> commIdsPrefixes = new HashSet<>();
+          for (Entry<Key, Value> e : perFeat) {
+            String tokUuid = e.getKey().getColumnQualifier().toString();
+            String commUuidPrefix = getCommUuidPrefixFromTokUuid(tokUuid);
+            commIdsPrefixes.add(commUuidPrefix);
+          }
+          int numToks = perFeat.size();
+          int numDocs = commIdsPrefixes.size();
+          double freq = (2d * numToks * numDocs) / (numToks + numDocs);
+          double p = (triageFeatNBPrior + 1) / (triageFeatNBPrior + freq);
+          System.out.println("triage:"
+              + " feat=" + feat
+              + " numToks=" + numToks
+              + " numDocs=" + numDocs
+              + " freq=" + freq
+              + " triageFeatNBPrior=" + triageFeatNBPrior
+              + " p=" + p);
+
           for (Entry<Key, Value> e : perFeat) {
             String tokUuid = e.getKey().getColumnQualifier().toString();
             tokUuid2score.update(tokUuid, p);
@@ -724,6 +841,7 @@ public class AccumuloIndex {
         }
         Log.info("found " + tokUuid2score.numNonZero() + " tokUuids to retrieve");
       }
+*/
       TIMER.stop("f2t/triage");
 
       // Now we have scores for every tokenization
@@ -736,9 +854,8 @@ public class AccumuloIndex {
       Map<String, StringTermVec> commId2terms = getWordsForComms(tokUuid2commId.values());
       
       // 3) Go through each tok and re-score
+      Counts<String> filterReasons = new Counts<>();
       List<SitSearchResult> res = new ArrayList<>();
-      //for (Entry<String, Double> r : tokUuid2score.entrySet()) {
-      //  String tokUuid = r.getKey();
       for (Entry<String, String> tc : tokUuid2commId.entrySet()) {
         String tokUuid = tc.getKey();
         String commId = tc.getValue();
@@ -761,12 +878,24 @@ public class AccumuloIndex {
         double entMatchScore = tokUuid2score.getCount(tokUuid);
         score.add(new Feat("entMatch").setWeight(entMatchScore));
 
+        double prod = entMatchScore * (0.1 + tfidf);
+        score.add(new Feat("prod").setWeight(prod).rescale("goodfeat", 10.0));
+
         // Filtering
-        if (tfidf < 0.05 || entMatchScore < 0.05)
+        if (entMatchScore < 0.001) {
+          EC.increment("resFilter/name");
+          filterReasons.increment("name");
           continue;
+        }
+        if (tfidf < 0.1 && entMatchScore < 0.01) {
+          EC.increment("resFilter/prod");
+          filterReasons.increment("prod");
+          continue;
+        }
         
         res.add(ss);
       }
+      Log.info("reasons for filtering results for " + triageFeats + ": " + filterReasons);
 
       // 4) Sort results by final score
       Collections.sort(res, SitSearchResult.BY_SCORE_DESC);
@@ -779,11 +908,10 @@ public class AccumuloIndex {
       TIMER.start("t2c/getCommIdsFor");
 
       // TODO Consider filtering based on score?
-      int maxToks = 300;
       List<String> bestToks = tokUuid2score.getKeysSortedByCount(true);
-      if (bestToks.size() > maxToks) {
-        Log.info("only taking the " + maxToks + " highest scoring of " + bestToks.size() + " tokenizations");
-        bestToks = bestToks.subList(0, maxToks);
+      if (bestToks.size() > maxToksPreDocRetrieval) {
+        Log.info("only taking the " + maxToksPreDocRetrieval + " highest scoring of " + bestToks.size() + " tokenizations");
+        bestToks = bestToks.subList(0, maxToksPreDocRetrieval);
       }
 
       List<Range> rows = new ArrayList<>();
@@ -820,6 +948,21 @@ public class AccumuloIndex {
       Log.info("found " + rows.size() + " commUuids containing all " + nt + " tokUuids");
       int numQueryThreads = 4;
       Map<String, StringTermVec> c2tv = new HashMap<>();
+      for (String commId : uniq) {
+        StringTermVec tv = new StringTermVec();
+        try (Scanner s = conn.createScanner(T_c2w.toString(), auths)) {
+          s.setRange(Range.exact(commId));
+          for (Entry<Key, Value> e : s) {
+            String word = e.getKey().getColumnQualifier().toString();
+            int count = decodeCount(e.getValue().get());
+            tv.add(word, count);
+          }
+        }
+        Object old = c2tv.put(commId, tv);
+        assert old == null;
+      }
+      Log.info("retrieved " + c2tv.size() + " of " + uniq.size() + " comms");
+/* BATCH SCANNER ASSUMPTION FAIL: results need not be sorted!!!
       try (BatchScanner bs = conn.createBatchScanner(T_c2w.toString(), auths, numQueryThreads)) {
         bs.setRanges(rows);
         // Group by commUuid (row in c2w)
@@ -840,6 +983,7 @@ public class AccumuloIndex {
           assert old == null;
         }
       }
+*/
       TIMER.stop("c2w/getWordsForComms");
       return c2tv;
     }
@@ -909,27 +1053,51 @@ public class AccumuloIndex {
     
     AccumuloCommRetrieval commRet = new AccumuloCommRetrieval(config);
 
+
+    Set<String> debugQueriesDoFirst = new HashSet<>();
+    for (String s : config.getString("debugQueriesDoFirst", "").split(",")) {
+      Log.info("debugQueriesDoFirst: " + s);
+      debugQueriesDoFirst.add(s);
+    }
+
+
     Search search = new Search(
-      config.getString("instanceName"),
-      config.getString("zookeepers"),
-      config.getString("username"),
-      new PasswordToken(config.getString("password")),
-      config.getInt("nThreadsSearch", 1));
+      config.getString("accumulo.instance"),
+      config.getString("accumulo.zookeepers"),
+      config.getString("accumulo.username"),
+      new PasswordToken(config.getString("accumulo.password")),
+      config.getInt("nThreadsSearch", 1),
+      config.getInt("maxToksPreDocRetrieval", 10*1000),
+      config.getDouble("triageFeatNBPrior", 50));
     
     File bf = config.getFile("expensiveFeatureBloomFilter", null);
     if (bf != null)
       search.ignoreFeaturesViaBF(bf);
 
+    Log.info("loading word frequencies...");
     ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
 
+    Log.info("getting queries...");
     List<KbpQuery> queries = TacKbp.getKbp2013SfQueries();
+    if (debugQueriesDoFirst.size() > 0) {
+      Collections.sort(queries, new Comparator<KbpQuery>() {
+        @Override
+        public int compare(KbpQuery a, KbpQuery b) {
+          int aa = debugQueriesDoFirst.contains(a.id) ? 1 : 0;
+          int bb = debugQueriesDoFirst.contains(b.id) ? 1 : 0;
+          return bb - aa;
+        }
+      });
+    }
 
     // How many results per KBP query.
-    int limit = config.getInt("limit", 1000);
-    
+    int limit = config.getInt("maxResultsPerQuery", 500);
+
+    boolean show = config.getBoolean("show", false);
+
+    Log.info("starting...");
     for (KbpQuery q : queries) {
       EC.increment("kbpQuery");
-      System.out.println(TIMER);
       Log.info(q);
 
       // 1a) Retrieve the context Communication
@@ -960,34 +1128,43 @@ public class AccumuloIndex {
       // 3) Search
       List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
 
-      // 4) Prune and show results
-      if (limit > 20 && res.size() > limit) {
+      // 4) Prune
+      if (limit > 0 && res.size() > limit) {
         Log.info("pruning " + res.size() + " queries down to " + limit);
-        res = res.subList(0, limit);
+        //res = res.subList(0, limit);  // not serializable
+        List<SitSearchResult> resPrune = new ArrayList<>(limit);
+        for (int i = 0; i < limit; i++)
+          resPrune.add(res.get(i));
+        res = resPrune;
       }
-      TIMER.start("showResults");
+
+      // 5) Retrieve communications
       for (SitSearchResult r : res) {
-        // Retrieve the comm for this result
         Communication c = commRet.get(r.getCommunicationId());
-        if (c == null) {
-          System.out.println("WARNING: could not find comm!");
-          System.out.println(r);
-        } else {
-          r.setCommunication(c);
+        r.setCommunication(c);
+      }
+
+      // 6) Show results
+      if (show) {
+        TIMER.start("showResults");
+        for (SitSearchResult r : res) {
           ShowResult sr = new ShowResult(q, r);
           sr.show(Collections.emptyList());
         }
+        TIMER.stop("showResults");
       }
-      TIMER.stop("showResults");
       
-      // 5) Serialize results
+      // 7) Serialize results
       TIMER.start("serializeResults");
       Pair<KbpQuery, List<SitSearchResult>> toSer = new Pair<>(q, res);
-      File toSerTo = new File(dirForSerializingResults, q.name + ".qrs.jser");
-      FileUtil.VERBOSE = true;
+      File toSerTo = new File(dirForSerializingResults,
+        q.id + "-" + q.name.replaceAll(" ", "_") + ".qrs.jser");
+      Log.info("serializing " + res.size() + " results to " + toSerTo.getPath());
       FileUtil.serialize(toSer, toSerTo);
       TIMER.stop("serializeResults");
-    }
+
+      System.out.println(TIMER);
+    } // END of query loop
   }
   
   
@@ -1020,11 +1197,11 @@ public class AccumuloIndex {
       TimeMarker tm = new TimeMarker();
       double interval = config.getDouble("interval", 10);
       Instance inst = new ZooKeeperInstance(
-          config.getString("instanceName"),
-          config.getString("zookeepers"));
+          config.getString("accumulo.instance"),
+          config.getString("accumulo.zookeepers"));
       Connector conn = inst.getConnector(
-          config.getString("username"),
-          new PasswordToken(config.getString("password")));
+          config.getString("accumulo.username"),
+          new PasswordToken(config.getString("accumulo.password")));
       Counts<String> ec = new Counts<>();
       try (Scanner s = conn.createScanner(T_f2t.toString(), new Authorizations());
           BufferedWriter w = FileUtil.getWriter(out)) {

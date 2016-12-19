@@ -12,6 +12,7 @@ import edu.jhu.hlt.concrete.TextSpan;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.util.TextSpanToTokens;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.Log;
@@ -118,6 +119,7 @@ public class TacQueryEntityMentionResolver {
   /** Doesn't mutate q */
   public EntityMention buildEntityMention(KbpQuery q) {
     EntityMention em = new EntityMention();
+    em.setUuid(new UUID("NA"));
     TextSpanToTokens ts2tok = new TextSpanToTokens();
     TextSpan ts = new TextSpan()
         .setStart(q.beg)
