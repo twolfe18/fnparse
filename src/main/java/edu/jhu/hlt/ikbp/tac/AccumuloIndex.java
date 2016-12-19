@@ -926,7 +926,7 @@ public class AccumuloIndex {
 
     // How many results per KBP query.
     int limit = config.getInt("limit", 1000);
-
+    
     for (KbpQuery q : queries) {
       EC.increment("kbpQuery");
       System.out.println(TIMER);
@@ -990,6 +990,28 @@ public class AccumuloIndex {
     }
   }
   
+  
+  public static void kbpSearchingMemo(ExperimentProperties config) {
+    // One file per query goes into this folder, each containing a:
+    // Pair<KbpQuery, List<SitSearchResult>>
+    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir");
+    
+    for (File f : dirForSerializingResults.listFiles()) {
+      FileUtil.VERBOSE = true;
+      Pair<KbpQuery, List<SitSearchResult>> p = (Pair<KbpQuery, List<SitSearchResult>>) FileUtil.deserialize(f);
+      KbpQuery q = p.get1();
+      List<SitSearchResult> res = p.get2();
+      Log.info(p);
+      Log.info("nResults=" + res.size() + " queryName=" + q.name);
+      for (SitSearchResult r : res) {
+        ShowResult sr = new ShowResult(q, r);
+        sr.show(Collections.emptyList());
+      }
+      System.out.println();
+    }
+    Log.info("done");
+  }
+
 
   public static class ComputeFeatureFrequencies {
     public static void main(ExperimentProperties config) throws Exception {
@@ -1052,6 +1074,8 @@ public class AccumuloIndex {
       ComputeFeatureFrequencies.main(config);
     } else if (c.equalsIgnoreCase("buildBigFeatureBloomFilters")) {
       BuildBigFeatureBloomFilters.main(config);
+    } else if (c.equalsIgnoreCase("kbpSearchMemo")) {
+      kbpSearchingMemo(config);
     } else {
       Log.info("unknown command: " + c);
     }

@@ -3751,7 +3751,7 @@ public class IndexCommunications implements AutoCloseable {
       String namespace = method.substring(saPref.length());
       Log.info("using simpleAccumulo, namespace=" + namespace);
       SimpleAccumuloConfig saConf = new SimpleAccumuloConfig(
-          namespace, // e.g. twolfe-cag1
+          namespace, // e.g. twolfe-cag1 or twolfe-cawiki-en1
           SimpleAccumuloConfig.DEFAULT_TABLE,
           SimpleAccumuloConfig.DEFAULT_INSTANCE,
           SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
