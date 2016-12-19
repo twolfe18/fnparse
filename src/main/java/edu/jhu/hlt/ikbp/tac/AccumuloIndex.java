@@ -1169,10 +1169,13 @@ public class AccumuloIndex {
   }
   
   
-  public static void kbpSearchingMemo(ExperimentProperties config) {
+  public static void kbpSearchingMemo(ExperimentProperties config) throws IOException {
     // One file per query goes into this folder, each containing a:
     // Pair<KbpQuery, List<SitSearchResult>>
     File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir");
+    
+    File wdf = config.getExistingFile("wordDocFreq");
+    ComputeIdf df = new ComputeIdf(wdf);
     
     for (File f : dirForSerializingResults.listFiles()) {
       FileUtil.VERBOSE = true;
@@ -1187,8 +1190,16 @@ public class AccumuloIndex {
         
         // Experimental: try to figure out what events are interesting
         List<String> queryEntityFeatures = r.triageFeatures;
-        assert queryEntityFeatures != null;
-        IndexCommunications.showDepPathBetweenEventsAndQuerySubject(queryEntityFeatures, r.getTokenization(), r.getCommunication());
+        if (queryEntityFeatures == null) {
+          Log.info("FIXME: for now I'm recomputing the features");
+          TokenObservationCounts tokObs = null;
+          TokenObservationCounts tokObsLc = null;
+          String nerType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
+          String[] headwords = q.name.split("\\s+");  // TODO
+          queryEntityFeatures = IndexCommunications.getEntityMentionFeatures(q.name, headwords, nerType, tokObs, tokObsLc);
+        }
+        IndexCommunications.showDepPathBetweenEventsAndQuerySubject(
+            queryEntityFeatures, r.getTokenization(), r.getCommunication(), df);
       }
       System.out.println();
     }
@@ -1259,6 +1270,8 @@ public class AccumuloIndex {
       BuildBigFeatureBloomFilters.main(config);
     } else if (c.equalsIgnoreCase("kbpSearchMemo")) {
       kbpSearchingMemo(config);
+    } else if (c.equals("develop")) {
+      IndexCommunications.develop(config);
     } else {
       Log.info("unknown command: " + c);
     }

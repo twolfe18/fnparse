@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiPredicate;
@@ -60,12 +61,14 @@ import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.Path2;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.CreateParmaTrainingData;
 import edu.jhu.hlt.ikbp.DataUtil;
 import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.features.ConcreteMentionFeatureExtractor;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw.QResultCluster;
 import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
@@ -76,6 +79,7 @@ import edu.jhu.hlt.scion.concrete.analytics.Analytics;
 import edu.jhu.hlt.scion.concrete.datasets.ConcreteDataSets;
 import edu.jhu.hlt.scion.core.accumulo.ConnectorFactory;
 import edu.jhu.hlt.scion.core.accumulo.ScionConnector;
+import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.EfficientUuidList;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -101,6 +105,16 @@ import edu.jhu.prim.util.Lambda.FnIntFloatToFloat;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
 import edu.jhu.prim.vector.IntIntHashVector;
 import edu.jhu.util.SlowParseyWrapper;
+import edu.mit.jwi.IRAMDictionary;
+import edu.mit.jwi.item.IIndexWord;
+import edu.mit.jwi.item.IPointer;
+import edu.mit.jwi.item.ISynset;
+import edu.mit.jwi.item.ISynsetID;
+import edu.mit.jwi.item.IWord;
+import edu.mit.jwi.item.IWordID;
+import edu.mit.jwi.item.POS;
+import edu.mit.jwi.item.Pointer;
+import edu.mit.jwi.item.Synset;
 
 /**
  * Produces an index of a given Concrete corpus. Writes everything to TSVs.
@@ -638,30 +652,137 @@ public class IndexCommunications implements AutoCloseable {
     assert tag.getTokenIndex() == i;
     return tag.getTag().toUpperCase().startsWith("V");
   }
+  
+//  public static boolean isNominalizedVerb(int i, edu.jhu.hlt.fnparse.datatypes.Sentence sent) {
+//    String tag = sent.getPos(i);
+//    boolean nom = tag.equalsIgnoreCase("NN") || tag.equalsIgnoreCase("NNS");
+//    if (!nom)
+//      return false;
+//
+//    IWord w = sent.getWnWord(i);
+//    if (w == null) {
+//      Log.info("failure1: " + sent.getLemmaLU(i));
+//      sent.getWnWord(i);
+//      return false;
+//    }
+//    ISynset ss = w.getSynset();
+//    if (ss == null) {
+//      Log.info("failure2: " + sent.getLemmaLU(i));
+//      return false;
+//    }
+//    
+//    List<ISynsetID> rel = ss.getRelatedSynsets(Pointer.DERIVATIONALLY_RELATED);
+//    
+//    Log.info("succ1");
+//    IRAMDictionary wn = TargetPruningData.getInstance().getWordnetDict();
+//    for (ISynsetID ssid : rel) {
+//      Log.info("checkme: " + ssid.getPOS().getTag() + " " + wn.getSynset(ssid));
+//      if (ssid.getPOS().getTag() == 'V') {
+//        // good enough
+//        Log.info("word=" + sent.getLemmaLU(i) + " relatedSynset=" + wn.getSynset(ssid));
+//        return true;
+//      }
+//    }
+//    Log.info("succ2");
+//    return false;
+//  }
+  
+  /**
+   * Returns a list of verbs which the given word could be a nominalization of,
+   * e.g. "resolution" => ["resolve", "preparation"]
+   */
+  public static List<String> inverseNominalization(int i, edu.jhu.hlt.fnparse.datatypes.Sentence sent) {
+    String pos = sent.getPos(i);
+    if (!(pos.equals("NN") || pos.equals("NNS"))) {
+      return Collections.emptyList();
+    }
+    IRAMDictionary wn = TargetPruningData.getInstance().getWordnetDict();
+
+    String term = sent.getLemma(i);
+    if (term == null) {
+      EC.increment("noLemmaUseWord");
+      term = sent.getWord(i);
+    }
+    IIndexWord iw = wn.getIndexWord(term, POS.NOUN);
+    if (iw == null) {
+//      Log.info("couldn't find " + sent.getWord(i) + "?");
+      return Collections.emptyList();
+    }
+//    System.err.flush();
+//    System.out.flush();
+//    System.out.println(iw);
+    Set<String> uniq = new HashSet<>();
+    List<String> l = new ArrayList<>();
+    if (iw.getWordIDs() == null) {
+      Log.info("no word ids for " + sent.getWord(i) + "?");
+      return Collections.emptyList();
+    }
+    for (IWordID wid : iw.getWordIDs()) {
+//      Log.info("word id: " + wid + " lemma=" + wid.getLemma() + " ss=" + wid.getSynsetID());
+      IWord w = wn.getWord(wid);
+      for (IWordID rw : w.getRelatedWords()) {
+//        System.out.println("\tREL:" + rw.getPOS().getTag() + "\t" + rw);
+        if (rw.getPOS().getTag() == 'v') {
+          if (uniq.add(rw.getLemma()))
+            l.add(rw.getLemma());
+        }
+      }
+    }
+    return l;
+  }
     
-  public static void showDepPathBetweenEventsAndQuerySubject(List<String> queryEntityFeatures, Tokenization tokenization, Communication comm) {
+  public static void showDepPathBetweenEventsAndQuerySubject(
+      List<String> queryEntityFeatures, Tokenization tokenization, Communication comm, ComputeIdf df) {
     List<Token> toks = tokenization.getTokenList().getTokenList();
     BiPredicate<String, String> tieBreaker =
         edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST);
     edu.jhu.hlt.fnparse.datatypes.Sentence sent2 = edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete(
         "ds", "id", tokenization, tieBreaker, tieBreaker, tieBreaker);
     DependencyParse deps = edu.jhu.hlt.fnparse.datatypes.Sentence.extractDeps(tokenization, tieBreaker);
+    boolean expectSingleHeaded = false;
     edu.jhu.hlt.fnparse.datatypes.DependencyParse deps2 =
-        edu.jhu.hlt.fnparse.datatypes.DependencyParse.fromConcrete(toks.size(), deps);
+        edu.jhu.hlt.fnparse.datatypes.DependencyParse.fromConcrete(toks.size(), deps, expectSingleHeaded);
+    new AddNerTypeToEntityMentions(comm);
     EntityMention em = bestGuessAtQueryMention(tokenization, comm, queryEntityFeatures);
+    if (em == null) {
+      Log.info("no EntityMentions in this Tokenization! comm=" + comm.getId() + " aka " + comm.getUuid().getUuidString());
+      return;
+    }
     System.out.println("best guess: " + em);
+    ArgMax<String> bestPath = new ArgMax<>();
+    int start = em.getTokens().getAnchorTokenIndex();
     for (Token t : toks) {
-      boolean v = isVerb(t.getTokenIndex(), tokenization);
-      if (v) {
-        int start = em.getTokens().getAnchorTokenIndex();
-        int end = t.getTokenIndex();
+      int end = t.getTokenIndex();
+      if (start == end)
+        continue;
+      List<String> invNom = inverseNominalization(t.getTokenIndex(), sent2);
+      boolean verb = isVerb(t.getTokenIndex(), tokenization);
+      if (verb || invNom.size() > 0) {
+//        if (invNom.size() > 0)
+//          System.out.println("invNom(" + t.getText() + "):\t" + invNom);
         Path2 path = new Path2(start, end, deps2, sent2);
-        if (path.connected())
-          System.err.println(path.getPath(NodeType.WORD, EdgeType.DEP, true));
-        else
-          System.err.println("not connected");
+        if (path.connected()) {
+          double idf = df.idf(t.getText());
+          int pathLen = path.getEntries().size();
+          double pathLenPenalth = 2d / (2 + pathLen);
+          int numNom = invNom.size();
+          double nomPenalty = 1;
+          if (!verb) {
+            nomPenalty *= 0.75;                 // have slight preference for verbs
+            nomPenalty *= (1d / (1 + numNom));  // and penalize unsure nominalizations
+          }
+          double score = Math.pow(idf, 1.5) * pathLenPenalth * nomPenalty;
+          String pathStr = path.getPath(NodeType.WORD, EdgeType.DEP, true);
+          bestPath.offer(pathStr, score);
+//          System.err.println(pathStr);
+//          System.out.printf("idf=%.2f pathLenPenalty=%.2f pathLen=%d nomPenalty=%.2f numNom=%d, score=%3g path=%s\n",
+//              idf, pathLenPenalth, pathLen, nomPenalty, numNom, score, pathStr);
+          System.out.printf("idf=%.2f pathLenPenalty=%.2f nomPenalty=%.2f score=%3g path=%s\n",
+              idf, pathLenPenalth, nomPenalty, score, pathStr);
+        }
       }
     }
+    System.out.println("bestPath=" + bestPath.get());
     System.out.println();
     System.out.println();
   }
@@ -686,8 +807,23 @@ public class IndexCommunications implements AutoCloseable {
     if (rel.size() > 1) {
       if (queryEntityFeatures == null)
         throw new IllegalArgumentException("need features for disambiguation");
-
-      throw new RuntimeException("implement me");
+      
+      Set<String> qf = new HashSet<>(queryEntityFeatures);
+      ArgMax<EntityMention> a = new ArgMax<>();
+      for (EntityMention em : rel) {
+        TokenObservationCounts tokObs = null;
+        TokenObservationCounts tokObsLc = null;
+//        String nerType = TacKbp.tacNerTypesToStanfordNerType(em.getEntityType());
+        String nerType = em.getEntityType();
+        String[] headwords = em.getText().split("\\s+");  // TODO
+        List<String> fs = getEntityMentionFeatures(em.getText(), headwords, nerType, tokObs, tokObsLc);
+        int score = 0;
+        for (String f : fs)
+          if (qf.contains(f))
+            score++;
+        a.offer(em, score);
+      }
+      return a.get();
     }
     
     if (rel.isEmpty())
@@ -3609,7 +3745,11 @@ public class IndexCommunications implements AutoCloseable {
     err_misc++;
     return 1;
   }
-  
+
+  /**
+   * Make sure you add entity mention types, a la:
+   *   new AddNerTypeToEntityMentions(comm);
+   */
   public static List<EntityMention> getEntityMentions(Communication c) {
     List<EntityMention> mentions = new ArrayList<>();
     if (c.isSetEntityMentionSetList()) {
@@ -4269,7 +4409,44 @@ public class IndexCommunications implements AutoCloseable {
   /** meta, just for developing code 
    * @throws Exception */
   public static void develop(ExperimentProperties config) throws Exception {
-    QueryDeprel.demo();
+//    QueryDeprel.demo();
+    
+    
+    // Wn debug:
+    // I should be able to get from "resolution.n" to "resolve.v"
+    // also: "demonstrations.n" => "demonstrate.v"
+    
+    IRAMDictionary wn = TargetPruningData.getInstance().getWordnetDict();
+    
+//    IIndexWord iw = wn.getIndexWord("resolution", POS.NOUN);
+    IIndexWord iw = wn.getIndexWord("demonstration", POS.NOUN);
+    System.err.flush();
+    System.out.flush();
+    System.out.println(iw);
+    
+    for (IWordID wid : iw.getWordIDs()) {
+      Log.info("word id: " + wid + " lemma=" + wid.getLemma() + " ss=" + wid.getSynsetID());
+      
+      
+      IWord w = wn.getWord(wid);
+      for (IWordID rw : w.getRelatedWords()) {
+        System.out.println("\t" + rw);
+      }
+      
+//      ISynset ss = wn.getSynset(wid.getSynsetID());
+//      for (Entry<IPointer, List<ISynsetID>> x : ss.getRelatedMap().entrySet()) {
+//        System.out.println("\t" + x.getKey() + " => " + x.getValue());
+//        
+//        if (x.getKey().getName().equalsIgnoreCase("hypernym")) {
+//          for (ISynsetID hs : x.getValue()) {
+//            ISynset hss = wn.getSynset(hs);
+//            System.out.println("\t\t" + hss.getGloss() + " " + hss.getPOS());
+//            System.out.println("\t\t" + hss.getRelatedMap());
+//          }
+//        }
+//      }
+      System.out.println();
+    }
   }
   
   

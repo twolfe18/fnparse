@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import edu.jhu.hlt.concrete.Dependency;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Span;
 
@@ -69,8 +70,19 @@ public class DependencyParse implements Serializable {
     this.labels = labels;
   }
   
-  public static DependencyParse fromConcrete(int n, edu.jhu.hlt.concrete.DependencyParse deps) {
-    throw new RuntimeException("implement me");
+  public static DependencyParse fromConcrete(int n, edu.jhu.hlt.concrete.DependencyParse deps, boolean expectSingleHeaded) {
+    String[] labels = new String[n];
+    int[] heads = new int[n];
+    Arrays.fill(heads, -1);
+    for (Dependency d : deps.getDependencyList()) {
+      if (d.isSetGov()) {
+        if (expectSingleHeaded && heads[d.getDep()] >= 0)
+          throw new IllegalArgumentException("multiple heads for: " + d);
+        heads[d.getDep()] = d.getGov();
+        labels[d.getDep()] = d.getEdgeType();
+      }
+    }
+    return new DependencyParse(heads, labels);
   }
   
   public static DependencyParse fromConllx(List<String[]> conllx) {
