@@ -961,6 +961,7 @@ public class AccumuloIndex {
         Object old = c2tv.put(commId, tv);
         assert old == null;
       }
+      Log.info("retrieved " + c2tv.size() + " of " + uniq.size() + " comms");
 /* BATCH SCANNER ASSUMPTION FAIL: results need not be sorted!!!
       try (BatchScanner bs = conn.createBatchScanner(T_c2w.toString(), auths, numQueryThreads)) {
         bs.setRanges(rows);
@@ -1127,7 +1128,7 @@ public class AccumuloIndex {
       // 3) Search
       List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
 
-      // 4) Prune and show results
+      // 4) Prune
       if (limit > 0 && res.size() > limit) {
         Log.info("pruning " + res.size() + " queries down to " + limit);
         //res = res.subList(0, limit);  // not serializable
@@ -1136,24 +1137,24 @@ public class AccumuloIndex {
           resPrune.add(res.get(i));
         res = resPrune;
       }
+
+      // 5) Retrieve communications
+      for (SitSearchResult r : res) {
+        Communication c = commRet.get(r.getCommunicationId());
+        r.setCommunication(c);
+      }
+
+      // 6) Show results
       if (show) {
         TIMER.start("showResults");
         for (SitSearchResult r : res) {
-          // Retrieve the comm for this result
-          Communication c = commRet.get(r.getCommunicationId());
-          if (c == null) {
-            System.out.println("WARNING: could not find comm!");
-            System.out.println(r);
-          } else {
-            r.setCommunication(c);
-            ShowResult sr = new ShowResult(q, r);
-            sr.show(Collections.emptyList());
-          }
+          ShowResult sr = new ShowResult(q, r);
+          sr.show(Collections.emptyList());
         }
         TIMER.stop("showResults");
       }
       
-      // 5) Serialize results
+      // 7) Serialize results
       TIMER.start("serializeResults");
       Pair<KbpQuery, List<SitSearchResult>> toSer = new Pair<>(q, res);
       File toSerTo = new File(dirForSerializingResults,
