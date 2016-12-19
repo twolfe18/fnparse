@@ -862,6 +862,7 @@ public class AccumuloIndex {
         List<Feat> score = new ArrayList<>();
         SitSearchResult ss = new SitSearchResult(tokUuid, null, score);
         ss.setCommunicationId(commId);
+        ss.triageFeatures = triageFeats;
         
         //String commUuid = tokUuid2commUuid.get(tokUuid);
         StringTermVec commVec = commId2terms.get(commId);
@@ -1183,6 +1184,11 @@ public class AccumuloIndex {
       for (SitSearchResult r : res) {
         ShowResult sr = new ShowResult(q, r);
         sr.show(Collections.emptyList());
+        
+        // Experimental: try to figure out what events are interesting
+        List<String> queryEntityFeatures = r.triageFeatures;
+        assert queryEntityFeatures != null;
+        IndexCommunications.showDepPathBetweenEventsAndQuerySubject(queryEntityFeatures, r.getTokenization(), r.getCommunication());
       }
       System.out.println();
     }

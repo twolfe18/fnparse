@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiPredicate;
 
 import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.accumulo.core.data.Range;
@@ -45,6 +46,7 @@ import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.Sentence;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
+import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
@@ -415,9 +417,10 @@ public class IndexCommunications implements AutoCloseable {
               int termCharLimit = 120;
               System.out.println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
               System.out.println("COREF:");
-              ShowResult.showQResult(b, b.comm, termCharLimit);
+              boolean highlighVerbs = true;
+              ShowResult.showQResult(b, b.comm, termCharLimit, highlighVerbs);
               System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
-              ShowResult.showQResult(m.canonical, m.canonical.comm, termCharLimit);
+              ShowResult.showQResult(m.canonical, m.canonical.comm, termCharLimit, highlighVerbs);
               System.out.println("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<");
             }
           }
@@ -585,10 +588,11 @@ public class IndexCommunications implements AutoCloseable {
       }
       System.out.println();
 
-      showQResult(res, comm, termCharLimit);
+      boolean highlightVerbs = true;
+      showQResult(res, comm, termCharLimit, highlightVerbs);
     }
     
-    public static void showQResult(SitSearchResult res, Communication comm, int termCharLimit) {
+    public static void showQResult(SitSearchResult res, Communication comm, int termCharLimit, boolean highlightVerbs) {
       // Result features
       System.out.println("result features:");
       if (res.featsResult != null)
@@ -609,17 +613,86 @@ public class IndexCommunications implements AutoCloseable {
         System.out.println("\t" + f);
       System.out.println();
       
+
       // Words/Tokenization
       Tokenization tokenization = findTok(res.tokUuid, comm);
       List<Token> toks = tokenization.getTokenList().getTokenList();
       System.out.printf("result tokens (in comm=%s tok=%s)\n", comm.getId(), res.tokUuid);
       for (Token t : toks) {
-//        System.out.printf("%-24s%16s%32s%48s\n", query.name, t.getText(), comm.getId(), res.tokUuid);
-        System.out.print(" " + t.getText());
+        System.out.print(" ");
+        boolean v = isVerb(t.getTokenIndex(), tokenization);
+        if (v)
+          System.out.print("<EVENT>");
+        System.out.print(t.getText());
+        if (v)
+          System.out.print("</EVENT>");
       }
       System.out.println();
       System.out.println();
     }
+  }
+    
+  public static boolean isVerb(int i, Tokenization t) {
+    TokenTagging tt = getPreferredPosTags(t);
+    TaggedToken tag = tt.getTaggedTokenList().get(i);
+    assert tag.getTokenIndex() == i;
+    return tag.getTag().toUpperCase().startsWith("V");
+  }
+    
+  public static void showDepPathBetweenEventsAndQuerySubject(List<String> queryEntityFeatures, Tokenization tokenization, Communication comm) {
+    List<Token> toks = tokenization.getTokenList().getTokenList();
+    BiPredicate<String, String> tieBreaker =
+        edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST);
+    edu.jhu.hlt.fnparse.datatypes.Sentence sent2 = edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete(
+        "ds", "id", tokenization, tieBreaker, tieBreaker, tieBreaker);
+    DependencyParse deps = edu.jhu.hlt.fnparse.datatypes.Sentence.extractDeps(tokenization, tieBreaker);
+    edu.jhu.hlt.fnparse.datatypes.DependencyParse deps2 =
+        edu.jhu.hlt.fnparse.datatypes.DependencyParse.fromConcrete(toks.size(), deps);
+    EntityMention em = bestGuessAtQueryMention(tokenization, comm, queryEntityFeatures);
+    System.out.println("best guess: " + em);
+    for (Token t : toks) {
+      boolean v = isVerb(t.getTokenIndex(), tokenization);
+      if (v) {
+        int start = em.getTokens().getAnchorTokenIndex();
+        int end = t.getTokenIndex();
+        Path2 path = new Path2(start, end, deps2, sent2);
+        if (path.connected())
+          System.err.println(path.getPath(NodeType.WORD, EdgeType.DEP, true));
+        else
+          System.err.println("not connected");
+      }
+    }
+    System.out.println();
+    System.out.println();
+  }
+
+  /**
+   * This is a first-stab at finding the position of the mention which matches the query.
+   * Before this, we are extracting features at the Tokenization level, ignoring the actual locations.
+   * 
+   * This works by looping over entityMentions
+   * 
+   * NOTE: This is slow, but a simple first impl.
+   */
+  public static EntityMention bestGuessAtQueryMention(Tokenization t, Communication c, List<String> queryEntityFeatures) {
+    List<EntityMention> rel = new ArrayList<>();
+    for (EntityMention em : getEntityMentions(c)) {
+      String tokUuid = em.getTokens().getTokenizationId().getUuidString();
+      if (tokUuid.equals(t.getUuid().getUuidString()))
+        rel.add(em);
+    }
+    
+    // Score each mention based on features (just dot prod)
+    if (rel.size() > 1) {
+      if (queryEntityFeatures == null)
+        throw new IllegalArgumentException("need features for disambiguation");
+
+      throw new RuntimeException("implement me");
+    }
+    
+    if (rel.isEmpty())
+      return null;
+    return rel.get(0);
   }
     
   private static Tokenization findTok(String tokUuid, Communication comm) {
@@ -1287,6 +1360,11 @@ public class IndexCommunications implements AutoCloseable {
 
     public List<String> importantTerms;
 
+    /**
+     * These are the features about an entity in a query which are used to look up Tokenizations.
+     * See {@link IndexCommunications#getEntityMentionFeatures(String, String[], String, TokenObservationCounts, TokenObservationCounts)}
+     */
+    public List<String> triageFeatures;
 
     public SitSearchResult(String tokUuid, SentFeats featsResult, List<Feat> score) {
       this.tokUuid = tokUuid;
@@ -3347,6 +3425,18 @@ public class IndexCommunications implements AutoCloseable {
       System.err.println(d);
       throw e;
     }
+  }
+
+  public static TokenTagging getPreferredPosTags(Tokenization t) {
+    List<TokenTagging> tt = new ArrayList<>();
+    for (TokenTagging tags : t.getTokenTaggingList())
+      if (tags.getTaggingType().equalsIgnoreCase("POS"))
+        tt.add(tags);
+    if (tt.isEmpty())
+      throw new RuntimeException("no POS in " + t);
+    if (tt.size() == 1)
+      return tt.get(0);
+    throw new RuntimeException("implement a preference over: " + tt);
   }
   
   private static DependencyParse getPreferredDependencyParse(Tokenization toks) {

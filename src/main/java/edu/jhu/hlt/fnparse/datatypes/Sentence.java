@@ -252,6 +252,16 @@ public class Sentence implements HasId, Serializable {
     s.ner = ner;
     return s;
   }
+  
+  public static edu.jhu.hlt.concrete.DependencyParse extractDeps(Tokenization t, BiPredicate<String, String> tieBreaker) {
+    edu.jhu.hlt.concrete.DependencyParse best = null;
+    for (edu.jhu.hlt.concrete.DependencyParse deps : t.getDependencyParseList()) {
+      if (best == null || tieBreaker.test(best.getMetadata().getTool(), deps.getMetadata().getTool())) {
+        best = deps;
+      }
+    }
+    return best;
+  }
 
   public Sentence(
       String dataset,

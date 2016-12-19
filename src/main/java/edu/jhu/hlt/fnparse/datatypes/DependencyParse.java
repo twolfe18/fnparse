@@ -69,6 +69,10 @@ public class DependencyParse implements Serializable {
     this.labels = labels;
   }
   
+  public static DependencyParse fromConcrete(int n, edu.jhu.hlt.concrete.DependencyParse deps) {
+    throw new RuntimeException("implement me");
+  }
+  
   public static DependencyParse fromConllx(List<String[]> conllx) {
     /* http://ilk.uvt.nl/conll/#dataformat
 1  ID  Token counter, starting at 1 for each new sentence.
