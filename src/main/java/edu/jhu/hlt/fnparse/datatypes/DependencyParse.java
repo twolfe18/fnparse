@@ -10,8 +10,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.IntFunction;
 
 import edu.jhu.hlt.concrete.Dependency;
+import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Span;
 
@@ -68,6 +70,30 @@ public class DependencyParse implements Serializable {
       throw new IllegalArgumentException();
     this.heads = heads;
     this.labels = labels;
+  }
+  
+  public static DependencyParse fromTutils(LabeledDirectedGraph deps, IntFunction<String> edgeLabels, int firstToken, int lastToken) {
+    int n = deps.getNumEdges();
+    int width = (lastToken-firstToken)+1;
+    int[] heads = new int[width];
+    String[] labels = new String[width];
+    for (int i = 0; i < n; i++) {
+      long e = deps.getEdge(i);
+      int d = LabeledDirectedGraph.unpackDep(e);
+      if (firstToken <= d && d <= lastToken) {
+        // keep
+        d -= firstToken;
+
+        int g = LabeledDirectedGraph.unpackGov(e);
+        if (g < firstToken || g > lastToken)
+          g = -1; // ROOT
+        heads[d] = g;
+        
+        int el = LabeledDirectedGraph.unpackEdge(e);
+        labels[d] = edgeLabels.apply(el);
+      }
+    }
+    return new DependencyParse(heads, labels);
   }
   
   public static DependencyParse fromConcrete(int n, edu.jhu.hlt.concrete.DependencyParse deps, boolean expectSingleHeaded) {
