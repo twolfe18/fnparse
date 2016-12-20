@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -80,7 +81,7 @@ import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
-import edu.jhu.util.HPair;
+import edu.jhu.util.SerializationTest;
 import edu.jhu.util.TokenizationIter;
 
 
@@ -649,6 +650,15 @@ public class AccumuloIndex {
     return out.toString();
   }
   
+  public static class WeightedFeature implements Serializable {
+    private static final long serialVersionUID = 5810788524410495193L;
+    public final String feature;
+    public final double weight;
+    public WeightedFeature(String f, double w) {
+      this.feature = f;
+      this.weight = w;
+    }
+  }
 
   /**
    * Roughly equivalent to {@link SituationSearch}
@@ -707,17 +717,6 @@ public class AccumuloIndex {
         return Collections.emptyList();
       }
 
-      /*
-       * 1) use a batch scan over f2t to find plausible t's
-       * 2) use a batch scan over t2f with t's from prev step, figure out how to do early stopping on this
-       */
-      
-      /*
-       * Naive Bayes vs tf-idf?
-       * argmax_t p(t|f) = p(t,f) / p(f)
-       * argmax_t g(t,f) = p(f|t) * idf(f)
-       */
-
       if (expensiveFeaturesBF != null) {
         List<String> pruned = new ArrayList<>(triageFeats.size());
         for (String f : triageFeats) {
@@ -730,36 +729,15 @@ public class AccumuloIndex {
         Log.info("kept " + pruned.size() + " of " + triageFeats.size() + " features");
         triageFeats = pruned;
       }
-
-
-/*
- * TODO This batch scan can be very costly if there are really common features
- * I'm getting a virtual hang on:
- * triageFeats=[pi:association, pi:of, pi:chinese, pi:american, pi:scientists, pi:and, pi:engineers, pb:BBBB_association, pb:association_of, pb:of_chinese, pb:chinese_american, pb:american_scientists, pb:scientists_and, pb:and_engineers, pb:engineers_AAAA]
- *
- * I could build a bloom filter for all of the feature which are really costly, and prune them
- * Or I could just have another table...
- * I think BF is the way to go
- */
-
-
-/*
- * I have made a huge mistake, BatchScanner makes no gaurantees that rows will be
- * returned in sorted order....
- * They also say that its not good if there may be a lot of entries in any of the ranges
- * I'm going to switch to a loop with a regular Scanner over one feature in the loop
- */
-
-
-
       
       // Make a batch scanner to retrieve all tokenization which contain any triageFeats
       TIMER.start("f2t/triage");
       Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
 
-
-      // ALT: Don't use batch scanner, isntead one sanner per feature
+      // Don't use batch scanner, use one scanner per feature
       // TODO Consider the ordering over features, most discriminative to least
+      // (allows you to skip retrieving toks for weak features if you have good signal from other features)
+      Map<String, List<WeightedFeature>> tokUuid2MatchedFeatures = new HashMap<>();
       for (String f : triageFeats) {
         try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
           f2tScanner.setRange(Range.exact(f));
@@ -787,66 +765,20 @@ public class AccumuloIndex {
               + " p=" + p);
 
           // Update the running score for all tokenizations
-          for (String t : toks)
+          for (String t : toks) {
             tokUuid2score.update(t, p);
+
+            List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
+            if (wfs == null) {
+              wfs = new ArrayList<>();
+              tokUuid2MatchedFeatures.put(t, wfs);
+            }
+            wfs.add(new WeightedFeature(f, p));
+          }
         }
         // NOTE: If you do a good job of sorting features you can break out of this loop
         // after a certain amount of score has already been dolled out.
       }
-/*
-      try (BatchScanner bs_f2t = conn.createBatchScanner(T_f2t.toString(), auths, numQueryThreads)) {
-        List<Range> triageFeatRows = convert(triageFeats);
-        if (batchTimeoutSeconds > 0)
-          bs_f2t.setBatchTimeout(batchTimeoutSeconds, TimeUnit.SECONDS);
-        bs_f2t.setRanges(triageFeatRows);
-        // Results will be in sorted order, keep running tally of score(tokenization)
-        GroupBy<Entry<Key, Value>, HPair<String, String>> gb = new GroupBy<>(bs_f2t.iterator(), Search::kf);
-        int gbi = 0;
-        while (gb.hasNext()) {
-
-          // This is a list of all Tokenizations which contain a given feature (key)
-          List<Entry<Key, Value>> perFeat = gb.next();
-
-          String feat = perFeat.get(0).getKey().getRow().toString();
-
-          for (Entry<Key, Value> pf : perFeat) {
-            System.out.printf("gbi=%d row=%s colf=%s colq=%s val=%s\n",
-                gbi,
-                pf.getKey().getRow(),
-                pf.getKey().getColumnFamily(),
-                pf.getKey().getColumnQualifier(),
-                pf.getValue());
-          }
-          gbi++;
-
-          // Count how many documents are in this set of tokenizations
-          // (document frequency instead of tokenization frequency for this feature)
-          Set<String> commIdsPrefixes = new HashSet<>();
-          for (Entry<Key, Value> e : perFeat) {
-            String tokUuid = e.getKey().getColumnQualifier().toString();
-            String commUuidPrefix = getCommUuidPrefixFromTokUuid(tokUuid);
-            commIdsPrefixes.add(commUuidPrefix);
-          }
-          int numToks = perFeat.size();
-          int numDocs = commIdsPrefixes.size();
-          double freq = (2d * numToks * numDocs) / (numToks + numDocs);
-          double p = (triageFeatNBPrior + 1) / (triageFeatNBPrior + freq);
-          System.out.println("triage:"
-              + " feat=" + feat
-              + " numToks=" + numToks
-              + " numDocs=" + numDocs
-              + " freq=" + freq
-              + " triageFeatNBPrior=" + triageFeatNBPrior
-              + " p=" + p);
-
-          for (Entry<Key, Value> e : perFeat) {
-            String tokUuid = e.getKey().getColumnQualifier().toString();
-            tokUuid2score.update(tokUuid, p);
-          }
-        }
-        Log.info("found " + tokUuid2score.numNonZero() + " tokUuids to retrieve");
-      }
-*/
       TIMER.stop("f2t/triage");
 
       // Now we have scores for every tokenization
@@ -868,6 +800,7 @@ public class AccumuloIndex {
         SitSearchResult ss = new SitSearchResult(tokUuid, null, score);
         ss.setCommunicationId(commId);
         ss.triageFeatures = triageFeats;
+        ss.triageFeaturesMatched = tokUuid2MatchedFeatures.get(tokUuid);
         
         //String commUuid = tokUuid2commUuid.get(tokUuid);
         StringTermVec commVec = commId2terms.get(commId);
@@ -952,7 +885,6 @@ public class AccumuloIndex {
           rows.add(Range.exact(commId));
       }
       Log.info("found " + rows.size() + " commUuids containing all " + nt + " tokUuids");
-      int numQueryThreads = 4;
       Map<String, StringTermVec> c2tv = new HashMap<>();
       for (String commId : uniq) {
         StringTermVec tv = new StringTermVec();
@@ -968,43 +900,8 @@ public class AccumuloIndex {
         assert old == null;
       }
       Log.info("retrieved " + c2tv.size() + " of " + uniq.size() + " comms");
-/* BATCH SCANNER ASSUMPTION FAIL: results need not be sorted!!!
-      try (BatchScanner bs = conn.createBatchScanner(T_c2w.toString(), auths, numQueryThreads)) {
-        bs.setRanges(rows);
-        // Group by commUuid (row in c2w)
-        Function<Entry<Key, Value>, String> keyFunction = e -> e.getKey().getRow().toString();
-        GroupBy<Entry<Key, Value>, String> gb = new GroupBy<>(bs.iterator(), keyFunction);
-        while (gb.hasNext()) {
-          List<Entry<Key, Value>> wordsForComm = gb.next();
-          String commId = wordsForComm.get(0).getKey().getRow().toString();
-          int n = wordsForComm.size();
-          StringTermVec tv = new StringTermVec();
-          for (int i = 0; i < n; i++) {
-            Entry<Key, Value> e = wordsForComm.get(i);
-            String word = e.getKey().getColumnQualifier().toString();
-            int count = decodeCount(e.getValue().get());
-            tv.add(word, count);
-          }
-          Object old = c2tv.put(commId, tv);
-          assert old == null;
-        }
-      }
-*/
       TIMER.stop("c2w/getWordsForComms");
       return c2tv;
-    }
-    
-    private static HPair<String, String> kf(Entry<Key, Value> f2t_entry) {
-      String feat = f2t_entry.getKey().getRow().toString();
-      String featType = f2t_entry.getKey().getColumnFamily().toString();
-      return new HPair<>(feat, featType);
-    }
-    
-    private static List<Range> convert(List<String> rows) {
-      List<Range> r = new ArrayList<>(rows.size());
-      for (String s : rows)
-        r.add(Range.exact(s));
-      return r;
     }
   }
   
@@ -1212,12 +1109,17 @@ public class AccumuloIndex {
     ComputeIdf df = new ComputeIdf(wdf);
     
     // Load parma
-    File modelFile = config.getFile("dedup.model");
-    IntDoubleHashMap idf = null;
+    ParmaVw parma = null;
+    boolean useParma = config.getBoolean("useParma", true);
+    Log.info("useParma=" + useParma);
     String parmaSitTool = EntityEventPathExtraction.class.getName();
-    String parmaEntTool = null;
-    int parmaVwPort = config.getInt("vw.port", 8094);
-    ParmaVw parma = new ParmaVw(modelFile, idf, parmaSitTool, parmaEntTool, parmaVwPort);
+    if (useParma) {
+      File modelFile = config.getFile("dedup.model");
+      IntDoubleHashMap idf = null;
+      String parmaEntTool = null;
+      int parmaVwPort = config.getInt("vw.port", 8094);
+      parma = new ParmaVw(modelFile, idf, parmaSitTool, parmaEntTool, parmaVwPort);
+    }
 
     // Iterate over (query, result*), one per file
     for (File f : dirForSerializingResults.listFiles()) {
@@ -1238,67 +1140,90 @@ public class AccumuloIndex {
       Log.info(p);
       Log.info("nResults=" + res.size() + " queryName=" + q.name);
       TIMER.start("eventSelection");
+      List<SitSearchResult> resWithSituations = new ArrayList<>();
       for (int resultIdx = 0; resultIdx < res.size(); resultIdx++) {
         SitSearchResult r = res.get(resultIdx);
         
         // Experimental: try to figure out what events are interesting
-        List<String> queryEntityFeatures = r.triageFeatures;
-        if (queryEntityFeatures == null) {
+        if (r.triageFeatures == null) {
           TIMER.start("unNecessaryQueryFeats");
 //          Log.info("FIXME: for now I'm recomputing the features");
           TokenObservationCounts tokObs = null;
           TokenObservationCounts tokObsLc = null;
           String nerType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
           String[] headwords = q.name.split("\\s+");  // TODO
-          queryEntityFeatures = IndexCommunications.getEntityMentionFeatures(q.name, headwords, nerType, tokObs, tokObsLc);
+          r.triageFeatures = IndexCommunications.getEntityMentionFeatures(q.name, headwords, nerType, tokObs, tokObsLc);
           TIMER.stop("unNecessaryQueryFeats");
           EC.increment("unNecessaryQueryFeats");
         }
 
         // Search for an interesting situation
-        EntityEventPathExtraction eep = new EntityEventPathExtraction(
-            queryEntityFeatures, r.getTokenization(), r.getCommunication());
-        boolean verbose = false;
+        EntityEventPathExtraction eep = new EntityEventPathExtraction(r);
+        eep.verboseEntSelection = true;
+        boolean verbose = !useParma;
         IntPair entEvent = eep.findMostInterestingEvent(df, verbose);
         r.yhatQueryEntityHead = entEvent.first;
         r.yhatEntitySituation = entEvent.second;
+        
+        if (r.yhatEntitySituation < 0)
+          EC.increment("result/skip/noSit");
+        if (r.yhatQueryEntityHead < 0)
+          EC.increment("result/skip/noEnt");
+        if (r.yhatEntitySituation < 0 || r.yhatQueryEntityHead < 0)
+          continue;
         EC.increment("result/entSitsSelected");
+        resWithSituations.add(r);
         
         SituationMention sm = ParmaVw.makeSingleTokenSm(r.yhatEntitySituation, r.tokUuid, eep.getClass().getName());
         sm.setUuid(new UUID("mention" + resultIdx));
+//        Log.info("created smUuid=" + sm.getUuid().getUuidString()
+//            + " for SitSearchResult tokUuid=" + r.tokUuid
+//            + " in " + r.getCommunicationId()
+//            + " sm.trs=" + sm.getTokens()
+//            + "\t" + r.getWordsInTokenizationWithHighlightedEntAndSit());
         ParmaVw.addToOrCreateSitutationMentionSet(r.getCommunication(), sm, parmaSitTool);
 
         // Switch findMOstInterestingEvent to verbose=true if you want to see these
-//        ShowResult sr = new ShowResult(q, r);
-//        sr.show(Collections.emptyList());
-      }
-      TIMER.stop("eventSelection");
-
-      // Call parma to remove duplicates
-      // NOTE: ParmaVw expect that the situations are *in the communications* when dedup is called.
-//      parma.verbose = true;
-      Log.info("starting dedup for " + q);
-      TIMER.start("parmaDedup");
-      int maxResluts = config.getInt("numDeduppedResults", 10); // NOTE: Parma is O(n^2) in this value!
-      List<QResultCluster> dedupped = parma.dedup(res, maxResluts);
-      TIMER.stop("parmaDedup");
-      System.out.println();
-      Log.info("showing dedupped results for " + q);
-      for (QResultCluster clust : dedupped) {
-        ShowResult sr = new ShowResult(q, clust.canonical);
-        sr.show(Collections.emptyList());
-        EC.increment("result/dedup/canonical");
-
-        // Show things we thought were coref with the canonical above:
-        int nr = clust.numRedundant();
-        System.out.println("this mention is canonical for " + nr + " other mentions");
-        for (int i = 0; i < nr; i++) {
-          System.out.println("\tredundant: " + clust.getRedundant(i).getWordsInTokenizationWithHighlightedEntAndSit());
-          EC.increment("result/dedup/redundant");
+        if (!useParma) {
+          ShowResult sr = new ShowResult(q, r);
+          sr.show(Collections.emptyList());
         }
       }
-      System.out.println();
+      res = resWithSituations;
+      resWithSituations = null;
+      TIMER.stop("eventSelection");
+
+
+      if (useParma) {
+        // Call parma to remove duplicates
+        // NOTE: ParmaVw expect that the situations are *in the communications* when dedup is called.
+//        parma.verbose(true);
+        Log.info("starting dedup for " + q);
+
+        TIMER.start("parmaDedup");
+        int maxResluts = config.getInt("numDeduppedResults", 10); // NOTE: Parma is O(n^2) in this value!
+        List<QResultCluster> dedupped = parma.dedup(res, maxResluts);
+        System.out.println();
+        TIMER.stop("parmaDedup");
+
+        Log.info("showing dedupped results for " + q);
+        for (QResultCluster clust : dedupped) {
+          ShowResult sr = new ShowResult(q, clust.canonical);
+          sr.show(Collections.emptyList());
+          EC.increment("result/dedup/canonical");
+
+          // Show things we thought were coref with the canonical above:
+          int nr = clust.numRedundant();
+          System.out.println("this mention is canonical for " + nr + " other mentions");
+          for (int i = 0; i < nr; i++) {
+            System.out.println("\tredundant: " + clust.getRedundant(i).getWordsInTokenizationWithHighlightedEntAndSit());
+            EC.increment("result/dedup/redundant");
+          }
+        }
+        System.out.println();
+      }
       
+
       System.out.println("AccumuloIndex timer:");
       System.out.println(TIMER);
       System.out.println("IndexCommunications timer:");

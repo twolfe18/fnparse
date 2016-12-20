@@ -70,6 +70,7 @@ import edu.jhu.hlt.ikbp.data.FeatureType;
 import edu.jhu.hlt.ikbp.data.Id;
 import edu.jhu.hlt.ikbp.features.ConcreteMentionFeatureExtractor;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.WeightedFeature;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw.QResultCluster;
 import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
@@ -215,7 +216,11 @@ public class IndexCommunications implements AutoCloseable {
     /** @deprecated in accumulo pipeline we use strings not hashes */
     private IntDoubleHashMap idf;
     
-    public boolean verbose = false;
+    private boolean verbose = false;
+    public void verbose(boolean setTo) {
+      verbose = setTo;
+      featEx.verbose = setTo;
+    }
     
     /**
      * @param modelFile should be trained by VW,
@@ -307,6 +312,8 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     public static SituationMention makeSingleTokenSm(int tokenIndex, String tokenizationUuid, String sitKind) {
+      if (tokenIndex < 0)
+        throw new IllegalArgumentException("tokenIndex=" + tokenIndex);
       SituationMention sm = new SituationMention();
       sm.setUuid(new UUID(""));
       sm.setArgumentList(Collections.emptyList());
@@ -387,6 +394,9 @@ public class IndexCommunications implements AutoCloseable {
       if (a.comm == null)
         throw new IllegalArgumentException();
       
+      if (verbose)
+        Log.info("finding nodes for " + a.getWordsInTokenizationWithHighlightedEntAndSit());
+      
       edu.jhu.hlt.ikbp.data.Node n = new edu.jhu.hlt.ikbp.data.Node();
       
       // Node's id is the Tokenization UUID of the result
@@ -410,8 +420,11 @@ public class IndexCommunications implements AutoCloseable {
               Id id = new Id()
                   .setType(FeatureType.CONCRETE_UUID.getValue())
                   .setName(em.getUuid().getUuidString());
-              if (verbose)
-                Log.info("creating entity node: " + em.getUuid().getUuidString());
+              if (verbose) {
+                Log.info("creating entity node, emUuid=" + em.getUuid().getUuidString()
+                    + " from tool " + ems.getMetadata().getTool()
+                    + " in comm=" + a.getCommunicationId());
+              }
               n.addToFeatures(id);
               nEnt++;
             }
@@ -432,8 +445,12 @@ public class IndexCommunications implements AutoCloseable {
               Id id = new Id()
                   .setType(FeatureType.CONCRETE_UUID.getValue())
                   .setName(sm.getUuid().getUuidString());
-              if (verbose)
-                Log.info("creating situation node: " + sm.getUuid().getUuidString());
+              if (verbose) {
+                Log.info("creating situation node smUuid=" + sm.getUuid().getUuidString()
+                    + " from tool " + sms.getMetadata().getTool()
+                    + " sm.trs=" + sm.getTokens()
+                    + " in comm=" + a.getCommunicationId());
+              }
               n.addToFeatures(id);
               nSit++;
             }
@@ -454,7 +471,6 @@ public class IndexCommunications implements AutoCloseable {
     
     private void setTopicForResults(List<SitSearchResult> results) {
       TIMER.start("parmaVW/setTopic");
-//      Set<String> commIds = new HashSet<>();
       List<Communication> comms = new ArrayList<>();
       Map<String, Communication> assureNoCommDups = new HashMap<>();
       for (SitSearchResult r : results) {
@@ -467,8 +483,6 @@ public class IndexCommunications implements AutoCloseable {
         } else if (old != cur) {
           throw new RuntimeException("duplicate comms sharing an id! " + r.getCommunicationId());
         }
-//        if (commIds.add(r.getCommunicationId()))
-//          comms.add(r.comm);
       }
       if (verbose)
         Log.info("setting topic, nComms=" + comms.size() + " nResults=" + results.size());
@@ -482,10 +496,8 @@ public class IndexCommunications implements AutoCloseable {
       for (Communication c : comms)
         ConcreteToolAliaser.DParse.copyIfNotPresent(c, sourceTool, destTool, allowFail);
       
-      // FOR DEBUGGING
-//      FileUtil.serialize(comms, new File("/tmp/dbg-topic-comms-list.jser"));
-      
       featEx.set(comms);
+
       if (verbose)
         Log.info("done, " + featEx.events);
       TIMER.stop("parmaVW/setTopic");
@@ -538,7 +550,7 @@ public class IndexCommunications implements AutoCloseable {
         boolean dup  = false;
         for (int j = 0; j < d.size() && !dup; j++) {
           QResultCluster m = d.get(j);
-          boolean c = coref(b, m.canonical);
+          boolean c = coref(m.canonical, b);
           dup |= c;
           if (c) {
             m.addRedundant(b);
@@ -859,13 +871,72 @@ public class IndexCommunications implements AutoCloseable {
     
   public static class EntityEventPathExtraction {
     List<String> queryEntityFeatures;
+    List<WeightedFeature> queryEntityFeaturesMatched;
     Tokenization tokenization;
     Communication comm;
     
-    public EntityEventPathExtraction(List<String> queryEntityfeatures, Tokenization toks, Communication comm) {
-      this.queryEntityFeatures = queryEntityfeatures;
+    public boolean verboseEntSelection = false;
+    public boolean verboseSitSelection = false;
+    
+    public EntityEventPathExtraction(SitSearchResult r) {
+      this(r.triageFeatures, r.triageFeaturesMatched, r.getTokenization(), r.getCommunication());
+    }
+
+    public EntityEventPathExtraction(
+        List<String> queryEntityFeatures,
+        List<WeightedFeature> queryEntityFeaturesMatched,
+        Tokenization toks,
+        Communication comm) {
+
+      if (queryEntityFeatures == null || queryEntityFeatures.isEmpty())
+        throw new IllegalArgumentException();
+      if (toks == null || comm == null)
+        throw new IllegalArgumentException();
+        
+      this.queryEntityFeatures = queryEntityFeatures;
+      this.queryEntityFeaturesMatched = queryEntityFeaturesMatched;
       this.tokenization = toks;
       this.comm = comm;
+    }
+    
+    private Map<String, Double> _indexMatchedFeatsMemo;
+    private Map<String, Double> indexMatchedFeats() {
+      if (_indexMatchedFeatsMemo == null) {
+        _indexMatchedFeatsMemo = new HashMap<>();
+        if (queryEntityFeaturesMatched == null) {
+          Log.info("queryEntityFeaturesMatched is not set!");
+        } else {
+          for (WeightedFeature wf : queryEntityFeaturesMatched) {
+            Object old = _indexMatchedFeatsMemo.put(wf.feature, wf.weight);
+            assert old == null : "duplicate features? " + wf.feature;
+          }
+        }
+      }
+      return _indexMatchedFeatsMemo;
+    }
+
+    private int chooseHeadOfEntityMention(EntityMention em) {
+      if (em.getTokens().getTokenizationId().getUuidString().equals(tokenization.getUuid().getUuidString()))
+        throw new IllegalArgumentException();
+      // Try to choose a token which matches some triage features
+      Map<String, Double> w = indexMatchedFeats();
+      ArgMax<Integer> a = new ArgMax<>();
+      for (int i = 0; i < em.getTokens().getTokenIndexListSize(); i++) {
+        int t = em.getTokens().getTokenIndexList().get(i);
+        double score = 0;
+        
+        // Features may not be present, if so fall back on the head
+        boolean head = em.getTokens().isSetAnchorTokenIndex() && t == em.getTokens().getAnchorTokenIndex();
+        if (head) score += 1.0;
+
+        String word = tokenization.getTokenList().getTokenList().get(t).getText();
+        score += w.getOrDefault("pi:" + word.toLowerCase(), 0d);
+        score += w.getOrDefault("hi:" + word.toLowerCase(), 0d);
+        score += w.getOrDefault("h:" + word, 0d);
+        System.out.printf("[chooseHeadOfEntityMention] t=%d w=%s head=%s score=%.2f\n", t, w, head, score);
+        a.offer(t, score);
+      }
+      return a.get();
     }
 
     /**
@@ -882,7 +953,7 @@ public class IndexCommunications implements AutoCloseable {
       edu.jhu.hlt.fnparse.datatypes.DependencyParse deps2 =
           edu.jhu.hlt.fnparse.datatypes.DependencyParse.fromConcrete(toks.size(), deps, expectSingleHeaded);
       new AddNerTypeToEntityMentions(comm);
-      EntityMention em = bestGuessAtQueryMention(tokenization, comm, queryEntityFeatures);
+      EntityMention em = bestGuessAtQueryMention(tokenization, comm, queryEntityFeatures, verboseEntSelection);
       if (em == null) {
         if (verbose)
           Log.info("no EntityMentions in this Tokenization! comm=" + comm.getId() + " aka " + comm.getUuid().getUuidString());
@@ -891,7 +962,14 @@ public class IndexCommunications implements AutoCloseable {
       if (verbose)
         System.out.println("best guess: " + em);
       ArgMax<Pair<String, Token>> bestPath = new ArgMax<>();
-      int start = em.getTokens().getAnchorTokenIndex();
+      
+      // NOTE: This is not always good.
+      // For example, during the search for "Esther-Ethy Mamane"
+      // we correctly find the EntityMention "Claudine and Esther-Ethy Mamane"
+      // but get the wrong head of "Claudine"
+//      int start = em.getTokens().getAnchorTokenIndex();
+      int start = chooseHeadOfEntityMention(em);
+
       for (Token t : toks) {
         int end = t.getTokenIndex();
         if (start == end)
@@ -943,7 +1021,7 @@ public class IndexCommunications implements AutoCloseable {
    * 
    * NOTE: This is slow, but a simple first impl.
    */
-  public static EntityMention bestGuessAtQueryMention(Tokenization t, Communication c, List<String> queryEntityFeatures) {
+  public static EntityMention bestGuessAtQueryMention(Tokenization t, Communication c, List<String> queryEntityFeatures, boolean verbose) {
     List<EntityMention> rel = new ArrayList<>();
     for (EntityMention em : getEntityMentions(c)) {
       String tokUuid = em.getTokens().getTokenizationId().getUuidString();
@@ -955,7 +1033,8 @@ public class IndexCommunications implements AutoCloseable {
     if (rel.size() > 1) {
       if (queryEntityFeatures == null)
         throw new IllegalArgumentException("need features for disambiguation");
-      
+      if (verbose)
+        Log.info("finding things similar to query with feats=" + queryEntityFeatures);
       Set<String> qf = new HashSet<>(queryEntityFeatures);
       ArgMax<EntityMention> a = new ArgMax<>();
       for (EntityMention em : rel) {
@@ -965,10 +1044,18 @@ public class IndexCommunications implements AutoCloseable {
         String nerType = em.getEntityType();
         String[] headwords = em.getText().split("\\s+");  // TODO
         List<String> fs = getEntityMentionFeatures(em.getText(), headwords, nerType, tokObs, tokObsLc);
-        int score = 0;
-        for (String f : fs)
-          if (qf.contains(f))
-            score++;
+        double score = 0;
+        for (String f : fs) {
+          if (qf.contains(f)) {
+            // Have a slight preference for smaller mentions, as they are biased to randomly match more features
+            double k = 5;
+            score += k / (k + fs.size());
+          }
+        }
+
+        if (verbose) {
+          System.out.printf("score=%.2f headwords=%s feats=%s\n", score, Arrays.toString(headwords), fs);
+        }
         a.offer(em, score);
       }
       return a.get();
@@ -1651,6 +1738,12 @@ public class IndexCommunications implements AutoCloseable {
      * See {@link IndexCommunications#getEntityMentionFeatures(String, String[], String, TokenObservationCounts, TokenObservationCounts)}
      */
     public List<String> triageFeatures;
+    
+    /**
+     * A subset of triageFeats which were found in this result, along with the
+     * weight they received (based on how common a given feature is).
+     */
+    public List<WeightedFeature> triageFeaturesMatched;
     
     /** Head token index of the mention of the query entity/subject in this tokenization */
     public int yhatQueryEntityHead = -1;

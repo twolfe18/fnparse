@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.IntFunction;
 import java.util.function.Predicate;
 
 import approxlib.distance.EditDist;
@@ -29,6 +30,9 @@ import edu.jhu.hlt.concrete.EntityMentionSet;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.UUID;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
 import edu.jhu.hlt.ikbp.DataUtil;
@@ -77,6 +81,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
   public Counts<String> events = new Counts<>();
   public MultiTimer timer = new MultiTimer();
   public boolean requireAtLeastOneMention = true;
+  public boolean verbose = false;
   
   /**
    * @param mentionToolName is the name of the tool which creates {@link SituationMention}s and {@link EntityMention}s in the given {@link Communication}s
@@ -117,6 +122,8 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
       // Add SituationMentions
       if (c.isSetSituationMentionSetList()) {
         for (SituationMentionSet sms : c.getSituationMentionSetList()) {
+          if (verbose)
+            Log.info("indexing SituationMentions from " + sms.getMetadata().getTool() + " in " + c.getId());
           for (SituationMention sm : sms.getMentionList()) {
             // We can't expect ALL SituationMentions to be in the ConcreteDocumentMapping, since we only take a subset...
             // e.g. Comm contains [semafor, EntityEventPathExtraction] SituationMentions
@@ -153,6 +160,8 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
       // Add EntityMentions
       if (c.isSetEntityMentionSetList()) {
         for (EntityMentionSet ems : c.getEntityMentionSetList()) {
+          if (verbose)
+            Log.info("indexing EntityMentions from " + ems.getMetadata().getTool() + " in " + c.getId());
           for (EntityMention em : ems.getMentionList()) {
             if (!m.containsUuid(em.getUuid()))
               continue;
@@ -199,12 +208,16 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
       if (i == mention.getFirstToken())
         System.out.println("-----------------------------------------");
       LabeledDirectedGraph.Node n = deps.getNode(i);
-      System.out.printf("%d\t%-20s\t%-10s\t%-10s\t%-10s\n",
-          i,
-          d.getWordStr(i),
-          a.pos(d.getPosH(i)),
-          n.isRoot() ? "ROOT" : a.dep(n.getParentEdgeLabel(0)),
-          n.isRoot() ? "ROOT" : d.getWordStr(n.getParent(0)));
+      if (n == null) {
+        System.out.println(i + "\t --- no dep node/edges at this index ---");
+      } else {
+        System.out.printf("%d\t%-20s\t%-10s\t%-10s\t%-10s\n",
+            i,
+            d.getWordStr(i),
+            a.pos(d.getPosH(i)),
+            n.isRoot() ? "ROOT" : a.dep(n.getParentEdgeLabel(0)),
+                n.isRoot() ? "ROOT" : d.getWordStr(n.getParent(0)));
+      }
       if (i == mention.getLastToken())
         System.out.println("-----------------------------------------");
     }
@@ -223,7 +236,6 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
    * @param concreteMention2 should refer to an (entity|situation) mention by UUID (the Id's name)
    */
   public List<String> pairwiseFeats(Id concreteMention1, Id concreteMention2) {
-    boolean verbose = false;
     
     // Resolve both mentions (they must be in this topic)
     IntPair loc1 = mentionLocations.get(concreteMention1.getName());
@@ -239,6 +251,8 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     ConcreteDocumentMapping cd1 = cdocs.get(loc1.first);
     Document d1 = cd1.getDocument();
     Document.Constituent mention1 = d1.getConstituent(loc1.second);
+    if (verbose)
+      Log.info("looking up cm1=" + concreteMention1 + " refers to " + mention1 + " in " + cd1.getCommunication().getId());
     int h1 = hf.head(d1, mention1.getFirstToken(), mention1.getLastToken());
     if (h1 < 0) {
       Log.info("warning: no head for " + loc1 + ": " + mention1.getFirstToken() + ", " + mention1.getLastToken());
@@ -250,6 +264,8 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     ConcreteDocumentMapping cd2 = cdocs.get(loc2.first);
     Document d2 = cd2.getDocument();
     Document.Constituent mention2 = d2.getConstituent(loc2.second);
+    if (verbose)
+      Log.info("looking up cm2=" + concreteMention2 + " refers to " + mention2 + " in " + cd2.getCommunication().getId());
     int h2 = hf.head(d2, mention2.getFirstToken(), mention2.getLastToken());
     if (h2 < 0) {
       Log.info("warning: no head for " + loc2 + ": " + mention2.getFirstToken() + ", " + mention2.getLastToken());
@@ -273,8 +289,8 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     String ts1 = null, ts2 = null;
     try {
       EditDist ed = new EditDist(true);
-      ts1 = makeTreeString(mention1);
-      ts2 = makeTreeString(mention2);
+      ts1 = makeTreeString(mention1, h1, hf);
+      ts2 = makeTreeString(mention2, h2, hf);
       if (ts1 == null || ts2 == null) {
         Log.info("WARNING: makeTreeString failed");
       } else {
@@ -310,7 +326,10 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
         f.add("aligned=" + aligned + "/" + n);
       }
     } catch (NullPointerException npe) {
+      npe.printStackTrace();
       Log.info("WARNING: TED feature failed, ts1=" + ts1 + " ts2=" + ts2);
+      System.out.println();
+      System.out.println();
     }
     
     if (verbose) {
@@ -397,25 +416,62 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     return b.freeze();
   }
   
-  private static String makeTreeString(Document.Constituent mention) {
-    // Find the root of the relevant sentence
-//    int t = mention.getLastToken();
+  private static String makeTreeString(Document.Constituent mention, int h, DParseHeadFinder hf) {
     Document d = mention.getDocument();
-
-//    LabeledDirectedGraph.Node node = d.parseyMcParseFace.getNode(t);
-//    while (node != null && !node.isRoot())
-//      node = node.getParentNode(0);
-    DParseHeadFinder hf = new DParseHeadFinder();
-    hf.useParse(doc -> doc.parseyMcParseFace);
-    int h = hf.head(d, mention.getFirstToken(), mention.getLastToken());
-    if (h < 0)
-      return null;
+//    DParseHeadFinder hf = new DParseHeadFinder();
+//    hf.useParse(doc -> doc.parseyMcParseFace);
+//    int h = hf.head(d, mention.getFirstToken(), mention.getLastToken());
+//    if (h < 0)
+//      return null;
     LabeledDirectedGraph deps = hf.getParse(d);
+    if (deps == null) {
+      Log.info("warning: can't find deps, doc=" + d.getId() + " h=" + h);
+      return null;
+    }
     LabeledDirectedGraph rot = rotateTreeAboutHeadword(deps, h);
+    if (rot == null) {
+      Log.info("warning: can't rotate, doc=" + d.getId() + " h=" + h);
+      return null;
+    }
     LabeledDirectedGraph.Node node = rot.getNode(h);  // node indices are the same, can still use h
+    if (node == null) {
+      Log.info("warning: can't get head after rotating, doc=" + d.getId() + " h=" + h);
+      
+      try {
+      IntFunction<String> showNode = d::getWordStr;
+      IntFunction<String> showEdge = d.getAlphabet()::dep;
+      deps.dfsShow(h, showNode, showEdge, "orig tree: ", System.out);
+      rot.dfsShow(h, showNode, showEdge, "rot tree:  ", System.out);
+      System.out.println();
+      
+      int sentBound = d.getT2cSentence().getParent(h);
+      int firstToken = d.getConstituent(sentBound).getFirstToken();
+      int lastToken = d.getConstituent(sentBound).getLastToken();
+      System.out.println("first=" + firstToken + " last=" + lastToken);
+      Sentence sent = Sentence.convertFromTutils("ds", "id", d, firstToken, lastToken, false, false, false, false, false);
+
+      // Show the original list of edges
+      System.out.println("orig:");
+      DependencyParse deps2 = DependencyParse.fromTutils(deps, showEdge, firstToken, lastToken);
+      System.out.println(Describe.sentenceWithDeps(sent, deps2));
+      System.out.println();
+      
+      // Show rot-ed
+      System.out.println("rot:");
+      DependencyParse rot2 = DependencyParse.fromTutils(rot, showEdge, firstToken, lastToken);
+      System.out.println(Describe.sentenceWithDeps(sent, rot2));
+      System.out.println();
+      } catch (NullPointerException npe) {
+        throw new RuntimeException(npe);
+      }
+      
+      return null;
+    }
     
     // Recursively build the tree string
     String ts = makeTreeString(node, d);
+    if (ts == null)
+      Log.info("warning: can't build tree string");
     
     return ts;
   }
