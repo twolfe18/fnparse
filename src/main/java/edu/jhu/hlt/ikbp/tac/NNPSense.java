@@ -1,6 +1,7 @@
 package edu.jhu.hlt.ikbp.tac;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -93,17 +94,21 @@ public class NNPSense {
     
     // Retrieve Tokenization which contain the anchor
     try (Scanner s = conn.createScanner(AccumuloIndex.T_f2t.toString(), new Authorizations())) {
-      s.setRange(Range.exact(text));
+      s.setRange(Range.exact("h:" + text));
       for (Entry<Key, Value> e : s) {
         String tokUuid = e.getKey().getColumnQualifier().toString();
         String commUuidP = AccumuloIndex.getCommUuidPrefixFromTokUuid(tokUuid);
         commPrefixes.add(commUuidP);
         tokUuids.add(Range.exact(tokUuid));
-        if (commPrefixes.size() == 1000)
+        if (commPrefixes.size() == 10000)
           break;
         if (tm.enoughTimePassed(2))
           Log.info("found " + tokUuids.size() + " toks and " + commPrefixes + " comm uuid prefixes");
       }
+    }
+    if (tokUuids.isEmpty()) {
+      Log.info("returning early, no toks");
+      return;
     }
     
     // Retrieve the IDs of the Communications which contain those Tokenizations
@@ -120,11 +125,16 @@ public class NNPSense {
           Log.info("found " + commUuids.size() + " comm uuids");
       }
     }
+    if (commUuids.isEmpty()) {
+      Log.info("returning early, no comms");
+      return;
+    }
     
     // Retrieve those Communications
     // and on the fly figure out what the values are there
     Log.info("retrieving " + commUuids.size() + " communications by id");
     TDeserializer deser = new TDeserializer(SimpleAccumulo.COMM_SERIALIZATION_PROTOCOL);
+    int commsProcessed = 0;
     for (String commUuid : commUuids) {
       try (Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations())) {
         // Find comm
@@ -138,6 +148,10 @@ public class NNPSense {
         
         // Find anchor and feature values
         scanComm(c);
+
+        commsProcessed++;
+        if (tm.enoughTimePassed(2))
+          Log.info("commsProcessed=" + commsProcessed);
       }
     }
     Log.info("done");
@@ -165,7 +179,7 @@ public class NNPSense {
         return;
     }
     
-    Log.info("matched " + text + " in " + c.getId());
+    //Log.info("matched " + text + " in " + c.getId());
     for (Dependency d : deps.getDependencyList()) {
       if (d.isSetGov() && d.getGov() == i) {
         int j = d.getDep();
@@ -178,9 +192,20 @@ public class NNPSense {
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-    NNPSense s = new NNPSense("Spooner", null);
-    s.scanAccumulo();
-    System.out.println(s.features);
+    for (String x : Arrays.asList("Spooner", "Goude", "ALICO", "Mamane", "Esther-Ethy", "Denaro", "Bamba", "Youssoufou")) {
+      NNPSense s = new NNPSense(x, null);
+      s.scanAccumulo();
+
+      int k = 100;
+      List<String> keys = s.features.getKeysSortedByCount(true);
+      if (keys.size() > k)
+        keys = keys.subList(0, k);
+      System.out.println("totalCount=" + s.features.getTotalCount());
+      for (String c : keys) {
+        System.out.printf("%20s %20s %d %.4f\n", x, c, s.features.getCount(c), s.features.getProportion(c));
+      }
+      System.out.println();
+    }
     Log.info("done");
   }
 
