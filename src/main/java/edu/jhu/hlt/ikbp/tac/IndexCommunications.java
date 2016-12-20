@@ -212,6 +212,7 @@ public class IndexCommunications implements AutoCloseable {
     private String situationMentionToolName;
     private String entityMentionToolName;
     
+    /** @deprecated in accumulo pipeline we use strings not hashes */
     private IntDoubleHashMap idf;
     
     public boolean verbose = false;
@@ -396,6 +397,9 @@ public class IndexCommunications implements AutoCloseable {
       n.setFeatures(new ArrayList<>());
       
       // Add features for all pairs
+      if (verbose)
+        Log.info("checking EntityMention tool " + entityMentionToolName);
+      int nEnt = 0;
       if (a.comm.isSetEntityMentionSetList() && entityMentionToolName != null) {
         for (EntityMentionSet ems : a.comm.getEntityMentionSetList()) {
           if (entityMentionToolName.equals(ems.getMetadata().getTool())) {
@@ -406,12 +410,18 @@ public class IndexCommunications implements AutoCloseable {
               Id id = new Id()
                   .setType(FeatureType.CONCRETE_UUID.getValue())
                   .setName(em.getUuid().getUuidString());
+              if (verbose)
+                Log.info("creating entity node: " + em.getUuid().getUuidString());
               n.addToFeatures(id);
+              nEnt++;
             }
           }
         }
       }
 
+      if (verbose)
+        Log.info("checking SituationMention tool " + situationMentionToolName);
+      int nSit = 0;
       if (a.comm.isSetSituationMentionSetList() && situationMentionToolName != null) {
         for (SituationMentionSet sms : a.comm.getSituationMentionSetList()) {
           if (situationMentionToolName.equals(sms.getMetadata().getTool())) {
@@ -422,12 +432,17 @@ public class IndexCommunications implements AutoCloseable {
               Id id = new Id()
                   .setType(FeatureType.CONCRETE_UUID.getValue())
                   .setName(sm.getUuid().getUuidString());
+              if (verbose)
+                Log.info("creating situation node: " + sm.getUuid().getUuidString());
               n.addToFeatures(id);
+              nSit++;
             }
           }
         }
       }
 
+      if (verbose)
+        Log.info("nEnt=" + nEnt + " nSit=" + nSit + " for SitSearchResult " + a);
       return n;
     }
     
@@ -488,13 +503,24 @@ public class IndexCommunications implements AutoCloseable {
       public void addRedundant(SitSearchResult r) {
         redundant.add(r);
       }
+      
+      public int numRedundant() {
+        return redundant.size();
+      }
+      
+      public SitSearchResult getRedundant(int i) {
+        return redundant.get(i);
+      }
     }
 
     /**
      * Resulting list contains (canonicalResult, otherResultsInSameCluster) entries.
      * The canonicalResult will not appear in the second list.
+     * 
+     * @param maxOutputClusters is an upper limit on how many outputs to produce,
+     * set to 0 to remove the limit.
      */
-    public List<QResultCluster> dedup(List<SitSearchResult> results) {
+    public List<QResultCluster> dedup(List<SitSearchResult> results, int maxOutputClusters) {
       if (results.isEmpty())
         return Collections.emptyList();
       TIMER.start("parmaVW/dedup");
@@ -531,6 +557,12 @@ public class IndexCommunications implements AutoCloseable {
         }
         if (!dup)
           d.add(new QResultCluster(b));
+        
+        if (maxOutputClusters > 0 && d.size() >= maxOutputClusters) {
+          if (verbose)
+            Log.info("stopping early at " + d.size() + " clusters");
+          break;
+        }
       }
       
       if (verbose)
@@ -719,22 +751,23 @@ public class IndexCommunications implements AutoCloseable {
       
 
       // Words/Tokenization
-      Tokenization tokenization = findTok(res.tokUuid, comm);
-      List<Token> toks = tokenization.getTokenList().getTokenList();
-      System.out.printf("result tokens (in comm=%s tok=%s)\n", comm.getId(), res.tokUuid);
-      for (Token t : toks) {
-        System.out.print(" ");
-        if (t.getTokenIndex() == res.yhatQueryEntityHead)
-          System.out.print("<ENT>");
-        if (t.getTokenIndex() == res.yhatEntitySituation)
-          System.out.print("<SIT>");
-        System.out.print(t.getText());
-        if (t.getTokenIndex() == res.yhatEntitySituation)
-          System.out.print("</SIT>");
-        if (t.getTokenIndex() == res.yhatQueryEntityHead)
-          System.out.print("</ENT>");
-      }
-      System.out.println();
+//      Tokenization tokenization = findTok(res.tokUuid, comm);
+//      List<Token> toks = tokenization.getTokenList().getTokenList();
+//      System.out.printf("result tokens (in comm=%s tok=%s)\n", comm.getId(), res.tokUuid);
+//      for (Token t : toks) {
+//        System.out.print(" ");
+//        if (t.getTokenIndex() == res.yhatQueryEntityHead)
+//          System.out.print("<ENT>");
+//        if (t.getTokenIndex() == res.yhatEntitySituation)
+//          System.out.print("<SIT>");
+//        System.out.print(t.getText());
+//        if (t.getTokenIndex() == res.yhatEntitySituation)
+//          System.out.print("</SIT>");
+//        if (t.getTokenIndex() == res.yhatQueryEntityHead)
+//          System.out.print("</ENT>");
+//      }
+//      System.out.println();
+      System.out.println(res.getWordsInTokenizationWithHighlightedEntAndSit());
       System.out.println();
     }
   }
@@ -1038,7 +1071,8 @@ public class IndexCommunications implements AutoCloseable {
         k.nlsf.rescore(results);
         
         // Deduplicate with parma
-        List<QResultCluster> deduped = parma.dedup(results);
+        int maxResults = 50;
+        List<QResultCluster> deduped = parma.dedup(results, maxResults);
 
         // Display results
         for (QResultCluster clust : deduped) {
@@ -1663,6 +1697,38 @@ public class IndexCommunications implements AutoCloseable {
         }
       }
       return tok;
+    }
+    
+    public List<String> getWordsInTokenization() {
+      Tokenization tokenization = findTok(tokUuid, comm);
+      List<Token> toks = tokenization.getTokenList().getTokenList();
+      List<String> words = new ArrayList<>(toks.size());
+      for (Token t : toks)
+        words.add(t.getText());
+      return words;
+    }
+    
+    public String getWordsInTokenizationWithHighlightedEntAndSit() {
+      StringBuilder sb = new StringBuilder();
+      sb.append(getCommunicationId());
+      sb.append('/');
+      sb.append(tokUuid.substring(tokUuid.length()-4, tokUuid.length()));
+      sb.append(':');
+      Tokenization tokenization = findTok(tokUuid, comm);
+      List<Token> toks = tokenization.getTokenList().getTokenList();
+      for (Token t : toks) {
+        sb.append(' ');
+        if (t.getTokenIndex() == yhatQueryEntityHead)
+          sb.append("<ENT>");
+        if (t.getTokenIndex() == yhatEntitySituation)
+          sb.append("<SIT>");
+        sb.append(t.getText());
+        if (t.getTokenIndex() == yhatEntitySituation)
+          sb.append("</SIT>");
+        if (t.getTokenIndex() == yhatQueryEntityHead)
+          sb.append("</ENT>");
+      }
+      return sb.toString();
     }
     
     public String getCommunicationId() {

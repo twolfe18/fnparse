@@ -1203,7 +1203,7 @@ public class AccumuloIndex {
     Log.info("done, kept=" + kept + " overwrote=" + overwrote);
   }
   
-  public static void kbpSearchingMemo(ExperimentProperties config) throws IOException {
+  public static void kbpSearchingMemo(ExperimentProperties config) throws Exception {
     // One file per query goes into this folder, each containing a:
     // Pair<KbpQuery, List<SitSearchResult>>
     File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir");
@@ -1221,8 +1221,13 @@ public class AccumuloIndex {
 
     // Iterate over (query, result*), one per file
     for (File f : dirForSerializingResults.listFiles()) {
+      EC.increment("query");
+      TIMER.start("query");
+      TIMER.start("deser/input");
       FileUtil.VERBOSE = true;
+      @SuppressWarnings("unchecked")
       Pair<KbpQuery, List<SitSearchResult>> p = (Pair<KbpQuery, List<SitSearchResult>>) FileUtil.deserialize(f);
+      TIMER.stop("deser/input");
       KbpQuery q = p.get1();
       List<SitSearchResult> res = p.get2();
       
@@ -1232,18 +1237,22 @@ public class AccumuloIndex {
 
       Log.info(p);
       Log.info("nResults=" + res.size() + " queryName=" + q.name);
+      TIMER.start("eventSelection");
       for (int resultIdx = 0; resultIdx < res.size(); resultIdx++) {
         SitSearchResult r = res.get(resultIdx);
         
         // Experimental: try to figure out what events are interesting
         List<String> queryEntityFeatures = r.triageFeatures;
         if (queryEntityFeatures == null) {
+          TIMER.start("unNecessaryQueryFeats");
 //          Log.info("FIXME: for now I'm recomputing the features");
           TokenObservationCounts tokObs = null;
           TokenObservationCounts tokObsLc = null;
           String nerType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
           String[] headwords = q.name.split("\\s+");  // TODO
           queryEntityFeatures = IndexCommunications.getEntityMentionFeatures(q.name, headwords, nerType, tokObs, tokObsLc);
+          TIMER.stop("unNecessaryQueryFeats");
+          EC.increment("unNecessaryQueryFeats");
         }
 
         // Search for an interesting situation
@@ -1253,31 +1262,59 @@ public class AccumuloIndex {
         IntPair entEvent = eep.findMostInterestingEvent(df, verbose);
         r.yhatQueryEntityHead = entEvent.first;
         r.yhatEntitySituation = entEvent.second;
+        EC.increment("result/entSitsSelected");
         
         SituationMention sm = ParmaVw.makeSingleTokenSm(r.yhatEntitySituation, r.tokUuid, eep.getClass().getName());
         sm.setUuid(new UUID("mention" + resultIdx));
-        if (resultIdx == 2)
-          Log.info("checkme");
         ParmaVw.addToOrCreateSitutationMentionSet(r.getCommunication(), sm, parmaSitTool);
 
         // Switch findMOstInterestingEvent to verbose=true if you want to see these
 //        ShowResult sr = new ShowResult(q, r);
 //        sr.show(Collections.emptyList());
       }
+      TIMER.stop("eventSelection");
 
       // Call parma to remove duplicates
       // NOTE: ParmaVw expect that the situations are *in the communications* when dedup is called.
 //      parma.verbose = true;
       Log.info("starting dedup for " + q);
-      List<QResultCluster> dedupped = parma.dedup(res);
+      TIMER.start("parmaDedup");
+      int maxResluts = config.getInt("numDeduppedResults", 10); // NOTE: Parma is O(n^2) in this value!
+      List<QResultCluster> dedupped = parma.dedup(res, maxResluts);
+      TIMER.stop("parmaDedup");
       System.out.println();
       Log.info("showing dedupped results for " + q);
       for (QResultCluster clust : dedupped) {
         ShowResult sr = new ShowResult(q, clust.canonical);
         sr.show(Collections.emptyList());
+        EC.increment("result/dedup/canonical");
+
+        // Show things we thought were coref with the canonical above:
+        int nr = clust.numRedundant();
+        System.out.println("this mention is canonical for " + nr + " other mentions");
+        for (int i = 0; i < nr; i++) {
+          System.out.println("\tredundant: " + clust.getRedundant(i).getWordsInTokenizationWithHighlightedEntAndSit());
+          EC.increment("result/dedup/redundant");
+        }
       }
       System.out.println();
+      
+      System.out.println("AccumuloIndex timer:");
+      System.out.println(TIMER);
+      System.out.println("IndexCommunications timer:");
+      System.out.println(IndexCommunications.TIMER);
+      System.out.println();
+
+      TIMER.stop("query");
     }
+
+    System.out.println("AccumuloIndex events counts:");
+    System.out.println(EC);
+    System.out.println("IndexCommunications events counts:");
+    System.out.println(IndexCommunications.EC);
+    System.out.println();
+
+    parma.close();
     Log.info("done");
   }
 

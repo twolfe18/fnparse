@@ -41,13 +41,14 @@ import edu.jhu.hlt.tutils.ConcreteDocumentMapping;
 import edu.jhu.hlt.tutils.ConcreteToDocument;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.Document;
+import edu.jhu.hlt.tutils.Document.Constituent;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.StringUtils;
-import edu.jhu.hlt.tutils.Document.Constituent;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
 import edu.jhu.hlt.tutils.ling.Language;
@@ -74,6 +75,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
   
   // Misc
   public Counts<String> events = new Counts<>();
+  public MultiTimer timer = new MultiTimer();
   public boolean requireAtLeastOneMention = true;
   
   /**
@@ -101,6 +103,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
   }
   
   public void set(Iterable<Communication> comms) {
+    timer.start("set");
     cdocs.clear();
     mentionLocations.clear();
     events.increment("resets");
@@ -109,6 +112,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
       int docIndex = cdocs.size();
 //      c2d.debug_situations_to_cons = true;
       ConcreteDocumentMapping m = c2d.communication2Document(c, docIndex, alph, lang);
+      events.increment("resets/comm");
       
       // Add SituationMentions
       if (c.isSetSituationMentionSetList()) {
@@ -125,7 +129,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
             String key = sm.getUuid().getUuidString();
             Object old = mentionLocations.put(key, location);
             assert old == null : "key=" + key + " old=" + old + " new=" + location + " cons=" + cons;
-            Log.info("adding sit " + key + " => " + location);
+//            Log.info("adding sit " + key + " => " + location);
             events.increment("mention/situation");
           }
         }
@@ -158,7 +162,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
             String key = em.getUuid().getUuidString();
             Object old = mentionLocations.put(key, location);
             assert old == null : "key=" + key + " old=" + old + " new=" + location + " cons=" + cons;
-            Log.info("adding ent " + key + " => " + location);
+//            Log.info("adding ent " + key + " => " + location);
             events.increment("mention/entity");
           }
         }
@@ -180,6 +184,8 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
       cdocs.add(m);
     }
     Log.info("added " + mentionLocations.size() + " mentions in " + cdocs.size() + " docs, " + events.toStringWithEq());
+    timer.stop("set");
+    System.out.println(timer);
   }
   
   private void show(Document.Constituent mention, int A, int B) {
@@ -264,10 +270,11 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     List<String> f = new ArrayList<>();
 
     // tree edit distance
+    String ts1 = null, ts2 = null;
     try {
       EditDist ed = new EditDist(true);
-      String ts1 = makeTreeString(mention1);
-      String ts2 = makeTreeString(mention2);
+      ts1 = makeTreeString(mention1);
+      ts2 = makeTreeString(mention2);
       if (ts1 == null || ts2 == null) {
         Log.info("WARNING: makeTreeString failed");
       } else {
@@ -303,7 +310,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
         f.add("aligned=" + aligned + "/" + n);
       }
     } catch (NullPointerException npe) {
-      Log.info("WARNING: TED feature failed");
+      Log.info("WARNING: TED feature failed, ts1=" + ts1 + " ts2=" + ts2);
     }
     
     if (verbose) {
