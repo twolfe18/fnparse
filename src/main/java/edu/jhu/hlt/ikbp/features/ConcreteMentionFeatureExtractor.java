@@ -2,6 +2,7 @@ package edu.jhu.hlt.ikbp.features;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -46,6 +47,7 @@ import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.Document.Constituent;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.ling.DParseHeadFinder;
 import edu.jhu.hlt.tutils.ling.Language;
@@ -71,7 +73,7 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
   public boolean backoffDepsFeatures = false;
   
   // Misc
-  private Counts<String> events = new Counts<>();
+  public Counts<String> events = new Counts<>();
   public boolean requireAtLeastOneMention = true;
   
   /**
@@ -105,17 +107,25 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     for (Communication c : comms) {
       
       int docIndex = cdocs.size();
+//      c2d.debug_situations_to_cons = true;
       ConcreteDocumentMapping m = c2d.communication2Document(c, docIndex, alph, lang);
       
       // Add SituationMentions
       if (c.isSetSituationMentionSetList()) {
         for (SituationMentionSet sms : c.getSituationMentionSetList()) {
           for (SituationMention sm : sms.getMentionList()) {
-            int consId = m.get(sm.getUuid()).getIndex();
-            IntPair location = new IntPair(docIndex, consId);
+            // We can't expect ALL SituationMentions to be in the ConcreteDocumentMapping, since we only take a subset...
+            // e.g. Comm contains [semafor, EntityEventPathExtraction] SituationMentions
+            //      we only point c2d at EntityEventPathExtraction, and this loop is over all situation mentions
+            if (!m.containsUuid(sm.getUuid()))
+              continue;
+
+            Constituent cons = m.get(sm.getUuid());
+            IntPair location = new IntPair(docIndex, cons.getIndex());
             String key = sm.getUuid().getUuidString();
             Object old = mentionLocations.put(key, location);
-            assert old == null : "key=" + key + " old=" + old + " new=" + location;
+            assert old == null : "key=" + key + " old=" + old + " new=" + location + " cons=" + cons;
+            Log.info("adding sit " + key + " => " + location);
             events.increment("mention/situation");
           }
         }
@@ -140,11 +150,15 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
       if (c.isSetEntityMentionSetList()) {
         for (EntityMentionSet ems : c.getEntityMentionSetList()) {
           for (EntityMention em : ems.getMentionList()) {
-            int consId = m.get(em.getUuid()).getIndex();
-            IntPair location = new IntPair(docIndex, consId);
+            if (!m.containsUuid(em.getUuid()))
+              continue;
+
+            Constituent cons = m.get(em.getUuid());
+            IntPair location = new IntPair(docIndex, cons.getIndex());
             String key = em.getUuid().getUuidString();
             Object old = mentionLocations.put(key, location);
-            assert old == null : "key=" + key + " old=" + old + " new=" + location;
+            assert old == null : "key=" + key + " old=" + old + " new=" + location + " cons=" + cons;
+            Log.info("adding ent " + key + " => " + location);
             events.increment("mention/entity");
           }
         }
@@ -190,12 +204,19 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     }
   }
   
+  private static void showMention(Document.Constituent mention) {
+    Document doc = mention.getDocument();
+    Log.info(mention + " in " + doc.getId());
+    for (int i = mention.getFirstToken(); i <= mention.getLastToken() && i >= 0; i++) {
+      System.out.println(i + "\t" + doc.getWordStr(i));
+    }
+  }
+
   /**
    * @param concreteMention1 should refer to an (entity|situation) mention by UUID (the Id's name)
    * @param concreteMention2 should refer to an (entity|situation) mention by UUID (the Id's name)
    */
   public List<String> pairwiseFeats(Id concreteMention1, Id concreteMention2) {
-    List<String> f = new ArrayList<>();
     boolean verbose = false;
     
     // Resolve both mentions (they must be in this topic)
@@ -213,11 +234,23 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     Document d1 = cd1.getDocument();
     Document.Constituent mention1 = d1.getConstituent(loc1.second);
     int h1 = hf.head(d1, mention1.getFirstToken(), mention1.getLastToken());
+    if (h1 < 0) {
+      Log.info("warning: no head for " + loc1 + ": " + mention1.getFirstToken() + ", " + mention1.getLastToken());
+      showMention(mention1);
+      hf.head(d1, mention1.getFirstToken(), mention1.getLastToken());
+      return Collections.emptyList();
+    }
 
     ConcreteDocumentMapping cd2 = cdocs.get(loc2.first);
     Document d2 = cd2.getDocument();
     Document.Constituent mention2 = d2.getConstituent(loc2.second);
     int h2 = hf.head(d2, mention2.getFirstToken(), mention2.getLastToken());
+    if (h2 < 0) {
+      Log.info("warning: no head for " + loc2 + ": " + mention2.getFirstToken() + ", " + mention2.getLastToken());
+      showMention(mention1);
+      hf.head(d2, mention2.getFirstToken(), mention2.getLastToken());
+      return Collections.emptyList();
+    }
     
     // Show the mentions
     if (verbose) {
@@ -228,46 +261,50 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
       System.out.println();
     }
 
+    List<String> f = new ArrayList<>();
+
     // tree edit distance
-    EditDist ed = new EditDist(true);
-    String ts1 = makeTreeString(mention1);
-    String ts2 = makeTreeString(mention2);
-    LblTree t1 = LblTree.fromString(ts1);
-    LblTree t2 = LblTree.fromString(ts2);
-    double dist = ed.treeDist(t1, t2);
-    if (verbose) {
-      System.out.println("tree1: " + ts1);
-      System.out.println("tree2: " + ts2);
-      System.out.println("distance=" + dist);
-    }
-    
-    int distDiscrete = (int) (0.5 + 10 * dist);
-    f.add("tedDist=" + distDiscrete);
+    try {
+      EditDist ed = new EditDist(true);
+      String ts1 = makeTreeString(mention1);
+      String ts2 = makeTreeString(mention2);
+      if (ts1 == null || ts2 == null) {
+        Log.info("WARNING: makeTreeString failed");
+      } else {
+        LblTree t1 = LblTree.fromString(ts1);
+        LblTree t2 = LblTree.fromString(ts2);
+        double dist = ed.treeDist(t1, t2);
+        if (verbose) {
+          System.out.println("tree1: " + ts1);
+          System.out.println("tree2: " + ts2);
+          System.out.println("distance=" + dist);
+        }
+        int distDiscrete = (int) (0.5 + 10 * dist);
+        f.add("tedDist=" + distDiscrete);
 
-    if (verbose) {
-////    System.out.println(ed.printEditScript());
+        if (verbose) {
+          String s = ed.printHumaneEditScript();
+          System.out.println("edit script:");
+          String[] st = s.split(";");
+          System.out.println(StringUtils.join("\n", st));
+          System.out.println();
+        }
 
-      String s = ed.printHumaneEditScript();
-//      System.out.println(s);
-      System.out.println("edit script:");
-      String[] st = s.split(";");
-      System.out.println(StringUtils.join("\n", st));
-      System.out.println();
-
-//    System.out.println(ed.getCompactEditList());
+        int aligned = 0;
+        for (Entry<Integer, Integer> p : ed.getAlignInWordOrder1to2().entrySet()) {
+          boolean in1 = mention1.getFirstToken() <= p.getKey() && p.getKey() <= mention1.getLastToken();
+          boolean in2 = mention2.getFirstToken() <= p.getValue() && p.getValue() <= mention2.getLastToken();
+          if (in1 && in2)
+            aligned++;
+        }
+        int n = Math.min(mention1.getWidth(), mention2.getWidth());
+        if (verbose)
+          System.out.println("aligned=" + aligned + "/" + n);
+        f.add("aligned=" + aligned + "/" + n);
+      }
+    } catch (NullPointerException npe) {
+      Log.info("WARNING: TED feature failed");
     }
-    
-    int aligned = 0;
-    for (Entry<Integer, Integer> p : ed.getAlignInWordOrder1to2().entrySet()) {
-      boolean in1 = mention1.getFirstToken() <= p.getKey() && p.getKey() <= mention1.getLastToken();
-      boolean in2 = mention2.getFirstToken() <= p.getValue() && p.getValue() <= mention2.getLastToken();
-      if (in1 && in2)
-        aligned++;
-    }
-    int n = Math.min(mention1.getWidth(), mention2.getWidth());
-    if (verbose)
-      System.out.println("aligned=" + aligned + "/" + n);
-    f.add("aligned=" + aligned + "/" + n);
     
     if (verbose) {
       System.out.println();
@@ -364,6 +401,8 @@ public class ConcreteMentionFeatureExtractor implements MentionFeatureExtractor 
     DParseHeadFinder hf = new DParseHeadFinder();
     hf.useParse(doc -> doc.parseyMcParseFace);
     int h = hf.head(d, mention.getFirstToken(), mention.getLastToken());
+    if (h < 0)
+      return null;
     LabeledDirectedGraph deps = hf.getParse(d);
     LabeledDirectedGraph rot = rotateTreeAboutHeadword(deps, h);
     LabeledDirectedGraph.Node node = rot.getNode(h);  // node indices are the same, can still use h

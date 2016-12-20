@@ -20,7 +20,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiPredicate;
@@ -37,6 +36,7 @@ import org.apache.thrift.transport.TTransport;
 
 import com.google.common.collect.Multimap;
 
+import edu.jhu.hlt.concrete.AnnotationMetadata;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Dependency;
 import edu.jhu.hlt.concrete.DependencyParse;
@@ -52,6 +52,7 @@ import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.access.FetchCommunicationService;
 import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
@@ -107,14 +108,9 @@ import edu.jhu.prim.vector.IntIntHashVector;
 import edu.jhu.util.SlowParseyWrapper;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.IIndexWord;
-import edu.mit.jwi.item.IPointer;
-import edu.mit.jwi.item.ISynset;
-import edu.mit.jwi.item.ISynsetID;
 import edu.mit.jwi.item.IWord;
 import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.item.POS;
-import edu.mit.jwi.item.Pointer;
-import edu.mit.jwi.item.Synset;
 
 /**
  * Produces an index of a given Concrete corpus. Writes everything to TSVs.
@@ -226,25 +222,25 @@ public class IndexCommunications implements AutoCloseable {
      * see data/parma/training_files/Makefile
      */
     public ParmaVw(File modelFile, IntDoubleHashMap idf, ExperimentProperties config) throws IOException {
+      this(modelFile, idf, null, config.getString("entTool", "Stanford Coref"), config.getInt("vw.port", 8094));
+    }
+    
+    public ParmaVw(File modelFile, IntDoubleHashMap idf, String sitMentionTool, String entityToolName, int port) throws IOException {
       this.idf = idf;
 
-      // TODO When you add situation indexing, choose a tool and pass it in here.
-      situationMentionToolName = null;
-//      situationMentionToolName = config.getString("sitTool", "");
-      entityMentionToolName = config.getString("entTool", "Stanford Coref");
-      
       // Problem is this:
       // when I pass in "Stanford Coref" for the situationMentionTool it tries to add to a (em:UUID <=> tutils.Document.Constituent) bijection
       // on the side, ConcreteMentionFeatureExtractor also has readConcreteStanford (for coref), which also adds em:UUID mappings, but with other cons, thus breaking the bijection
       
       // Question 1: Why are we reading concrete-stanford input in ConcreteMentionFeatureExtractor?
       
+      this.situationMentionToolName = sitMentionTool;
+      this.entityMentionToolName = entityToolName;
       
-      featEx = new ConcreteMentionFeatureExtractor(
+      this.featEx = new ConcreteMentionFeatureExtractor(
           situationMentionToolName, null, Collections.emptyList());
 //          situationMentionToolName, entityMentionToolName, Collections.emptyList());
       
-      int port = config.getInt("vw.port", 8094);
       try {
         classifier = new VwWrapper(modelFile, port);
       } catch (Exception e) {
@@ -261,14 +257,18 @@ public class IndexCommunications implements AutoCloseable {
       // in either Tokenization, then computes score/prob of coreference.
       // PERHAPS I SHOULD compute the score for every pair and then combine in a principled manner.
 
-      // First, the tf-idf score for the two documents must exceed a threshold
-      double tfidfThresh = 0.7;
-      double sim = TermVec.tfidfCosineSim(a.featsResult.tfidf, b.featsResult.tfidf, idf);
-      if (verbose)
-        System.out.println("[coref] tfidfCosineSim=" + sim);
-      if (sim < tfidfThresh)
-        return false;
-      EC.increment("parma/tfidfThreshMet");
+//      // First, the tf-idf score for the two documents must exceed a threshold
+//      if (a.featsResult != null && b.featsResult != null) {
+//        double tfidfThresh = 0.7;
+//        double sim = TermVec.tfidfCosineSim(a.featsResult.tfidf, b.featsResult.tfidf, idf);
+//        if (verbose)
+//          System.out.println("[coref] tfidfCosineSim=" + sim);
+//        if (sim < tfidfThresh)
+//          return false;
+//        EC.increment("parma/tfidfThreshMet");
+//      } else {
+//        Log.info("no SentFeats, skipping tf-idf filtering!");
+//      }
       
       TIMER.start("parmaVW/featEx");
       // Get features from a
@@ -305,11 +305,51 @@ public class IndexCommunications implements AutoCloseable {
       return y > 0;
     }
     
+    public static SituationMention makeSingleTokenSm(int tokenIndex, String tokenizationUuid, String sitKind) {
+      SituationMention sm = new SituationMention();
+      sm.setUuid(new UUID(""));
+      sm.setArgumentList(Collections.emptyList());
+      sm.setSituationKind(sitKind);
+      sm.setSituationType("EVENT");
+      sm.setTokens(new TokenRefSequence());
+      sm.getTokens().setAnchorTokenIndex(tokenIndex);
+      sm.getTokens().setTokenizationId(new UUID(tokenizationUuid));
+      sm.getTokens().addToTokenIndexList(tokenIndex);
+      return sm;
+    }
+    
+    public static SituationMentionSet makeSingleMentionSms(SituationMention m, String toolname) {
+      SituationMentionSet sms = new SituationMentionSet();
+      sms.setUuid(new UUID(""));
+      sms.setMetadata(new AnnotationMetadata()
+          .setTimestamp(System.currentTimeMillis() / 1000)
+          .setTool(toolname));
+      sms.addToMentionList(m);
+      return sms;
+    }
+    
+    public static void addToOrCreateSitutationMentionSet(Communication c, SituationMention m, String toolname) {
+      if (c.isSetSituationMentionSetList()) {
+        for (SituationMentionSet sms : c.getSituationMentionSetList()) {
+          if (sms.getMetadata().getTool().equals(toolname)) {
+            sms.addToMentionList(m);
+            return;
+          }
+        }
+      }
+      SituationMentionSet sms = makeSingleMentionSms(m, toolname);
+      c.addToSituationMentionSetList(sms);
+    }
+
     /**
-     * Finds all {@link EntityMention}s and {@link SituationMention}s which
-     * appear in the {@link Tokenization} specified by the given {@link SitSearchResult}.
+     * Reads {@link SitSearchResult#yhatEntitySituation} and adds
+     * a {@link SituationMention} and {@link SituationMentionSet}
+     * to the given result's {@link Communication}.
+     * 
+     * @deprecated This doesn't work because we must add the {@link SituationMention}s
+     * well before this method is called.
      */
-    private edu.jhu.hlt.ikbp.data.Node convert(SitSearchResult a) {
+    private edu.jhu.hlt.ikbp.data.Node convertAssumingGivenSituationToken(SitSearchResult a) {
       if (a.comm == null)
         throw new IllegalArgumentException();
       
@@ -322,7 +362,41 @@ public class IndexCommunications implements AutoCloseable {
       
       n.setFeatures(new ArrayList<>());
       
-      if (a.comm.isSetEntityMentionSetList()) {
+      SituationMention sm = makeSingleTokenSm(a.yhatEntitySituation, a.tokUuid, "treeDistIdfWeighting");
+      SituationMentionSet sms = makeSingleMentionSms(sm, situationMentionToolName);
+      
+      // Check that there isn't already a SMS with conflicting name
+      if (a.comm.isSetSituationMentionSetList()) {
+        for (SituationMentionSet sms2 : a.comm.getSituationMentionSetList())
+          assert !sms2.getMetadata().getTool().equals(situationMentionToolName);
+      } else {
+        a.comm.setSituationMentionSetList(new ArrayList<>());
+      }
+      // Add this new SMS to the comm
+      a.comm.addToSituationMentionSetList(sms);
+      
+      return n;
+    }
+    
+    /**
+     * Finds all {@link EntityMention}s and {@link SituationMention}s which
+     * appear in the {@link Tokenization} specified by the given {@link SitSearchResult}.
+     */
+    private edu.jhu.hlt.ikbp.data.Node convertAllPairs(SitSearchResult a) {
+      if (a.comm == null)
+        throw new IllegalArgumentException();
+      
+      edu.jhu.hlt.ikbp.data.Node n = new edu.jhu.hlt.ikbp.data.Node();
+      
+      // Node's id is the Tokenization UUID of the result
+      n.setId(new Id()
+          .setType(FeatureType.CONCRETE_UUID.getValue())
+          .setName(a.tokUuid));
+      
+      n.setFeatures(new ArrayList<>());
+      
+      // Add features for all pairs
+      if (a.comm.isSetEntityMentionSetList() && entityMentionToolName != null) {
         for (EntityMentionSet ems : a.comm.getEntityMentionSetList()) {
           if (entityMentionToolName.equals(ems.getMetadata().getTool())) {
             for (EntityMention em : ems.getMentionList()) {
@@ -338,7 +412,7 @@ public class IndexCommunications implements AutoCloseable {
         }
       }
 
-      if (a.comm.isSetSituationMentionSetList()) {
+      if (a.comm.isSetSituationMentionSetList() && situationMentionToolName != null) {
         for (SituationMentionSet sms : a.comm.getSituationMentionSetList()) {
           if (situationMentionToolName.equals(sms.getMetadata().getTool())) {
             for (SituationMention sm : sms.getMentionList()) {
@@ -353,19 +427,33 @@ public class IndexCommunications implements AutoCloseable {
           }
         }
       }
-      
+
       return n;
+    }
+    
+    private edu.jhu.hlt.ikbp.data.Node convert(SitSearchResult a) {
+//      if (a.yhatEntitySituation >= 0)
+//        return convertAssumingGivenSituationToken(a);
+      return convertAllPairs(a);
     }
     
     private void setTopicForResults(List<SitSearchResult> results) {
       TIMER.start("parmaVW/setTopic");
-      Set<String> commIds = new HashSet<>();
+//      Set<String> commIds = new HashSet<>();
       List<Communication> comms = new ArrayList<>();
+      Map<String, Communication> assureNoCommDups = new HashMap<>();
       for (SitSearchResult r : results) {
         if (r.comm == null)
           throw new IllegalArgumentException();
-        if (commIds.add(r.getCommunicationId()))
-          comms.add(r.comm);
+        Communication cur = r.getCommunication();
+        Communication old = assureNoCommDups.put(r.getCommunicationId(), cur);
+        if (old == null) {
+          comms.add(r.getCommunication());
+        } else if (old != cur) {
+          throw new RuntimeException("duplicate comms sharing an id! " + r.getCommunicationId());
+        }
+//        if (commIds.add(r.getCommunicationId()))
+//          comms.add(r.comm);
       }
       if (verbose)
         Log.info("setting topic, nComms=" + comms.size() + " nResults=" + results.size());
@@ -383,6 +471,8 @@ public class IndexCommunications implements AutoCloseable {
 //      FileUtil.serialize(comms, new File("/tmp/dbg-topic-comms-list.jser"));
       
       featEx.set(comms);
+      if (verbose)
+        Log.info("done, " + featEx.events);
       TIMER.stop("parmaVW/setTopic");
     }
     
@@ -634,12 +724,15 @@ public class IndexCommunications implements AutoCloseable {
       System.out.printf("result tokens (in comm=%s tok=%s)\n", comm.getId(), res.tokUuid);
       for (Token t : toks) {
         System.out.print(" ");
-        boolean v = isVerb(t.getTokenIndex(), tokenization);
-        if (v)
-          System.out.print("<EVENT>");
+        if (t.getTokenIndex() == res.yhatQueryEntityHead)
+          System.out.print("<ENT>");
+        if (t.getTokenIndex() == res.yhatEntitySituation)
+          System.out.print("<SIT>");
         System.out.print(t.getText());
-        if (v)
-          System.out.print("</EVENT>");
+        if (t.getTokenIndex() == res.yhatEntitySituation)
+          System.out.print("</SIT>");
+        if (t.getTokenIndex() == res.yhatQueryEntityHead)
+          System.out.print("</ENT>");
       }
       System.out.println();
       System.out.println();
@@ -731,60 +824,82 @@ public class IndexCommunications implements AutoCloseable {
     return l;
   }
     
-  public static void showDepPathBetweenEventsAndQuerySubject(
-      List<String> queryEntityFeatures, Tokenization tokenization, Communication comm, ComputeIdf df) {
-    List<Token> toks = tokenization.getTokenList().getTokenList();
-    BiPredicate<String, String> tieBreaker =
-        edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST);
-    edu.jhu.hlt.fnparse.datatypes.Sentence sent2 = edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete(
-        "ds", "id", tokenization, tieBreaker, tieBreaker, tieBreaker);
-    DependencyParse deps = edu.jhu.hlt.fnparse.datatypes.Sentence.extractDeps(tokenization, tieBreaker);
-    boolean expectSingleHeaded = false;
-    edu.jhu.hlt.fnparse.datatypes.DependencyParse deps2 =
-        edu.jhu.hlt.fnparse.datatypes.DependencyParse.fromConcrete(toks.size(), deps, expectSingleHeaded);
-    new AddNerTypeToEntityMentions(comm);
-    EntityMention em = bestGuessAtQueryMention(tokenization, comm, queryEntityFeatures);
-    if (em == null) {
-      Log.info("no EntityMentions in this Tokenization! comm=" + comm.getId() + " aka " + comm.getUuid().getUuidString());
-      return;
+  public static class EntityEventPathExtraction {
+    List<String> queryEntityFeatures;
+    Tokenization tokenization;
+    Communication comm;
+    
+    public EntityEventPathExtraction(List<String> queryEntityfeatures, Tokenization toks, Communication comm) {
+      this.queryEntityFeatures = queryEntityfeatures;
+      this.tokenization = toks;
+      this.comm = comm;
     }
-    System.out.println("best guess: " + em);
-    ArgMax<String> bestPath = new ArgMax<>();
-    int start = em.getTokens().getAnchorTokenIndex();
-    for (Token t : toks) {
-      int end = t.getTokenIndex();
-      if (start == end)
-        continue;
-      List<String> invNom = inverseNominalization(t.getTokenIndex(), sent2);
-      boolean verb = isVerb(t.getTokenIndex(), tokenization);
-      if (verb || invNom.size() > 0) {
-//        if (invNom.size() > 0)
-//          System.out.println("invNom(" + t.getText() + "):\t" + invNom);
-        Path2 path = new Path2(start, end, deps2, sent2);
-        if (path.connected()) {
-          double idf = df.idf(t.getText());
-          int pathLen = path.getEntries().size();
-          double pathLenPenalth = 2d / (2 + pathLen);
-          int numNom = invNom.size();
-          double nomPenalty = 1;
-          if (!verb) {
-            nomPenalty *= 0.75;                 // have slight preference for verbs
-            nomPenalty *= (1d / (1 + numNom));  // and penalize unsure nominalizations
+
+    /**
+     * returns (entityHeadIdx, eventHeadIdx) in the given tokenization
+     */
+    public IntPair findMostInterestingEvent(ComputeIdf df, boolean verbose) {
+      List<Token> toks = tokenization.getTokenList().getTokenList();
+      BiPredicate<String, String> tieBreaker =
+          edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST);
+      edu.jhu.hlt.fnparse.datatypes.Sentence sent2 = edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete(
+          "ds", "id", tokenization, tieBreaker, tieBreaker, tieBreaker);
+      DependencyParse deps = edu.jhu.hlt.fnparse.datatypes.Sentence.extractDeps(tokenization, tieBreaker);
+      boolean expectSingleHeaded = false;
+      edu.jhu.hlt.fnparse.datatypes.DependencyParse deps2 =
+          edu.jhu.hlt.fnparse.datatypes.DependencyParse.fromConcrete(toks.size(), deps, expectSingleHeaded);
+      new AddNerTypeToEntityMentions(comm);
+      EntityMention em = bestGuessAtQueryMention(tokenization, comm, queryEntityFeatures);
+      if (em == null) {
+        if (verbose)
+          Log.info("no EntityMentions in this Tokenization! comm=" + comm.getId() + " aka " + comm.getUuid().getUuidString());
+        return new IntPair(-1, -1);
+      }
+      if (verbose)
+        System.out.println("best guess: " + em);
+      ArgMax<Pair<String, Token>> bestPath = new ArgMax<>();
+      int start = em.getTokens().getAnchorTokenIndex();
+      for (Token t : toks) {
+        int end = t.getTokenIndex();
+        if (start == end)
+          continue;
+        List<String> invNom = inverseNominalization(t.getTokenIndex(), sent2);
+        boolean verb = isVerb(t.getTokenIndex(), tokenization);
+        if (verb || invNom.size() > 0) {
+          //        if (invNom.size() > 0)
+          //          System.out.println("invNom(" + t.getText() + "):\t" + invNom);
+          Path2 path = new Path2(start, end, deps2, sent2);
+          if (path.connected()) {
+            double idf = df.idf(t.getText());
+            int pathLen = path.getEntries().size();
+            double pathLenPenalth = 2d / (2 + pathLen);
+            int numNom = invNom.size();
+            double nomPenalty = 1;
+            if (!verb) {
+              nomPenalty *= 0.75;                 // have slight preference for verbs
+              nomPenalty *= (1d / (1 + numNom));  // and penalize unsure nominalizations
+            }
+            double score = Math.pow(idf, 1.5) * pathLenPenalth * nomPenalty;
+            String pathStr = path.getPath(NodeType.WORD, EdgeType.DEP, true);
+            bestPath.offer(new Pair<>(pathStr, t), score);
+            if (verbose) {
+              System.out.printf("idf=%.2f pathLenPenalty=%.2f nomPenalty=%.2f score=%3g path=%s\n",
+                  idf, pathLenPenalth, nomPenalty, score, pathStr);
+            }
           }
-          double score = Math.pow(idf, 1.5) * pathLenPenalth * nomPenalty;
-          String pathStr = path.getPath(NodeType.WORD, EdgeType.DEP, true);
-          bestPath.offer(pathStr, score);
-//          System.err.println(pathStr);
-//          System.out.printf("idf=%.2f pathLenPenalty=%.2f pathLen=%d nomPenalty=%.2f numNom=%d, score=%3g path=%s\n",
-//              idf, pathLenPenalth, pathLen, nomPenalty, numNom, score, pathStr);
-          System.out.printf("idf=%.2f pathLenPenalty=%.2f nomPenalty=%.2f score=%3g path=%s\n",
-              idf, pathLenPenalth, nomPenalty, score, pathStr);
         }
       }
+      if (bestPath.numOffers() == 0)
+        return new IntPair(start, -1);
+      Pair<String, Token> b = bestPath.get();
+      if (verbose) {
+        System.out.println("bestPath=" + b.get1());
+        System.out.println();
+        System.out.println();
+      }
+      int end = b.get2().getTokenIndex();
+      return new IntPair(start, end);
     }
-    System.out.println("bestPath=" + bestPath.get());
-    System.out.println();
-    System.out.println();
   }
 
   /**
@@ -1478,6 +1593,7 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
   
+
   public static class SitSearchResult implements Serializable {
     private static final long serialVersionUID = -2345944595589887531L;
 
@@ -1501,6 +1617,13 @@ public class IndexCommunications implements AutoCloseable {
      * See {@link IndexCommunications#getEntityMentionFeatures(String, String[], String, TokenObservationCounts, TokenObservationCounts)}
      */
     public List<String> triageFeatures;
+    
+    /** Head token index of the mention of the query entity/subject in this tokenization */
+    public int yhatQueryEntityHead = -1;
+
+    /** Head token index of a situtation mention related to the query entity */
+    public int yhatEntitySituation = -1;
+
 
     public SitSearchResult(String tokUuid, SentFeats featsResult, List<Feat> score) {
       this.tokUuid = tokUuid;
@@ -3563,11 +3686,31 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
 
-  public static TokenTagging getPreferredPosTags(Tokenization t) {
+  static TokenTagging getPreferredNerTags(Tokenization t) {
     List<TokenTagging> tt = new ArrayList<>();
-    for (TokenTagging tags : t.getTokenTaggingList())
-      if (tags.getTaggingType().equalsIgnoreCase("POS"))
+    for (TokenTagging tags : t.getTokenTaggingList()) {
+      if (tags.getTaggingType().equalsIgnoreCase("NER")) {
+        if (tags.getMetadata().getTool().contains("parsey"))
+          return tags;
         tt.add(tags);
+      }
+    }
+    if (tt.isEmpty())
+      throw new RuntimeException("no NER in " + t);
+    if (tt.size() == 1)
+      return tt.get(0);
+    throw new RuntimeException("implement a preference over: " + tt);
+  }
+
+  static TokenTagging getPreferredPosTags(Tokenization t) {
+    List<TokenTagging> tt = new ArrayList<>();
+    for (TokenTagging tags : t.getTokenTaggingList()) {
+      if (tags.getTaggingType().equalsIgnoreCase("POS")) {
+        if (tags.getMetadata().getTool().contains("parsey"))
+          return tags;
+        tt.add(tags);
+      }
+    }
     if (tt.isEmpty())
       throw new RuntimeException("no POS in " + t);
     if (tt.size() == 1)
@@ -3575,7 +3718,7 @@ public class IndexCommunications implements AutoCloseable {
     throw new RuntimeException("implement a preference over: " + tt);
   }
   
-  private static DependencyParse getPreferredDependencyParse(Tokenization toks) {
+  static DependencyParse getPreferredDependencyParse(Tokenization toks) {
     for (DependencyParse dp : toks.getDependencyParseList()) {
       if ("parsey".equalsIgnoreCase(dp.getMetadata().getTool())) {
         EC.increment("preferredDParse/parsey");
@@ -3996,6 +4139,13 @@ public class IndexCommunications implements AutoCloseable {
         throw new RuntimeException("not a dir: " + cagRoot.getPath());
       List<File> archives = dataProfileCagFileFilter(cagRoot, p);
       return new FileBasedCommIter(archives);
+    }
+    
+    // Single file (primarily for debugging)
+    if (method.toLowerCase().startsWith("file:")) {
+      File f = new File(method.substring("file:".length(), method.length()));
+      assert f.isFile();
+      return new FileBasedCommIter(Arrays.asList(f));
     }
 
     throw new RuntimeException("can't parse: " + method);

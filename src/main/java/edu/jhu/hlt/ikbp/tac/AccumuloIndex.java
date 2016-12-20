@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import org.apache.accumulo.core.client.AccumuloException;
@@ -52,16 +51,20 @@ import com.google.common.hash.Funnels;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.EntityMention;
+import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloFetch;
-import edu.jhu.hlt.fnparse.rl.full.GroupBy;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.CommunicationRetrieval;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.EntityEventPathExtraction;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw.QResultCluster;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ShowResult;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SituationSearch;
@@ -69,13 +72,16 @@ import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
+import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.HPair;
+import edu.jhu.util.SerializationTest;
 import edu.jhu.util.TokenizationIter;
 
 
@@ -1169,6 +1175,35 @@ public class AccumuloIndex {
   }
   
   
+  /**
+   * Removes duplicate {@link Communication}s (by looking at their id).
+   * You can get duplicates when you serialize, upon deserialization java
+   * doesn't re-construct the original contents of memory by having shared
+   * pointers point to a single item in memory.
+   * (for an example see {@link SerializationTest})
+   * 
+   * This method does not check that communications that share an id are
+   * byte-for-byte identical, so be careful.
+   */
+  public static void dedupCommunications(List<SitSearchResult> res) {
+    int overwrote = 0, kept = 0;
+    Map<String, Communication> m = new HashMap<>();
+    for (SitSearchResult r : res) {
+      Communication c = r.getCommunication();
+      if (c == null)
+        throw new IllegalArgumentException();
+      Communication old = m.put(c.getId(), c);
+      if (old != null) {
+        r.setCommunication(old);
+        m.put(c.getId(), old);
+        overwrote++;
+      } else {
+        kept++;
+      }
+    }
+    Log.info("done, kept=" + kept + " overwrote=" + overwrote);
+  }
+  
   public static void kbpSearchingMemo(ExperimentProperties config) throws IOException {
     // One file per query goes into this folder, each containing a:
     // Pair<KbpQuery, List<SitSearchResult>>
@@ -1177,29 +1212,70 @@ public class AccumuloIndex {
     File wdf = config.getExistingFile("wordDocFreq");
     ComputeIdf df = new ComputeIdf(wdf);
     
+    // Load parma
+    File modelFile = config.getFile("dedup.model");
+    IntDoubleHashMap idf = null;
+    String parmaSitTool = EntityEventPathExtraction.class.getName();
+    String parmaEntTool = null;
+    int parmaVwPort = config.getInt("vw.port", 8094);
+    ParmaVw parma = new ParmaVw(modelFile, idf, parmaSitTool, parmaEntTool, parmaVwPort);
+
+    // Iterate over (query, result*), one per file
     for (File f : dirForSerializingResults.listFiles()) {
       FileUtil.VERBOSE = true;
       Pair<KbpQuery, List<SitSearchResult>> p = (Pair<KbpQuery, List<SitSearchResult>>) FileUtil.deserialize(f);
       KbpQuery q = p.get1();
       List<SitSearchResult> res = p.get2();
+      
+      // Dedup communications (introduced during serialization process)
+      // TODO set the comms to null and serialize a Map<String, Communication> separately
+      dedupCommunications(res);
+
       Log.info(p);
       Log.info("nResults=" + res.size() + " queryName=" + q.name);
-      for (SitSearchResult r : res) {
-        ShowResult sr = new ShowResult(q, r);
-        sr.show(Collections.emptyList());
+      for (int resultIdx = 0; resultIdx < res.size(); resultIdx++) {
+        SitSearchResult r = res.get(resultIdx);
         
         // Experimental: try to figure out what events are interesting
         List<String> queryEntityFeatures = r.triageFeatures;
         if (queryEntityFeatures == null) {
-          Log.info("FIXME: for now I'm recomputing the features");
+//          Log.info("FIXME: for now I'm recomputing the features");
           TokenObservationCounts tokObs = null;
           TokenObservationCounts tokObsLc = null;
           String nerType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
           String[] headwords = q.name.split("\\s+");  // TODO
           queryEntityFeatures = IndexCommunications.getEntityMentionFeatures(q.name, headwords, nerType, tokObs, tokObsLc);
         }
-        IndexCommunications.showDepPathBetweenEventsAndQuerySubject(
-            queryEntityFeatures, r.getTokenization(), r.getCommunication(), df);
+
+        // Search for an interesting situation
+        EntityEventPathExtraction eep = new EntityEventPathExtraction(
+            queryEntityFeatures, r.getTokenization(), r.getCommunication());
+        boolean verbose = false;
+        IntPair entEvent = eep.findMostInterestingEvent(df, verbose);
+        r.yhatQueryEntityHead = entEvent.first;
+        r.yhatEntitySituation = entEvent.second;
+        
+        SituationMention sm = ParmaVw.makeSingleTokenSm(r.yhatEntitySituation, r.tokUuid, eep.getClass().getName());
+        sm.setUuid(new UUID("mention" + resultIdx));
+        if (resultIdx == 2)
+          Log.info("checkme");
+        ParmaVw.addToOrCreateSitutationMentionSet(r.getCommunication(), sm, parmaSitTool);
+
+        // Switch findMOstInterestingEvent to verbose=true if you want to see these
+//        ShowResult sr = new ShowResult(q, r);
+//        sr.show(Collections.emptyList());
+      }
+
+      // Call parma to remove duplicates
+      // NOTE: ParmaVw expect that the situations are *in the communications* when dedup is called.
+//      parma.verbose = true;
+      Log.info("starting dedup for " + q);
+      List<QResultCluster> dedupped = parma.dedup(res);
+      System.out.println();
+      Log.info("showing dedupped results for " + q);
+      for (QResultCluster clust : dedupped) {
+        ShowResult sr = new ShowResult(q, clust.canonical);
+        sr.show(Collections.emptyList());
       }
       System.out.println();
     }
