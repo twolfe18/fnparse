@@ -280,22 +280,35 @@ public class NNPSense {
   
   /**
    * Returns strings like "PERSON-nn-Dr." where PERSON matches the given nameHead
+   * 
+   * @param tokUuid is the {@link Tokenization} UUID to restrict to. If null it looks through the entire comm.
    */
-  public static List<String> extractAttributeFeatures(Communication c, String... nameHeads) {
+  public static List<String> extractAttributeFeatures(String tokUuid, Communication c, String... nameHeads) {
+    
+    // TODO Might want to expand this set
+    // Currently it will miss "Italian" because it is an JJ
+    // Perhaps I could actually take all high idf terms? This would miss titles like "Dr."
     Set<String> properNouns = new HashSet<>();
     properNouns.add("NNP");
     properNouns.add("NNPS");
+    properNouns.add("CD");
+    properNouns.add("JJ");
+    properNouns.add("JJS");
+
     List<String> attr = new ArrayList<>();
     for (Tokenization toks : new TokenizationIter(c)) {
+      if (tokUuid != null && !tokUuid.equals(toks.getUuid().getUuidString()))
+        continue;
       DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
       List<TaggedToken> pos = IndexCommunications.getPreferredPosTags(toks).getTaggedTokenList();
       List<TaggedToken> ner = IndexCommunications.getPreferredNerTags(toks).getTaggedTokenList();
       List<Token> t = toks.getTokenList().getTokenList();
       for (Token tok : t) {
+        Set<String> uniq = new HashSet<>(); // uniq per tokenization, otherwise multiple nameHeads means duplicates
         for (String nameHead : nameHeads) {
           if (nameHead.equalsIgnoreCase(tok.getText())) {
             int source = tok.getTokenIndex();
-            List<Pair<Integer, LL<Dependency>>> paths = kHop(source, 3, deps);
+            List<Pair<Integer, LL<Dependency>>> paths = kHop(source, 4, deps);
             for (Pair<Integer, LL<Dependency>> p : paths) {
               int dest = p.get1();
               String destPos = pos.get(dest).getTag();
@@ -305,7 +318,12 @@ public class NNPSense {
                 ArrayDeque<String> path = reverseDeps(p.get2());
                 path.addFirst(sourceNer);
                 path.addLast(destWord);
-                attr.add(StringUtils.join("-", path));
+                String x = StringUtils.join("-", path);
+                if (uniq.add(x))
+                  attr.add(x);
+                String xBackoff = sourceNer + "-backoff-" + destWord;
+                if (uniq.add(xBackoff))
+                  attr.add(xBackoff);
               }
             }
           }

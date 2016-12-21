@@ -723,6 +723,18 @@ public class IndexCommunications implements AutoCloseable {
         System.out.println("FOUND QUERY DOCUMENT, this result will be filtered out later");
 
       System.out.println();
+
+      // Mention itself
+      System.out.println("query mention itself:");
+//      List<String> toks = query.findMention();
+      String toks = query.findMentionHighlighted();
+      if (toks == null) {
+        System.out.println("Communication or EntityMention not set, cannot show");
+      } else {
+//        System.out.println(StringUtils.join(" ", toks));
+        System.out.println(toks);
+      }
+      System.out.println();
       
       // Query features
       System.out.println("pkbDocs.size=" + pkbDocs.size());
@@ -735,6 +747,7 @@ public class IndexCommunications implements AutoCloseable {
           System.out.println("\tqf: " + f);
       }
       System.out.println();
+      
 
       boolean highlightVerbs = true;
       showQResult(res, comm, termCharLimit, highlightVerbs);
@@ -755,10 +768,18 @@ public class IndexCommunications implements AutoCloseable {
       }
       System.out.println();
       
+      // Attribute features
+      System.out.println("attribute features");
+      System.out.println("query:   " + res.attributeFeaturesQ);
+      System.out.println("result:  " + res.attributeFeaturesR);
+      System.out.println("matched: " + res.attributeFeaturesMatched);
+      System.out.println();
+      
       // score = weights * (featQuery outerProd featResult)... or something like that
       System.out.println("score derivation:");
       for (Feat f : res.scoreDerivation)
         System.out.println("\t" + f);
+      System.out.printf("sum=%.3f\n", res.getScore());
       System.out.println();
       
 
@@ -916,7 +937,7 @@ public class IndexCommunications implements AutoCloseable {
     }
 
     private int chooseHeadOfEntityMention(EntityMention em) {
-      if (em.getTokens().getTokenizationId().getUuidString().equals(tokenization.getUuid().getUuidString()))
+      if (!em.getTokens().getTokenizationId().getUuidString().equals(tokenization.getUuid().getUuidString()))
         throw new IllegalArgumentException();
       // Try to choose a token which matches some triage features
       Map<String, Double> w = indexMatchedFeats();

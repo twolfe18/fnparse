@@ -81,7 +81,6 @@ import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
-import edu.jhu.util.SerializationTest;
 import edu.jhu.util.TokenizationIter;
 
 
@@ -938,6 +937,115 @@ public class AccumuloIndex {
       return tf.entrySet().iterator();
     }
   }
+  
+  // TODO Want to be able to match "PERSON-nn-nn-Wen" with "PERSON-nn-Wen", though this is technically a parsing error
+  private static Pair<Double, List<String>> match(List<String> attrFeatQ, List<String> attrFeatR) {
+    List<String> matched = new ArrayList<>();
+    Set<String> intersect = new HashSet<>();
+    Set<String> union = new HashSet<>();
+    union.addAll(attrFeatQ);
+    for (String f : attrFeatR) {
+      union.add(f);
+      if (attrFeatQ.contains(f)) {
+        matched.add(f);
+        intersect.add(f);
+      }
+    }
+    // adding to denom is same as dirichlet prior on jaccard=0, more attr will wash this out
+    double score = intersect.size() / (1d + union.size());
+    return new Pair<>(score, matched);
+  }
+  
+  public static void attrFeatureReranking(KbpQuery q, List<SitSearchResult> res) {
+    TIMER.start("attrFeatureReranking");
+    String nameHeadQ = NNPSense.extractNameHead(q.name);
+    
+    // FIXED: Acceptable bug here: should really only look at the mention highlighed by the query.
+    // E.g. if a doc mentions Bill and Hillary Clinton, the attr feats will be collected off
+    // of any Clinton match, thus adding Bill features, which is what these were specifically
+    // designed to avoid.
+    assert q.entityMention != null;
+    String tokUuidQ = q.entityMention.getTokens().getTokenizationId().getUuidString();
+    List<String> attrCommQ = NNPSense.extractAttributeFeatures(null, q.sourceComm, nameHeadQ);
+    List<String> attrTokQ = NNPSense.extractAttributeFeatures(tokUuidQ, q.sourceComm, nameHeadQ);
+
+//    Set<String> attrFeatSetQ = new HashSet<>(attrFeatCommQ);
+    Log.info(q + " attribute features: " + attrCommQ);
+    for (SitSearchResult r : res) {
+
+      // This is not only dis-allowed in evaluation, but will screw up
+      // the scores by having all the attribute features trivially match
+      if (q.sourceComm.getId().equals(r.getCommunicationId())) {
+        continue;
+      }
+
+      String nameHeadR = r.getEntityHeadGuess();
+      
+//      // Attributes for mentions of this entity ANYWHERE in the Communication
+//      List<String> attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadQ);
+//      List<String> attrCommMatched = new ArrayList<>();
+//      Set<String> attrCommIntersect = new HashSet<>();
+//      Set<String> attrCommUnion = new HashSet<>();
+//      attrCommUnion.addAll(attrFeatCommQ);
+//      for (String ra : attrCommR) {
+//        attrCommUnion.add(ra);
+//        if (attrFeatSetQ.contains(ra)) {
+//          attrCommMatched.add(ra);
+//          attrCommIntersect.add(ra);
+//        }
+//      }
+//      
+//      List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadQ);
+//      List<String> attrTokMatched = new ArrayList<>();
+//      Set<String> attrTokIntersect = new HashSet<>();
+//      Set<String> attrTokUnion = new HashSet<>();
+//      attrTokUnion.addAll(attrFeatCommQ);
+//      for (String ra : attrTokR) {
+//        attrTokUnion.add(ra);
+//        if (attrFeatSetQ.contains(ra)) {
+//          attrTokMatched.add(ra);
+//          attrTokIntersect.add(ra);
+//        }
+//      }
+//      
+//      double scoreComm = attrCommIntersect.size() / Math.max(1d, attrCommUnion.size());
+//      double scoreTok = attrTokIntersect.size() / Math.max(1d, attrTokUnion.size());
+
+      List<String> attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadQ);
+      List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadQ);
+      
+      Pair<Double, List<String>> mCC = match(attrCommQ, attrCommR);
+      Pair<Double, List<String>> mCT = match(attrCommQ, attrTokR);
+      Pair<Double, List<String>> mTC = match(attrTokQ, attrCommR);
+      Pair<Double, List<String>> mTT = match(attrTokQ, attrTokR);
+      
+      double scale = 1;
+      r.addToScore("attrFeatCC", 1 * scale * mCC.get1());
+      r.addToScore("attrFeatCT", 2 * scale * mCT.get1());
+      r.addToScore("attrFeatTC", 2 * scale * mTC.get1());
+      r.addToScore("attrFeatTT", 8 * scale * mTT.get1());
+
+//      r.addToScore("attrComm", 0.5 * scoreComm);
+//      r.addToScore("attrTok", 5 * scoreComm);
+
+//      r.attributeFeaturesQ = attrFeatCommQ;
+//      r.attributeFeaturesR = attrTokR;
+//      r.attributeFeaturesMatched = attrTokMatched;
+//      System.out.printf("response score=%.2f attrMatched=%s attrAll=%s\n", scoreTok, attrTokMatched, attrTokR);
+
+      r.attributeFeaturesQ = attrTokQ;
+      r.attributeFeaturesR = attrTokR;
+      r.attributeFeaturesMatched = mTT.get2();
+    }
+
+    Collections.sort(res, SitSearchResult.BY_SCORE_DESC);
+    
+    for (SitSearchResult r : res) {
+      ShowResult sr = new ShowResult(q, r);
+      sr.show(Collections.emptyList());
+    }
+    TIMER.stop("attrFeatureReranking");
+  }
 
   public static void kbpSearching(ExperimentProperties config) throws Exception {
 //    // TUNNEL DEBUGGING
@@ -1053,39 +1161,7 @@ public class AccumuloIndex {
       // 6) Rescore according to attribute features
       // We need to have the Communications (specifically deps, POS, NER) to do this
       // attributeFeatures look like "PERSON-nn-Dr." and are generated by {@link NNPSense}
-      String nameHeadQ = NNPSense.extractNameHead(q.name);
-      List<String> attributeFeaturesQ = NNPSense.extractAttributeFeatures(q.sourceComm, nameHeadQ);
-      Set<String> attrFeatSetQ = new HashSet<>(attributeFeaturesQ);
-      Log.info("query attribute features: " + attributeFeaturesQ);
-      for (SitSearchResult r : res) {
-
-        // This is not only dis-allowed in evaluation, but will screw up
-        // the scores by having all the attribute features trivially match
-        if (q.sourceComm.getId().equals(r.getCommunicationId())) {
-          continue;
-        }
-
-        String nameHeadR = r.getEntityHeadGuess();
-        List<String> resAttr = NNPSense.extractAttributeFeatures(r.getCommunication(), nameHeadR, nameHeadQ);
-        List<String> hits = new ArrayList<>();
-        Set<String> intersect = new HashSet<>();
-        Set<String> union = new HashSet<>();
-        union.addAll(attributeFeaturesQ);
-        for (String ra : resAttr) {
-          union.add(ra);
-          if (attrFeatSetQ.contains(ra)) {
-            hits.add(ra);
-            intersect.add(ra);
-          }
-        }
-        double score = intersect.size() / Math.max(1d, union.size());
-        r.addToScore("attr", score);
-        r.attributeFeaturesQ = attributeFeaturesQ;
-        r.attributeFeaturesR = resAttr;
-        r.attributeFeaturesMatched = hits;
-        System.out.printf("response score=%.2f attrMatched=%s attrAll=%s\n", score, hits, resAttr);
-      }
-      Collections.sort(res, SitSearchResult.BY_SCORE_DESC);
+      attrFeatureReranking(q, res);
 
       // 7) Show results
       if (show) {
@@ -1110,13 +1186,12 @@ public class AccumuloIndex {
     } // END of query loop
   }
   
-  
   /**
    * Removes duplicate {@link Communication}s (by looking at their id).
    * You can get duplicates when you serialize, upon deserialization java
    * doesn't re-construct the original contents of memory by having shared
    * pointers point to a single item in memory.
-   * (for an example see {@link SerializationTest})
+   * (for an example see SerializationTest)
    * 
    * This method does not check that communications that share an id are
    * byte-for-byte identical, so be careful.
@@ -1143,14 +1218,14 @@ public class AccumuloIndex {
   public static void kbpSearchingMemo(ExperimentProperties config) throws Exception {
     // One file per query goes into this folder, each containing a:
     // Pair<KbpQuery, List<SitSearchResult>>
-    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir");
+    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir", new File("data/sit-search/old/maxToks100"));
     
     File wdf = config.getExistingFile("wordDocFreq");
     ComputeIdf df = new ComputeIdf(wdf);
     
     // Load parma
     ParmaVw parma = null;
-    boolean useParma = config.getBoolean("useParma", true);
+    boolean useParma = config.getBoolean("useParma", false);
     Log.info("useParma=" + useParma);
     String parmaSitTool = EntityEventPathExtraction.class.getName();
     if (useParma) {
@@ -1160,6 +1235,8 @@ public class AccumuloIndex {
       int parmaVwPort = config.getInt("vw.port", 8094);
       parma = new ParmaVw(modelFile, idf, parmaSitTool, parmaEntTool, parmaVwPort);
     }
+
+    boolean attrFeatureRerank = config.getBoolean("attributeFeatureReranking", true);
 
     // Iterate over (query, result*), one per file
     for (File f : dirForSerializingResults.listFiles()) {
@@ -1184,7 +1261,7 @@ public class AccumuloIndex {
       for (int resultIdx = 0; resultIdx < res.size(); resultIdx++) {
         SitSearchResult r = res.get(resultIdx);
         
-        // Experimental: try to figure out what events are interesting
+        // Figure out what events are interesting
         if (r.triageFeatures == null) {
           TIMER.start("unNecessaryQueryFeats");
 //          Log.info("FIXME: for now I'm recomputing the features");
@@ -1224,7 +1301,7 @@ public class AccumuloIndex {
         ParmaVw.addToOrCreateSitutationMentionSet(r.getCommunication(), sm, parmaSitTool);
 
         // Switch findMOstInterestingEvent to verbose=true if you want to see these
-        if (!useParma) {
+        if (!useParma && !attrFeatureRerank) {
           ShowResult sr = new ShowResult(q, r);
           sr.show(Collections.emptyList());
         }
@@ -1232,6 +1309,16 @@ public class AccumuloIndex {
       res = resWithSituations;
       resWithSituations = null;
       TIMER.stop("eventSelection");
+
+
+      if (attrFeatureRerank) {
+        Log.info("performing attribute feature reranking");
+        attrFeatureReranking(q, res);
+      }
+      
+      
+      // TODO NER type matching
+      // e.g. "Hollister" may refer to a person or an organization
 
 
       if (useParma) {
@@ -1279,7 +1366,8 @@ public class AccumuloIndex {
     System.out.println(IndexCommunications.EC);
     System.out.println();
 
-    parma.close();
+    if (parma != null)
+      parma.close();
     Log.info("done");
   }
 

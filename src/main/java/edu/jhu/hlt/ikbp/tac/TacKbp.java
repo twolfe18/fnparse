@@ -45,6 +45,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.TokenizationIter;
 
 /**
  * KBP 2014 will serve as the base for the retrieval annotations
@@ -99,6 +100,54 @@ public class TacKbp {
     public KbpQuery(String id) {
       this.id = id;
       beg = end = -1;
+    }
+    
+    public List<String> findMention() {
+//      if (sourceComm == null)
+//        throw new IllegalStateException("Communication not set");
+//      if (entityMention != null)
+//        throw new IllegalStateException("EntityMention not set");
+      if (sourceComm == null || entityMention == null)
+        return null;
+      String tokUuid = entityMention.getTokens().getTokenizationId().getUuidString();
+      for (Tokenization t : new TokenizationIter(sourceComm)) {
+        if (tokUuid.equals(t.getUuid().getUuidString())) {
+          List<String> l = new ArrayList<>();
+          for (Token tok : t.getTokenList().getTokenList())
+            l.add(tok.getText());
+          return l;
+        }
+      }
+      throw new RuntimeException("Tokenization " + tokUuid
+          + " is not in Communication " + sourceComm.getUuid().getUuidString() + " aka " + sourceComm.getId());
+    }
+    
+    public String findMentionHighlighted() {
+//      if (sourceComm == null)
+//        throw new IllegalStateException("Communication not set");
+//      if (entityMention != null)
+//        throw new IllegalStateException("EntityMention not set");
+      if (sourceComm == null || entityMention == null)
+        return null;
+      String tokUuid = entityMention.getTokens().getTokenizationId().getUuidString();
+      List<Integer> m = entityMention.getTokens().getTokenIndexList();
+      for (Tokenization t : new TokenizationIter(sourceComm)) {
+        if (tokUuid.equals(t.getUuid().getUuidString())) {
+          StringBuilder sb = new StringBuilder();
+          for (Token tok : t.getTokenList().getTokenList()) {
+            if (tok.getTokenIndex() > 0)
+              sb.append(' ');
+            if (tok.getTokenIndex() == m.get(0))
+              sb.append("<QUERY>");
+            sb.append(tok.getText());
+            if (tok.getTokenIndex() == m.get(m.size()-1))
+              sb.append("</QUERY>");
+          }
+          return sb.toString();
+        }
+      }
+      throw new RuntimeException("Tokenization " + tokUuid
+          + " is not in Communication " + sourceComm.getUuid().getUuidString() + " aka " + sourceComm.getId());
     }
     
     @Override
