@@ -1684,6 +1684,10 @@ public class IndexCommunications implements AutoCloseable {
     public Feat(String name) {
       this.name = name;
     }
+    public Feat(String name, double weight) {
+      this.name = name;
+      this.weight = weight;
+    }
     
     public Feat rescale(String reason, double factor) {
       this.weight *= factor;
@@ -1731,7 +1735,7 @@ public class IndexCommunications implements AutoCloseable {
     // Features from the EntityRetrieval module
     Result entSearchResult;
 
-    public List<String> importantTerms;
+    public List<String> importantTerms; // in the document (typically high tf-idf)
 
     /**
      * These are the features about an entity in a query which are used to look up Tokenizations.
@@ -1744,6 +1748,13 @@ public class IndexCommunications implements AutoCloseable {
      * weight they received (based on how common a given feature is).
      */
     public List<WeightedFeature> triageFeaturesMatched;
+    
+
+    // Attribute features are things like "PERSON-nn-Dr." which are discriminative modifiers of the entity headword
+    public List<String> attributeFeaturesQ; // query
+    public List<String> attributeFeaturesR; // response
+    public List<String> attributeFeaturesMatched; // intersection
+
     
     /** Head token index of the mention of the query entity/subject in this tokenization */
     public int yhatQueryEntityHead = -1;
@@ -1774,6 +1785,13 @@ public class IndexCommunications implements AutoCloseable {
         }
       }
       return e;
+    }
+    
+    public String getEntityHeadGuess() {
+      if (yhatQueryEntityHead < 0)
+        throw new IllegalStateException();
+      Tokenization toks = getTokenization();
+      return toks.getTokenList().getTokenList().get(yhatQueryEntityHead).getText();
     }
     
     public Tokenization getTokenization() {
@@ -1846,6 +1864,10 @@ public class IndexCommunications implements AutoCloseable {
     
     public Communication getCommunication() {
       return comm;
+    }
+    
+    public void addToScore(String feature, double weight) {
+      scoreDerivation.add(new Feat(feature, weight));
     }
     
     public double getScore() {

@@ -1,12 +1,15 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -35,8 +38,12 @@ import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
+import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.TokenizationIter;
 
 /**
@@ -192,6 +199,20 @@ public class NNPSense {
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
+//    File f = new File("data/concretely-annotated-gigaword/sample-with-semafor-nov08/nyt_eng_200909.withParsey.tar.gz");
+//    Counts<String> ec = new Counts<>();
+//    TimeMarker tm = new TimeMarker();
+//    try (AutoCloseableIterator<Communication> iter = new IndexCommunications.FileBasedCommIter(Arrays.asList(f))) {
+//      while (iter.hasNext()) {
+//        Communication c = iter.next();
+//        ec.increment("comm");
+//      }
+//    }
+    
+    countCommonPathsLeavingEntities(config);
+  }
+  
+  public static void countFirstNames(ExperimentProperties config) throws Exception {
     for (String x : Arrays.asList("Spooner", "Goude", "ALICO", "Mamane", "Esther-Ethy", "Denaro", "Bamba", "Youssoufou")) {
       NNPSense s = new NNPSense(x, null);
       s.scanAccumulo();
@@ -208,13 +229,105 @@ public class NNPSense {
     }
     Log.info("done");
   }
+  
+  // TODO Put this in tutils
+  public static void oneHop(List<Pair<Integer, LL<Dependency>>> from, BitSet visited, DependencyParse deps) {
+    int n = from.size();
+    for (int i = 0; i < n; i++) {
+      int f = from.get(i).get1();
+      visited.set(f);
+      for (Dependency d : deps.getDependencyList()) {
+        int to = -1;
+        if (d.isSetGov() && d.getGov() == f)
+          to = d.getDep();
+        else if (d.getDep() == f)
+          to = d.getGov();
+        if (to >= 0 && !visited.get(to)) {
+          visited.set(to);  // You only need this line if not a tree
+          LL<Dependency> path = new LL<>(d, from.get(i).get2());
+          from.add(new Pair<>(to, path));
+        }
+      }
+    }
+  }
+
+  // TODO Put this in tutils
+  public static List<Pair<Integer, LL<Dependency>>> kHop(int from, int k, DependencyParse deps) {
+    List<Pair<Integer, LL<Dependency>>> paths = new ArrayList<>();
+    paths.add(new Pair<>(from, null));
+    BitSet visited = new BitSet();
+    for (int i = 0; i < k; i++)
+      oneHop(paths, visited, deps);
+    return paths;
+  }
+  
+  private static ArrayDeque<String> reverseDeps(LL<Dependency> deps) {
+    ArrayDeque<String> d = new ArrayDeque<>();
+    for (LL<Dependency> cur = deps; cur != null; cur = cur.next)
+      d.push(cur.item.getEdgeType());
+    return d;
+  }
+  
+  /**
+   * Accepts strings like "Barack Obama" and "University of Southern California"
+   * and returns "Obama" and "University" respectively.
+   */
+  public static String extractNameHead(String entityFullName) {
+    // TODO write a better implementation!
+    String[] terms = entityFullName.split("\\s+");
+    return terms[terms.length -1];
+  }
+  
+  /**
+   * Returns strings like "PERSON-nn-Dr." where PERSON matches the given nameHead
+   */
+  public static List<String> extractAttributeFeatures(Communication c, String... nameHeads) {
+    Set<String> properNouns = new HashSet<>();
+    properNouns.add("NNP");
+    properNouns.add("NNPS");
+    List<String> attr = new ArrayList<>();
+    for (Tokenization toks : new TokenizationIter(c)) {
+      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
+      List<TaggedToken> pos = IndexCommunications.getPreferredPosTags(toks).getTaggedTokenList();
+      List<TaggedToken> ner = IndexCommunications.getPreferredNerTags(toks).getTaggedTokenList();
+      List<Token> t = toks.getTokenList().getTokenList();
+      for (Token tok : t) {
+        for (String nameHead : nameHeads) {
+          if (nameHead.equalsIgnoreCase(tok.getText())) {
+            int source = tok.getTokenIndex();
+            List<Pair<Integer, LL<Dependency>>> paths = kHop(source, 3, deps);
+            for (Pair<Integer, LL<Dependency>> p : paths) {
+              int dest = p.get1();
+              String destPos = pos.get(dest).getTag();
+              if (properNouns.contains(destPos) && p.get2() != null) {
+                String sourceNer = ner.get(source).getTag();
+                String destWord = t.get(dest).getText();
+                ArrayDeque<String> path = reverseDeps(p.get2());
+                path.addFirst(sourceNer);
+                path.addLast(destWord);
+                attr.add(StringUtils.join("-", path));
+              }
+            }
+          }
+        }
+      }
+    }
+    return attr;
+  }
 
   /**
    * Perhaps I can take the 1000 most common walks out of an entity head?
    */
   public static void countCommonPathsLeavingEntities(ExperimentProperties config) throws Exception {
-    Counts<String> commonWalksFromEnts = new Counts<>();
     Counts<String> ec = new Counts<>();
+
+    Counts<String> common = new Counts<>();
+    ReservoirSample<String> sample = new ReservoirSample<>(100, new Random(9001));
+    
+    Set<String> properNouns = new HashSet<>();
+    properNouns.add("NNP");
+    properNouns.add("NNPS");
+
     TimeMarker tm = new TimeMarker();
     try (AutoCloseableIterator<Communication> iter = IndexCommunications.getCommunicationsForIngest(config)) {
       while (iter.hasNext()) {
@@ -233,38 +346,61 @@ public class NNPSense {
           int h = em.getTokens().getAnchorTokenIndex();
           String p0 = pos.get(h).getTag();
           String w0 = em.getEntityType(); //tokz.getTokenList().getTokenList().get(h).getText();
-          for (Dependency d1 : deps.getDependencyList()) {
-            if (d1.getDep() != h)
-              continue;
-            // Walk of length 1
-            String p1, w1;
-            String e01 = d1.getEdgeType();
-            if (d1.isSetGov() && d1.getGov() >= 0) {
-              p1 = pos.get(d1.getGov()).getTag();
-              w1 = tokz.getTokenList().getTokenList().get(d1.getGov()).getText();
-              
-              for (Dependency d2 : deps.getDependencyList()) {
-                if (d2.getDep() != d1.getGov())
-                  continue;
-                String p2, w2;
-                String e12 = d2.getEdgeType();
-                if (d2.isSetGov() && d2.getGov() >= 0) {
-                  p2 = pos.get(d2.getGov()).getTag();
-                  w2 = tokz.getTokenList().getTokenList().get(d2.getGov()).getText();
-                } else {
-                  p2 = "ROOT";
-                  w2 = "ROOT";
-                }
-//                commonWalksFromEnts.increment(p0 + "-" + e01 + "-" + p1 + "-" + e12 + "-" + p2);
-                commonWalksFromEnts.increment(w0 + "-" + e01 + "-" + w1 + "-" + e12 + "-" + w2);
-              }
-            } else {
-              p1 = "ROOT";
-              w1 = "ROOT";
+          
+          // New cleaner way
+          List<Pair<Integer, LL<Dependency>>> paths = kHop(h, 3, deps);
+          for (Pair<Integer, LL<Dependency>> p : paths) {
+            int dest = p.get1();
+            String destPos = pos.get(dest).getTag();
+            if (properNouns.contains(destPos) && p.get2() != null) {
+              String destWord = tokz.getTokenList().getTokenList().get(dest).getText();
+              ArrayDeque<String> path = reverseDeps(p.get2());
+              path.addFirst(w0);
+              path.addLast(destWord);
+              String x = StringUtils.join("-", path);
+              common.increment(x);
+              sample.add(x);
             }
-//            commonWalksFromEnts.increment(p0 + "-" + e01 + "-" + p1);
-            commonWalksFromEnts.increment(w0 + "-" + e01 + "-" + w1);
           }
+          
+          
+//          // Parents of w0
+//          for (Dependency d1 : deps.getDependencyList()) {
+//            if (d1.getDep() != h)
+//              continue;
+//
+//            String p1, w1;
+//            String e01 = d1.getEdgeType();
+//            if (d1.isSetGov() && d1.getGov() >= 0) {
+//              p1 = pos.get(d1.getGov()).getTag();
+//              w1 = tokz.getTokenList().getTokenList().get(d1.getGov()).getText();
+//              
+//              // Parents of w1
+//              for (Dependency d2 : deps.getDependencyList()) {
+//                if (d2.getDep() != d1.getGov())
+//                  continue;
+//                String p2, w2;
+//                String e12 = d2.getEdgeType();
+//                if (d2.isSetGov() && d2.getGov() >= 0) {
+//                  p2 = pos.get(d2.getGov()).getTag();
+//                  w2 = tokz.getTokenList().getTokenList().get(d2.getGov()).getText();
+//                } else {
+//                  p2 = "ROOT";
+//                  w2 = "ROOT";
+//                }
+////                commonWalksFromEnts.increment(p0 + "-" + e01 + "-" + p1 + "-" + e12 + "-" + p2);
+//                if (properNouns.contains(p2))
+//                  commonWalksFromEnts.increment(w0 + "-" + e01 + "-" + w1 + "-" + e12 + "-" + w2);
+//              }
+//
+//            } else {
+//              p1 = "ROOT";
+//              w1 = "ROOT";
+//            }
+////            commonWalksFromEnts.increment(p0 + "-" + e01 + "-" + p1);
+//            if (properNouns.contains(p1))
+//              commonWalksFromEnts.increment(w0 + "-" + e01 + "-" + w1);
+//          }
         }
         if (ec.getCount("comm") > 10000)
           break;
@@ -273,12 +409,17 @@ public class NNPSense {
       }
     }
     
+    System.out.println("most common:");
     int i = 0;
-    for (String f : commonWalksFromEnts.getKeysSortedByCount(true)) {
-      System.out.println(commonWalksFromEnts.getCount(f) + "\t" + f);
+    for (String f : common.getKeysSortedByCount(true)) {
+      System.out.println(common.getCount(f) + "\t" + f);
       if (++i == 100)
         break;
     }
+    System.out.println();
+    System.out.println("random sample:");
+    for (String f : sample)
+      System.out.println(common.getCount(f) + "\t" + f);
 
     Log.info("done");
   }
