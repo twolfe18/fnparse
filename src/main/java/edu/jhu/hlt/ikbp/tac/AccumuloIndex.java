@@ -726,7 +726,7 @@ public class AccumuloIndex {
     public List<SitSearchResult> search(List<String> triageFeats, StringTermVec docContext, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
       Log.info("starting, triageFeats=" + triageFeats);
       if (batchTimeoutSeconds > 0)
-        Log.info("using a timeout of " + batchTimeoutSeconds + " seconds for f2t query");
+        Log.info("[filter] using a timeout of " + batchTimeoutSeconds + " seconds for f2t query");
 
       if (triageFeats.size() > 8) {
         Log.info("WARNING! something is broken when there are too many features (" + triageFeats.size() + "), skipping");
@@ -742,7 +742,7 @@ public class AccumuloIndex {
             pruned.add(f);
           }
         }
-        Log.info("kept " + pruned.size() + " of " + triageFeats.size() + " features");
+        Log.info("[filter] kept " + pruned.size() + " of " + triageFeats.size() + " features");
         triageFeats = pruned;
       }
       
@@ -835,12 +835,12 @@ public class AccumuloIndex {
         score.add(new Feat("prod").setWeight(prod).rescale("goodfeat", 10.0));
 
         // Filtering
-        if (entMatchScore < 0.001) {
+        if (entMatchScore < 0.0001) {
           EC.increment("resFilter/name");
           filterReasons.increment("badNameMatch");
           continue;
         }
-        if (tfidf < 0.1 && entMatchScore < 0.01) {
+        if (tfidf < 0.05 && entMatchScore < 0.001) {
           EC.increment("resFilter/prod");
           filterReasons.increment("badNameAndTfIdf");
           continue;
@@ -848,7 +848,7 @@ public class AccumuloIndex {
         
         res.add(ss);
       }
-      Log.info("reasons for filtering results for " + triageFeats + ": " + filterReasons);
+      Log.info("[filter] reasons for filtering: " + filterReasons + " feats: " + triageFeats);
 
       // 4) Sort results by final score
       Collections.sort(res, SitSearchResult.BY_SCORE_DESC);
@@ -864,7 +864,7 @@ public class AccumuloIndex {
       // TODO Consider filtering based on score?
       List<String> bestToks = tokUuid2score.getKeysSortedByCount(true);
       if (bestToks.size() > maxToksPreDocRetrieval) {
-        Log.info("only taking the " + maxToksPreDocRetrieval + " highest scoring of " + bestToks.size() + " tokenizations");
+        Log.info("[filter] only taking the " + maxToksPreDocRetrieval + " highest scoring of " + bestToks.size() + " tokenizations");
         bestToks = bestToks.subList(0, maxToksPreDocRetrieval);
       }
 
@@ -914,7 +914,7 @@ public class AccumuloIndex {
         Object old = c2tv.put(commId, tv);
         assert old == null;
       }
-      Log.info("retrieved " + c2tv.size() + " of " + uniq.size() + " comms");
+      Log.info("[filter] retrieved " + c2tv.size() + " of " + uniq.size() + " comms");
       TIMER.stop("c2w/getWordsForComms");
       return c2tv;
     }
@@ -1182,7 +1182,7 @@ public class AccumuloIndex {
             break;
         }
       }
-      Log.info("resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
+      Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
       res = resKeep;
       }
 
@@ -1312,7 +1312,7 @@ public class AccumuloIndex {
         ParmaVw.addToOrCreateSitutationMentionSet(r.getCommunication(), sm, parmaSitTool);
       }
     }
-    Log.info("lost " + (res.size() - resWithSituations.size()) +  " results due to ent/sit finding failures");
+    Log.info("[filter] lost " + (res.size() - resWithSituations.size()) +  " results due to ent/sit finding failures");
     res.clear();
     res.addAll(resWithSituations);
     TIMER.stop("findEntitiesAndSituations");

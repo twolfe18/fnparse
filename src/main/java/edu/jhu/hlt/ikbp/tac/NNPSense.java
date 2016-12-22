@@ -73,6 +73,11 @@ import edu.jhu.util.TokenizationIter;
  * @author travis
  */
 public class NNPSense {
+  
+  // Shows what is being extracted/pruned and why
+  public static boolean EXTRACT_ATTR_FEAT_VERBOSE = false;
+  
+  
   String text;
   String nerType;
 
@@ -278,14 +283,25 @@ public class NNPSense {
     return terms[terms.length -1];
   }
   
+  private static String join(List<Token> toks) {
+    StringBuilder sb = new StringBuilder();
+    for (Token t : toks) {
+      if (sb.length() > 0)
+        sb.append(' ');
+      sb.append(t.getText());
+    }
+    return sb.toString();
+  }
   /**
    * Returns strings like "PERSON-nn-Dr." where PERSON matches the given nameHead
    * 
    * @param tokUuid is the {@link Tokenization} UUID to restrict to. If null it looks through the entire comm.
    */
   public static List<String> extractAttributeFeatures(String tokUuid, Communication c, String... nameHeads) {
+    if (EXTRACT_ATTR_FEAT_VERBOSE)
+      Log.info("comm=" + c.getId() + " nameHeads=" + Arrays.toString(nameHeads) + " tok=" + tokUuid);
     
-    // TODO Might want to expand this set
+    // Might want to expand this set
     // Currently it will miss "Italian" because it is an JJ
     // Perhaps I could actually take all high idf terms? This would miss titles like "Dr."
     Set<String> interestingPos = new HashSet<>();
@@ -293,7 +309,7 @@ public class NNPSense {
     interestingPos.add("NNPS");
     interestingPos.add("CD");
     interestingPos.add("JJ");
-    interestingPos.add("JJS");
+    interestingPos.add("JJS");    // TODO might want to restrict these to one-hop paths
 
     List<String> attr = new ArrayList<>();
     for (Tokenization toks : new TokenizationIter(c)) {
@@ -303,6 +319,8 @@ public class NNPSense {
       List<TaggedToken> pos = IndexCommunications.getPreferredPosTags(toks).getTaggedTokenList();
       List<TaggedToken> ner = IndexCommunications.getPreferredNerTags(toks).getTaggedTokenList();
       List<Token> t = toks.getTokenList().getTokenList();
+      if (EXTRACT_ATTR_FEAT_VERBOSE)
+        Log.info("scanning: " + join(t));
       for (Token tok : t) {
         Set<String> uniq = new HashSet<>(); // uniq per tokenization, otherwise multiple nameHeads means duplicates
         for (String nameHead : nameHeads) {
@@ -312,21 +330,60 @@ public class NNPSense {
             for (Pair<Integer, LL<Dependency>> p : paths) {
               int dest = p.get1();
               String destPos = pos.get(dest).getTag();
-              if (interestingPos.contains(destPos) && p.get2() != null) {
-                String sourceNer = ner.get(source).getTag();
-                String destWord = t.get(dest).getText();
-                ArrayDeque<String> path = reverseDeps(p.get2());
-                path.addFirst(sourceNer);
-                path.addLast(destWord);
-                // e.g. ORGANIZATION-appos-nn-Boston
-                String x = StringUtils.join("-", path);
+              
+              // TODO Check that path only *ends* in an interesting POS, rather that going over them.
+              // e.g. we want a path that leads to "New York" to end with the head, "York", and not include "New"
+              // This matters for backoff (where the path is lost) and avoiding double-counting.
+              int length = 0;
+              BitSet interestingOnPath = new BitSet();
+              for (LL<Dependency> cur = p.get2(); cur != null; cur = cur.next) {
+                length++;
+                Dependency d = cur.item;
+                if (d.isSetGov() && interestingPos.contains(pos.get(d.getGov()).getTag()))
+                  interestingOnPath.set(d.getGov());
+                if (interestingPos.contains(pos.get(d.getDep()).getTag()))
+                  interestingOnPath.set(d.getDep());
+              }
+
+              // Build the path
+              String sourceNer = ner.get(source).getTag();
+              String destWord = t.get(dest).getText();
+              ArrayDeque<String> path = reverseDeps(p.get2());
+              path.addFirst(sourceNer);
+              path.addLast(destWord);
+              // e.g. ORGANIZATION-appos-nn-Boston
+              String x = StringUtils.join("-", path);
+              // e.g. ORGANIZATION-backoff-Boston
+              String xBackoff = sourceNer + "-backoff-" + destWord;
+
+              // See if you want to keep it
+              if (length == 0) {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c length=0: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                continue;
+              }
+              if (interestingOnPath.cardinality() > 2) {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c mult interesting on path: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                continue;
+              }
+              if (destPos.startsWith("JJ") && length > 1) {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c long JJ*: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                continue;
+              }
+              if (interestingPos.contains(destPos)) {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("keeping: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
                 if (uniq.add(x))
                   attr.add(x);
-                // e.g. ORGANIZATION-backoff-Boston
-                String xBackoff = sourceNer + "-backoff-" + destWord;
                 if (uniq.add(xBackoff))
                   attr.add(xBackoff);
+              } else {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c not interesting: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
               }
+
             }
           }
         }
