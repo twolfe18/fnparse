@@ -2029,7 +2029,7 @@ public class IndexCommunications implements AutoCloseable {
     
     public Tokenization getTokenization() {
       if (comm == null)
-        throw new RuntimeException();
+        throw new RuntimeException("can't ask for tokenization until communication is provided!");
       Tokenization tok = null;
       for (Section section : comm.getSectionList()) {
         for (Sentence sentence : section.getSentenceList()) {

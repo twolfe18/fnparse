@@ -1077,6 +1077,7 @@ public class AccumuloIndex {
     TacQueryEntityMentionResolver findEntityMention =
         new TacQueryEntityMentionResolver("tacQuery");
     
+    // Gets Communications (and contents/annotations) given an id
     AccumuloCommRetrieval commRet = new AccumuloCommRetrieval(config);
 
 
@@ -1156,20 +1157,34 @@ public class AccumuloIndex {
       List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
 
       // 4) Prune
-      if (limit > 0 && res.size() > limit) {
-        Log.info("pruning " + res.size() + " queries down to " + limit);
-        //res = res.subList(0, limit);  // not serializable
-        List<SitSearchResult> resPrune = new ArrayList<>(limit);
-        for (int i = 0; i < limit; i++)
-          resPrune.add(res.get(i));
-        res = resPrune;
-      }
-
-      // 5) Retrieve communications
+//      if (limit > 0 && res.size() > limit) {
+//        Log.info("pruning " + res.size() + " queries down to " + limit);
+//        //res = res.subList(0, limit);  // not serializable
+//        List<SitSearchResult> resPrune = new ArrayList<>(limit);
+//        for (int i = 0; i < limit; i++)
+//          resPrune.add(res.get(i));
+//        res = resPrune;
+//      }
+      // 4-5) Retrieve communications and prune
+      {
+      List<SitSearchResult> resKeep = new ArrayList<>();
+      int failed = 0;
       for (SitSearchResult r : res) {
         Communication c = commRet.get(r.getCommunicationId());
-        r.setCommunication(c);
+        if (c == null) {
+          Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
+          failed++;
+        } else {
+          r.setCommunication(c);
+          resKeep.add(r);
+          if (limit > 0 && resKeep.size() >= limit)
+            break;
+        }
       }
+      Log.info("resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
+      res = resKeep;
+      }
+
 
       // 6) Find entities and situations
       // (technically situations are not needed, only entities for attribute features)
@@ -1244,6 +1259,8 @@ public class AccumuloIndex {
    * 
    * @param parmaSitTool is the tool name use for new {@link SituationMentionSet}s
    * If this is null, then {@link SituationMention}s will NOT be added to.
+   * 
+   * Precondition: {@link SitSearchResult} must have their {@link Communication}s set.
    */
   public static void findEntitiesAndSituations(KbpQuery q, List<SitSearchResult> res, ComputeIdf df, String parmaSitTool) {
     Log.info("nResults=" + res.size() + " query=" + q.toString() + " insitu=" + q.findMentionHighlighted());
@@ -1251,6 +1268,8 @@ public class AccumuloIndex {
     List<SitSearchResult> resWithSituations = new ArrayList<>();
     for (int resultIdx = 0; resultIdx < res.size(); resultIdx++) {
       SitSearchResult r = res.get(resultIdx);
+      if (r.getCommunication() == null)
+        throw new IllegalArgumentException();
 
       // Figure out what events are interesting
       if (r.triageFeatures == null) {
