@@ -124,18 +124,14 @@ public class TacKbp {
     }
     
     public String findMentionHighlighted() {
-//      if (sourceComm == null)
-//        throw new IllegalStateException("Communication not set");
-//      if (entityMention != null)
-//        throw new IllegalStateException("EntityMention not set");
       if (sourceComm == null || entityMention == null)
         return null;
       
-      // DEUBGGING: check that all tokenization uuids are uniq
-      Set<String> tUniq = new HashSet<>();
-      Log.info("looking in " + sourceComm.getId());
-      for (Tokenization t : new TokenizationIter(sourceComm))
-        assert tUniq.add(t.getUuid().getUuidString());
+//      // DEUBGGING: check that all tokenization uuids are uniq
+//      Set<String> tUniq = new HashSet<>();
+//      Log.info("looking in " + sourceComm.getId());
+//      for (Tokenization t : new TokenizationIter(sourceComm))
+//        assert tUniq.add(t.getUuid().getUuidString());
       
       String tokUuid = entityMention.getTokens().getTokenizationId().getUuidString();
       List<Integer> m = entityMention.getTokens().getTokenIndexList();
@@ -152,16 +148,16 @@ public class TacKbp {
               sb.append("</QUERY>");
           }
           
-          // DEBUGGING: show a few related descriptions of this mention
-          TextSpan ts = entityMention.getTokens().getTextSpan();
-          if (ts != null)
-            Log.info("em.ts:   " + sourceComm.getText().substring(ts.getStart(), ts.getEnding()));
-          else
-            Log.info("em.ts:   null");
-          Log.info("em.text: " + entityMention.getText());
-          Log.info("tq.ts:   " + sourceComm.getText().substring(beg, end+1));
-          Log.info("found:   " + sb.toString());
-          System.out.println();
+//          // DEBUGGING: show a few related descriptions of this mention
+//          TextSpan ts = entityMention.getTokens().getTextSpan();
+//          if (ts != null)
+//            Log.info("em.ts:   " + sourceComm.getText().substring(ts.getStart(), ts.getEnding()));
+//          else
+//            Log.info("em.ts:   null");
+//          Log.info("em.text: " + entityMention.getText());
+//          Log.info("tq.ts:   " + sourceComm.getText().substring(beg, end+1));
+//          Log.info("found:   " + sb.toString());
+//          System.out.println();
           
           return sb.toString();
         }

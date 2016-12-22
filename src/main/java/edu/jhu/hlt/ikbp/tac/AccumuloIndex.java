@@ -384,12 +384,12 @@ public class AccumuloIndex {
       List<String> p = new ArrayList<>(k);
       for (int i = 0; i < k; i++) {
         Pair<String, Double> term = t.get(i);
-        Log.info(term);
+//        Log.info(term);
         assert i == 0 || term.get2() <= prevScore;
         prevScore = term.get2();
         p.add(term.get1());
       }
-      System.out.println();
+//      System.out.println();
       return p;
     }
     
@@ -837,12 +837,12 @@ public class AccumuloIndex {
         // Filtering
         if (entMatchScore < 0.001) {
           EC.increment("resFilter/name");
-          filterReasons.increment("name");
+          filterReasons.increment("badNameMatch");
           continue;
         }
         if (tfidf < 0.1 && entMatchScore < 0.01) {
           EC.increment("resFilter/prod");
-          filterReasons.increment("prod");
+          filterReasons.increment("badNameAndTfIdf");
           continue;
         }
         
@@ -853,6 +853,7 @@ public class AccumuloIndex {
       // 4) Sort results by final score
       Collections.sort(res, SitSearchResult.BY_SCORE_DESC);
       
+      Log.info("returning " + res.size() + " sorted SitSearchResults");
       return res;
     }
     
