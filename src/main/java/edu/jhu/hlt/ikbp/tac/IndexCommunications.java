@@ -107,6 +107,7 @@ import edu.jhu.prim.util.Lambda.FnIntFloatToFloat;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
 import edu.jhu.prim.vector.IntIntHashVector;
 import edu.jhu.util.SlowParseyWrapper;
+import edu.jhu.util.TokenizationIter;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.IIndexWord;
 import edu.mit.jwi.item.IWord;
@@ -616,14 +617,29 @@ public class IndexCommunications implements AutoCloseable {
     }
 
     public static String[] getMturkCorefHitHeader() {
-      return new String[] {"hitId", "sourceDocId", "targetDocId", "sourceMentionHtml", "targetMentionHtml"};
+//      return new String[] {"hitId", "sourceDocId", "score", "targetDocId", "sourceMentionHtml", "targetMentionHtml"};
+      return new String[] {"hitId", "sourceDocId", "targetDocId", "score", "nicelyFormattedHtml"};
+    }
+    
+    private static Span nounPhraseExpand(int head, DependencyParse deps) {
+      assert head >= 0;
+      int left = head;
+      int right = head;
+      List<String> edges = Arrays.asList("nn");
+      for (Dependency d : deps.getDependencyList()) {
+        if (d.isSetGov() && d.getGov() == head && edges.contains(d.getEdgeType())) {
+          if (d.getDep() < left) left = d.getDep();
+          if (d.getDep() > right) right = d.getDep();
+        }
+      }
+      return Span.getSpan(left, right+1);
     }
 
     /**
      * Outputs (hitId, sourceDocId, targetDocId, score, sourceHtml, targetHtml)
      * Currently score is a placeholder.
      */
-    public String[] emitMturkCorefHit(SitSearchResult r) {
+    public String[] emitMturkCorefHit(File writeHtmlTableTo) {
       // How do I highlight an entity
       // Which ent to highlight!
 
@@ -635,36 +651,99 @@ public class IndexCommunications implements AutoCloseable {
       Tokenization st = findTok(s.getTokens().getTokenizationId().getUuidString(), query.sourceComm);
       Span ss = convert(s.getTokens());
       
-      // Target: You have a Tokenization, need to decide what to show.
-      // Heuristic: just highlight according to NER TokenTagging?
-      Tokenization t = r.getTokenization();
+      Tokenization t = res.getTokenization();
       if (t == null)
-        throw new RuntimeException("couldn't resolve result Tokenization for: " + r);
-      Span ts = getEntitySpanFor(r, t);
+        throw new RuntimeException("couldn't resolve result Tokenization for: " + res);
+//      Span ts = Span.widthOne(res.yhatQueryEntityHead);
+      DependencyParse depsR = getPreferredDependencyParse(res.getTokenization());
+      Span ts = nounPhraseExpand(res.yhatQueryEntityHead, depsR);
       
-      String hitId = query.id + "___rTokUuid:" + r.tokUuid;
+      String hitId = query.id + "___rTokUuid:" + res.tokUuid;
       
-      String sourceHtml = formatHighlightedSpanInHtml(st, ss);
-      String targetHtml = formatHighlightedSpanInHtml(t, ts);
+      String sourceMentionHtml = formatHighlightedSpanInHtml(st, ss);
+      String targetMentionHtml = formatHighlightedSpanInHtml(t, ts);
+      
+      int minToksGoal = 200;
+      int maxToksGoal = 1000;
+      String sourceContext = new NewsStoryContext(query.sourceComm)
+          .createSummaryWorkBackwardsFromQuery(minToksGoal, maxToksGoal, query.entityMention);
+      String targetContext = new NewsStoryContext(res.getCommunication())
+          .createSummaryWorkBackwardsFromQuery(minToksGoal, maxToksGoal, res.tokUuid, ts);
+      
+      int k = 15;
+      List<String> sterms = query.docCtxImportantTerms;
+      if (sterms.size() > k) sterms = sterms.subList(0, k);
+      List<String> rterms = res.importantTerms;
+      if (rterms.size() > k) rterms = rterms.subList(0, k);
+      String sourceTerms = StringUtils.join(", ", sterms);
+      String targetTerms = StringUtils.join(", ", rterms);
+      
+      StringBuilder sb = new StringBuilder();
+
+      // Set this in the mturk editor
+//      sb.append("<style>");
+//      sb.append("span.entity { color: blue; font-weight: bold; }");
+//      sb.append("span.terms { font-style: italic; }");
+//      sb.append("</style>");
+
+      sb.append("<center>");
+      sb.append("<table border=\"1\" cellpadding=\"10\" width=\"80%\">");
+      sb.append("<col width=\"50%\"><col width=\"50%\">");
+//      sb.append("<tr><td>Source</td><td>Target</td></tr>");
+
+      // mention
+      sb.append("<tr>");
+      sb.append("<td valign=top><span class=\"mention\">" + sourceMentionHtml + "</span></td>");
+      sb.append("<td valign=top><span class=\"mention\">" + targetMentionHtml + "</span></td>");
+      sb.append("<tr>");
+
+      // terms
+      sb.append("<tr>");
+      sb.append("<td valign=top>Keywords: <span class=\"terms\">" + sourceTerms + "</span></td>");
+      sb.append("<td valign=top>Keywords: <span class=\"terms\">" + targetTerms + "</span></td>");
+      sb.append("<tr>");
+
+      // first paragraph
+      sb.append("<tr>");
+      sb.append("<td valign=top><span class=\"context\">" + sourceContext + "</span></td>");
+      sb.append("<td valign=top><span class=\"context\">" + targetContext + "</span></td>");
+      sb.append("<tr>");
+
+      sb.append("</table>");
+      sb.append("</center>");
+      
+      String nicelyFormattedHtml = sb.toString();
+
+      if (writeHtmlTableTo != null) {
+        assert writeHtmlTableTo.isDirectory();
+        File f = new File(writeHtmlTableTo, hitId + ".html");
+        Log.info("writing to " + f.getPath());
+        try (BufferedWriter w = FileUtil.getWriter(f)) {
+          w.write("<html><body>\n");
+          w.write("<style>");
+          w.write("span.entity { color: blue; font-weight: bold; }\n");
+          w.write("span.terms { font-style: italic; }\n");
+          w.write("</style>\n");
+          w.write(nicelyFormattedHtml);
+          w.write("</body></html>\n");
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+      }
       
       return new String[] {
           hitId,
           query.sourceComm.getId(),
-          r.getCommunication().getId(),
-          "1.0",
-          sourceHtml,
-          targetHtml,
+          res.getCommunicationId(),
+          "" + res.getScore(),
+          nicelyFormattedHtml,
+//          sourceMentionHtml,
+//          targetMentionHtml,
+//          sourceContext,
+//          targetContext,
+//          sourceTerms,
+//          targetTerms,
       };
-    }
-    
-    /** TODO figure out how not to do this. */
-    public static Span getEntitySpanFor(SitSearchResult r, Tokenization rt) {
-      
-      List<Token> t = rt.getTokenList().getTokenList();
-//      List<TaggedToken> ner = rt.getTag
-
-//      throw new RuntimeException("implement me");
-      return Span.widthOne(0);
     }
     
     public static Span convert(TokenRefSequence trs) {
@@ -681,19 +760,152 @@ public class IndexCommunications implements AutoCloseable {
       StringBuilder sb = new StringBuilder();
       List<Token> t = words.getTokenList().getTokenList();
       int n = t.size();
-      assert highlight.start >= 0 && highlight.start < highlight.end && highlight.end < n;
+      assert 0 <= highlight.start && highlight.start <= highlight.end && highlight.end <= n : "highlight=" + highlight;
       for (int i = 0; i < n; i++) {
         if (i > 0)
           sb.append(' ');
-        if (i == highlight.start) // assumption: start is inclusive
+        if (i == highlight.start)     // assumption: start is inclusive
           sb.append("<span class=\"entity\">");
-        if (i == highlight.end)   // assumption: end is exclusive
-          sb.append("</span>");
         sb.append(t.get(i).getText());
+        if (i == highlight.end-1)     // assumption: end is exclusive
+          sb.append("</span>");
       }
       return sb.toString();
     }
     
+  }
+  
+  /**
+   * Provides a paragraph-length snippet which summarizes a {@link Communication} news story.
+   */
+  public static class NewsStoryContext {
+    private Communication comm;
+    
+    public NewsStoryContext(Communication comm) {
+      if (comm == null)
+        throw new IllegalArgumentException();
+      this.comm = comm;
+    }
+
+    public String createSummaryWorkBackwardsFromQuery(int minToksGoal, int maxToksGoal, EntityMention em) {
+      String tokUuid = em.getTokens().getTokenizationId().getUuidString();
+      List<Integer> toks = em.getTokens().getTokenIndexList();
+      int left = toks.get(0);
+      int right = left;
+      for (int i : toks) {
+        if (i < left) left = i;
+        if (i > right) right = i;
+      }
+      return createSummaryWorkBackwardsFromQuery(minToksGoal, maxToksGoal, tokUuid, Span.getSpan(left, right+1));
+    }
+    
+    /**
+     * @param minToksGoal
+     * @param maxToksGoal
+     * @param tokUuidOfQuery
+     * @param highlight can be null, otherwise will put a <span class="entity> around this span.
+     */
+    public String createSummaryWorkBackwardsFromQuery(int minToksGoal, int maxToksGoal, String tokUuidOfQuery, Span highlight) {
+      StringBuilder sb = new StringBuilder();
+      ArrayDeque<Tokenization> stack = new ArrayDeque<>();
+      int toks = 0;
+      for (Tokenization t : new TokenizationIter(comm)) {
+        if (sb.length() == 0) {
+          // Case 1: We haven't found the desired tokenization yet
+          stack.push(t);
+          if (tokUuidOfQuery.equals(t.getUuid().getUuidString())) {
+            // If we found it, unwind and keep what fits
+            ArrayDeque<Tokenization> properOrder = new ArrayDeque<>();
+            while (toks < minToksGoal && !stack.isEmpty()) {
+              Tokenization cur = stack.pop();
+              toks += cur.getTokenList().getTokenListSize();
+              properOrder.push(cur);
+            }
+            // Output what fits to strings
+            while (!properOrder.isEmpty()) {
+              Tokenization cur = properOrder.pop();
+              // Query tok was the last one in, highlight == null means rel is moot
+              boolean rel = properOrder.isEmpty() && highlight != null;
+              for (Token tt : cur.getTokenList().getTokenList()) {
+                if (sb.length() > 0)
+                  sb.append(' ');
+
+                if (rel && tt.getTokenIndex() == highlight.start)
+                  sb.append("<span class=\"entity\">");
+
+                sb.append(tt.getText());
+
+                if (rel && tt.getTokenIndex() == highlight.end-1)
+                  sb.append("</span>");
+              }
+              sb.append("<br/>");
+            }
+          }
+        } else {
+          // Case 2: we've gotten everything up through the desired tokenization,
+          // and we are going to keep going until we hit min
+          toks += t.getTokenList().getTokenListSize();
+          for (Token tt : t.getTokenList().getTokenList())
+            sb.append(" " + tt.getText());
+          sb.append("<br/>");
+          if (toks >= minToksGoal)
+            break;
+        }
+      }
+      return sb.toString();
+    }
+    
+    /**
+     * Takes the first K tokens of the communication. This is normally a good thing for news,
+     * but sometimes in long or incoherent docs, the query does not appear in this prefix.
+     */
+    public String createSummaryInitialSentences(int minToksGoal, int maxToksGoal) {
+      StringBuilder sb = new StringBuilder();
+      int toks = 0;
+      for (Section section : comm.getSectionList()) {
+
+//        sb.append("kind=" + section.getKind());       // dateline, headline, passage
+//        sb.append(" label=" + section.getLabel());    // null
+        
+//        if (section.getKind().equalsIgnoreCase("headline"))
+//          sb.append("<b>");
+//        if (section.getKind().equalsIgnoreCase("dateline"))
+//          sb.append("<i>");
+
+//        if (section.getKind().equalsIgnoreCase("dateline"))
+//          continue;
+
+        boolean first = true;
+        for (Sentence sent : section.getSentenceList()) {
+          Tokenization t = sent.getTokenization();
+          toks += t.getTokenList().getTokenListSize();
+
+          String s = comm.getText().substring(sent.getTextSpan().getStart(), sent.getTextSpan().getEnding());
+          s = s.replace('\n', ' ').replaceAll("\\s+", " ");
+          if (first) {
+            first = false;
+            sb.append(' ');
+          }
+          sb.append(s);
+
+          if (toks >= minToksGoal) {
+//            int e = sent.getTextSpan().getEnding();
+//            assert e > toks;
+//            return comm.getText().substring(0, e);
+            return sb.toString();
+          }
+        }
+
+//        if (section.getKind().equalsIgnoreCase("headline"))
+//          sb.append("</b>");
+//        if (section.getKind().equalsIgnoreCase("dateline"))
+//          sb.append("</i>");
+
+        sb.append("<br/>");
+      }
+//      return comm.getText();
+      return sb.toString();
+    }
   }
   
   /**
@@ -1190,7 +1402,7 @@ public class IndexCommunications implements AutoCloseable {
           s.show(k.search.state.pkbDocs);
 
           MturkCorefHit mtc = new MturkCorefHit(q, r);
-          String[] csv = mtc.emitMturkCorefHit(r);
+          String[] csv = mtc.emitMturkCorefHit(null);
           System.out.println("mturk coref csv: " + Arrays.toString(csv));
           System.out.println("mturk targetMentionHtml: " + csv[csv.length-1]);
           mturkCorefCsvW.printRecord(csv);

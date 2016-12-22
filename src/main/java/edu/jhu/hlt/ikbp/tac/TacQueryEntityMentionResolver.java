@@ -68,8 +68,17 @@ public class TacQueryEntityMentionResolver {
           int lt = lastToken(em.getTokens());
           int fc = firstChar(ft, t);
           int lc = lastChar(lt, t);
-          double err = (cstart - fc) * (cstart - fc)
-              + (cend - lc) * (cend - lc);
+          
+          // Be careful to avoid overflow!
+//          double err = (cstart - fc) * (cstart - fc)
+//              + (cend - lc) * (cend - lc);
+          double estart = cstart - fc;
+          double eend = (cend - lc);
+          double err = estart*estart + eend*eend;
+          assert err >= 0;
+          assert err >= estart;
+          assert err >= eend;
+          
           if (DEBUG && err <= 3*tolerance + 1) {
             Log.info("em=" + em);
             Log.info("q=" + q);
@@ -161,8 +170,11 @@ public class TacQueryEntityMentionResolver {
    * Returns true if didn't find an {@link EntityMention} in q's {@link Communication}.
    */
   public boolean resolve(KbpQuery q, boolean addEmToCommIfMissing) {
-    if (q.entityMention != null)
-      return false;
+    if (q.entityMention != null) {
+//      return false;
+      Log.info("warning: are you un-intentionally over-writing an existing EntityMention");
+      assert !addEmToCommIfMissing;
+    }
     q.entityMention = find(q, 3);
     if (q.entityMention != null)
       return false;

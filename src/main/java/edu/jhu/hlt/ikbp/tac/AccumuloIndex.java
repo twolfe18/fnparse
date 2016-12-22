@@ -39,6 +39,8 @@ import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.commons.configuration.ConfigurationException;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
@@ -53,6 +55,7 @@ import com.google.common.hash.Funnels;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.SituationMention;
+import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.access.FetchRequest;
@@ -61,9 +64,11 @@ import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloFetch;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.ikbp.features.ConcreteMentionFeatureExtractor;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.CommunicationRetrieval;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.EntityEventPathExtraction;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.MturkCorefHit;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw.QResultCluster;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ShowResult;
@@ -375,9 +380,16 @@ public class AccumuloIndex {
       });
       if (k > t.size())
         k = t.size();
+      double prevScore = 0;
       List<String> p = new ArrayList<>(k);
-      for (int i = 0; i < k; i++)
-        p.add(t.get(i).get1());
+      for (int i = 0; i < k; i++) {
+        Pair<String, Double> term = t.get(i);
+        Log.info(term);
+        assert i == 0 || term.get2() <= prevScore;
+        prevScore = term.get2();
+        p.add(term.get1());
+      }
+      System.out.println();
       return p;
     }
     
@@ -1117,6 +1129,7 @@ public class AccumuloIndex {
       // 1a) Retrieve the context Communication
       q.sourceComm = commRet.get(q.docid);
       if (q.sourceComm == null) {
+        Log.info("skipping query b/c failed to retreive document: " + q);
         EC.increment("kbpQuery/failResolveSourceDoc");
         continue;
       }
@@ -1175,6 +1188,9 @@ public class AccumuloIndex {
       
       // 8) Serialize results
       TIMER.start("serializeResults");
+      assert q.sourceComm != null;
+      for (SitSearchResult r : res)
+        assert r.getCommunication() != null;
       Pair<KbpQuery, List<SitSearchResult>> toSer = new Pair<>(q, res);
       File toSerTo = new File(dirForSerializingResults,
         q.id + "-" + q.name.replaceAll(" ", "_") + ".qrs.jser");
@@ -1215,6 +1231,96 @@ public class AccumuloIndex {
     Log.info("done, kept=" + kept + " overwrote=" + overwrote);
   }
   
+  
+
+  /**
+   * Sets the {@link SitSearchResult#yhatEntitySituation} and
+   * {@link SitSearchResult#yhatQueryEntityHead} fields and
+   * creates {@link SituationMention}s for parma (via {@link ConcreteMentionFeatureExtractor}).
+   * 
+   * @param parmaSitTool is the tool name use for new {@link SituationMentionSet}s
+   */
+  public static void findEntitiesAndSituations(KbpQuery q, List<SitSearchResult> res, ComputeIdf df, String parmaSitTool) {
+    Log.info("nResults=" + res.size() + " query=" + q.toString() + " insitu=" + q.findMentionHighlighted());
+    TIMER.start("findEntitiesAndSituations");
+    List<SitSearchResult> resWithSituations = new ArrayList<>();
+    for (int resultIdx = 0; resultIdx < res.size(); resultIdx++) {
+      SitSearchResult r = res.get(resultIdx);
+
+      // Figure out what events are interesting
+      if (r.triageFeatures == null) {
+        TIMER.start("unNecessaryQueryFeats");
+        //          Log.info("FIXME: for now I'm recomputing the features");
+        TokenObservationCounts tokObs = null;
+        TokenObservationCounts tokObsLc = null;
+        String nerType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
+        String[] headwords = q.name.split("\\s+");  // TODO
+        r.triageFeatures = IndexCommunications.getEntityMentionFeatures(q.name, headwords, nerType, tokObs, tokObsLc);
+        TIMER.stop("unNecessaryQueryFeats");
+        EC.increment("unNecessaryQueryFeats");
+      }
+
+      // Search for an interesting situation
+      EntityEventPathExtraction eep = new EntityEventPathExtraction(r);
+      eep.verboseEntSelection = true;
+      boolean verbose = false;
+      IntPair entEvent = eep.findMostInterestingEvent(df, verbose);
+      r.yhatQueryEntityHead = entEvent.first;
+      r.yhatEntitySituation = entEvent.second;
+
+      if (r.yhatEntitySituation < 0)
+        EC.increment("result/skip/noSit");
+      if (r.yhatQueryEntityHead < 0)
+        EC.increment("result/skip/noEnt");
+      if (r.yhatEntitySituation < 0 || r.yhatQueryEntityHead < 0)
+        continue;
+      EC.increment("result/entSitsSelected");
+      resWithSituations.add(r);
+
+      SituationMention sm = ParmaVw.makeSingleTokenSm(r.yhatEntitySituation, r.tokUuid, eep.getClass().getName());
+      sm.setUuid(new UUID("mention" + resultIdx));
+      //        Log.info("created smUuid=" + sm.getUuid().getUuidString()
+      //            + " for SitSearchResult tokUuid=" + r.tokUuid
+      //            + " in " + r.getCommunicationId()
+      //            + " sm.trs=" + sm.getTokens()
+      //            + "\t" + r.getWordsInTokenizationWithHighlightedEntAndSit());
+      ParmaVw.addToOrCreateSitutationMentionSet(r.getCommunication(), sm, parmaSitTool);
+    }
+    res.clear();
+    res.addAll(resWithSituations);
+//    res = resWithSituations;
+//    resWithSituations = null;
+    TIMER.stop("findEntitiesAndSituations");
+  }
+
+  public static void parmaDedup(ParmaVw parma, KbpQuery q, List<SitSearchResult> res, int maxResults) {
+    // Call parma to remove duplicates
+    // NOTE: ParmaVw expect that the situations are *in the communications* when dedup is called.
+    //        parma.verbose(true);
+    Log.info("starting dedup for " + q);
+
+    TIMER.start("parmaDedup");
+    List<QResultCluster> dedupped = parma.dedup(res, maxResults);
+    System.out.println();
+    TIMER.stop("parmaDedup");
+
+    Log.info("showing dedupped results for " + q);
+    for (QResultCluster clust : dedupped) {
+      ShowResult sr = new ShowResult(q, clust.canonical);
+      sr.show(Collections.emptyList());
+      EC.increment("result/dedup/canonical");
+
+      // Show things we thought were coref with the canonical above:
+      int nr = clust.numRedundant();
+      System.out.println("this mention is canonical for " + nr + " other mentions");
+      for (int i = 0; i < nr; i++) {
+        System.out.println("\tredundant: " + clust.getRedundant(i).getWordsInTokenizationWithHighlightedEntAndSit());
+        EC.increment("result/dedup/redundant");
+      }
+    }
+    System.out.println();
+  }
+  
   public static void kbpSearchingMemo(ExperimentProperties config) throws Exception {
     // One file per query goes into this folder, each containing a:
     // Pair<KbpQuery, List<SitSearchResult>>
@@ -1236,7 +1342,17 @@ public class AccumuloIndex {
       parma = new ParmaVw(modelFile, idf, parmaSitTool, parmaEntTool, parmaVwPort);
     }
 
+    // Attribute feature reranking
     boolean attrFeatureRerank = config.getBoolean("attributeFeatureReranking", true);
+    
+    // m-turk HIT output
+    File mturkCorefCsv = config.getFile("mturkCorefCsv", null);
+    CSVPrinter mturkCorefCsvW = null;
+    if (mturkCorefCsv != null) {
+      String[] mturkCorefCsvCols = MturkCorefHit.getMturkCorefHitHeader();
+      CSVFormat csvFormat = CSVFormat.DEFAULT.withHeader(mturkCorefCsvCols);
+      mturkCorefCsvW = new CSVPrinter(FileUtil.getWriter(mturkCorefCsv), csvFormat);
+    }
 
     // Iterate over (query, result*), one per file
     for (File f : dirForSerializingResults.listFiles()) {
@@ -1249,107 +1365,42 @@ public class AccumuloIndex {
       TIMER.stop("deser/input");
       KbpQuery q = p.get1();
       List<SitSearchResult> res = p.get2();
+
+      // Compute important terms in the query doc (I think this was FUBAR the first time)
+      StringTermVec queryContext = new StringTermVec(q.sourceComm);
+      q.docCtxImportantTerms = df.importantTerms(queryContext, 20);
       
       // Dedup communications (introduced during serialization process)
       // TODO set the comms to null and serialize a Map<String, Communication> separately
       dedupCommunications(res);
+      
+      findEntitiesAndSituations(q, res, df, parmaSitTool);
 
-      Log.info(p);
-      Log.info("nResults=" + res.size() + " queryName=" + q.name);
-      TIMER.start("eventSelection");
-      List<SitSearchResult> resWithSituations = new ArrayList<>();
-      for (int resultIdx = 0; resultIdx < res.size(); resultIdx++) {
-        SitSearchResult r = res.get(resultIdx);
-        
-        // Figure out what events are interesting
-        if (r.triageFeatures == null) {
-          TIMER.start("unNecessaryQueryFeats");
-//          Log.info("FIXME: for now I'm recomputing the features");
-          TokenObservationCounts tokObs = null;
-          TokenObservationCounts tokObsLc = null;
-          String nerType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
-          String[] headwords = q.name.split("\\s+");  // TODO
-          r.triageFeatures = IndexCommunications.getEntityMentionFeatures(q.name, headwords, nerType, tokObs, tokObsLc);
-          TIMER.stop("unNecessaryQueryFeats");
-          EC.increment("unNecessaryQueryFeats");
-        }
+      // TODO NER type matching
+      // e.g. "Hollister" may refer to a person or an organization
 
-        // Search for an interesting situation
-        EntityEventPathExtraction eep = new EntityEventPathExtraction(r);
-        eep.verboseEntSelection = true;
-        boolean verbose = !useParma;
-        IntPair entEvent = eep.findMostInterestingEvent(df, verbose);
-        r.yhatQueryEntityHead = entEvent.first;
-        r.yhatEntitySituation = entEvent.second;
-        
-        if (r.yhatEntitySituation < 0)
-          EC.increment("result/skip/noSit");
-        if (r.yhatQueryEntityHead < 0)
-          EC.increment("result/skip/noEnt");
-        if (r.yhatEntitySituation < 0 || r.yhatQueryEntityHead < 0)
-          continue;
-        EC.increment("result/entSitsSelected");
-        resWithSituations.add(r);
-        
-        SituationMention sm = ParmaVw.makeSingleTokenSm(r.yhatEntitySituation, r.tokUuid, eep.getClass().getName());
-        sm.setUuid(new UUID("mention" + resultIdx));
-//        Log.info("created smUuid=" + sm.getUuid().getUuidString()
-//            + " for SitSearchResult tokUuid=" + r.tokUuid
-//            + " in " + r.getCommunicationId()
-//            + " sm.trs=" + sm.getTokens()
-//            + "\t" + r.getWordsInTokenizationWithHighlightedEntAndSit());
-        ParmaVw.addToOrCreateSitutationMentionSet(r.getCommunication(), sm, parmaSitTool);
-
-        // Switch findMOstInterestingEvent to verbose=true if you want to see these
-        if (!useParma && !attrFeatureRerank) {
-          ShowResult sr = new ShowResult(q, r);
-          sr.show(Collections.emptyList());
-        }
-      }
-      res = resWithSituations;
-      resWithSituations = null;
-      TIMER.stop("eventSelection");
-
-
+      // Attribute features
       if (attrFeatureRerank) {
         Log.info("performing attribute feature reranking");
         attrFeatureReranking(q, res);
       }
-      
-      
-      // TODO NER type matching
-      // e.g. "Hollister" may refer to a person or an organization
-
 
       if (useParma) {
-        // Call parma to remove duplicates
-        // NOTE: ParmaVw expect that the situations are *in the communications* when dedup is called.
-//        parma.verbose(true);
-        Log.info("starting dedup for " + q);
-
-        TIMER.start("parmaDedup");
-        int maxResluts = config.getInt("numDeduppedResults", 10); // NOTE: Parma is O(n^2) in this value!
-        List<QResultCluster> dedupped = parma.dedup(res, maxResluts);
-        System.out.println();
-        TIMER.stop("parmaDedup");
-
-        Log.info("showing dedupped results for " + q);
-        for (QResultCluster clust : dedupped) {
-          ShowResult sr = new ShowResult(q, clust.canonical);
-          sr.show(Collections.emptyList());
-          EC.increment("result/dedup/canonical");
-
-          // Show things we thought were coref with the canonical above:
-          int nr = clust.numRedundant();
-          System.out.println("this mention is canonical for " + nr + " other mentions");
-          for (int i = 0; i < nr; i++) {
-            System.out.println("\tredundant: " + clust.getRedundant(i).getWordsInTokenizationWithHighlightedEntAndSit());
-            EC.increment("result/dedup/redundant");
-          }
-        }
-        System.out.println();
+        int maxResults = config.getInt("numDeduppedResults", 10); // NOTE: Parma is O(n^2) in this value!
+        parmaDedup(parma, q, res, maxResults);
       }
       
+      if (mturkCorefCsv != null) {
+        File parent = new File("/tmp/mturk-html-debug");
+        parent.mkdirs();
+        for (SitSearchResult r : res) {
+          MturkCorefHit mtc = new MturkCorefHit(q, r);
+//          File html = File.createTempFile(q.id, ".html", parent);
+          String[] csv = mtc.emitMturkCorefHit(parent);
+          mturkCorefCsvW.printRecord(csv);
+          mturkCorefCsvW.flush();
+        }
+      }
 
       System.out.println("AccumuloIndex timer:");
       System.out.println(TIMER);
@@ -1368,6 +1419,9 @@ public class AccumuloIndex {
 
     if (parma != null)
       parma.close();
+    if (mturkCorefCsvW != null)
+      mturkCorefCsvW.close();
+
     Log.info("done");
   }
 

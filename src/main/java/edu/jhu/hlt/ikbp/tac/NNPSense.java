@@ -288,12 +288,12 @@ public class NNPSense {
     // TODO Might want to expand this set
     // Currently it will miss "Italian" because it is an JJ
     // Perhaps I could actually take all high idf terms? This would miss titles like "Dr."
-    Set<String> properNouns = new HashSet<>();
-    properNouns.add("NNP");
-    properNouns.add("NNPS");
-    properNouns.add("CD");
-    properNouns.add("JJ");
-    properNouns.add("JJS");
+    Set<String> interestingPos = new HashSet<>();
+    interestingPos.add("NNP");
+    interestingPos.add("NNPS");
+    interestingPos.add("CD");
+    interestingPos.add("JJ");
+    interestingPos.add("JJS");
 
     List<String> attr = new ArrayList<>();
     for (Tokenization toks : new TokenizationIter(c)) {
@@ -312,15 +312,17 @@ public class NNPSense {
             for (Pair<Integer, LL<Dependency>> p : paths) {
               int dest = p.get1();
               String destPos = pos.get(dest).getTag();
-              if (properNouns.contains(destPos) && p.get2() != null) {
+              if (interestingPos.contains(destPos) && p.get2() != null) {
                 String sourceNer = ner.get(source).getTag();
                 String destWord = t.get(dest).getText();
                 ArrayDeque<String> path = reverseDeps(p.get2());
                 path.addFirst(sourceNer);
                 path.addLast(destWord);
+                // e.g. ORGANIZATION-appos-nn-Boston
                 String x = StringUtils.join("-", path);
                 if (uniq.add(x))
                   attr.add(x);
+                // e.g. ORGANIZATION-backoff-Boston
                 String xBackoff = sourceNer + "-backoff-" + destWord;
                 if (uniq.add(xBackoff))
                   attr.add(xBackoff);
