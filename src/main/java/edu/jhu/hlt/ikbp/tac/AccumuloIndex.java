@@ -1316,9 +1316,9 @@ public class AccumuloIndex {
     res.clear();
     res.addAll(resWithSituations);
     TIMER.stop("findEntitiesAndSituations");
-  }
+  } 
 
-  public static void parmaDedup(ParmaVw parma, KbpQuery q, List<SitSearchResult> res, int maxResults) {
+  public static List<SitSearchResult> parmaDedup(ParmaVw parma, KbpQuery q, List<SitSearchResult> res, int maxResults, boolean show) {
     // Call parma to remove duplicates
     // NOTE: ParmaVw expect that the situations are *in the communications* when dedup is called.
     //        parma.verbose(true);
@@ -1329,21 +1329,28 @@ public class AccumuloIndex {
     System.out.println();
     TIMER.stop("parmaDedup");
 
-    Log.info("showing dedupped results for " + q);
-    for (QResultCluster clust : dedupped) {
-      ShowResult sr = new ShowResult(q, clust.canonical);
-      sr.show(Collections.emptyList());
-      EC.increment("result/dedup/canonical");
+    if (show) {
+      Log.info("showing dedupped results for " + q);
+      for (QResultCluster clust : dedupped) {
+        ShowResult sr = new ShowResult(q, clust.canonical);
+        sr.show(Collections.emptyList());
+        EC.increment("result/dedup/canonical");
 
-      // Show things we thought were coref with the canonical above:
-      int nr = clust.numRedundant();
-      System.out.println("this mention is canonical for " + nr + " other mentions");
-      for (int i = 0; i < nr; i++) {
-        System.out.println("\tredundant: " + clust.getRedundant(i).getWordsInTokenizationWithHighlightedEntAndSit());
-        EC.increment("result/dedup/redundant");
+        // Show things we thought were coref with the canonical above:
+        int nr = clust.numRedundant();
+        System.out.println("this mention is canonical for " + nr + " other mentions");
+        for (int i = 0; i < nr; i++) {
+          System.out.println("\tredundant: " + clust.getRedundant(i).getWordsInTokenizationWithHighlightedEntAndSit());
+          EC.increment("result/dedup/redundant");
+        }
       }
+      System.out.println();
     }
-    System.out.println();
+    
+    List<SitSearchResult> resDedup = new ArrayList<>();
+    for (QResultCluster w : dedupped)
+      resDedup.add(w.canonical);
+    return resDedup;
   }
 
   // This is the tool name for SituationMentionSets containing events which parma is intended to dedup
@@ -1352,7 +1359,8 @@ public class AccumuloIndex {
   public static void kbpSearchingMemo(ExperimentProperties config) throws Exception {
     // One file per query goes into this folder, each containing a:
     // Pair<KbpQuery, List<SitSearchResult>>
-    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir", new File("data/sit-search/old/maxToks100"));
+//    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir", new File("data/sit-search/old/maxToks100"));
+    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir", new File("data/sit-search/maxToks1000"));
     
     File wdf = config.getExistingFile("wordDocFreq");
     ComputeIdf df = new ComputeIdf(wdf);
@@ -1373,6 +1381,8 @@ public class AccumuloIndex {
     // (now handled in first stage of pipeline, may want to add back if this code changes)
     boolean attrFeatureRerank = config.getBoolean("attributeFeatureReranking", false);
     
+    boolean show = config.getBoolean("show", true);
+    
     // m-turk HIT output
     File mturkCorefCsv = config.getFile("mturkCorefCsv", null);
     CSVPrinter mturkCorefCsvW = null;
@@ -1381,6 +1391,13 @@ public class AccumuloIndex {
       CSVFormat csvFormat = CSVFormat.DEFAULT.withHeader(mturkCorefCsvCols);
       mturkCorefCsvW = new CSVPrinter(FileUtil.getWriter(mturkCorefCsv), csvFormat);
     }
+
+    File mturkHtmlDebugDir = new File("/tmp/mturk-html-debug");
+    if (mturkHtmlDebugDir.isDirectory()) {
+      Log.info("cleaning out mturkHtmlDebugDir=" + mturkHtmlDebugDir.getPath());
+      FileUtil.rm_rf(mturkHtmlDebugDir);
+    }
+    mturkHtmlDebugDir.mkdirs();
 
     // Iterate over (query, result*), one per file
     for (File f : dirForSerializingResults.listFiles()) {
@@ -1416,16 +1433,23 @@ public class AccumuloIndex {
 
       if (useParma) {
         int maxResults = config.getInt("numDeduppedResults", 10); // NOTE: Parma is O(n^2) in this value!
-        parmaDedup(parma, q, res, maxResults);
+        res = parmaDedup(parma, q, res, maxResults, show);
+      } else if (show) {
+        for (int i = 0; i < res.size(); i++) {
+          SitSearchResult r = res.get(i);
+          ShowResult sr = new ShowResult(q, r);
+          System.out.println("rank=" + (i+1) + " of=" + res.size());
+          sr.show(Collections.emptyList());
+        }
       }
       
+      // TODO Output things dedupped by parma too?
       if (mturkCorefCsv != null) {
-        File parent = new File("/tmp/mturk-html-debug");
-        parent.mkdirs();
-        for (SitSearchResult r : res) {
+        for (int i = 0; i < res.size(); i++) {
+          SitSearchResult r = res.get(i);
           MturkCorefHit mtc = new MturkCorefHit(q, r);
-//          File html = File.createTempFile(q.id, ".html", parent);
-          String[] csv = mtc.emitMturkCorefHit(parent);
+          IntPair rank = new IntPair(i+1, res.size());
+          String[] csv = mtc.emitMturkCorefHit(mturkHtmlDebugDir, rank, r.getScore());
           mturkCorefCsvW.printRecord(csv);
           mturkCorefCsvW.flush();
         }

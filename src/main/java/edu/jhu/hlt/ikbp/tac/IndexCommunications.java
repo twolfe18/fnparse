@@ -639,7 +639,7 @@ public class IndexCommunications implements AutoCloseable {
      * Outputs (hitId, sourceDocId, targetDocId, score, sourceHtml, targetHtml)
      * Currently score is a placeholder.
      */
-    public String[] emitMturkCorefHit(File writeHtmlTableTo) {
+    public String[] emitMturkCorefHit(File writeHtmlTableTo, IntPair rank, double score) {
       // How do I highlight an entity
       // Which ent to highlight!
 
@@ -658,7 +658,10 @@ public class IndexCommunications implements AutoCloseable {
       DependencyParse depsR = getPreferredDependencyParse(res.getTokenization());
       Span ts = nounPhraseExpand(res.yhatQueryEntityHead, depsR);
       
-      String hitId = query.id + "___rTokUuid:" + res.tokUuid;
+      String rankStr = String.format("%04d-of-%04d", rank.first, rank.second);
+      String hitId = query.id
+          + "_" + rankStr
+          + "_rTokUuid:" + res.tokUuid;
       
       String sourceMentionHtml = formatHighlightedSpanInHtml(st, ss);
       String targetMentionHtml = formatHighlightedSpanInHtml(t, ts);
@@ -724,6 +727,18 @@ public class IndexCommunications implements AutoCloseable {
           w.write("span.entity { color: blue; font-weight: bold; }\n");
           w.write("span.terms { font-style: italic; }\n");
           w.write("</style>\n");
+
+          w.write("<center>\n");
+          w.write("<h2>NOT SHOWN TO TURKERS: rank=" + rank + " score=" + score + "</h2>\n");
+          w.write("</center>\n");
+          w.write("<pre>\n");
+          ShowResult sr = new ShowResult(query, res);
+          for (String line : sr.show2(Collections.emptyList())) {
+            w.write(line);
+          }
+          w.write("</pre>\n");
+
+          w.write("<center><h2>SHOWN TO TURKERS</h2></center>\n");
           w.write(nicelyFormattedHtml);
           w.write("</body></html>\n");
         } catch (Exception e) {
@@ -926,94 +941,129 @@ public class IndexCommunications implements AutoCloseable {
         throw new IllegalArgumentException("couldn't find tokUuid=" + res.tokUuid + " in " + comm.getId());
     }
     
-    public void show(List<TermVec> pkbDocs) {
+    public List<String> show2(List<TermVec> pkbDocs) {
+      List<String> lines = new ArrayList<>();
       int termCharLimit = 120;
 
-      System.out.println("####################################################################################################");
-      System.out.println(query + "\tres.tokUuid=" + res.tokUuid + " in " + comm.getId());
+      lines.add("####################################################################################################\n");
+      lines.add(query + "\tres.tokUuid=" + res.tokUuid + " in " + comm.getId() + "\n");
       if (res.getCommunicationId().equals(query.docid))
-        System.out.println("FOUND QUERY DOCUMENT, this result will be filtered out later");
-
-      System.out.println();
+        lines.add("FOUND QUERY DOCUMENT, this result will be filtered out later\n");
+      lines.add("\n");
 
       // Mention itself
-      System.out.println("query mention itself:");
-//      List<String> toks = query.findMention();
+      lines.add("query mention itself:\n");
       String toks = query.findMentionHighlighted();
       if (toks == null) {
-        System.out.println("Communication or EntityMention not set, cannot show");
+        lines.add("Communication or EntityMention not set, cannot show\n");
       } else {
-//        System.out.println(StringUtils.join(" ", toks));
-        System.out.println(toks);
+        lines.add(toks + "\n");
       }
-      System.out.println();
+      lines.add("\n");
       
       // Query features
-      System.out.println("pkbDocs.size=" + pkbDocs.size());
+      lines.add("pkbDocs.size=" + pkbDocs.size() + "\n");
       if (query.docCtxImportantTerms != null)
-        System.out.println("queryDocCtxImportantTerms: " + query.docCtxImportantTerms);
+        lines.add("queryDocCtxImportantTerms: " + query.docCtxImportantTerms + "\n");
       for (TermVec queryDoc : pkbDocs)
-        System.out.println("queryDoc: " + queryDoc.showTerms(termCharLimit));
+        lines.add("queryDoc: " + queryDoc.showTerms(termCharLimit) + "\n");
       if (query.features != null) {
         for (String f : query.features)
-          System.out.println("\tqf: " + f);
+          lines.add("\tqf: " + f + "\n");
       }
-      System.out.println();
+      lines.add("\n");
       
 
       boolean highlightVerbs = true;
-      showQResult(res, comm, termCharLimit, highlightVerbs);
+      lines.addAll(showQResult2(res, comm, termCharLimit, highlightVerbs));
+      return lines;
+    }
+
+    public void show(List<TermVec> pkbDocs) {
+//      int termCharLimit = 120;
+//
+//      System.out.println("####################################################################################################");
+//      System.out.println(query + "\tres.tokUuid=" + res.tokUuid + " in " + comm.getId());
+//      if (res.getCommunicationId().equals(query.docid))
+//        System.out.println("FOUND QUERY DOCUMENT, this result will be filtered out later");
+//
+//      System.out.println();
+//
+//      // Mention itself
+//      System.out.println("query mention itself:");
+//      String toks = query.findMentionHighlighted();
+//      if (toks == null) {
+//        System.out.println("Communication or EntityMention not set, cannot show");
+//      } else {
+//        System.out.println(toks);
+//      }
+//      System.out.println();
+//      
+//      // Query features
+//      System.out.println("pkbDocs.size=" + pkbDocs.size());
+//      if (query.docCtxImportantTerms != null)
+//        System.out.println("queryDocCtxImportantTerms: " + query.docCtxImportantTerms);
+//      for (TermVec queryDoc : pkbDocs)
+//        System.out.println("queryDoc: " + queryDoc.showTerms(termCharLimit));
+//      if (query.features != null) {
+//        for (String f : query.features)
+//          System.out.println("\tqf: " + f);
+//      }
+//      System.out.println();
+//      
+//
+//      boolean highlightVerbs = true;
+//      showQResult(res, comm, termCharLimit, highlightVerbs);
+      for (String line : show2(pkbDocs)) {
+        assert line.endsWith("\n");
+        System.out.print(line);
+      }
     }
     
-    public static void showQResult(SitSearchResult res, Communication comm, int termCharLimit, boolean highlightVerbs) {
+    public static List<String> showQResult2(SitSearchResult res, Communication comm, int termCharLimit, boolean highlightVerbs) {
+      List<String> lines = new ArrayList<>();
+
       // Result features
-      System.out.println("result features:");
+      lines.add("result features:\n");
       if (res.featsResult != null)
-        System.out.println(res.featsResult.show(termCharLimit));
-      System.out.println("important terms: " + res.importantTerms);
+        lines.add(res.featsResult.show(termCharLimit));
+      lines.add("important terms: " + res.importantTerms + "\n");
       
       // Query entity features
-      System.out.println("query entity features:");
+      lines.add("query entity features:\n");
       if (res.entSearchResult != null) {
         for (String f : res.entSearchResult.queryEntityFeatures)
-          System.out.println("\tes: " + f);
+          lines.add("\tes: " + f + "\n");
       }
-      System.out.println();
+      lines.add("\n");
       
       // Attribute features
-      System.out.println("attribute features");
-      System.out.println("query:   " + res.attributeFeaturesQ);
-      System.out.println("result:  " + res.attributeFeaturesR);
-      System.out.println("matched: " + res.attributeFeaturesMatched);
-      System.out.println();
+      lines.add("attribute features\n");
+      lines.add("query:   " + res.attributeFeaturesQ + "\n");
+      lines.add("result:  " + res.attributeFeaturesR + "\n");
+      lines.add("matched: " + res.attributeFeaturesMatched + "\n");
+      lines.add("\n");
       
       // score = weights * (featQuery outerProd featResult)... or something like that
-      System.out.println("score derivation:");
+      lines.add("score derivation:\n");
       for (Feat f : res.scoreDerivation)
-        System.out.println("\t" + f);
-      System.out.printf("sum=%.3f\n", res.getScore());
-      System.out.println();
+        lines.add("\t" + f + "\n");
+      lines.add(String.format("sum=%.3f\n", res.getScore()));
+      lines.add("\n");
       
 
       // Words/Tokenization
-//      Tokenization tokenization = findTok(res.tokUuid, comm);
-//      List<Token> toks = tokenization.getTokenList().getTokenList();
-//      System.out.printf("result tokens (in comm=%s tok=%s)\n", comm.getId(), res.tokUuid);
-//      for (Token t : toks) {
-//        System.out.print(" ");
-//        if (t.getTokenIndex() == res.yhatQueryEntityHead)
-//          System.out.print("<ENT>");
-//        if (t.getTokenIndex() == res.yhatEntitySituation)
-//          System.out.print("<SIT>");
-//        System.out.print(t.getText());
-//        if (t.getTokenIndex() == res.yhatEntitySituation)
-//          System.out.print("</SIT>");
-//        if (t.getTokenIndex() == res.yhatQueryEntityHead)
-//          System.out.print("</ENT>");
-//      }
-//      System.out.println();
-      System.out.println(res.getWordsInTokenizationWithHighlightedEntAndSit());
-      System.out.println();
+      lines.add(res.getWordsInTokenizationWithHighlightedEntAndSit() + "\n");
+      lines.add("\n");
+      
+      return lines;
+    }
+
+    public static void showQResult(SitSearchResult res, Communication comm, int termCharLimit, boolean highlightVerbs) {
+      for (String line : showQResult2(res, comm, termCharLimit, highlightVerbs)) {
+        assert line.endsWith("\n");
+        System.out.print(line);
+      }
     }
   }
     
@@ -1402,7 +1452,7 @@ public class IndexCommunications implements AutoCloseable {
           s.show(k.search.state.pkbDocs);
 
           MturkCorefHit mtc = new MturkCorefHit(q, r);
-          String[] csv = mtc.emitMturkCorefHit(null);
+          String[] csv = mtc.emitMturkCorefHit(null, null, 0);
           System.out.println("mturk coref csv: " + Arrays.toString(csv));
           System.out.println("mturk targetMentionHtml: " + csv[csv.length-1]);
           mturkCorefCsvW.printRecord(csv);
@@ -2058,19 +2108,23 @@ public class IndexCommunications implements AutoCloseable {
       sb.append('/');
       sb.append(tokUuid.substring(tokUuid.length()-4, tokUuid.length()));
       sb.append(':');
+      if (yhatEntitySituation < 0)
+        sb.append(" noSit");
+      if (yhatQueryEntityHead < 0)
+        sb.append(" noEnt");
       Tokenization tokenization = findTok(tokUuid, comm);
       List<Token> toks = tokenization.getTokenList().getTokenList();
       for (Token t : toks) {
         sb.append(' ');
         if (t.getTokenIndex() == yhatQueryEntityHead)
-          sb.append("<ENT>");
+          sb.append("[ENT]");
         if (t.getTokenIndex() == yhatEntitySituation)
-          sb.append("<SIT>");
+          sb.append("[SIT]");
         sb.append(t.getText());
         if (t.getTokenIndex() == yhatEntitySituation)
-          sb.append("</SIT>");
+          sb.append("[/SIT]");
         if (t.getTokenIndex() == yhatQueryEntityHead)
-          sb.append("</ENT>");
+          sb.append("[/ENT]");
       }
       return sb.toString();
     }
