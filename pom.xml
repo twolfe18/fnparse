@@ -16,12 +16,6 @@
   </properties>
 
   <dependencies>
-    <dependency>
-      <groupId>edu.jhu.hlt</groupId>
-      <artifactId>concrete-ingesters-conll</artifactId>
-      <version>4.11.3-SNAPSHOT</version>
-    </dependency>
-
     <!-- silences logging
       http://stackoverflow.com/questions/2372056/how-to-turn-off-logging-from-slf4j
       -->
@@ -29,6 +23,13 @@
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-nop</artifactId>
       <version>1.7.21</version>
+    </dependency>
+
+    <!-- SNAPSHOT is only for CoNLL-X upgrades -->
+    <dependency>
+      <groupId>edu.jhu.hlt</groupId>
+      <artifactId>concrete-ingesters-conll</artifactId>
+      <version>4.11.3-SNAPSHOT</version>
     </dependency>
 
     <dependency>
