@@ -1,6 +1,8 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -73,6 +75,28 @@ public class FeatureCardinalityEstimator implements Serializable {
   public FreqMode getMode() {
     return mode;
   }
+  
+  /** @param f should have format: <freq> <tab> <feature> */
+  public void addFromFile(File f) throws IOException {
+    if (f == null || !f.isFile())
+      throw new IllegalArgumentException("bad: " + f);
+    Log.info("reading from=" + f.getPath());
+    int read = 0, updated = 0;
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        String[] ar = line.split("\t", 2);
+        int f1 = Integer.parseUnsignedInt(ar[0]);
+        int fh = getHash(ar[1]);
+        int f0 = term2freq.getWithDefault(fh, 0);
+        if (f1 > f0) {
+          term2freq.put(fh, f1);
+          updated++;
+        }
+        read++;
+      }
+    }
+    Log.info("read=" + read + " updated=" + updated);
+  }
 
   /**
    * @param serializeTo Uses java serialization to save here
@@ -81,7 +105,7 @@ public class FeatureCardinalityEstimator implements Serializable {
    * @throws AccumuloSecurityException 
    * @throws AccumuloException 
    */
-  public void scanAccumulo(File serializeTo, double everyThisManySeconds) throws TableNotFoundException, AccumuloException, AccumuloSecurityException {
+  public void addFromAccumulo(File serializeTo, double everyThisManySeconds) throws TableNotFoundException, AccumuloException, AccumuloSecurityException {
     Log.info("starting serializeTo=" + serializeTo.getPath()
         + " everyThisManySeconds=" + everyThisManySeconds);
     
@@ -156,16 +180,9 @@ public class FeatureCardinalityEstimator implements Serializable {
     s.add("h:Alan_Gross");
     s.add("pi:westminster");
 
-    sortByFreqUpperBoundDesc(s);
+    sortByFreqUpperBoundAsc(s);
 
-    StringBuilder sb = new StringBuilder();
-    for (String f : s) {
-      if (sb.length() > 0)
-        sb.append(' ');
-      int c = getFreq(f);
-      sb.append("freq(" + f + ")=" + c);
-    }
-    return sb.toString();
+    return showFreqs(s);
   }
   
   public int getHash(String feature) {
@@ -178,8 +195,19 @@ public class FeatureCardinalityEstimator implements Serializable {
     int h = getHash(feature);
     return term2freq.getWithDefault(h, 0);
   }
+
+  public String showFreqs(List<String> feats) {
+    StringBuilder sb = new StringBuilder();
+    for (String f : feats) {
+      if (sb.length() > 0)
+        sb.append(' ');
+      int c = getFreq(f);
+      sb.append("c(" + f + ")=" + c);
+    }
+    return sb.toString();
+  }
   
-  public void sortByFreqUpperBoundDesc(List<String> feats) {
+  public void sortByFreqUpperBoundAsc(List<String> feats) {
     Collections.sort(feats, new Comparator<String>() {
       @Override
       public int compare(String o1, String o2) {
@@ -201,7 +229,7 @@ public class FeatureCardinalityEstimator implements Serializable {
         FreqMode.valueOf(config.getString("freqMode", FreqMode.TOK.name())));
     File serializeTo = config.getFile("output");
     double everyThisManySeconds = config.getDouble("interval", 60);
-    fce.scanAccumulo(serializeTo, everyThisManySeconds);
+    fce.addFromAccumulo(serializeTo, everyThisManySeconds);
     Log.info("done");
   }
 }

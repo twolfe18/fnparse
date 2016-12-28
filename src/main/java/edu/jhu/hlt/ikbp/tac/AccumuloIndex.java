@@ -712,6 +712,10 @@ public class AccumuloIndex {
     private Authorizations auths;
     private Connector conn;
 
+    // Holds approximate feature cardinalities used to sort features
+    // by most discriminative first.
+    private FeatureCardinalityEstimator fce;
+
     int numQueryThreads;
     int batchTimeoutSeconds = 60;
 
@@ -724,9 +728,11 @@ public class AccumuloIndex {
     private BloomFilter<String> expensiveFeaturesBF;
 
     public Search(String instanceName, String zks, String username, AuthenticationToken password,
+        FeatureCardinalityEstimator featureCardinalityModel,
         int nThreads, int maxToksPreDocRetrieval, double triageFeatNBPrior,
         boolean batchC2W) throws Exception {
       Log.info("maxToksPreDocRetrieval=" + maxToksPreDocRetrieval
+          + " featureCardinalityModel=" + featureCardinalityModel
           + " batchC2W=" + batchC2W
           + " triageFeatNBPrior=" + triageFeatNBPrior
           + " instanceName=" + instanceName
@@ -735,6 +741,7 @@ public class AccumuloIndex {
           + " zks=" + zks);
       this.maxToksPreDocRetrieval = maxToksPreDocRetrieval;
       this.triageFeatNBPrior = triageFeatNBPrior;
+      this.fce = featureCardinalityModel;
       this.username = username;
       this.password = password;
       this.auths = new Authorizations();
@@ -785,16 +792,18 @@ public class AccumuloIndex {
       Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
       
       // Sort features by an upper bound on their cardinality (number of toks which contain this feature)
-      FeatureCardinalityEstimator fce = new FeatureCardinalityEstimator();    // TODO
-      fce.sortByFreqUpperBoundDesc(triageFeats);
+      fce.sortByFreqUpperBoundAsc(triageFeats);
+      Log.info("after sorting feats by freq: " + fce.showFreqs(triageFeats));
       
       // Features which have a score below this value cannot introduce new
       // tokenizations to the result set, only add to the score of tokenizations
       // retrieved using more selective features.
       double minScoreForNewTok = 1e-6;
+      int tokFeatTooSmall = 0;
 
-      // TODO Consider the ordering over features, most discriminative to least
-      // (allows you to skip retrieving toks for weak features if you have good signal from other features)
+      // TODO Consider computing a bound based on the K-th best result so far:
+      // given the gap between that score and the K+1-th, may not need to continue
+      // of remaining features have little mass to contribute.
       Map<String, List<WeightedFeature>> tokUuid2MatchedFeatures = new HashMap<>();
       for (int fi = 0; fi < triageFeats.size(); fi++) {
         String f = triageFeats.get(fi);
@@ -826,13 +835,17 @@ public class AccumuloIndex {
           // Update the running score for all tokenizations
           for (String t : toks) {
             boolean canAdd = p > minScoreForNewTok || tokUuid2score.getCount(t) > 0;
-            if (!canAdd)
+            if (!canAdd) {
+              tokFeatTooSmall++;
               continue;
+            }
             tokUuid2score.update(t, p);
             
             int nt = tokUuid2score.numNonZero();
-            if (nt % 2000 == 0)
-              System.out.println("numToks=" + nt + " during featIdx=" + fi + " of=" + triageFeats.size() + " featStr=" + f);
+            if (nt % 2000 == 0) {
+              System.out.println("numToks=" + nt + " during featIdx=" + fi + " of=" + triageFeats.size()
+                  + " featStr=" + f + " tokFeatTooSmall=" + tokFeatTooSmall + " minScoreForNewTok=" + minScoreForNewTok);
+            }
 
             List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
             if (wfs == null) {
@@ -1194,12 +1207,24 @@ public class AccumuloIndex {
       debugQueriesDoFirst.add(s);
     }
 
+    // Load the feature cardinality estimator, which is used during triage to
+    // search through the most selective features first.
+    FeatureCardinalityEstimator fce =
+        (FeatureCardinalityEstimator) FileUtil.deserialize(config.getExistingFile("featureCardinalityEstimator"));
+    // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
+    // e.g.
+    // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
+    // /export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
+    File extraCards = config.getFile("featureCardinalityManual");
+    if (extraCards != null)
+      fce.addFromFile(extraCards);
 
     Search search = new Search(
       config.getString("accumulo.instance"),
       config.getString("accumulo.zookeepers"),
       config.getString("accumulo.username"),
       new PasswordToken(config.getString("accumulo.password")),
+      fce,
       config.getInt("nThreadsSearch", 4),
       config.getInt("maxToksPreDocRetrieval", 1000),
       config.getDouble("triageFeatNBPrior", 10),
