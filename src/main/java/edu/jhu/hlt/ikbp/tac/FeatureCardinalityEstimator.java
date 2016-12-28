@@ -19,9 +19,11 @@ import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.security.Authorizations;
+import org.apache.hadoop.io.Text;
 
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -96,29 +98,26 @@ public class FeatureCardinalityEstimator implements Serializable {
     Instance inst = new ZooKeeperInstance(instance, zookeepers);
     Connector conn = inst.getConnector(username, password);
     try (Scanner s = conn.createScanner(AccumuloIndex.T_f2t.toString(), new Authorizations())) {
-      String curFeat = null;
+      Text curFeat = new Text();
       int curCount = 0;
-//      Text feat = new Text();
       for (Entry<Key, Value> e : s) {
-//        int c = e.getKey().compareRow(feat);
-        String feature = e.getKey().getRow().toString();
-//        String tokUuid = e.getKey().getColumnQualifier().toString();
-        
-        if (!feature.equals(curFeat)) {
-          int fh = getHash(feature);
+        if (e.getKey().compareRow(curFeat) != 0) {
+          // Output old feature
+          int fh = getHash(curFeat.toString());
           int c = term2freq.getWithDefault(fh, 0);
           if (curCount > c)
             term2freq.put(fh, curCount);
           
+          // Update for new run
           curCount = 0;
-          curFeat = feature;
+          curFeat = new Text(e.getKey().getRow());
         }
         
         curCount++;
         totalRows++;
         
         if (tm.enoughTimePassed(everyThisManySeconds)) {
-          Log.info("numTerms=" + term2freq.size() + " curFeat=" + feature + " curCount=" + curCount + " totalRows=" + totalRows
+          Log.info("numTerms=" + term2freq.size() + " curFeat=" + curFeat.toString() + " curCount=" + curCount + " totalRows=" + totalRows + "\t" + Describe.memoryUsage()
               + "\nsample freqs: " + showSampleFreqs()
               + "\nsaving to=" + serializeTo.getPath());
           FileUtil.serialize(this, serializeTo);

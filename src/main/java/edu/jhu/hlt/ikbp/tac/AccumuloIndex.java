@@ -783,12 +783,21 @@ public class AccumuloIndex {
       // Make a batch scanner to retrieve all tokenization which contain any triageFeats
       TIMER.start("f2t/triage");
       Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
+      
+      // Sort features by an upper bound on their cardinality (number of toks which contain this feature)
+      FeatureCardinalityEstimator fce = new FeatureCardinalityEstimator();    // TODO
+      fce.sortByFreqUpperBoundDesc(triageFeats);
+      
+      // Features which have a score below this value cannot introduce new
+      // tokenizations to the result set, only add to the score of tokenizations
+      // retrieved using more selective features.
+      double minScoreForNewTok = 1e-6;
 
-      // Don't use batch scanner, use one scanner per feature
       // TODO Consider the ordering over features, most discriminative to least
       // (allows you to skip retrieving toks for weak features if you have good signal from other features)
       Map<String, List<WeightedFeature>> tokUuid2MatchedFeatures = new HashMap<>();
-      for (String f : triageFeats) {
+      for (int fi = 0; fi < triageFeats.size(); fi++) {
+        String f = triageFeats.get(fi);
         try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
           f2tScanner.setRange(Range.exact(f));
 
@@ -813,10 +822,17 @@ public class AccumuloIndex {
               + " freq=" + freq
               + " triageFeatNBPrior=" + triageFeatNBPrior
               + " p=" + p);
-
+          
           // Update the running score for all tokenizations
           for (String t : toks) {
+            boolean canAdd = p > minScoreForNewTok || tokUuid2score.getCount(t) > 0;
+            if (!canAdd)
+              continue;
             tokUuid2score.update(t, p);
+            
+            int nt = tokUuid2score.numNonZero();
+            if (nt % 2000 == 0)
+              System.out.println("numToks=" + nt + " during featIdx=" + fi + " of=" + triageFeats.size() + " featStr=" + f);
 
             List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
             if (wfs == null) {
