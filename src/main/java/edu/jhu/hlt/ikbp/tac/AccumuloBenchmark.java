@@ -2,7 +2,9 @@ package edu.jhu.hlt.ikbp.tac;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
 import org.apache.accumulo.core.client.BatchScanner;
@@ -21,6 +23,7 @@ import org.apache.thrift.TDeserializer;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
+import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -35,6 +38,8 @@ public class AccumuloBenchmark {
   private Authorizations auth;
 
   private List<String> commIds;
+  
+  private Map<String, Average> avgs;
   
   public AccumuloBenchmark() {
     commIds = new ArrayList<>();
@@ -55,6 +60,21 @@ public class AccumuloBenchmark {
     }
   }
   
+  private void record(String key, double valueToAvg) {
+    if (avgs == null)
+      avgs = new HashMap<>();
+    Average a = avgs.get(key);
+    if (a == null) {
+      a = new Average.Uniform();
+      avgs.put(key, a);
+    }
+    a.add(valueToAvg);
+  }
+  
+  public double getAvg(String key) {
+    return avgs.get(key).getAverage();
+  }
+  
   public void add(String commId) {
     commIds.add(commId);
   }
@@ -73,20 +93,26 @@ public class AccumuloBenchmark {
 
     try (BatchScanner bs = conn.createBatchScanner(SimpleAccumuloConfig.DEFAULT_TABLE, auth, numQueryThreads)) {
       bs.setRanges(ranges);
-      for (Entry<Key, Value> e : bs) {
-        Communication c = new Communication();
-        try {
-          deser.deserialize(c, e.getValue().get());
-        } catch (Exception ex) {
-          throw new RuntimeException(ex);
-        }
-        ids.add(c.getId());
-      }
+      batch(bs, ids);
     }
     
     long ms = System.currentTimeMillis() - start;
     double rate = ((double) ids.size()) / ms;
-    Log.info("rate=" + rate + "\treinit=" + reinit + " numQueryThreads=" + numQueryThreads);
+    String key = "batch/reinit=" + reinit + "_nQueryThreads=" + numQueryThreads;
+    record(key, rate);
+    System.out.printf("%.4f %s\n", getAvg(key), key);
+  }
+  
+  private void batch(BatchScanner bs, List<String> ids) {
+    for (Entry<Key, Value> e : bs) {
+      Communication c = new Communication();
+      try {
+        deser.deserialize(c, e.getValue().get());
+      } catch (Exception ex) {
+        throw new RuntimeException(ex);
+      }
+      ids.add(c.getId());
+    }
   }
   
   public void timeSerial(boolean reinit, boolean rescanner) throws TableNotFoundException {
@@ -115,7 +141,9 @@ public class AccumuloBenchmark {
     
     long ms = System.currentTimeMillis() - start;
     double rate = ((double) ids.size()) / ms;
-    Log.info("rate=" + rate + "\treinit=" + reinit + " rescanner=" + rescanner);
+    String key = "serial/reinit=" + reinit + "_rescanner=" + rescanner;
+    record(key, rate);
+    System.out.printf("%.4f %s\n", getAvg(key), key);
   }
   
   private Communication serial(Scanner s, String id) {
@@ -134,7 +162,8 @@ public class AccumuloBenchmark {
     ExperimentProperties config = ExperimentProperties.init(args);
     
     AccumuloBenchmark b = new AccumuloBenchmark();
-    for (String line : FileUtil.getLines(new File("sample-docs.txt"))) {
+    File f = config.getFile("commIds", new File("sample-docs.txt"));
+    for (String line : FileUtil.getLines(f)) {
       System.out.println("id=" + line);
       b.add(line);
     }
