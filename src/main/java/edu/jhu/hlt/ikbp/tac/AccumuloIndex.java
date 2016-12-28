@@ -718,12 +718,16 @@ public class AccumuloIndex {
     int maxToksPreDocRetrieval = 10 * 1000;
     double triageFeatNBPrior = 50;    // higher values penalize very frequent features less
     
+    boolean batchC2W;
+    
     /** @deprecated should have just used batchTimeout... */
     private BloomFilter<String> expensiveFeaturesBF;
 
     public Search(String instanceName, String zks, String username, AuthenticationToken password,
-        int nThreads, int maxToksPreDocRetrieval, double triageFeatNBPrior) throws Exception {
+        int nThreads, int maxToksPreDocRetrieval, double triageFeatNBPrior,
+        boolean batchC2W) throws Exception {
       Log.info("maxToksPreDocRetrieval=" + maxToksPreDocRetrieval
+          + " batchC2W=" + batchC2W
           + " triageFeatNBPrior=" + triageFeatNBPrior
           + " instanceName=" + instanceName
           + " username=" + username
@@ -735,6 +739,9 @@ public class AccumuloIndex {
       this.password = password;
       this.auths = new Authorizations();
       this.numQueryThreads = nThreads;
+      this.batchC2W = batchC2W;
+      if (batchC2W && nThreads == 1)
+        Log.info("warning: you asked for batchC2W but only one thread");
       Instance inst = new ZooKeeperInstance(instanceName, zks);
       this.conn = inst.getConnector(username, password);
     }
@@ -831,11 +838,8 @@ public class AccumuloIndex {
       Map<String, String> tokUuid2commId = getCommIdsFor(tokUuid2score);
       
       // 2) Make a batch scanner to retrieve the words from the most promising comms, look in c2w
-      ExperimentProperties config = ExperimentProperties.getInstance();
-      boolean batchWords = config.getBoolean("batchC2W", false);
       Collection<String> toRet = tokUuid2commId.values();
-      Map<String, StringTermVec> commId2terms =
-          batchWords ? getWordsForCommsBatch(toRet) : getWordsForComms(toRet);
+      Map<String, StringTermVec> commId2terms = getWordsForComms(toRet);
       
       // 3) Go through each tok and re-score
       Counts<String> filterReasons = new Counts<>();
@@ -920,7 +924,7 @@ public class AccumuloIndex {
 
     /** keys of returned map are comm ids */
     private Map<String, StringTermVec> getWordsForCommsBatch(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
-      TIMER.start("c2w/getWordsForComms2");
+      TIMER.start("c2w/getWordsForCommsBatch");
 
       // Collect the ids of all the comm keys which need to be retrieved in c2w
       List<Range> rows = new ArrayList<>();
@@ -953,13 +957,19 @@ public class AccumuloIndex {
         }
       }
       Log.info("[filter] retrieved " + c2tv.size() + " of " + uniq.size() + " comms, numWords=" + nr);
-      TIMER.stop("c2w/getWordsForComms2");
+      TIMER.stop("c2w/getWordsForCommsBatch");
       return c2tv;
+    }
+
+    private Map<String, StringTermVec> getWordsForComms(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
+      if (batchC2W)
+        return getWordsForCommsBatch(commIdsNonUniq);
+      return getWordsForCommsSerial(commIdsNonUniq);
     }
     
     /** keys of returned map are comm ids */
-    private Map<String, StringTermVec> getWordsForComms(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
-      TIMER.start("c2w/getWordsForComms");
+    private Map<String, StringTermVec> getWordsForCommsSerial(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
+      TIMER.start("c2w/getWordsForCommsSerial");
       
       // NOTE: This can be made batch to go faster
       // The only thing is that we don't get the results back in a specific order,
@@ -993,7 +1003,7 @@ public class AccumuloIndex {
         assert old == null;
       }
       Log.info("[filter] retrieved " + c2tv.size() + " of " + uniq.size() + " comms, numWords=" + nr);
-      TIMER.stop("c2w/getWordsForComms");
+      TIMER.stop("c2w/getWordsForCommsSerial");
       return c2tv;
     }
   }
@@ -1174,9 +1184,10 @@ public class AccumuloIndex {
       config.getString("accumulo.zookeepers"),
       config.getString("accumulo.username"),
       new PasswordToken(config.getString("accumulo.password")),
-      config.getInt("nThreadsSearch", 1),
-      config.getInt("maxToksPreDocRetrieval", 10*1000),
-      config.getDouble("triageFeatNBPrior", 50));
+      config.getInt("nThreadsSearch", 4),
+      config.getInt("maxToksPreDocRetrieval", 1000),
+      config.getDouble("triageFeatNBPrior", 10),
+      config.getBoolean("batchC2W", true));
     
     File bf = config.getFile("expensiveFeatureBloomFilter", null);
     if (bf != null)
@@ -1207,6 +1218,7 @@ public class AccumuloIndex {
     Log.info("starting...");
     for (KbpQuery q : queries) {
       EC.increment("kbpQuery");
+      TIMER.start("kbpQuery");
       Log.info(q);
 
       // 1a) Retrieve the context Communication
@@ -1298,7 +1310,7 @@ public class AccumuloIndex {
       Log.info("serializing " + res.size() + " results to " + toSerTo.getPath());
       FileUtil.serialize(toSer, toSerTo);
       TIMER.stop("serializeResults");
-
+      TIMER.stop("kbpQuery");
       System.out.println(TIMER);
     } // END of query loop
   }
@@ -1347,6 +1359,8 @@ public class AccumuloIndex {
   public static void findEntitiesAndSituations(KbpQuery q, List<SitSearchResult> res, ComputeIdf df, String parmaSitTool) {
     Log.info("nResults=" + res.size() + " query=" + q.toString() + " insitu=" + q.findMentionHighlighted());
     TIMER.start("findEntitiesAndSituations");
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    boolean verbose = config.getBoolean("findEntSitVerbose", false);
     List<SitSearchResult> resWithSituations = new ArrayList<>();
     for (int resultIdx = 0; resultIdx < res.size(); resultIdx++) {
       SitSearchResult r = res.get(resultIdx);
@@ -1367,8 +1381,8 @@ public class AccumuloIndex {
 
       // Search for an interesting situation
       EntityEventPathExtraction eep = new EntityEventPathExtraction(r);
-      eep.verboseEntSelection = true;
-      boolean verbose = false;
+      if (verbose)
+        eep.verboseEntSelection = true;
       IntPair entEvent = eep.findMostInterestingEvent(df, verbose);
       r.yhatQueryEntityHead = entEvent.first;
       r.yhatEntitySituation = entEvent.second;
@@ -1394,6 +1408,8 @@ public class AccumuloIndex {
       }
     }
     Log.info("[filter] lost " + (res.size() - resWithSituations.size()) +  " results due to ent/sit finding failures");
+    if (verbose)
+      System.out.println(EC);
     res.clear();
     res.addAll(resWithSituations);
     TIMER.stop("findEntitiesAndSituations");
