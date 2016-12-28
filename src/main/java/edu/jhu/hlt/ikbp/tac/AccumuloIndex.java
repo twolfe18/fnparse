@@ -515,13 +515,6 @@ public class AccumuloIndex {
     private TDeserializer deser;
 
     public AccumuloCommRetrieval(ExperimentProperties config) throws Exception {
-//      SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);
-//      int numThreads = 1;
-//      fetch = new SimpleAccumuloFetch(saConf, numThreads);
-//      fetch.connect(
-//          config.getString("accumulo.username"),
-//          new PasswordToken(config.getString("accumulo.password")));
-//      conn = saConf.connect("reader", new PasswordToken("an accumulo reader"));
       Instance inst = new ZooKeeperInstance(
           SimpleAccumuloConfig.DEFAULT_INSTANCE, SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
       conn = inst.getConnector("reader", new PasswordToken("an accumulo reader"));
@@ -848,7 +841,7 @@ public class AccumuloIndex {
             tokUuid2score.update(t, p);
             
             int nt = tokUuid2score.numNonZero();
-            if (nt % 10000 == 0) {
+            if (nt % 20000 == 0) {
               System.out.println("numToks=" + nt
                   + " during featIdx=" + (fi+1)
                   + " of=" + triageFeats.size()
@@ -1231,10 +1224,10 @@ public class AccumuloIndex {
       fce.addFromFile(extraCards);
 
     Search search = new Search(
-      config.getString("accumulo.instance"),
-      config.getString("accumulo.zookeepers"),
-      config.getString("accumulo.username"),
-      new PasswordToken(config.getString("accumulo.password")),
+      SimpleAccumuloConfig.DEFAULT_INSTANCE,
+      SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS,
+      "reader",
+      new PasswordToken("an accumulo reader"),
       fce,
       config.getInt("nThreadsSearch", 4),
       config.getInt("maxToksPreDocRetrieval", 1000),
