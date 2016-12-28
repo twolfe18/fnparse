@@ -115,9 +115,17 @@ public class FeatureCardinalityEstimator implements Serializable {
         
         curCount++;
         totalRows++;
+        assert curCount > 0 : "overflow";
+        assert totalRows > 0 : "overflow";
         
-        if (tm.enoughTimePassed(everyThisManySeconds)) {
-          Log.info("numTerms=" + term2freq.size() + " curFeat=" + curFeat.toString() + " curCount=" + curCount + " totalRows=" + totalRows + "\t" + Describe.memoryUsage()
+        if (curCount % 500 == 0 && tm.enoughTimePassed(everyThisManySeconds)) {
+          int rps = (int) Math.floor((totalRows/1000d) / tm.secondsSinceFirstMark());
+          Log.info("numTerms=" + (term2freq.size()/(1<<10)) + "K"
+              + " curFeat=" + curFeat.toString()
+              + " curCount=" + curCount
+              + " totalRows=" + (totalRows/(1<<20)) + "M"
+              + " kRowPerSec=" + rps
+              + "\n" + Describe.memoryUsage()
               + "\nsample freqs: " + showSampleFreqs()
               + "\nsaving to=" + serializeTo.getPath());
           FileUtil.serialize(this, serializeTo);
