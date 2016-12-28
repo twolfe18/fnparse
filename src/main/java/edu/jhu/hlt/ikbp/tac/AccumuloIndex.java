@@ -1187,6 +1187,10 @@ public class AccumuloIndex {
     }
     TIMER.stop("attrFeatureReranking");
   }
+  
+//  public static List<SitSearchResult> batchCommRet(KbpQuery q, List<SitSearchResult> res, int maxOutput) {
+//    // TODO
+//  }
 
   public static void kbpSearching(ExperimentProperties config) throws Exception {
 //    // TUNNEL DEBUGGING
@@ -1230,6 +1234,18 @@ public class AccumuloIndex {
     if (extraCards != null)
       fce.addFromFile(extraCards);
 
+    // How many results per KBP query.
+    // Note: each result must have its Communication fetched from the DB,
+    // which is currently the most costly part of querying, so set this carefully,
+    // and in coordination with maxToksPreDocRetrieval
+    int maxResultsPerQuery = config.getInt("maxResultsPerQuery", 30);
+    // This affects pruning early in the pipeline
+    double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 5);
+    int maxToksPreDocRetrieval = (int) Math.max(50, maxToksPruningSafetyRatio * maxResultsPerQuery);
+    Log.info("[filter] maxResultsPerQuery=" + maxResultsPerQuery
+        + " maxToksPruningSafetyRatio=" + maxToksPruningSafetyRatio
+        + " maxToksPreDocRetrieval=" + maxToksPreDocRetrieval);
+
     Search search = new Search(
       SimpleAccumuloConfig.DEFAULT_INSTANCE,
       SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS,
@@ -1237,7 +1253,7 @@ public class AccumuloIndex {
       new PasswordToken("an accumulo reader"),
       fce,
       config.getInt("nThreadsSearch", 4),
-      config.getInt("maxToksPreDocRetrieval", 1000),
+      maxToksPreDocRetrieval,
       config.getDouble("triageFeatNBPrior", 10),
       config.getBoolean("batchC2W", true));
     
@@ -1261,9 +1277,6 @@ public class AccumuloIndex {
         }
       });
     }
-
-    // How many results per KBP query.
-    int limit = config.getInt("maxResultsPerQuery", 500);
 
     boolean show = config.getBoolean("show", false);
 
@@ -1318,7 +1331,7 @@ public class AccumuloIndex {
         } else {
           r.setCommunication(c);
           resKeep.add(r);
-          if (limit > 0 && resKeep.size() >= limit)
+          if (maxResultsPerQuery > 0 && resKeep.size() >= maxResultsPerQuery)
             break;
         }
       }
@@ -1360,6 +1373,7 @@ public class AccumuloIndex {
       Log.info("serializing " + res.size() + " results to " + toSerTo.getPath());
       FileUtil.serialize(toSer, toSerTo);
       TIMER.stop("serializeResults");
+
       TIMER.stop("kbpQuery");
       System.out.println(TIMER);
     } // END of query loop
