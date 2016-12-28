@@ -1215,11 +1215,12 @@ public class AccumuloIndex {
 
     boolean show = config.getBoolean("show", false);
 
-    Log.info("starting...");
-    for (KbpQuery q : queries) {
+    Log.info("starting on nQueries=" + queries.size());
+    for (int qi = 0; qi < queries.size(); qi++) {
+      KbpQuery q = queries.get(qi);
       EC.increment("kbpQuery");
       TIMER.start("kbpQuery");
-      Log.info(q);
+      Log.info("rank=" + (qi+1) + " of=" + queries.size() + "\t" + q);
 
       // 1a) Retrieve the context Communication
       q.sourceComm = commRet.get(q.docid);
