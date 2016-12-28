@@ -64,6 +64,7 @@ public class FeatureCardinalityEstimator implements Serializable {
   }
 
   public FeatureCardinalityEstimator(int nBits, FreqMode mode) {
+    Log.info("nBits=" + nBits + " mode=" + mode);
     this.mode = mode;
     this.signatureNumBits = nBits;
     this.term2freq = new IntIntHashMap();
@@ -119,12 +120,16 @@ public class FeatureCardinalityEstimator implements Serializable {
         assert totalRows > 0 : "overflow";
         
         if (curCount % 500 == 0 && tm.enoughTimePassed(everyThisManySeconds)) {
-          int rps = (int) Math.floor((totalRows/1000d) / tm.secondsSinceFirstMark());
+          double sec = tm.secondsSinceFirstMark();
+          int nf = term2freq.size();
+          int rps = (int) Math.floor((totalRows/1000d) / sec);
+          int fps = (int) Math.floor(((double) nf) / sec);
           Log.info("numTerms=" + (term2freq.size()/(1<<10)) + "K"
               + " curFeat=" + curFeat.toString()
               + " curCount=" + curCount
               + " totalRows=" + (totalRows/(1<<20)) + "M"
               + " kRowPerSec=" + rps
+              + " featPerSec=" + fps
               + "\n" + Describe.memoryUsage()
               + "\nsample freqs: " + showSampleFreqs()
               + "\nsaving to=" + serializeTo.getPath());
