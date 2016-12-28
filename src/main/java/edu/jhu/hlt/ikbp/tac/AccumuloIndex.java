@@ -1267,6 +1267,7 @@ public class AccumuloIndex {
       TIMER.start("kbpQuery");
       Log.info("rank=" + (qi+1) + " of=" + queries.size() + "\t" + q);
 
+      TIMER.start("kbpQuery/setup");
       // 1a) Retrieve the context Communication
       q.sourceComm = commRet.get(q.docid);
       if (q.sourceComm == null) {
@@ -1292,25 +1293,18 @@ public class AccumuloIndex {
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
       List<String> triageFeats = IndexCommunications.getEntityMentionFeatures(entityName, headwords, entityType, tokObs, tokObsLc);
+      TIMER.stop("kbpQuery/setup");
       
       // 3) Search
       List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
 
-      // 4) Prune
-//      if (limit > 0 && res.size() > limit) {
-//        Log.info("pruning " + res.size() + " queries down to " + limit);
-//        //res = res.subList(0, limit);  // not serializable
-//        List<SitSearchResult> resPrune = new ArrayList<>(limit);
-//        for (int i = 0; i < limit; i++)
-//          resPrune.add(res.get(i));
-//        res = resPrune;
-//      }
       // 4-5) Retrieve communications and prune
       {
+      TIMER.start("getCommsForSitSearchResults");
       List<SitSearchResult> resKeep = new ArrayList<>();
       int failed = 0;
       for (SitSearchResult r : res) {
-        Communication c = commRet.get(r.getCommunicationId());
+        Communication c = q.getCommWithDefault(r.getCommunicationId(), commRet::get);
         if (c == null) {
           Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
           failed++;
@@ -1323,8 +1317,8 @@ public class AccumuloIndex {
       }
       Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
       res = resKeep;
+      TIMER.stop("getCommsForSitSearchResults");
       }
-
 
       // 6) Find entities and situations
       // (technically situations are not needed, only entities for attribute features)
@@ -1346,10 +1340,13 @@ public class AccumuloIndex {
       }
       
       // 9) Serialize results
+      // Query stores all comms, results store none (reset them upon deserialization)
       TIMER.start("serializeResults");
       assert q.sourceComm != null;
-      for (SitSearchResult r : res)
+      for (SitSearchResult r : res) {
         assert r.getCommunication() != null;
+        r.setCommunication(null);
+      }
       Pair<KbpQuery, List<SitSearchResult>> toSer = new Pair<>(q, res);
       File toSerTo = new File(dirForSerializingResults,
         q.id + "-" + q.name.replaceAll(" ", "_") + ".qrs.jser");
@@ -1359,6 +1356,15 @@ public class AccumuloIndex {
       TIMER.stop("kbpQuery");
       System.out.println(TIMER);
     } // END of query loop
+  }
+  
+  public static void getCommsFromQuery(KbpQuery q, List<SitSearchResult> res) {
+    for (SitSearchResult r : res) {
+      assert r.getCommunication() == null;
+      Communication c = q.getCommWithDefault(r.getCommunicationId(), null);
+      assert c != null;
+      r.setCommunication(c);
+    }
   }
   
   /**
@@ -1560,7 +1566,8 @@ public class AccumuloIndex {
       
       // Dedup communications (introduced during serialization process)
       // TODO set the comms to null and serialize a Map<String, Communication> separately
-      dedupCommunications(res);
+//      dedupCommunications(res);
+      getCommsFromQuery(q, res);
       
       // This adds SituationMentions which are used by parmaDedup
 //      findEntitiesAndSituations(q, res, df, PARMA_SIT_TOOL);

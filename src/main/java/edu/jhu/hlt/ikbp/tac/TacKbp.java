@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.Function;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -96,10 +97,26 @@ public class TacKbp {
     // See AccumuloIndex for creating this
     List<String> features;
     
+
+    // Stores the communications for an associated result set by comm id
+    public Map<String, Communication> resultCommunicationMemo;
+
     
     public KbpQuery(String id) {
       this.id = id;
       beg = end = -1;
+    }
+    
+    public Communication getCommWithDefault(String commId, Function<String, Communication> backup) {
+      if (resultCommunicationMemo == null && backup != null)
+        resultCommunicationMemo = new HashMap<>();
+      Communication c = resultCommunicationMemo.get(commId);
+      if (c == null && backup != null) {
+        c = backup.apply(commId);
+        assert c != null;
+        resultCommunicationMemo.put(commId, c);
+      }
+      return c;
     }
     
     public List<String> findMention() {
