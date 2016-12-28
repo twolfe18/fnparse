@@ -506,18 +506,47 @@ public class AccumuloIndex {
    * Gets {@link Communication}s given an id. Similar to {@link CommunicationRetrieval}.
    */
   public static class AccumuloCommRetrieval {
+    // Old way: use simpleaccumulo, only supports a single namespace
     private SimpleAccumuloFetch fetch;
+    // New way: directly use accumulo, multiple namespaces
+    private Connector conn;
+    private TDeserializer deser;
 
     public AccumuloCommRetrieval(ExperimentProperties config) throws Exception {
-      int numThreads = 1;
       SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);
-      fetch = new SimpleAccumuloFetch(saConf, numThreads);
-      fetch.connect(
-          config.getString("accumulo.username"),
-          new PasswordToken(config.getString("accumulo.password")));
+//      int numThreads = 1;
+//      fetch = new SimpleAccumuloFetch(saConf, numThreads);
+//      fetch.connect(
+//          config.getString("accumulo.username"),
+//          new PasswordToken(config.getString("accumulo.password")));
+      conn = saConf.connect("reader", new PasswordToken("an accumulo reader"));
+      deser = new TDeserializer(SimpleAccumulo.COMM_SERIALIZATION_PROTOCOL);
+    }
+
+    public Communication get(String commId) {
+//      return getSimpleAccumulo(commId);
+      return getAccumulo(commId);
+    }
+
+    private Communication getAccumulo(String commId) {
+      try (Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations())) {
+        s.setRange(Range.exact(commId));
+        Iterator<Entry<Key, Value>> iter = s.iterator();
+        if (!iter.hasNext())
+          return null;
+        Entry<Key, Value> e = iter.next();
+        if (iter.hasNext())
+          Log.info("WARNING: more than one result (returning first) for commId=" + commId);
+        Communication c = new Communication();
+        deser.deserialize(c, e.getValue().get());
+        return c;
+      } catch (Exception e) {
+        e.printStackTrace();
+        return null;
+      }
     }
     
-    public Communication get(String commId) {
+    private Communication getSimpleAccumulo(String commId) {
       TIMER.start("accCommRet");
       FetchRequest fr = new FetchRequest();
       fr.addToCommunicationIds(commId);;
