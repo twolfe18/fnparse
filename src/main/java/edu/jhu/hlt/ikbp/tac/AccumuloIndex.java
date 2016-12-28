@@ -515,13 +515,16 @@ public class AccumuloIndex {
     private TDeserializer deser;
 
     public AccumuloCommRetrieval(ExperimentProperties config) throws Exception {
-      SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);
+//      SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);
 //      int numThreads = 1;
 //      fetch = new SimpleAccumuloFetch(saConf, numThreads);
 //      fetch.connect(
 //          config.getString("accumulo.username"),
 //          new PasswordToken(config.getString("accumulo.password")));
-      conn = saConf.connect("reader", new PasswordToken("an accumulo reader"));
+//      conn = saConf.connect("reader", new PasswordToken("an accumulo reader"));
+      Instance inst = new ZooKeeperInstance(
+          SimpleAccumuloConfig.DEFAULT_INSTANCE, SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
+      conn = inst.getConnector("reader", new PasswordToken("an accumulo reader"));
       deser = new TDeserializer(SimpleAccumulo.COMM_SERIALIZATION_PROTOCOL);
     }
 
@@ -573,6 +576,9 @@ public class AccumuloIndex {
    * filter for features which return more than K tokenizations. You can do what you like with
    * these features given the BF (e.g. eliminating them may not be a good idea, but using them
    * as a last resort if more selective features don't return a good result is an option).
+   * 
+   * @deprecated
+   * @see FeatureCardinalityEstimator
    */
   public static class BuildBigFeatureBloomFilters {
     
@@ -842,9 +848,14 @@ public class AccumuloIndex {
             tokUuid2score.update(t, p);
             
             int nt = tokUuid2score.numNonZero();
-            if (nt % 2000 == 0) {
-              System.out.println("numToks=" + nt + " during featIdx=" + fi + " of=" + triageFeats.size()
-                  + " featStr=" + f + " tokFeatTooSmall=" + tokFeatTooSmall + " minScoreForNewTok=" + minScoreForNewTok);
+            if (nt % 10000 == 0) {
+              System.out.println("numToks=" + nt
+                  + " during featIdx=" + (fi+1)
+                  + " of=" + triageFeats.size()
+                  + " featStr=" + f
+                  + " p=" + p
+                  + " minScoreForNewTok=" + minScoreForNewTok
+                  + " tokFeatTooSmall=" + tokFeatTooSmall);
             }
 
             List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
@@ -1618,6 +1629,11 @@ public class AccumuloIndex {
   }
 
 
+  /**
+   * @deprecated
+   * @see BuildBigFeatureBloomFilters
+   * @see FeatureCardinalityEstimator
+   */
   public static class ComputeFeatureFrequencies {
     public static void main(ExperimentProperties config) throws Exception {
       File out = config.getFile("output");

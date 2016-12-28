@@ -1198,7 +1198,7 @@ public class IndexCommunications implements AutoCloseable {
       return _indexMatchedFeatsMemo;
     }
 
-    private int chooseHeadOfEntityMention(EntityMention em) {
+    private int chooseHeadOfEntityMention(EntityMention em, boolean verbose) {
       if (!em.getTokens().getTokenizationId().getUuidString().equals(tokenization.getUuid().getUuidString()))
         throw new IllegalArgumentException();
       // Try to choose a token which matches some triage features
@@ -1216,7 +1216,8 @@ public class IndexCommunications implements AutoCloseable {
         score += w.getOrDefault("pi:" + word.toLowerCase(), 0d);
         score += w.getOrDefault("hi:" + word.toLowerCase(), 0d);
         score += w.getOrDefault("h:" + word, 0d);
-        System.out.printf("[chooseHeadOfEntityMention] t=%d w=%s head=%s score=%.2f\n", t, w, head, score);
+        if (verbose)
+          System.out.printf("[chooseHeadOfEntityMention] t=%d w=%s head=%s score=%.2f\n", t, w, head, score);
         a.offer(t, score);
       }
       return a.get();
@@ -1251,7 +1252,7 @@ public class IndexCommunications implements AutoCloseable {
       // we correctly find the EntityMention "Claudine and Esther-Ethy Mamane"
       // but get the wrong head of "Claudine"
 //      int start = em.getTokens().getAnchorTokenIndex();
-      int start = chooseHeadOfEntityMention(em);
+      int start = chooseHeadOfEntityMention(em, verbose);
 
       for (Token t : toks) {
         int end = t.getTokenIndex();
