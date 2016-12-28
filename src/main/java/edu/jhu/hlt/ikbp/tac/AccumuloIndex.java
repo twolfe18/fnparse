@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import org.apache.accumulo.core.client.AccumuloException;
@@ -833,7 +835,11 @@ public class AccumuloIndex {
       Map<String, String> tokUuid2commId = getCommIdsFor(tokUuid2score);
       
       // 2) Make a batch scanner to retrieve the words from the most promising comms, look in c2w
-      Map<String, StringTermVec> commId2terms = getWordsForComms(tokUuid2commId.values());
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      boolean batchWords = config.getBoolean("batchC2W", false);
+      Collection<String> toRet = tokUuid2commId.values();
+      Map<String, StringTermVec> commId2terms =
+          batchWords ? getWordsForCommsBatch(toRet) : getWordsForComms(toRet);
       
       // 3) Go through each tok and re-score
       Counts<String> filterReasons = new Counts<>();
@@ -915,10 +921,54 @@ public class AccumuloIndex {
       TIMER.stop("t2c/getCommIdsFor");
       return t2c;
     }
+
+    /** keys of returned map are comm ids */
+    private Map<String, StringTermVec> getWordsForCommsBatch(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
+      TIMER.start("c2w/getWordsForComms2");
+
+      // Collect the ids of all the comm keys which need to be retrieved in c2w
+      List<Range> rows = new ArrayList<>();
+      Set<String> uniq = new HashSet<>();
+      for (String commId : commIdsNonUniq) {
+        if (uniq.add(commId))
+          rows.add(Range.exact(commId));
+      }
+      
+      int nr = 0;
+      Map<String, StringTermVec> c2tv = new HashMap<>();
+      try (BatchScanner bs = conn.createBatchScanner(T_c2w.toString(), auths, numQueryThreads)) {
+        if (batchTimeoutSeconds > 0) {
+          Log.info("[filter] using a timeout of " + batchTimeoutSeconds + " seconds for c2w query");
+          bs.setBatchTimeout(batchTimeoutSeconds, TimeUnit.SECONDS);
+        }
+        bs.setRanges(rows);
+        
+        for (Entry<Key, Value> e : bs) {
+          String commId = e.getKey().getRow().toString();
+          String word = e.getKey().getColumnQualifier().toString();
+          int count = decodeCount(e.getValue().get());
+          StringTermVec tv = c2tv.get(commId);
+          if (tv ==  null) {
+            tv = new StringTermVec();
+            c2tv.put(commId, tv);
+          }
+          tv.add(word, count);
+          nr++;
+        }
+      }
+      Log.info("[filter] retrieved " + c2tv.size() + " of " + uniq.size() + " comms, numWords=" + nr);
+      TIMER.stop("c2w/getWordsForComms2");
+      return c2tv;
+    }
     
     /** keys of returned map are comm ids */
     private Map<String, StringTermVec> getWordsForComms(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
       TIMER.start("c2w/getWordsForComms");
+      
+      // NOTE: This can be made batch to go faster
+      // The only thing is that we don't get the results back in a specific order,
+      // but since we're loading this all into memory anyway, it doesn't much matter.
+      
       // Collect the ids of all the comm keys which need to be retrieved in c2w
       int nt = 0;
       List<Range> rows = new ArrayList<>();
@@ -929,6 +979,8 @@ public class AccumuloIndex {
           rows.add(Range.exact(commId));
       }
       Log.info("found " + rows.size() + " commUuids containing all " + nt + " tokUuids");
+
+      int nr = 0;
       Map<String, StringTermVec> c2tv = new HashMap<>();
       for (String commId : uniq) {
         StringTermVec tv = new StringTermVec();
@@ -938,12 +990,13 @@ public class AccumuloIndex {
             String word = e.getKey().getColumnQualifier().toString();
             int count = decodeCount(e.getValue().get());
             tv.add(word, count);
+            nr++;
           }
         }
         Object old = c2tv.put(commId, tv);
         assert old == null;
       }
-      Log.info("[filter] retrieved " + c2tv.size() + " of " + uniq.size() + " comms");
+      Log.info("[filter] retrieved " + c2tv.size() + " of " + uniq.size() + " comms, numWords=" + nr);
       TIMER.stop("c2w/getWordsForComms");
       return c2tv;
     }
