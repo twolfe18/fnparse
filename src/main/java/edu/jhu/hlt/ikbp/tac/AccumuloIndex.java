@@ -1598,19 +1598,15 @@ public class AccumuloIndex {
         }
       }
 
-      System.out.println("AccumuloIndex timer:");
+      System.out.println("timer:");
       System.out.println(TIMER);
-      System.out.println("IndexCommunications timer:");
-      System.out.println(IndexCommunications.TIMER);
       System.out.println();
 
       TIMER.stop("query");
     }
 
-    System.out.println("AccumuloIndex events counts:");
+    System.out.println("events counts:");
     System.out.println(EC);
-    System.out.println("IndexCommunications events counts:");
-    System.out.println(IndexCommunications.EC);
     System.out.println();
 
     if (parma != null)

@@ -126,8 +126,8 @@ public class IndexCommunications implements AutoCloseable {
   public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/nyt_eng_2007-fromCOE-scion");
 //  public static final File HOME = new File("data/concretely-annotated-gigaword/ner-indexing/apw_eng_2XXX-scion");
 
-  public static final MultiTimer TIMER = new MultiTimer();
-  public static final Counts<String> EC = new Counts<>();   // event counts
+  public static final MultiTimer TIMER = AccumuloIndex.TIMER;
+  public static final Counts<String> EC = AccumuloIndex.EC;
   
   // How many words to store for every document
   public static final int N_DOC_TERMS = 128;    // don't change this!
