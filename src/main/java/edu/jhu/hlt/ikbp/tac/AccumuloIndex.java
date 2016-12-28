@@ -759,12 +759,8 @@ public class AccumuloIndex {
       if (batchTimeoutSeconds > 0)
         Log.info("[filter] using a timeout of " + batchTimeoutSeconds + " seconds for f2t query");
 
-      if (triageFeats.size() > 8) {
-        Log.info("WARNING! something is broken when there are too many features (" + triageFeats.size() + "), skipping");
-        return Collections.emptyList();
-      }
-
       if (expensiveFeaturesBF != null) {
+        assert false : "should not be using this anymore";
         List<String> pruned = new ArrayList<>(triageFeats.size());
         for (String f : triageFeats) {
           if (expensiveFeaturesBF.mightContain(f)) {
