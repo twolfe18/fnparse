@@ -30,7 +30,6 @@ import edu.jhu.hlt.concrete.Clustering;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.EntityMentionSet;
-import edu.jhu.hlt.concrete.TextSpan;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.access.FetchRequest;
@@ -328,6 +327,9 @@ public class TacKbp {
   /**
    * The point of this class is to take an (EntityMention UUID, Communication UUID),
    * retrieve the Communication from scion/accumulo, and then show the results.
+   * 
+   * @deprecated
+   * @see TacQueryEntityMentionResolver
    */
   public static class MentionFetcher {
     private FetchCommunicationServiceImpl impl;
@@ -392,17 +394,40 @@ public class TacKbp {
     }
   }
   
+  public static List<KbpQuery> getKbpSfQueries(String name) throws Exception {
+    Log.info("retrieving slot fill queries for=" + name);
+    switch (name.toLowerCase()) {
+    case "sf13":
+      return getKbp2013SfQueries();
+    case "sf14":
+      return getKbp2014SfQueries();
+    case "sf13+sf14":
+    case "sf13+14":
+      List<KbpQuery> q = new ArrayList<>();
+      q.addAll(getKbp2013SfQueries());
+      q.addAll(getKbp2014SfQueries());
+      return q;
+    default:
+      throw new RuntimeException("don't recognize: " + name);
+    }
+  }
 
-  public static List<KbpQuery> getKbp2013SfQueries() throws Exception {
-    //File qxml = new File("/home/travis/code/fnparse/data/tackbp/TAC_2014_KBP_Slot_Filler_Validation_Evaluation_Queries_V1.1/"
-    //    + "data/LDC2014R38_TAC_2014_KBP_English_Regular_Slot_Filling_Evaluation_Queries/"
-    //    + "data/tac_2014_kbp_english_regular_slot_filling_evaluation_queries.xml");
+  public static List<KbpQuery> getKbp2014SfQueries() throws Exception {
     File qxml = new File("data/tackbp/TAC_2014_KBP_Slot_Filler_Validation_Evaluation_Queries_V1.1/"
         + "data/LDC2014R38_TAC_2014_KBP_English_Regular_Slot_Filling_Evaluation_Queries/"
         + "data/tac_2014_kbp_english_regular_slot_filling_evaluation_queries.xml");
-    
+    return getKbpSfQueries(qxml);
+  }
+
+  public static List<KbpQuery> getKbp2013SfQueries() throws Exception {
+    File qxml = new File("data/tackbp/TAC_2013_KBP_Slot_Filler_Validation_Evaluation_Queries_V1.2/"
+        + "data/LDC2013R14_TAC_2013_KBP_English_Regular_Slot_Filling_Evaluation_Queries/"
+        + "data/tac_2013_kbp_english_regular_slot_filling_evaluation_queries.xml");
+    return getKbpSfQueries(qxml);
+  }
+
+  public static List<KbpQuery> getKbpSfQueries(File qxml) throws Exception {
     List<KbpQuery> queries = new ArrayList<>();
-    
     DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
     DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
     Document root = dBuilder.parse(qxml);
@@ -410,12 +435,10 @@ public class TacKbp {
     for (int i = 0; i < nl.getLength(); i++) {
       Node n = nl.item(i);
       String id = n.getAttributes().getNamedItem("id").getTextContent();
-//      System.out.println(id);
       KbpQuery q = new KbpQuery(id);
       NodeList c = n.getChildNodes();
       for (int j = 0; j < c.getLength(); j++) {
         Node cc = c.item(j);
-//        System.out.println(cc.getNodeName() + "\t" + cc.getTextContent());
         switch (cc.getNodeName()) {
         case "name":
           q.name = cc.getTextContent();
@@ -436,11 +459,9 @@ public class TacKbp {
           break;
         }
       }
-      
-      System.out.println(q);
+//      System.out.println(q);
       queries.add(q);
     }
-
     return queries;
   }
   
@@ -463,10 +484,8 @@ public class TacKbp {
     }
     return queries;
   }
-
-  public static void main(String[] args) throws Exception {
-    ExperimentProperties config = ExperimentProperties.init(args);
-
+  
+  public static void oldMain(ExperimentProperties config) throws Exception {
     // This will only work on the grid.
     System.setProperty("scion.accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181");
     System.setProperty("scion.accumulo.instanceName", "minigrid");
@@ -536,5 +555,13 @@ public class TacKbp {
     }
 
     Log.info(IndexCommunications.TIMER);
+  }
+
+  public static void main(String[] args) throws Exception {
+//    ExperimentProperties config = ExperimentProperties.init(args);
+    for (KbpQuery q : getKbp2013SfQueries())
+      System.out.println(q);
+    for (KbpQuery q : getKbp2014SfQueries())
+      System.out.println(q);
   }
 }

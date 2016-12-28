@@ -1081,6 +1081,8 @@ public class AccumuloIndex {
     // Gets Communications (and contents/annotations) given an id
     AccumuloCommRetrieval commRet = new AccumuloCommRetrieval(config);
 
+    // TODO Include OfflineBatchParseyAnnotator working dir and logic
+    // Extract comms to parse @COE, copy to laptop and parse there
 
     Set<String> debugQueriesDoFirst = new HashSet<>();
     for (String s : config.getString("debugQueriesDoFirst", "").split(",")) {
@@ -1106,7 +1108,8 @@ public class AccumuloIndex {
     ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
 
     Log.info("getting queries...");
-    List<KbpQuery> queries = TacKbp.getKbp2013SfQueries();
+    String sfName = config.getString("slotFillQueries", "sf13+sf14");
+    List<KbpQuery> queries = TacKbp.getKbpSfQueries(sfName);
     if (debugQueriesDoFirst.size() > 0) {
       Collections.sort(queries, new Comparator<KbpQuery>() {
         @Override

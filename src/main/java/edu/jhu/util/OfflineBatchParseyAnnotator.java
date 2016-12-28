@@ -43,6 +43,10 @@ import edu.jhu.prim.tuple.Pair;
  * so don't use this with an extravagant number of files (~10^5)
  * on a crappy file system (my laptop SSD doesn't count...).
  *
+ * NOTE: There is nothing which requires this class to call parsey,
+ * it generalizes to any dependency parser which takes/makes CoNLL-X
+ * and can be pointed to with a script.
+ *
  * @author travis
  */
 public class OfflineBatchParseyAnnotator {
