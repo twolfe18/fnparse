@@ -527,20 +527,27 @@ public class AccumuloIndex {
     }
 
     private Communication getAccumulo(String commId) {
+      TIMER.start("commRet/acc/scan");
       try (Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations())) {
         s.setRange(Range.exact(commId));
         Iterator<Entry<Key, Value>> iter = s.iterator();
-        if (!iter.hasNext())
+        if (!iter.hasNext()) {
+          TIMER.stop("commRet/acc/scan");
           return null;
+        }
         Entry<Key, Value> e = iter.next();
         if (iter.hasNext())
           Log.info("WARNING: more than one result (returning first) for commId=" + commId);
+        TIMER.stop("commRet/acc/scan");
+
+        TIMER.start("commRet/acc/deser");
         Communication c = new Communication();
         deser.deserialize(c, e.getValue().get());
+        TIMER.stop("commRet/acc/deser");
+
         return c;
       } catch (Exception e) {
-        e.printStackTrace();
-        return null;
+        throw new RuntimeException(e);
       }
     }
     
