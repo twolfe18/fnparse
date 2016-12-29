@@ -621,20 +621,6 @@ public class IndexCommunications implements AutoCloseable {
       return new String[] {"hitId", "sourceDocId", "targetDocId", "score", "nicelyFormattedHtml"};
     }
     
-    private static Span nounPhraseExpand(int head, DependencyParse deps) {
-      assert head >= 0;
-      int left = head;
-      int right = head;
-      List<String> edges = Arrays.asList("nn");
-      for (Dependency d : deps.getDependencyList()) {
-        if (d.isSetGov() && d.getGov() == head && edges.contains(d.getEdgeType())) {
-          if (d.getDep() < left) left = d.getDep();
-          if (d.getDep() > right) right = d.getDep();
-        }
-      }
-      return Span.getSpan(left, right+1);
-    }
-
     /**
      * Outputs (hitId, sourceDocId, targetDocId, score, sourceHtml, targetHtml)
      * Currently score is a placeholder.
@@ -789,6 +775,24 @@ public class IndexCommunications implements AutoCloseable {
     }
     
   }
+
+  /**
+   * Takes all nn dependencies out of a head to get a span
+   */
+  public static Span nounPhraseExpand(int head, DependencyParse deps) {
+    assert head >= 0;
+    int left = head;
+    int right = head;
+    List<String> edges = Arrays.asList("nn");
+    for (Dependency d : deps.getDependencyList()) {
+      if (d.isSetGov() && d.getGov() == head && edges.contains(d.getEdgeType())) {
+        if (d.getDep() < left) left = d.getDep();
+        if (d.getDep() > right) right = d.getDep();
+      }
+    }
+    return Span.getSpan(left, right+1);
+  }
+
   
   /**
    * Provides a paragraph-length snippet which summarizes a {@link Communication} news story.
@@ -2042,10 +2046,11 @@ public class IndexCommunications implements AutoCloseable {
     
     /** Head token index of the mention of the query entity/subject in this tokenization */
     public int yhatQueryEntityHead = -1;
+    public String yhatQueryEntityNerType = null;
+    public Span yhatQueryEntitySpan = null;   // e.g. see nounPhraseExpand
 
     /** Head token index of a situtation mention related to the query entity */
     public int yhatEntitySituation = -1;
-
 
     public SitSearchResult(String tokUuid, SentFeats featsResult, List<Feat> score) {
       this.tokUuid = tokUuid;
@@ -2076,6 +2081,20 @@ public class IndexCommunications implements AutoCloseable {
         throw new IllegalStateException();
       Tokenization toks = getTokenization();
       return toks.getTokenList().getTokenList().get(yhatQueryEntityHead).getText();
+    }
+    
+    public String getEntitySpanGuess() {
+      if (yhatQueryEntitySpan == null)
+        throw new IllegalStateException();
+      Tokenization toks = getTokenization();
+      StringBuilder sb = new StringBuilder();
+      for (int i = yhatQueryEntitySpan.start; i < yhatQueryEntitySpan.end; i++) {
+        if (sb.length() > 0)
+          sb.append(' ');
+        String s = toks.getTokenList().getTokenList().get(i).getText();
+        sb.append(s);
+      }
+      return sb.toString();
     }
     
     public Tokenization getTokenization() {

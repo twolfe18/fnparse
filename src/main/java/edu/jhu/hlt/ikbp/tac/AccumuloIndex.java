@@ -16,6 +16,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -86,6 +87,7 @@ import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
+import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.TokenizationIter;
@@ -1098,59 +1100,32 @@ public class AccumuloIndex {
   }
   
   public static void attrFeatureReranking(KbpQuery q, List<SitSearchResult> res) {
-    TIMER.start("attrFeatureReranking");
-    String nameHeadQ = NNPSense.extractNameHead(q.name);
-    
     // FIXED: Acceptable bug here: should really only look at the mention highlighed by the query.
     // E.g. if a doc mentions Bill and Hillary Clinton, the attr feats will be collected off
     // of any Clinton match, thus adding Bill features, which is what these were specifically
     // designed to avoid.
     assert q.entityMention != null;
     String tokUuidQ = q.entityMention.getTokens().getTokenizationId().getUuidString();
-    List<String> attrCommQ = NNPSense.extractAttributeFeatures(null, q.sourceComm, nameHeadQ);
-    List<String> attrTokQ = NNPSense.extractAttributeFeatures(tokUuidQ, q.sourceComm, nameHeadQ);
+    attrFeatureReranking(q.name, tokUuidQ, q.sourceComm, res);
+  }
 
-//    Set<String> attrFeatSetQ = new HashSet<>(attrFeatCommQ);
-    Log.info(q + " attribute features: " + attrCommQ);
+  public static void attrFeatureReranking(String sourceName, String sourceTok, Communication sourceComm, List<SitSearchResult> res) {
+    TIMER.start("attrFeatureReranking");
+    String nameHeadQ = NNPSense.extractNameHead(sourceName);
+    
+    List<String> attrCommQ = NNPSense.extractAttributeFeatures(null, sourceComm, nameHeadQ);
+    List<String> attrTokQ = NNPSense.extractAttributeFeatures(sourceTok, sourceComm, nameHeadQ);
+
+    Log.info(sourceName + " attribute features: " + attrCommQ);
     for (SitSearchResult r : res) {
 
       // This is not only dis-allowed in evaluation, but will screw up
       // the scores by having all the attribute features trivially match
-      if (q.sourceComm.getId().equals(r.getCommunicationId())) {
+      if (sourceComm.getId().equals(r.getCommunicationId())) {
         continue;
       }
 
       String nameHeadR = r.getEntityHeadGuess();
-      
-//      // Attributes for mentions of this entity ANYWHERE in the Communication
-//      List<String> attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadQ);
-//      List<String> attrCommMatched = new ArrayList<>();
-//      Set<String> attrCommIntersect = new HashSet<>();
-//      Set<String> attrCommUnion = new HashSet<>();
-//      attrCommUnion.addAll(attrFeatCommQ);
-//      for (String ra : attrCommR) {
-//        attrCommUnion.add(ra);
-//        if (attrFeatSetQ.contains(ra)) {
-//          attrCommMatched.add(ra);
-//          attrCommIntersect.add(ra);
-//        }
-//      }
-//      
-//      List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadQ);
-//      List<String> attrTokMatched = new ArrayList<>();
-//      Set<String> attrTokIntersect = new HashSet<>();
-//      Set<String> attrTokUnion = new HashSet<>();
-//      attrTokUnion.addAll(attrFeatCommQ);
-//      for (String ra : attrTokR) {
-//        attrTokUnion.add(ra);
-//        if (attrFeatSetQ.contains(ra)) {
-//          attrTokMatched.add(ra);
-//          attrTokIntersect.add(ra);
-//        }
-//      }
-//      
-//      double scoreComm = attrCommIntersect.size() / Math.max(1d, attrCommUnion.size());
-//      double scoreTok = attrTokIntersect.size() / Math.max(1d, attrTokUnion.size());
 
       List<String> attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadQ);
       List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadQ);
@@ -1166,14 +1141,6 @@ public class AccumuloIndex {
       r.addToScore("attrFeatTC", 2 * scale * mTC.get1());
       r.addToScore("attrFeatTT", 8 * scale * mTT.get1());
 
-//      r.addToScore("attrComm", 0.5 * scoreComm);
-//      r.addToScore("attrTok", 5 * scoreComm);
-
-//      r.attributeFeaturesQ = attrFeatCommQ;
-//      r.attributeFeaturesR = attrTokR;
-//      r.attributeFeaturesMatched = attrTokMatched;
-//      System.out.printf("response score=%.2f attrMatched=%s attrAll=%s\n", scoreTok, attrTokMatched, attrTokR);
-
       r.attributeFeaturesQ = attrTokQ;
       r.attributeFeaturesR = attrTokR;
       r.attributeFeaturesMatched = mTT.get2();
@@ -1181,16 +1148,460 @@ public class AccumuloIndex {
 
     Collections.sort(res, SitSearchResult.BY_SCORE_DESC);
     
-    for (SitSearchResult r : res) {
-      ShowResult sr = new ShowResult(q, r);
-      sr.show(Collections.emptyList());
-    }
     TIMER.stop("attrFeatureReranking");
   }
   
 //  public static List<SitSearchResult> batchCommRet(KbpQuery q, List<SitSearchResult> res, int maxOutput) {
 //    // TODO
 //  }
+  
+  
+  public static class PkbpSearching {
+    
+    public static void main(ExperimentProperties config) throws Exception {
+      Random rand = config.getRandom();
+      KbpSearching ks = new KbpSearching(config);
+      
+      String sfName = config.getString("slotFillQueries", "sf13+sf14");
+      List<KbpQuery> queries = TacKbp.getKbpSfQueries(sfName);
+      
+      int stepsPerQuery = config.getInt("stepsPerQuery", 15);
+      
+      for (KbpQuery seed : queries) {
+        PkbpSearching ps = new PkbpSearching(ks, seed, rand);
+        ps.verbose = true;
+        for (int i = 0; i < stepsPerQuery; i++) {
+          Log.info("step=" + (i+1));
+          ps.expandEntity();
+        }
+        System.out.println();
+      }
+    }
+
+    class Entity {
+      String id;
+      List<SitSearchResult> mentions;
+      
+      public Entity(String id, SitSearchResult canonical) {
+        this.id = id;
+        this.mentions = new ArrayList<>();
+        this.mentions.add(canonical);
+        Log.info(this);
+      }
+      
+      public double getMentionWeight() {
+        double m = 0;
+        double s = 0;
+        for (SitSearchResult ss : mentions) {
+          m = Math.max(m, ss.getScore());
+          s += ss.getScore();
+        }
+        return (m+s)/2;
+      }
+      
+      
+      @Override
+      public String toString() {
+        return "(Entity id=" + id + " nMentions=" + mentions.size() + " weight=" + getMentionWeight() + ")";
+      }
+    }
+    
+    private KbpSearching search;
+    private Random rand;
+
+    // Pkb
+    private KbpQuery seed;
+    private List<Entity> entities;
+    private Set<String> knownComms;
+    // TODO situations
+    
+    public boolean verbose = false;
+
+    public PkbpSearching(KbpSearching search, KbpQuery seed, Random rand) {
+      Log.info("seed=" + seed);
+
+      this.rand = rand;
+      this.search = search;
+      this.seed = seed;
+      this.entities = new ArrayList<>();
+      this.knownComms = new HashSet<>();
+      
+      if (seed.entityMention == null)
+        throw new IllegalArgumentException();
+      String tokUuid = seed.entityMention.getTokens().getTokenizationId().getUuidString();
+      SitSearchResult canonical = new SitSearchResult(tokUuid, null, Collections.emptyList());
+      String id = "seed/" + seed.id;
+      this.entities.add(new Entity(id, canonical));
+    }
+    
+    public KbpQuery getSeed() {
+      return seed;
+    }
+    
+    public void expandEntity() throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      // Find a SitSearchResult (essentially an EntityMention) to search off of
+      ChooseOne<Entity> ce = new ChooseOne<>(rand);
+      for (Entity e : entities) {
+        double w = Math.exp(e.getMentionWeight());
+        if (verbose) Log.info("considering weight=" + w + "\t" + e);
+        ce.offer(e, w);
+      }
+      Entity e = ce.choose();
+      if (verbose)
+        Log.info("chose " + e);
+
+      ChooseOne<SitSearchResult> cr = new ChooseOne<>(rand);
+      for (SitSearchResult r : e.mentions) {
+        double w = Math.exp(r.getScore());
+        if (verbose) Log.info("considering weight=" + w + "\t" + r);
+        cr.offer(r, w);
+      }
+      SitSearchResult r = cr.choose();
+      if (verbose)
+        Log.info("chose " + r);
+      
+      // Do the search
+      List<SitSearchResult> res = search.entityMentionSearch(r);
+      if (verbose)
+        Log.info("found " + res.size() + " results for " + r);
+      
+      // Add results to PBK
+      for (SitSearchResult rr : res)
+        putInPkb(e, rr);
+      
+      if (verbose)
+        Log.info("done");
+    }
+    
+    public void putInPkb(Entity e, SitSearchResult r) {
+      if (verbose) {
+        Log.info("adding to " + e);
+        ShowResult.showQResult(r, r.getCommunication(), 120, true);
+      }
+
+      if (!knownComms.add(r.getCommunicationId())) {
+        if (verbose) Log.info("skipping b/c not new doc");
+        return;
+      }
+      
+      // Add this mention to the entity which it was a search for
+      {
+        double offset = 3.0;
+        double lp = r.getScore() - offset;
+        double t = 1d / (1+Math.exp(-lp));
+        double d = rand.nextDouble();
+        if (verbose) {
+          Log.info(String.format(
+              "reject based on linking score? score=%.2f offset=%.2f thresh=%.3f draw=%.3f keep=%s",
+              r.getScore(), offset, t, d, d<=t));
+        }
+        if (d > t)
+          return;
+        e.mentions.add(r);
+      }
+      
+      // Search for related entities
+      Communication comm = r.getCommunication();
+      TokenObservationCounts tokObs = null;
+      TokenObservationCounts tokObsLc = null;
+      Map<String, Tokenization> tokMap = new HashMap<>();
+      for (Tokenization tok : new TokenizationIter(comm)) {
+        Object old = tokMap.put(tok.getUuid().getUuidString(), tok);
+        assert old == null;
+      }
+      new AddNerTypeToEntityMentions(comm);
+      for (EntityMention em : IndexCommunications.getEntityMentions(comm)) {
+        boolean takeNnCompounts = true;
+        boolean allowFailures = true;
+        String head = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
+        List<String> feats = IndexCommunications.getEntityMentionFeatures(
+            em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
+        
+        String nerType = em.getEntityType();
+        
+        String tokUuid = em.getTokens().getTokenizationId().getUuidString();
+        List<Feat> relevanceReasons = new ArrayList<>();
+        relevanceReasons.add(new Feat("nerType", nerTypeExploreLogProb(nerType)));
+        if (tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
+          relevanceReasons.add(new Feat("sameSent", 1));
+        SitSearchResult rel = new SitSearchResult(tokUuid, null, relevanceReasons);
+        rel.triageFeatures = feats;
+        
+        double offset = 2;
+        double lp = rel.getScore() - offset;
+        double t = 1 / (1+Math.exp(-lp));
+        double d = rand.nextDouble();
+        if (verbose) {
+          Log.info(String.format(
+              "keep related entity? ner=%s head=%s offset=%.2 thresh=%.3f draw=%.3f keep=%s reasons=%s",
+              nerType, head, offset, t, d, d<t, relevanceReasons));
+        }
+        if (d < t) {
+          // TODO Presumably new entity (check?)
+          String id = getEntityIdStartingWith(head);
+          this.entities.add(new Entity(id, rel));
+        }
+      }
+
+      // TODO Search for related situations
+    }
+
+    private String getEntityIdStartingWith(String name) {
+      for (Entity e : entities)
+        if (e.id.equals(name))
+          return getEntityIdStartingWith(name + "X");
+      return name;
+    }
+
+    private static double nerTypeExploreLogProb(String nerType) {
+      switch (nerType) {
+      case "PER":
+      case "PERSON":
+        return 2;
+      case "ORG":
+      case "ORGANIZATION":
+        return 1;
+      default:
+        return -1;
+      }
+    }
+  }
+  
+  /**
+   * Without replacement.
+   *
+   * @author travis
+   */
+  public static class ChooseOne<T> {
+    private Random rand;
+    private List<T> obj;
+    private DoubleArrayList weights;
+    private double Z;
+    private int offers;
+
+    public ChooseOne(int seed) {
+      this(new Random(seed));
+    }
+    
+    public ChooseOne(Random rand) {
+      this.rand = rand;
+      obj = new ArrayList<>();
+      weights = new DoubleArrayList();
+      Z = 0;
+      offers = 0;
+    }
+    
+    public void offer(T object, double weight) {
+      if (weight < 0)
+        throw new IllegalArgumentException();
+      if (weight == 0)
+        return;
+      obj.add(object);
+      weights.add(weight);
+      Z += weight;
+      offers++;
+    }
+    
+    public int numOffers() {
+      return offers;
+    }
+    
+    public void clear() {
+      obj.clear();
+      weights.clear();
+      Z = 0;
+      offers = 0;
+    }
+    
+    public void optimizeForManyDraws() {
+      List<Pair<T, Double>> items = new ArrayList<>();
+      int n = obj.size();
+      for (int i = 0; i < n; i++)
+        items.add(new Pair<>(obj.get(i), weights.get(i)));
+      Collections.sort(items, new Comparator<Pair<?, Double>>() {
+        @Override
+        public int compare(Pair<?, Double> o1, Pair<?, Double> o2) {
+          double s1 = o1.get2();
+          double s2 = o2.get2();
+          if (s1 > s2)
+            return -1;
+          if (s1 < s2)
+            return +1;
+          return 0;
+        }
+      });
+      clear();
+      for (Pair<T, Double> p : items)
+        offer(p.get1(), p.get2());
+    }
+    
+    public T choose() {
+      double t = rand.nextDouble() * Z;
+      double s = 0;
+      int n = obj.size();
+      for (int i = 0; i < n; i++) {
+        s += weights.get(i);
+        if (s >= t)
+          return obj.get(i);
+      }
+      throw new RuntimeException();
+    }
+  }
+  
+  public static class KbpSearching {
+    // Finds EntityMentions for query documents which just come with char offsets.
+//    private TacQueryEntityMentionResolver findEntityMention;
+    
+    // Gets Communications (and contents/annotations) given an id
+    private AccumuloCommRetrieval commRet;
+    private HashMap<String, Communication> commRetCache;  // contains everything commRet ever gave us
+
+    // Load the feature cardinality estimator, which is used during triage to
+    // search through the most selective features first.
+    private FeatureCardinalityEstimator fce;
+    
+    private Search search;
+
+    private int maxResultsPerQuery;
+    private int maxToksPreDocRetrieval;
+
+    private ComputeIdf df;
+    
+    public KbpSearching(ExperimentProperties config) throws Exception {
+//      findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
+
+      commRet = new AccumuloCommRetrieval(config);
+
+      fce = (FeatureCardinalityEstimator) FileUtil.deserialize(config.getExistingFile("featureCardinalityEstimator"));
+      // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
+      // e.g.
+      // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
+      // /export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
+      File extraCards = config.getFile("featureCardinalityManual");
+      if (extraCards != null)
+        fce.addFromFile(extraCards);
+
+      // How many results per KBP query.
+      // Note: each result must have its Communication fetched from the DB,
+      // which is currently the most costly part of querying, so set this carefully,
+      // and in coordination with maxToksPreDocRetrieval
+      maxResultsPerQuery = config.getInt("maxResultsPerQuery", 30);
+      // This affects pruning early in the pipeline
+      double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 5);
+      maxToksPreDocRetrieval = (int) Math.max(50, maxToksPruningSafetyRatio * maxResultsPerQuery);
+      Log.info("[filter] maxResultsPerQuery=" + maxResultsPerQuery
+          + " maxToksPruningSafetyRatio=" + maxToksPruningSafetyRatio
+          + " maxToksPreDocRetrieval=" + maxToksPreDocRetrieval);
+      search = new Search(
+          SimpleAccumuloConfig.DEFAULT_INSTANCE,
+          SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS,
+          "reader",
+          new PasswordToken("an accumulo reader"),
+          fce,
+          config.getInt("nThreadsSearch", 4),
+          maxToksPreDocRetrieval,
+          config.getDouble("triageFeatNBPrior", 10),
+          config.getBoolean("batchC2W", true));
+
+      df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
+    }
+    
+    public void clearCommCache() {
+      commRetCache.clear();
+    }
+    
+    public Communication getCommCaching(String commId) {
+      Communication c = commRetCache.get(commId);
+      if (c == null) {
+        c = commRet.get(commId);
+        commRetCache.put(commId, c);
+      }
+      return c;
+    }
+
+    public List<SitSearchResult> entityMentionSearch(SitSearchResult query) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      TIMER.start("kbpQuery/setup");
+      // 1a) Retrieve the context Communication
+      if (query.getCommunication() == null) {
+        Communication c = getCommCaching(query.getCommunicationId());
+        if (c == null) {
+          Log.info("skipping query b/c failed to retreive document: " + query);
+          EC.increment("kbpQuery/failResolveSourceDoc");
+          return null;
+        }
+        query.setCommunication(c);
+      }
+
+//      // 1b) Create an EntityMention for the query mention (for parma features I think?)
+//      boolean addEmToCommIfMissing = true;
+//      findEntityMention.resolve(q, addEmToCommIfMissing);
+
+      // 1c) Build the context vector
+      StringTermVec queryContext = new StringTermVec(query.getCommunication());
+      if (query.importantTerms == null)
+        query.importantTerms = df.importantTerms(queryContext, 20);
+      
+      // 2) Extract entity mention features
+      // TODO Remove headwords, switch to purely a key-word based retrieval model.
+      // NOTE that headwords must match the headwords extracted during the indexing phrase.
+      String[] headwords = new String[] {};
+//      String entityName = q.name;
+//      String entityType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
+      String entityName = query.getEntitySpanGuess();
+      String entityType = TacKbp.tacNerTypesToStanfordNerType(query.yhatQueryEntityNerType);
+      TokenObservationCounts tokObs = null;
+      TokenObservationCounts tokObsLc = null;
+      List<String> triageFeats = IndexCommunications.getEntityMentionFeatures(entityName, headwords, entityType, tokObs, tokObsLc);
+      TIMER.stop("kbpQuery/setup");
+      
+      // 3) Search
+      List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
+
+      // 4-5) Retrieve communications and prune
+      {
+      TIMER.start("getCommsForSitSearchResults");
+      List<SitSearchResult> resKeep = new ArrayList<>();
+      int failed = 0;
+      for (SitSearchResult r : res) {
+//        Communication c = q.getCommWithDefault(r.getCommunicationId(), commRet::get);
+        Communication c = getCommCaching(r.getCommunicationId());
+        if (c == null) {
+          Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
+          failed++;
+        } else {
+          r.setCommunication(c);
+          resKeep.add(r);
+          if (maxResultsPerQuery > 0 && resKeep.size() >= maxResultsPerQuery)
+            break;
+        }
+      }
+      Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
+      res = resKeep;
+      TIMER.stop("getCommsForSitSearchResults");
+      }
+
+      // 6) Find entities and situations
+      // (technically situations are not needed, only entities for attribute features)
+      {
+      List<SitSearchResult> withEntAndSit = new ArrayList<>();
+      for (SitSearchResult r : res)
+        if (findEntitiesAndSituations(r, df, false))
+          withEntAndSit.add(r);
+      Log.info("[filter] lost " + (res.size()-withEntAndSit.size()) + " SitSearchMention b/c ent/sit finding");
+      res = withEntAndSit;
+      }
+      
+      // 7) Rescore according to attribute features
+      // We need to have the Communications (specifically deps, POS, NER) to do this
+      // attributeFeatures look like "PERSON-nn-Dr." and are generated by {@link NNPSense}
+//      attrFeatureReranking(q, res);
+      String sourceTok = query.getTokenization().getUuid().getUuidString();
+      attrFeatureReranking(entityName, sourceTok, query.getCommunication(), res);
+      
+      return res;
+    }
+  }
+  
 
   public static void kbpSearching(ExperimentProperties config) throws Exception {
 //    // TUNNEL DEBUGGING
@@ -1495,7 +1906,34 @@ public class AccumuloIndex {
     res.clear();
     res.addAll(resWithSituations);
     TIMER.stop("findEntitiesAndSituations");
-  } 
+  }
+
+  /** returns false if it failed */
+  public static boolean findEntitiesAndSituations(SitSearchResult r, ComputeIdf df, boolean verbose) {
+    if (r.getCommunication() == null)
+      throw new IllegalArgumentException();
+
+    // Figure out what events are interesting
+    if (r.triageFeatures == null)
+      throw new IllegalArgumentException();
+
+    // Search for an interesting situation
+    EntityEventPathExtraction eep = new EntityEventPathExtraction(r);
+    if (verbose)
+      eep.verboseEntSelection = true;
+    IntPair entEvent = eep.findMostInterestingEvent(df, verbose);
+    r.yhatQueryEntityHead = entEvent.first;
+    r.yhatEntitySituation = entEvent.second;
+
+    if (r.yhatEntitySituation < 0)
+      EC.increment("findEntitiesAndSituations/noSit");
+    if (r.yhatQueryEntityHead < 0)
+      EC.increment("findEntitiesAndSituations/noEnt");
+    if (r.yhatEntitySituation < 0 || r.yhatQueryEntityHead < 0)
+      return false;
+    EC.increment("findEntitiesAndSituations/entSitsSelected");
+    return true;
+  }
 
   public static List<SitSearchResult> parmaDedup(ParmaVw parma, KbpQuery q, List<SitSearchResult> res, int maxResults, boolean show) {
     // Call parma to remove duplicates

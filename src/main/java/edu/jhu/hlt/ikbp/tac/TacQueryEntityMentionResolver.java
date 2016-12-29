@@ -15,6 +15,7 @@ import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.util.TextSpanToTokens;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.util.TokenizationIter;
 
@@ -52,15 +53,17 @@ public class TacQueryEntityMentionResolver {
    * @param tolerance is how many characters off is acceptable, 0 means exact match
    */
   public static EntityMention find(KbpQuery q, double tolerance) {
-    if (q.sourceComm == null)
+    return find(q.sourceComm, q.beg, q.end, tolerance);
+  }
+
+  public static EntityMention find(Communication c, int cstart, int cend, double tolerance) {
+    if (c == null)
       throw new IllegalArgumentException("argument must have resolved Communication");
-    int cstart = q.beg;
-    int cend = q.end;
-    Map<String, Tokenization> tm = buildTokMap(q.sourceComm);
+    Map<String, Tokenization> tm = buildTokMap(c);
     double minErr = Double.MAX_VALUE;
     EntityMention minEm = null;
-    if (q.sourceComm.isSetEntityMentionSetList()) {
-      for (EntityMentionSet ems : q.sourceComm.getEntityMentionSetList()) {
+    if (c.isSetEntityMentionSetList()) {
+      for (EntityMentionSet ems : c.getEntityMentionSetList()) {
         for (EntityMention em : ems.getMentionList()) {
           String tid = em.getTokens().getTokenizationId().getUuidString();
           Tokenization t = tm.get(tid);
@@ -81,7 +84,6 @@ public class TacQueryEntityMentionResolver {
           
           if (DEBUG && err <= 3*tolerance + 1) {
             Log.info("em=" + em);
-            Log.info("q=" + q);
             Log.info("err=" + err);
             Log.info("tol=" + tolerance);
             System.out.println();
@@ -97,7 +99,7 @@ public class TacQueryEntityMentionResolver {
     if (minErr <= tolerance * tolerance * 2)
       return minEm;
     if (DEBUG) {
-      Log.info("failed to find (tol=" + tolerance + ") EntityMention for: " + q);
+      Log.info("failed to find (tol=" + tolerance + ") EntityMention for: " + c.getId() + " @ " + new IntPair(cstart, cend));
       Log.info("best guess minErr="+ minErr + " minEm=" + minEm);
       System.out.println();
     }
@@ -171,7 +173,6 @@ public class TacQueryEntityMentionResolver {
    */
   public boolean resolve(KbpQuery q, boolean addEmToCommIfMissing) {
     if (q.entityMention != null) {
-//      return false;
       Log.info("warning: are you un-intentionally over-writing an existing EntityMention");
       assert !addEmToCommIfMissing;
     }
