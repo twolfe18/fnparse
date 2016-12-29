@@ -33,7 +33,7 @@ import edu.jhu.util.TokenizationIter;
  * @author travis
  */
 public class TacQueryEntityMentionResolver {
-  public static boolean DEBUG = true;
+  public static boolean DEBUG = false;
   
   private AnnotationMetadata metaForNewEntityMentions;
   

@@ -56,6 +56,7 @@ import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
 
 import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
@@ -1207,6 +1208,7 @@ public class AccumuloIndex {
     }
     
     private KbpSearching search;
+    private TacQueryEntityMentionResolver findEntityMention;
     private Random rand;
 
     // Pkb
@@ -1220,6 +1222,13 @@ public class AccumuloIndex {
     public PkbpSearching(KbpSearching search, KbpQuery seed, Random rand) {
       Log.info("seed=" + seed);
 
+      seed.sourceComm = search.getCommCaching(seed.docid);
+
+      findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
+      boolean addEmToCommIfMissing = true;
+      findEntityMention.resolve(seed, addEmToCommIfMissing);
+
+      this.findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
       this.rand = rand;
       this.search = search;
       this.seed = seed;
@@ -1230,6 +1239,18 @@ public class AccumuloIndex {
         throw new IllegalArgumentException();
       String tokUuid = seed.entityMention.getTokens().getTokenizationId().getUuidString();
       SitSearchResult canonical = new SitSearchResult(tokUuid, null, Collections.emptyList());
+      canonical.setCommunicationId(seed.docid);
+      canonical.setCommunication(seed.sourceComm);
+      canonical.yhatQueryEntityNerType = seed.entity_type;
+
+    // TODO
+      canonical.triageFeatures = null;
+
+      findEntitiesAndSituations(canonical, search.df, false);
+      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
+      int head = canonical.yhatQueryEntityHead;
+      canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(head, deps);
+
       String id = "seed/" + seed.id;
       this.entities.add(new Entity(id, canonical));
     }
@@ -1274,6 +1295,7 @@ public class AccumuloIndex {
     }
     
     public void putInPkb(Entity e, SitSearchResult r) {
+      assert r.getCommunicationId() != null;
       if (verbose) {
         Log.info("adding to " + e);
         ShowResult.showQResult(r, r.getCommunication(), 120, true);
@@ -1326,6 +1348,7 @@ public class AccumuloIndex {
           relevanceReasons.add(new Feat("sameSent", 1));
         SitSearchResult rel = new SitSearchResult(tokUuid, null, relevanceReasons);
         rel.triageFeatures = feats;
+        rel.setCommunicationId(comm.getId());
         
         double offset = 2;
         double lp = rel.getScore() - offset;
@@ -1468,16 +1491,15 @@ public class AccumuloIndex {
     private ComputeIdf df;
     
     public KbpSearching(ExperimentProperties config) throws Exception {
-//      findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
-
       commRet = new AccumuloCommRetrieval(config);
+      commRetCache = new HashMap<>();
 
       fce = (FeatureCardinalityEstimator) FileUtil.deserialize(config.getExistingFile("featureCardinalityEstimator"));
       // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
       // e.g.
       // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
       // /export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
-      File extraCards = config.getFile("featureCardinalityManual");
+      File extraCards = config.getFile("featureCardinalityManual", null);
       if (extraCards != null)
         fce.addFromFile(extraCards);
 
@@ -1511,6 +1533,8 @@ public class AccumuloIndex {
     }
     
     public Communication getCommCaching(String commId) {
+      if (commId == null)
+        throw new IllegalArgumentException();
       Communication c = commRetCache.get(commId);
       if (c == null) {
         c = commRet.get(commId);
@@ -1520,7 +1544,9 @@ public class AccumuloIndex {
     }
 
     public List<SitSearchResult> entityMentionSearch(SitSearchResult query) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      assert query.getCommunicationId() != null;
       TIMER.start("kbpQuery/setup");
+
       // 1a) Retrieve the context Communication
       if (query.getCommunication() == null) {
         Communication c = getCommCaching(query.getCommunicationId());
@@ -1641,7 +1667,7 @@ public class AccumuloIndex {
     // e.g.
     // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
     // /export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
-    File extraCards = config.getFile("featureCardinalityManual");
+    File extraCards = config.getFile("featureCardinalityManual", null);
     if (extraCards != null)
       fce.addFromFile(extraCards);
 
@@ -2162,8 +2188,10 @@ public class AccumuloIndex {
       BuildBigFeatureBloomFilters.main(config);
     } else if (c.equalsIgnoreCase("kbpSearchMemo")) {
       kbpSearchingMemo(config);
-    } else if (c.equals("develop")) {
+    } else if (c.equalsIgnoreCase("develop")) {
       IndexCommunications.develop(config);
+    } else if (c.equalsIgnoreCase("pocketKbpSearch")) {
+      PkbpSearching.main(config);
     } else {
       Log.info("unknown command: " + c);
     }
