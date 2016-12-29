@@ -1379,6 +1379,7 @@ public class AccumuloIndex {
     } // END of query loop
   }
   
+  /** Restore the {@link Communication} stored in each {@link SitSearchResult} from the {@link KbpQuery} */
   public static void getCommsFromQuery(KbpQuery q, List<SitSearchResult> res) {
     for (SitSearchResult r : res) {
       assert r.getCommunication() == null;
@@ -1386,6 +1387,14 @@ public class AccumuloIndex {
       assert c != null;
       r.setCommunication(c);
     }
+  }
+  
+  public static List<SitSearchResult> removeResultsInSameDocAsQuery(KbpQuery q, List<SitSearchResult> res) {
+    List<SitSearchResult> out = new ArrayList<>();
+    for (SitSearchResult r : res)
+      if (!r.getCommunicationId().equals(q.docid))
+        out.add(r);
+    return out;
   }
   
   /**
@@ -1530,7 +1539,8 @@ public class AccumuloIndex {
     // One file per query goes into this folder, each containing a:
     // Pair<KbpQuery, List<SitSearchResult>>
 //    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir", new File("data/sit-search/old/maxToks100"));
-    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir", new File("data/sit-search/maxToks1000"));
+//    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir", new File("data/sit-search/maxToks1000"));
+    File dirForSerializingResults = config.getOrMakeDir("serializeQueryResponsesDir", new File("data/sit-search/maxRes30"));
     
     File wdf = config.getExistingFile("wordDocFreq");
     ComputeIdf df = new ComputeIdf(wdf);

@@ -2103,12 +2103,20 @@ public class IndexCommunications implements AutoCloseable {
       return words;
     }
     
+    /** returns "commId/tokUuidSuf" */
+    public String getCommTokIdShort() {
+      return getCommunicationId() + "/" + tokUuid.substring(tokUuid.length()-4, tokUuid.length());
+    }
+    
     public String getWordsInTokenizationWithHighlightedEntAndSit() {
+      return getWordsInTokenizationWithHighlightedEntAndSit(true);
+    }
+    public String getWordsInTokenizationWithHighlightedEntAndSit(boolean includeCommTokId) {
       StringBuilder sb = new StringBuilder();
-      sb.append(getCommunicationId());
-      sb.append('/');
-      sb.append(tokUuid.substring(tokUuid.length()-4, tokUuid.length()));
-      sb.append(':');
+      if (includeCommTokId) {
+        sb.append(getCommTokIdShort());
+        sb.append(':');
+      }
       if (yhatEntitySituation < 0)
         sb.append(" noSit");
       if (yhatQueryEntityHead < 0)
@@ -4153,6 +4161,18 @@ public class IndexCommunications implements AutoCloseable {
       System.err.println(d);
       throw e;
     }
+  }
+
+  static TokenTagging getPreferredLemmas(Tokenization t) {
+    List<TokenTagging> all = new ArrayList<>(1);
+    for (TokenTagging tt : t.getTokenTaggingList())
+      if (tt.getTaggingType().equalsIgnoreCase("lemma"))
+        all.add(tt);
+    if (all.isEmpty())
+      throw new IllegalArgumentException("there are no lemmas");
+    if (all.size() > 1)
+      throw new RuntimeException("implement choice");
+    return all.get(0);
   }
 
   static TokenTagging getPreferredNerTags(Tokenization t) {
