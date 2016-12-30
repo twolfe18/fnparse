@@ -4352,6 +4352,18 @@ public class IndexCommunications implements AutoCloseable {
     return f;
   }
   
+  public static final Set<String> STOP_TRIAGE_FEATURES;
+  static {
+    STOP_TRIAGE_FEATURES = new HashSet<>();
+    for (String t : Arrays.asList("p:", "pi:", "h:", "hi:", "hp:", "hip:")) {
+      STOP_TRIAGE_FEATURES.add(t + "s");
+      STOP_TRIAGE_FEATURES.add(t + "i");
+      STOP_TRIAGE_FEATURES.add(t + "I");
+      STOP_TRIAGE_FEATURES.add(t + "a");
+      STOP_TRIAGE_FEATURES.add(t + "A");
+    }
+  }
+  
   /**
    * @param tokObs can be null
    * @param tokObsLc can be null
@@ -4399,8 +4411,15 @@ public class IndexCommunications implements AutoCloseable {
         EC.increment("mentionFeat/" + p);
       }
     }
-
-    return features;
+    
+    List<String> pruned = new ArrayList<>();
+    for (String f : features) {
+      if (!STOP_TRIAGE_FEATURES.contains(f)) {
+        pruned.add(f);
+      }
+    }
+    return pruned;
+//    return features;
   }
   public static int getEntityMentionFeatureWeight(String feature) {
     if (feature.startsWith("h:"))
