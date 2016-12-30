@@ -1608,10 +1608,9 @@ public class AccumuloIndex {
           AttrFeatMatch afm = new AttrFeatMatch(attrCommQ, attrTokQ, r);
           attrFeatScore += Feat.avg(afm.getFeatures());
         }
-        fs.add(new Feat("attrFeat", Math.sqrt(attrFeatScore)));
+        fs.add(new Feat("attrFeat", Math.sqrt(attrFeatScore+1)-1));
         
         double score = Feat.sum(fs);
-        a.offer(new Pair<>(e, fs), score);
         if (verboseLinking) {
           System.out.println("mention:  " + r.getWordsInTokenizationWithHighlightedEntAndSit());
           System.out.println("entity:   " + e);
@@ -1619,6 +1618,7 @@ public class AccumuloIndex {
           System.out.println("features: " + fs);
           System.out.println();
         }
+        a.offer(new Pair<>(e, fs), score);
       }
       return a.get();
     }
