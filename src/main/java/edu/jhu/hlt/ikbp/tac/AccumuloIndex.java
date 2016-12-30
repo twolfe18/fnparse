@@ -1809,7 +1809,8 @@ public class AccumuloIndex {
         TokenObservationCounts tokObs = null;
         TokenObservationCounts tokObsLc = null;
         List<String> feats = IndexCommunications.getEntityMentionFeatures(
-            em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
+            head, head.split("\\s+"), em.getEntityType(), tokObs, tokObsLc);
+            //em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
         rel.triageFeatures = feats;
 
 

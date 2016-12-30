@@ -4355,12 +4355,27 @@ public class IndexCommunications implements AutoCloseable {
   public static final Set<String> STOP_TRIAGE_FEATURES;
   static {
     STOP_TRIAGE_FEATURES = new HashSet<>();
-    for (String t : Arrays.asList("p:", "pi:", "h:", "hi:", "hp:", "hip:")) {
+    for (String t : Arrays.asList("p:", "pi:", "pb:", "h:", "hi:", "hp:", "hip:")) {
+      STOP_TRIAGE_FEATURES.add(t + "s_AAAA");
       STOP_TRIAGE_FEATURES.add(t + "s");
       STOP_TRIAGE_FEATURES.add(t + "i");
       STOP_TRIAGE_FEATURES.add(t + "I");
       STOP_TRIAGE_FEATURES.add(t + "a");
       STOP_TRIAGE_FEATURES.add(t + "A");
+      STOP_TRIAGE_FEATURES.add(t + "the");
+      STOP_TRIAGE_FEATURES.add(t + "BBBB_the");
+      STOP_TRIAGE_FEATURES.add(t + "of");
+      for (int i = 1; i < 10; i++) {
+
+        StringBuilder sb = new StringBuilder();
+        for (int j = 0; j < i; j++)
+          sb.append('0');
+        String num = sb.toString();
+        
+        STOP_TRIAGE_FEATURES.add(t + num);
+        STOP_TRIAGE_FEATURES.add(t + num + "_AAAA");
+        STOP_TRIAGE_FEATURES.add(t + "BBBB_" + num);
+      }
     }
   }
   
