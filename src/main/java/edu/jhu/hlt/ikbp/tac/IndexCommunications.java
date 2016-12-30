@@ -2035,7 +2035,7 @@ public class IndexCommunications implements AutoCloseable {
     private static final long serialVersionUID = -2345944595589887531L;
 
     public final String tokUuid;
-    public final SentFeats featsResult; // features on the result represented by this QResult (as opposed to the query)
+    public final SentFeats featsResult; // features on the result represented by this instance (as opposed to the query)
     private List<Feat> scoreDerivation;
 
     // Can be set later, not stored in memory by main pipeline (use scion/accumulo).
@@ -2218,12 +2218,12 @@ public class IndexCommunications implements AutoCloseable {
     
     @Override
     public String toString() {
-      return String.format("(QResult score=%.3f tok=%s has_comm=%s feats=%s)", getScore(), tokUuid, comm!=null, featsResult);
+      return String.format("(SitSearchResult score=%.3f tok=%s has_comm=%s feats=%s)", getScore(), tokUuid, comm!=null, featsResult);
     }
     
     public String show() {
       StringBuilder sb = new StringBuilder();
-      sb.append(String.format("(QResult score=%.3f tok=%s\n", getScore(), tokUuid));
+      sb.append(String.format("(SitSearchResult score=%.3f tok=%s\n", getScore(), tokUuid));
       sb.append(featsResult.show());
       sb.append(')');
       return sb.toString();
