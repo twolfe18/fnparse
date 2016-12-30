@@ -1676,9 +1676,9 @@ public class AccumuloIndex {
         // Decide whether to create a new entity
         double centralityScore = Feat.sum(relevanceReasons);
         double lpNewEnt = centralityScore;
-        lpNewEnt -= linkingScore;                           // if it might not be NIL, then don't make it a new entity
-        lpNewEnt -= 0.25 * Math.sqrt(entities.size() + 1);  // don't grow the PKB indefinitely
-        lpNewEnt += estimatePrecisionOfTriageFeatures(r);   // a proxy for whether this is a common entity or not
+        lpNewEnt -= linkingScore;                                 // if it might not be NIL, then don't make it a new entity
+        lpNewEnt -= 0.25 * Math.sqrt(entities.size() + 1);        // don't grow the PKB indefinitely
+        lpNewEnt += estimatePrecisionOfTriageFeatures(r, 0.01);   // a proxy for whether this is a common entity or not
         double pNewEnt = 1 / (1 + Math.exp(-lpNewEnt));
         double t = rand.nextDouble();
         if (t < pNewEnt) {
@@ -1695,16 +1695,29 @@ public class AccumuloIndex {
       }
     }
     
-    public double estimatePrecisionOfTriageFeatures(SitSearchResult r) {
+    public double estimatePrecisionOfTriageFeatures(SitSearchResult r, double tolerance) {
       if (r.triageFeatures == null)
         throw new IllegalArgumentException();
+      
+      // Sort by freq
+      search.fce.sortByFreqUpperBoundAsc(r.triageFeatures);
+
       boolean computeIfNecessary = true;
       TriageSearch ts = search.getTriageSearch();
       List<Double> c = new ArrayList<>();
-      for (String tf : r.triageFeatures) {
+      for (int i = 0; i < r.triageFeatures.size(); i++) {
+        String tf = r.triageFeatures.get(i);
         double p = ts.getFeatureScore(tf, computeIfNecessary);
         c.add(p);
+        
+        // Exit early based on estimate of mass remaining
+        int remaining = r.triageFeatures.size()-(i+1);
+        if (p*remaining < tolerance) {
+          Log.info("breaking tol=" + tolerance + " p=" + p + " remaining=" + remaining + " i=" + i);
+          break;
+        }
       }
+
       // Bias towards most specific features
       Collections.sort(c);
       Collections.reverse(c);
