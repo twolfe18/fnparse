@@ -1968,6 +1968,24 @@ public class IndexCommunications implements AutoCloseable {
   
   public static class Feat implements Serializable {
     private static final long serialVersionUID = -2723964704627341786L;
+    
+    public static double sum(Iterable<Feat> features) {
+      double s = 0;
+      for (Feat f : features)
+        s += f.weight;
+      return s;
+    }
+    public static double avg(Iterable<Feat> features) {
+      double s = 0;
+      int n = 0;
+      for (Feat f : features) {
+        s += f.weight;
+        n++;
+      }
+      if (n == 0)
+        return 0;
+      return s / n;
+    }
 
     String name;
     double weight;

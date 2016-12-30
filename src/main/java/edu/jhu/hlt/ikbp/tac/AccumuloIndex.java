@@ -6,8 +6,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
-import java.rmi.activation.UnknownGroupException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -62,7 +60,6 @@ import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
-import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
@@ -82,8 +79,9 @@ import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw.QResultCluster;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ShowResult;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
-import edu.jhu.hlt.ikbp.tac.IndexCommunications.SituationSearch;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
+import edu.jhu.hlt.tutils.ArgMax;
+import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.DoublePair;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -94,9 +92,9 @@ import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
-import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.ChooseOne;
 import edu.jhu.util.TokenizationIter;
 
 
@@ -717,11 +715,7 @@ public class AccumuloIndex {
     }
   }
 
-  /**
-   * Roughly equivalent to {@link SituationSearch}
-   * TODO parma integration
-   */
-  public static class Search {
+  public static class TriageSearch {
     private String username;
     private AuthenticationToken password;
     private Authorizations auths;
@@ -742,18 +736,25 @@ public class AccumuloIndex {
     /** @deprecated should have just used batchTimeout... */
     private BloomFilter<String> expensiveFeaturesBF;
 
-    public Search(String instanceName, String zks, String username, AuthenticationToken password,
+    
+    // This is used to cache the cardinality of features which were used for triage retrieval
+    private Map<String, IntPair> feat2tokCommFreq;
+    
+    public TriageSearch(String instanceName, String zks, String username, AuthenticationToken password,
         FeatureCardinalityEstimator featureCardinalityModel,
         int nThreads, int maxToksPreDocRetrieval, double triageFeatNBPrior,
-        boolean batchC2W) throws Exception {
+        boolean batchC2W, boolean cacheFeatureFrequencies) throws Exception {
       Log.info("maxToksPreDocRetrieval=" + maxToksPreDocRetrieval
           + " featureCardinalityModel=" + featureCardinalityModel
+          + " cacheFeatureFrequencies=" + cacheFeatureFrequencies
           + " batchC2W=" + batchC2W
           + " triageFeatNBPrior=" + triageFeatNBPrior
           + " instanceName=" + instanceName
           + " username=" + username
           + " nThreads=" + nThreads
           + " zks=" + zks);
+      if (cacheFeatureFrequencies)
+        feat2tokCommFreq = new HashMap<>();
       this.maxToksPreDocRetrieval = maxToksPreDocRetrieval;
       this.triageFeatNBPrior = triageFeatNBPrior;
       this.fce = featureCardinalityModel;
@@ -783,6 +784,68 @@ public class AccumuloIndex {
       if (rank >= keys.size())
         rank = keys.size()-1;
       return weights.getCount(keys.get(rank));
+    }
+    
+    /** returns null if any of the common features don't have a score */
+    public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget) {
+      // TODO Consider using some jaccard-like denominator for source/target features
+      if (triageFeatsSource == null)
+        throw new IllegalArgumentException();
+      if (triageFeatsTarget == null)
+        throw new IllegalArgumentException();
+      Set<String> common = new HashSet<>();
+      common.addAll(triageFeatsSource);
+      double score = 0;
+      for (String f : triageFeatsTarget) {
+        if (!common.contains(f))
+          continue;
+        Double s = getFeatureScore(f);
+        if (s == null)
+          return null;
+        score += s;
+      }
+      return score;
+    }
+
+    public void clearFeatFreqCache() {
+      if (feat2tokCommFreq != null)
+        feat2tokCommFreq.clear();
+    }
+    
+    public IntPair getFeatureFrequency(String triageFeature) {
+      if (feat2tokCommFreq == null)
+        throw new IllegalStateException();
+      return feat2tokCommFreq.get(triageFeature);
+    }
+    
+    public void storeFeatureFrequency(String f, int numToks, int numDocs) {
+      IntPair vcur = new IntPair(numToks, numDocs);
+      IntPair vprev = feat2tokCommFreq.get(f);
+      if (vprev == null) {
+        feat2tokCommFreq.put(f, vcur);
+      } else {
+        assert vprev.equals(vcur) : "feat=" + f + " prev=" + vprev + " cur=" + vcur;
+      }
+    }
+
+    /** returns null if this feature has not been searched for, and thus had its frequency computed */
+    public Double getFeatureScore(String f) {
+      IntPair tc = feat2tokCommFreq.get(f);
+      if (tc == null)
+        return null;
+      return getFeatureScore(tc.first, tc.second);
+    }
+
+    public double getFeatureScore(int numToks, int numDocs) {
+      double freq = (2d * numToks * numDocs) / (numToks + numDocs);
+      double p = (triageFeatNBPrior + 1) / (triageFeatNBPrior + freq);
+      System.out.println("triage:"
+          + " numToks=" + numToks
+          + " numDocs=" + numDocs
+          + " freq=" + freq
+          + " triageFeatNBPrior=" + triageFeatNBPrior
+          + " p=" + p);
+      return p;
     }
 
     /**
@@ -844,15 +907,11 @@ public class AccumuloIndex {
           // Compute a score based on how selective this feature is
           int numToks = toks.size();
           int numDocs = commUuidPrefixes.size();
-          double freq = (2d * numToks * numDocs) / (numToks + numDocs);
-          double p = (triageFeatNBPrior + 1) / (triageFeatNBPrior + freq);
-          System.out.println("triage:"
-              + " feat=" + f
-              + " numToks=" + numToks
-              + " numDocs=" + numDocs
-              + " freq=" + freq
-              + " triageFeatNBPrior=" + triageFeatNBPrior
-              + " p=" + p);
+          double p = getFeatureScore(numToks, numDocs);
+          
+          // Store the frequency in the cache
+          if (feat2tokCommFreq != null)
+            storeFeatureFrequency(f, numToks, numDocs);
           
           // Update the running score for all tokenizations
           boolean first = true;
@@ -1108,6 +1167,11 @@ public class AccumuloIndex {
     public int getTotalCount() {
       return tf.getTotalCount();
     }
+
+    public void add(StringTermVec other) {
+      for (Entry<String, Integer> e : other.tf.entrySet())
+        add(e.getKey(), e.getValue());
+    }
     
     public void add(String word, int count) {
       tf.update(word, count);
@@ -1165,8 +1229,8 @@ public class AccumuloIndex {
 
       String nameHeadR = r.getEntityHeadGuess();
 
-      List<String> attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadQ);
-      List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadQ);
+      List<String> attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadR);
+      List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadR);
       
       Pair<Double, List<String>> mCC = match(attrCommQ, attrCommR);
       Pair<Double, List<String>> mCT = match(attrCommQ, attrTokR);
@@ -1189,11 +1253,74 @@ public class AccumuloIndex {
     TIMER.stop("attrFeatureReranking");
   }
   
+  public static class AttrFeatMatch {
+    List<String> attrCommQ;
+    List<String> attrTokQ;
+
+    List<String> attrCommR;
+    List<String> attrTokR;
+
+    Pair<Double, List<String>> mCC;
+    Pair<Double, List<String>> mCT;
+    Pair<Double, List<String>> mTC;
+    Pair<Double, List<String>> mTT;
+    
+    public AttrFeatMatch(List<String> attrCommQ, List<String> attrTokQ, SitSearchResult r) {
+      String nameHeadR = r.getEntityHeadGuess();
+      this.attrCommQ = attrCommQ;
+      this.attrTokQ = attrTokQ;
+      attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadR);
+      attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadR);
+      mCC = match(attrCommQ, attrCommR);
+      mCT = match(attrCommQ, attrTokR);
+      mTC = match(attrTokQ, attrCommR);
+      mTT = match(attrTokQ, attrTokR);
+    }
+    
+    public List<Feat> getFeatures() {
+      List<Feat> fs = new ArrayList<>();
+      double scale = 1;
+      fs.add(new Feat("attrFeatCC", 1 * scale * mCC.get1()));
+      fs.add(new Feat("attrFeatCT", 2 * scale * mCT.get1()));
+      fs.add(new Feat("attrFeatTC", 2 * scale * mTC.get1()));
+      fs.add(new Feat("attrFeatTT", 8 * scale * mTT.get1()));
+      return fs;
+    }
+    
+    public void addFeaturesTo(SitSearchResult r) {
+      for (Feat f : getFeatures())
+        r.addToScore(f.name, f.weight);
+    }
+  }
+  
+//  public static List<Feat> attrFeatureScore(List<String> attrCommQ, List<String> attrTokQ, SitSearchResult r) {
+//    String nameHeadR = r.getEntityHeadGuess();
+//
+//    List<String> attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadR);
+//    List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadR);
+//
+//    Pair<Double, List<String>> mCC = match(attrCommQ, attrCommR);
+//    Pair<Double, List<String>> mCT = match(attrCommQ, attrTokR);
+//    Pair<Double, List<String>> mTC = match(attrTokQ, attrCommR);
+//    Pair<Double, List<String>> mTT = match(attrTokQ, attrTokR);
+//
+//    List<Feat> fs = new ArrayList<>();
+//    double scale = 1;
+//    fs.add(new Feat("attrFeatCC", 1 * scale * mCC.get1()));
+//    fs.add(new Feat("attrFeatCT", 2 * scale * mCT.get1()));
+//    fs.add(new Feat("attrFeatTC", 2 * scale * mTC.get1()));
+//    fs.add(new Feat("attrFeatTT", 8 * scale * mTT.get1()));
+//    return fs;
+//  }
+  
 //  public static List<SitSearchResult> batchCommRet(KbpQuery q, List<SitSearchResult> res, int maxOutput) {
 //    // TODO
 //  }
   
   
+  /**
+   * Search outwards starting with a {@link KbpQuery} seed.
+   */
   public static class PkbpSearching {
     
     public static void main(ExperimentProperties config) throws Exception {
@@ -1214,12 +1341,12 @@ public class AccumuloIndex {
           continue;
         }
 
-        PkbpSearching ps = new PkbpSearching(ks, seed, rand);
+        double seedWeight = config.getDouble("seedWeight", 10);
+        PkbpSearching ps = new PkbpSearching(ks, seed, seedWeight, rand);
         ps.verbose = true;
         for (int i = 0; i < stepsPerQuery; i++) {
           Log.info("step=" + (i+1));
-          double newMentionDecay = Math.pow(0.7, i);
-          ps.expandEntity(newMentionDecay);
+          ps.expandEntity();
         }
         System.out.println();
 
@@ -1227,35 +1354,39 @@ public class AccumuloIndex {
       }
     }
 
-    class Entity {
+    static class Entity {
       String id;
       List<SitSearchResult> mentions;
+      /** Reasons why this entity is central to the PKB/seed */
+      List<Feat> relevantReasons;
       
-      public Entity(String id, SitSearchResult canonical) {
+      public Entity(String id, SitSearchResult canonical, List<Feat> relevanceReasons) {
         this.id = id;
         this.mentions = new ArrayList<>();
         this.mentions.add(canonical);
+        this.relevantReasons = relevanceReasons;
         Log.info(this);
       }
       
-      public double getMentionWeight() {
-        double m = 0;
-        double s = 0;
-        int n = 0;
-        for (SitSearchResult ss : mentions) {
-          m = Math.max(m, ss.getScore());
-          s += ss.getScore();
-          n++;
-        }
-        if (n > 0)
-          s /= n;
-        return (m+s)/2;
+      public double getRelevanceWeight() {
+        return Feat.sum(relevantReasons);
       }
-      
       
       @Override
       public String toString() {
-        return "(Entity id=" + id + " nMentions=" + mentions.size() + " weight=" + getMentionWeight() + ")";
+        return "(Entity id=" + id + " nMentions=" + mentions.size() + " weight=" + getRelevanceWeight() + ")";
+      }
+      
+      public StringTermVec getDocVec() {
+        StringTermVec tvAll = new StringTermVec();
+        Set<String> seenComms = new HashSet<>();
+        for (SitSearchResult s : mentions) {
+          if (seenComms.add(s.getCommunicationId())) {
+            StringTermVec tv = new StringTermVec(s.getCommunication());
+            tvAll.add(tv);
+          }
+        }
+        return tvAll;
       }
     }
     
@@ -1276,34 +1407,32 @@ public class AccumuloIndex {
     private Set<String> knownComms;
     // TODO situations
     
+    Counts<String> ec = new Counts<>();
+    
     public boolean verbose = false;
+    public boolean verboseLinking = true;
 
-    public PkbpSearching(KbpSearching search, KbpQuery seed, Random rand) {
+    public PkbpSearching(KbpSearching search, KbpQuery seed, double seedWeight, Random rand) {
       Log.info("seed=" + seed);
       if (seed.sourceComm == null)
         throw new IllegalArgumentException();
+      if (seed.entityMention == null)
+        throw new IllegalArgumentException();
       
-      seedTermVec = new StringTermVec(seed.sourceComm);
-
-      findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
-      boolean addEmToCommIfMissing = true;
-      findEntityMention.resolve(seed, addEmToCommIfMissing);
-      assert seed.entityMention != null;
-      assert seed.entity_type != null;
-
-      this.findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
       this.rand = rand;
       this.search = search;
       this.seed = seed;
       this.entities = new ArrayList<>();
       this.knownComms = new HashSet<>();
+      this.seedTermVec = new StringTermVec(seed.sourceComm);
+      this.findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
+      boolean addEmToCommIfMissing = true;
+      findEntityMention.resolve(seed, addEmToCommIfMissing);
+      assert seed.entityMention != null;
+      assert seed.entity_type != null;
       
-      if (seed.entityMention == null)
-        throw new IllegalArgumentException();
       String tokUuid = seed.entityMention.getTokens().getTokenizationId().getUuidString();
-      List<Feat> scoreFeats = new ArrayList<>();
-      scoreFeats.add(new Feat("seed", 5));
-      SitSearchResult canonical = new SitSearchResult(tokUuid, null, scoreFeats);
+      SitSearchResult canonical = new SitSearchResult(tokUuid, null, Collections.emptyList());
       canonical.setCommunicationId(seed.docid);
       canonical.setCommunication(seed.sourceComm);
       canonical.yhatQueryEntityNerType = seed.entity_type;
@@ -1315,121 +1444,244 @@ public class AccumuloIndex {
         Object old = tokMap.put(tok.getUuid().getUuidString(), tok);
         assert old == null;
       }
+      EntityMention em = seed.entityMention;
       boolean takeNnCompounts = true;
       boolean allowFailures = true;
-      EntityMention em = seed.entityMention;
-      String head = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
+      String headEM = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
       canonical.triageFeatures = IndexCommunications.getEntityMentionFeatures(
-          em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
+          em.getText(), headEM.split("\\s+"), em.getEntityType(), tokObs, tokObsLc);
 
+      // sets head token, needs triage feats and comm
       findEntitiesAndSituations(canonical, search.df, false);
-      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
-      int headToken = canonical.yhatQueryEntityHead;
-      canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(headToken, deps);
 
+      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
+      canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(canonical.yhatQueryEntityHead, deps);
+
+      String head = canonical.getEntitySpanGuess();
       canonical.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, seed.sourceComm, head.split("\\s+"));
 
-      String id = "seed/" + seed.id;
-      this.entities.add(new Entity(id, canonical));
+//      String id = "seed/" + seed.id;
+      String id = "seed/" + head;
+      List<Feat> relevanceReasons = new ArrayList<>();
+      relevanceReasons.add(new Feat("seed", seedWeight));
+      this.entities.add(new Entity(id, canonical, relevanceReasons));
     }
     
     public KbpQuery getSeed() {
       return seed;
     }
     
-    public void expandEntity(double newMentionDecay) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+    public void expandEntity() throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
       // Find a SitSearchResult (essentially an EntityMention) to search off of
+      Pair<Entity, SitSearchResult> er = chooseMentionToExpand();
+      Entity e = er.get1();
+
+      ec.increment("expandEnt");
+      if (e.id.startsWith("seed"))
+        ec.increment("expandEnt/seed");
+      
+      // Do the search
+      List<SitSearchResult> res = search.entityMentionSearch(er.get2());
+      if (verbose)
+        Log.info("found " + res.size() + " results for " + er.get2());
+
+      for (SitSearchResult newMention : res) {
+        if (verbose) {
+          System.out.println("result: " + newMention.getWordsInTokenizationWithHighlightedEntAndSit());
+        }
+        
+        ec.increment("expandEnt/searchResult");
+
+        // Add mention to entity
+        double lpLink = newMention.getScore();
+        lpLink -= xdocCorefSigmoid.first;
+        lpLink /= xdocCorefSigmoid.second;
+        double pLink = 1 / (1+Math.exp(-lpLink));
+        double tLink = rand.nextDouble();
+        if (tLink < pLink) {
+          ec.increment("expandEnt/searchResult/link");
+
+          // Link this entity
+          e.mentions.add(newMention);
+
+          // Check related mentions (do this once per doc)
+          if (knownComms.add(newMention.getCommunicationId())) {
+            List<Pair<SitSearchResult, List<Feat>>> relevant = extractRelatedEntities(er.get1(), newMention);
+            for (Pair<SitSearchResult, List<Feat>> rel : relevant) {
+              ec.increment("expandEnt/searchResult/relMention");
+              linkRelatedEntity(rel.get1(), rel.get2());
+            }
+          } else {
+            ec.increment("expandEnt/searchResult/dupComm");
+          }
+        }
+      }
+      
+      if (verbose) {
+        Log.info("event counts:");
+        for (String k : ec.getKeysSorted())
+          System.out.printf("%-26s % 5d\n", k, ec.getCount(k));
+        Log.info("done");
+      }
+    }
+    
+    private Pair<Entity, List<Feat>> linkAgainstPkb(SitSearchResult r) {
+      if (r.triageFeatures == null)
+        throw new RuntimeException();
+      ArgMax<Pair<Entity, List<Feat>>> a = new ArgMax<>();
+      TriageSearch ts = search.getTriageSearch();
+      for (Entity e : entities) {
+        List<Feat> fs = new ArrayList<>();
+        
+        // TODO Products of features below
+        
+        // Cosine similarity
+        StringTermVec eDocVec = e.getDocVec();
+        StringTermVec rDocVec = new StringTermVec(r.getCommunication());
+        double tfidfCosine = search.df.tfIdfCosineSim(eDocVec, rDocVec);
+        fs.add(new Feat("tfidfCosine", 10 * (tfidfCosine - 0.5)));
+        
+        // Average triage feature similarity
+        Average triage = new Average.Uniform();
+        for (SitSearchResult ss : e.mentions) {
+          if (ss.triageFeatures == null)
+            throw new RuntimeException();
+          Double s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures);
+          if (s == null)
+            s = 0d;
+          triage.add(s);
+        }
+        fs.add(new Feat("triageFeatsAvg", triage.getAverage()));
+        
+        // Attribute Features
+        double attrFeatScore = 0;
+        for (SitSearchResult ss : e.mentions) {
+          String nameHeadQ = ss.getEntityHeadGuess();
+          List<String> attrCommQ = NNPSense.extractAttributeFeatures(null, ss.getCommunication(), nameHeadQ, nameHeadQ);
+          List<String> attrTokQ = NNPSense.extractAttributeFeatures(ss.tokUuid, ss.getCommunication(), nameHeadQ, nameHeadQ);
+          AttrFeatMatch afm = new AttrFeatMatch(attrCommQ, attrTokQ, r);
+          attrFeatScore += Feat.avg(afm.getFeatures());
+        }
+        fs.add(new Feat("attrFeat", Math.sqrt(attrFeatScore)));
+        
+        double score = Feat.sum(fs);
+        a.offer(new Pair<>(e, fs), score);
+        if (verboseLinking) {
+          System.out.println("mention:  " + r.getWordsInTokenizationWithHighlightedEntAndSit());
+          System.out.println("entity:   " + e);
+          System.out.println("score:    " + score);
+          System.out.println("features: " + fs);
+          System.out.println();
+        }
+      }
+      return a.get();
+    }
+    
+    private Pair<Entity, SitSearchResult> chooseMentionToExpand() {
       ChooseOne<Entity> ce = new ChooseOne<>(rand);
       for (Entity e : entities) {
-        //double w = Math.exp(e.getMentionWeight());
-        double w = e.getMentionWeight();
-        w = w*w;
-        if (verbose) Log.info("considering weight=" + w + "\t" + e);
+        // This score characterizes centrality to the PKB/seed
+        double w = e.getRelevanceWeight();
+        if (verbose)
+          Log.info("considering weight=" + w + "\t" + e);
         ce.offer(e, w);
       }
       Entity e = ce.choose();
       if (verbose)
         Log.info("chose " + e);
+      
+      ec.increment("chooseMentionToExpand");
+      if (e.id.startsWith("seed"))
+        ec.increment("chooseMentionToExpand/seedEnt");
 
       ChooseOne<SitSearchResult> cr = new ChooseOne<>(rand);
       for (SitSearchResult r : e.mentions) {
-        //double w = Math.exp(r.getScore());
+        // This score measures quality of link to the entity
         double w = r.getScore();
-        w = w*w;
-        if (verbose) Log.info("considering weight=" + w + "\t" + r);
+        if (verbose)
+          Log.info("considering weight=" + w + "\t" + r);
         cr.offer(r, w);
       }
       SitSearchResult r = cr.choose();
       if (verbose)
         Log.info("chose " + r);
-      
-      // Do the search
-      List<SitSearchResult> res = search.entityMentionSearch(r);
-      if (verbose)
-        Log.info("found " + res.size() + " results for " + r);
-      
-      // Add results to PBK
-      for (SitSearchResult rr : res)
-        putInPkb(e, rr, r, newMentionDecay);
-      
-      if (verbose)
-        Log.info("done");
+      return new Pair<>(e, r);
     }
     
-    public void putInPkb(Entity e, SitSearchResult r, SitSearchResult measureRelevanceAgainst, double newMentionDecay) {
-      assert r.getCommunicationId() != null;
-      if (verbose) {
-        Log.info("adding to " + e + "\t" + r.getWordsInTokenizationWithHighlightedEntAndSit());
-        ShowResult.showQResult(r, r.getCommunication(), 120, true);
-      }
-
-      GigawordId sourceGW = new GigawordId(measureRelevanceAgainst.getCommunicationId());
-      GigawordId targetGW = new GigawordId(r.getCommunicationId());
-
-      if (!knownComms.add(r.getCommunicationId())) {
-        if (verbose) Log.info("skipping b/c not new doc");
-        return;
-      }
-      
-      // Add this mention to the entity which it was a search for
-      {
-        double lp = r.getScore() - xdocCorefSigmoid.first;
-        lp /= xdocCorefSigmoid.second;
-        double t = 1d / (1+Math.exp(-lp));
-        double d = rand.nextDouble();
-        if (verbose) {
-          Log.info(String.format(
-              "reject xdoc coref? score=%.2f xdocCorefSigmoid=%s thresh=%.3f draw=%.3f keep=%s",
-              r.getScore(), xdocCorefSigmoid, t, d, d<=t));
-          System.out.println();
-        }
-        if (d > t)
-          return;
+    /**
+     * We can do three things with a relevant entity:
+     * A) link it against an entity in the PKB
+     * B) create a new Entity to put in PKB
+     * C) nothing (prune/ignore the mention)
+     * 
+     * We break this down into two steps:
+     * 1) Find the best entity and decide whether or not to link to it
+     * 2) Conditioned on (1) decide whether to prune or add to PKB based on centrality score
+     */
+    public void linkRelatedEntity(SitSearchResult r, List<Feat> relevanceReasons) {
+      Pair<Entity, List<Feat>> link = linkAgainstPkb(r);
+      double linkingScore = Feat.sum(link.get2());
+      if (linkingScore > 4) {
+        // Link
+        Entity e = link.get1();
         e.mentions.add(r);
+        ec.increment("linkRel/pkbEnt");
+      } else {
+        // Decide whether to create a new entity
+        double centralityScore = Feat.sum(relevanceReasons);
+        double lpNewEnt = centralityScore;
+        lpNewEnt -= linkingScore;                           // if it might not be NIL, then don't make it a new entity
+        lpNewEnt -= 0.25 * Math.sqrt(entities.size() + 1);  // don't grow the PKB indefinitely
+        double pNewEnt = 1 / (1 + Math.exp(-lpNewEnt));
+        double t = rand.nextDouble();
+        if (t < pNewEnt) {
+          // New entity
+          String id = r.getEntitySpanGuess().replaceAll("\\s+", "_");
+          Entity e = new Entity(id, r, relevanceReasons);
+          entities.add(e);
+          ec.increment("linkRel/newEnt");
+        } else {
+          // Prune this mention
+          // no-op
+          ec.increment("linkRel/prune");
+        }
       }
-      
-      // Search for related entities
-      // Multiply in the tf-idf similarity between this comm and the seed
-      Communication comm = r.getCommunication();
-      StringTermVec commVec = new StringTermVec(comm);
-      double tfidf = search.df.tfIdfCosineSim(seedTermVec, commVec);
+    }
 
-      TokenObservationCounts tokObs = null;
-      TokenObservationCounts tokObsLc = null;
+    /**
+     * Looks in the communication around newMention for other entities which might be relevant
+     * to the given entity in the context of the seed query.
+     * 
+     * Each returned pair is a relevant entity and a list of reasons why it is relevant.
+     * 
+     * This method doesn't modify the PKB/state of this instance.
+     */
+    public List<Pair<SitSearchResult, List<Feat>>> extractRelatedEntities(Entity relevantTo, SitSearchResult newMention) {
+      List<Pair<SitSearchResult, List<Feat>>> out = new ArrayList<>();
+      ec.increment("exRel");
+
+      // Compute tf-idf similarity between this comm and the seed
+      Communication comm = newMention.getCommunication();
+      StringTermVec commVec = new StringTermVec(comm);
+      double tfidfWithSeed = search.df.tfIdfCosineSim(seedTermVec, commVec);
+
+      // Index tokenizations by their id
       Map<String, Tokenization> tokMap = new HashMap<>();
       for (Tokenization tok : new TokenizationIter(comm)) {
         Object old = tokMap.put(tok.getUuid().getUuidString(), tok);
         assert old == null;
       }
+      // Determine NER types
       new AddNerTypeToEntityMentions(comm);
+      // See if each EntityMention is relevant
       for (EntityMention em : IndexCommunications.getEntityMentions(comm)) {
 
         String tokUuid = em.getTokens().getTokenizationId().getUuidString();
         String nerType = em.getEntityType();
         assert nerType != null;
 
-        List<Feat> relevanceReasons = new ArrayList<>();
-        SitSearchResult rel = new SitSearchResult(tokUuid, null, relevanceReasons);
+        // Create a new SitSearchResult which could be relevant and fill in known data
+        SitSearchResult rel = new SitSearchResult(tokUuid, null, new ArrayList<>());
         rel.setCommunicationId(comm.getId());
         rel.setCommunication(comm);
         rel.yhatQueryEntityNerType = nerType;
@@ -1437,58 +1689,52 @@ public class AccumuloIndex {
         assert rel.yhatQueryEntityHead >= 0;
         DependencyParse deps = IndexCommunications.getPreferredDependencyParse(rel.getTokenization());
         rel.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(rel.yhatQueryEntityHead, deps);
-        
         // NOTE: This can be multiple words with nn, e.g. "Barack Obama"
-//        boolean takeNnCompounts = true;
-//        boolean allowFailures = true;
-        //String head = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
-        //String head = rel.getEntityHeadGuess();
         String head = rel.getEntitySpanGuess();
+        TokenObservationCounts tokObs = null;
+        TokenObservationCounts tokObsLc = null;
         List<String> feats = IndexCommunications.getEntityMentionFeatures(
             em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
         rel.triageFeatures = feats;
+
+
+        List<Feat> relevanceReasons = new ArrayList<>();
         
-        // For now we are assuming that if the headword is the same, it is not
-        // "related" in the sense of "related but distinct". Xdoc coref is checked above.
-        // So we are disallowing "related" entities which match a known headword
-        if (getEntityIdStartingWith(head).endsWith("X"))
-          continue;
-        // TODO Just try to match this against a mention in the KKB
+        // To be relevant, the new mention must indeed be coreferent with the entity searched for
+        relevanceReasons.add(new Feat("searchQuality", Math.sqrt(newMention.getScore())));
         
-        // Score for the original search being good
-        relevanceReasons.add(new Feat("searchQuality", Math.sqrt(r.getScore())));
-        
-        // Score whether we should add this to the PKB as a related entity
+        // Certain NER types are more or less interesting
         relevanceReasons.add(new Feat("nerType", nerTypeExploreLogProb(nerType, relatedEntitySigmoid.second)));
-        //if (tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
-        //  relevanceReasons.add(new Feat("sameSent", 1.5));
-        if (!tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
-          relevanceReasons.add(new Feat("notSameSent", -5));
+
+        // Nominal mentions are dis-preferred due to difficulty in doing xdoc coref for them, etc
         if (!hasNNP(em.getTokens(), tokMap))
           relevanceReasons.add(new Feat("noNNP", -3));
-        
-        // Reward for this comm looking like the seed
-        relevanceReasons.add(new Feat("seedTfIdf", 10 * (tfidf - 0.5)));
-        
-        // Reward for being temporally close to the searched entity
-//        double days = Duration.between(sourceGW.toDate(), targetGW.toDate()).abs().toDays();
-        Integer days = GigawordId.daysBetween(sourceGW, targetGW);
-        if (days != null) {
-          days = Math.abs(days);
-          double tl = days / rewardForTemporalLocalityMuSigma.second;
-          assert tl >= 0 : "tl=" + tl;
-          tl = rewardForTemporalLocalityMuSigma.first * Math.exp(-(tl*tl));
-          assert tl >= 0 : "tl=" + tl;
-          relevanceReasons.add(new Feat("temporalLocality", tl));
-        }
 
-        // Reward for having attribute features
+        // Having attribute features like "PERSON-nn-Dr." is good, discriminating features help coref
         rel.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, comm, head.split("\\s+"));
-        assert measureRelevanceAgainst.attributeFeaturesR != null;
-        Pair<Double, List<String>> mTT = match(measureRelevanceAgainst.attributeFeaturesR, rel.attributeFeaturesR);
-        rel.addToScore("attrFeatTT", 8 * mTT.get1());
         int nAttrFeat = rel.attributeFeaturesR.size();
         relevanceReasons.add(new Feat("nAttrFeat", Math.sqrt(nAttrFeat+1d) * rewardForAttrFeats));
+        
+        // Reward for this comm looking like the seed
+        relevanceReasons.add(new Feat("tfidfWithSeed", 10 * (tfidfWithSeed - 0.5)));
+        
+        // TODO Add this back
+//      GigawordId sourceGW = new GigawordId(measureRelevanceAgainst.getCommunicationId());
+//      GigawordId targetGW = new GigawordId(r.getCommunicationId());
+//        // It is good if this mention appears in the same sentence as a known mention
+//        if (!tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
+//          relevanceReasons.add(new Feat("notSameSent", -5));
+//
+//        // It is good if this story came out at a time near a known mention/story
+//        Integer days = GigawordId.daysBetween(sourceGW, targetGW);
+//        if (days != null) {
+//          days = Math.abs(days);
+//          double tl = days / rewardForTemporalLocalityMuSigma.second;
+//          assert tl >= 0 : "tl=" + tl;
+//          tl = rewardForTemporalLocalityMuSigma.first * Math.exp(-(tl*tl));
+//          assert tl >= 0 : "tl=" + tl;
+//          relevanceReasons.add(new Feat("temporalLocality", tl));
+//        }
 
         // Decide to keep or not
         double lp = rel.getScore() - relatedEntitySigmoid.first;
@@ -1500,23 +1746,13 @@ public class AccumuloIndex {
               "keep related entity? ner=%s head=%s relatedEntitySigmoidOffset=%s thresh=%.3f draw=%.3f keep=%s reasons=%s",
               nerType, head, relatedEntitySigmoid, t, d, d<t, relevanceReasons));
         }
+        ec.increment("exRel/mention");
         if (d < t) {
-          // TODO Presumably new entity (check?)
-          String id = getEntityIdStartingWith(head);
-          if (verbose) {
-            Log.info("related entity: " + rel.getWordsInTokenizationWithHighlightedEntAndSit());
-            //Log.info("related entity: " + rel.triageFeatures);
-          }
-          for (Feat f : relevanceReasons)
-            f.rescale("newMentionDecay", newMentionDecay);
-          this.entities.add(new Entity(id, rel));
+          ec.increment("exRel/mention/kept");
+          out.add(new Pair<>(rel, relevanceReasons));
         }
-        if (verbose) System.out.println();
       }
-
-      // TODO Search for related situations
-
-      if (verbose) System.out.println();
+      return out;
     }
     
     private boolean hasNNP(TokenRefSequence trs, Map<String, Tokenization> tokMap) {
@@ -1557,88 +1793,10 @@ public class AccumuloIndex {
   }
   
   /**
-   * Without replacement.
-   *
-   * @author travis
+   * Does triage plus extras like:
+   * 1) fetching communications
+   * 2) re-scoring methods like attribute features
    */
-  public static class ChooseOne<T> {
-    private Random rand;
-    private List<T> obj;
-    private DoubleArrayList weights;
-    private double Z;
-    private int offers;
-
-    public ChooseOne(int seed) {
-      this(new Random(seed));
-    }
-    
-    public ChooseOne(Random rand) {
-      this.rand = rand;
-      obj = new ArrayList<>();
-      weights = new DoubleArrayList();
-      Z = 0;
-      offers = 0;
-    }
-    
-    public void offer(T object, double weight) {
-      if (weight < 0)
-        throw new IllegalArgumentException();
-      if (weight == 0)
-        return;
-      obj.add(object);
-      weights.add(weight);
-      Z += weight;
-      offers++;
-    }
-    
-    public int numOffers() {
-      return offers;
-    }
-    
-    public void clear() {
-      obj.clear();
-      weights.clear();
-      Z = 0;
-      offers = 0;
-    }
-    
-    public void optimizeForManyDraws() {
-      List<Pair<T, Double>> items = new ArrayList<>();
-      int n = obj.size();
-      for (int i = 0; i < n; i++)
-        items.add(new Pair<>(obj.get(i), weights.get(i)));
-      Collections.sort(items, new Comparator<Pair<?, Double>>() {
-        @Override
-        public int compare(Pair<?, Double> o1, Pair<?, Double> o2) {
-          double s1 = o1.get2();
-          double s2 = o2.get2();
-          if (s1 > s2)
-            return -1;
-          if (s1 < s2)
-            return +1;
-          return 0;
-        }
-      });
-      clear();
-      for (Pair<T, Double> p : items)
-        offer(p.get1(), p.get2());
-    }
-    
-    public T choose() {
-      double t = rand.nextDouble() * Z;
-      double s = 0;
-      int n = obj.size();
-      if (n == 0)
-        throw new IllegalStateException("no positive-weight items have been added!");
-      for (int i = 0; i < n; i++) {
-        s += weights.get(i);
-        if (s >= t)
-          return obj.get(i);
-      }
-      throw new RuntimeException("Z=" + Z + " t=" + t + " s=" + s + " n=" + n + " weights=" + weights);
-    }
-  }
-  
   public static class KbpSearching {
     // Finds EntityMentions for query documents which just come with char offsets.
 //    private TacQueryEntityMentionResolver findEntityMention;
@@ -1651,7 +1809,7 @@ public class AccumuloIndex {
     // search through the most selective features first.
     private FeatureCardinalityEstimator fce;
     
-    private Search search;
+    private TriageSearch triageSearch;
 
     private int maxResultsPerQuery;
     private int maxToksPreDocRetrieval;
@@ -1682,7 +1840,7 @@ public class AccumuloIndex {
       Log.info("[filter] maxResultsPerQuery=" + maxResultsPerQuery
           + " maxToksPruningSafetyRatio=" + maxToksPruningSafetyRatio
           + " maxToksPreDocRetrieval=" + maxToksPreDocRetrieval);
-      search = new Search(
+      triageSearch = new TriageSearch(
           SimpleAccumuloConfig.DEFAULT_INSTANCE,
           SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS,
           "reader",
@@ -1691,9 +1849,14 @@ public class AccumuloIndex {
           config.getInt("nThreadsSearch", 4),
           maxToksPreDocRetrieval,
           config.getDouble("triageFeatNBPrior", 10),
-          config.getBoolean("batchC2W", true));
+          config.getBoolean("batchC2W", true),
+          config.getBoolean("cacheFeatureFrequencies", true));
 
       df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
+    }
+    
+    public TriageSearch getTriageSearch() {
+      return triageSearch;
     }
     
     public void clearCommCache() {
@@ -1757,7 +1920,7 @@ public class AccumuloIndex {
       TIMER.stop("kbpQuery/setup");
       
       // 3) Search
-      List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
+      List<SitSearchResult> res = triageSearch.search(triageFeats, queryContext, df);
       // Set all results to be the same NER type as input
       for (SitSearchResult r : res)
         r.yhatQueryEntityNerType = query.yhatQueryEntityNerType;
@@ -1768,7 +1931,6 @@ public class AccumuloIndex {
       List<SitSearchResult> resKeep = new ArrayList<>();
       int failed = 0;
       for (SitSearchResult r : res) {
-//        Communication c = q.getCommWithDefault(r.getCommunicationId(), commRet::get);
         Communication c = getCommCaching(r.getCommunicationId());
         if (c == null) {
           Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
@@ -1865,7 +2027,7 @@ public class AccumuloIndex {
         + " maxToksPruningSafetyRatio=" + maxToksPruningSafetyRatio
         + " maxToksPreDocRetrieval=" + maxToksPreDocRetrieval);
 
-    Search search = new Search(
+    TriageSearch search = new TriageSearch(
       SimpleAccumuloConfig.DEFAULT_INSTANCE,
       SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS,
       "reader",
@@ -1874,7 +2036,8 @@ public class AccumuloIndex {
       config.getInt("nThreadsSearch", 4),
       maxToksPreDocRetrieval,
       config.getDouble("triageFeatNBPrior", 10),
-      config.getBoolean("batchC2W", true));
+      config.getBoolean("batchC2W", true),
+      config.getBoolean("cacheFeatureFrequencies", true));
     
     File bf = config.getFile("expensiveFeatureBloomFilter", null);
     if (bf != null)
