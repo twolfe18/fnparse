@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -60,6 +61,7 @@ import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
+import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
@@ -82,6 +84,7 @@ import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SituationSearch;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.DoublePair;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
@@ -1212,6 +1215,11 @@ public class AccumuloIndex {
     private KbpSearching search;
     private TacQueryEntityMentionResolver findEntityMention;
     private Random rand;
+    
+    // Controls search
+    public DoublePair rewardForTemporalLocalityMuSigma = new DoublePair(2, 30); // = (reward, stddev), score += reward * Math.exp(-(diffInDays/stddev)^2)
+    public double rewardForAttrFeats = 3;   // score += rewardForAttrFeats * sqrt(numAttrFeats)
+    public DoublePair relatedEntitySigmoid = new DoublePair(3, 2);    // first: higher value lowers prob of keeping related entities. second: temperature of sigmoid (e.g. infinity means everything is 50/50 odds of keep)
 
     // Pkb
     private KbpQuery seed;
@@ -1309,18 +1317,21 @@ public class AccumuloIndex {
       
       // Add results to PBK
       for (SitSearchResult rr : res)
-        putInPkb(e, rr);
+        putInPkb(e, rr, r);
       
       if (verbose)
         Log.info("done");
     }
     
-    public void putInPkb(Entity e, SitSearchResult r) {
+    public void putInPkb(Entity e, SitSearchResult r, SitSearchResult measureRelevanceAgainst) {
       assert r.getCommunicationId() != null;
       if (verbose) {
         Log.info("adding to " + e + "\t" + r.getWordsInTokenizationWithHighlightedEntAndSit());
         ShowResult.showQResult(r, r.getCommunication(), 120, true);
       }
+
+      GigawordId sourceGW = new GigawordId(measureRelevanceAgainst.getCommunicationId());
+      GigawordId targetGW = new GigawordId(r.getCommunicationId());
 
       if (!knownComms.add(r.getCommunicationId())) {
         if (verbose) Log.info("skipping b/c not new doc");
@@ -1354,25 +1365,20 @@ public class AccumuloIndex {
       }
       new AddNerTypeToEntityMentions(comm);
       for (EntityMention em : IndexCommunications.getEntityMentions(comm)) {
+        
+        // NOTE: This can be multiple words with nn, e.g. "Barack Obama"
         boolean takeNnCompounts = true;
         boolean allowFailures = true;
         String head = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
         List<String> feats = IndexCommunications.getEntityMentionFeatures(
             em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
         
-        String nerType = em.getEntityType();
-        assert nerType != null;
         
         String tokUuid = em.getTokens().getTokenizationId().getUuidString();
+        String nerType = em.getEntityType();
+        assert nerType != null;
+
         List<Feat> relevanceReasons = new ArrayList<>();
-        relevanceReasons.add(new Feat("nerType", nerTypeExploreLogProb(nerType)));
-        if (tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
-          relevanceReasons.add(new Feat("sameSent", 1));
-        if (!hasNNP(em.getTokens(), tokMap))
-          relevanceReasons.add(new Feat("noNNP", -2));
-
-      // TODO have reward for having attribute features
-
         SitSearchResult rel = new SitSearchResult(tokUuid, null, relevanceReasons);
         rel.triageFeatures = feats;
         rel.setCommunicationId(comm.getId());
@@ -1381,14 +1387,38 @@ public class AccumuloIndex {
         rel.yhatQueryEntityHead = em.getTokens().getAnchorTokenIndex();
         assert rel.yhatQueryEntityHead >= 0;
         
-        double offset = 2;
-        double lp = rel.getScore() - offset;
+        // Score for the original search being good
+        relevanceReasons.add(new Feat("searchQuality", Math.sqrt(r.getScore())));
+        
+        // Score whether we should add this to the PKB as a related entity
+        relevanceReasons.add(new Feat("nerType", nerTypeExploreLogProb(nerType)));
+        if (tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
+          relevanceReasons.add(new Feat("sameSent", 1));
+        if (!hasNNP(em.getTokens(), tokMap))
+          relevanceReasons.add(new Feat("noNNP", -2));
+        
+        // Reward for being temporally close to the searched entity
+        double days = Duration.between(sourceGW.toDate(), targetGW.toDate()).abs().toDays();
+        double tl = days / rewardForTemporalLocalityMuSigma.second;
+        assert tl >= 0;
+        tl = rewardForTemporalLocalityMuSigma.first * Math.exp(-(tl*tl));
+        assert tl >= 0;
+        relevanceReasons.add(new Feat("temporalLocality", tl));
+
+        // Reward for having attribute features
+        rel.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, comm, head.split("\\s+"));
+        int nAttrFeat = rel.attributeFeaturesR.size();
+        relevanceReasons.add(new Feat("nAttrFeat", nAttrFeat * rewardForAttrFeats));
+
+        // Decide to keep or not
+        double lp = rel.getScore() - relatedEntitySigmoid.first;
+        lp /= relatedEntitySigmoid.second;
         double t = 1 / (1+Math.exp(-lp));
         double d = rand.nextDouble();
         if (verbose) {
           Log.info(String.format(
-              "keep related entity? ner=%s head=%s offset=%.2f thresh=%.3f draw=%.3f keep=%s reasons=%s",
-              nerType, head, offset, t, d, d<t, relevanceReasons));
+              "keep related entity? ner=%s head=%s relatedEntitySigmoidOffset=%s thresh=%.3f draw=%.3f keep=%s reasons=%s",
+              nerType, head, relatedEntitySigmoid, t, d, d<t, relevanceReasons));
         }
         if (d < t) {
           // TODO Presumably new entity (check?)

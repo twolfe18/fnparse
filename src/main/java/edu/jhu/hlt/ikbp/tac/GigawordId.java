@@ -1,6 +1,7 @@
 package edu.jhu.hlt.ikbp.tac;
 
 import java.io.Serializable;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -37,6 +38,12 @@ public class GigawordId implements Serializable {
   
   public boolean isValid() {
     return source != null;
+  }
+  
+  public LocalDate toDate() {
+    if (!isValid())
+      return null;
+    return LocalDate.of(year, month, day);
   }
   
   @Override
