@@ -780,7 +780,7 @@ public class AccumuloIndex {
     
     private static <R> double rank(Counts.Pseudo<R> weights, int rank) {
       List<R> keys = weights.getKeysSortedByCount(true);
-      if (keys.size() >= rank)
+      if (rank >= keys.size())
         rank = keys.size()-1;
       return weights.getCount(keys.get(rank));
     }
@@ -889,19 +889,21 @@ public class AccumuloIndex {
           // Measure the ratio between this number and an upper bound on the amount of mass to be given out
           // You can get an upper bound by taking this feat's score (p) and assuming that all the remaining features get the same score
           int remainingFeats = triageFeats.size() - (fi+1);
-          double upperBoundOnRemainingMass = p * remainingFeats;
-          double lastTokScore = rank(tokUuid2score, maxToksPreDocRetrieval);
-          double goodTokScore = rank(tokUuid2score, 50);
-          double safetyFactor = 5;
-          if ((lastTokScore+goodTokScore)/2 > safetyFactor * upperBoundOnRemainingMass) {
-            Log.info("probably don't need any other feats,"
-                + " fi=" + fi
-                + " remainingFeats=" + remainingFeats
-                + " boundOnRemainingMass=" + upperBoundOnRemainingMass
-                + " lastTokScore=" + lastTokScore
-                + " goodTokScore=" + goodTokScore
-                + " maxToksPreDocRetrieval=" + maxToksPreDocRetrieval);
-            break;
+          if (tokUuid2score.numNonZero() > 50 && remainingFeats > 0) {
+            double upperBoundOnRemainingMass = p * remainingFeats;
+            double lastTokScore = rank(tokUuid2score, maxToksPreDocRetrieval);
+            double goodTokScore = rank(tokUuid2score, 50);
+            double safetyFactor = 5;
+            if ((lastTokScore+goodTokScore)/2 > safetyFactor * upperBoundOnRemainingMass) {
+              Log.info("probably don't need any other feats,"
+                  + " fi=" + fi
+                  + " remainingFeats=" + remainingFeats
+                  + " boundOnRemainingMass=" + upperBoundOnRemainingMass
+                  + " lastTokScore=" + lastTokScore
+                  + " goodTokScore=" + goodTokScore
+                  + " maxToksPreDocRetrieval=" + maxToksPreDocRetrieval);
+              break;
+            }
           }
         }
         // NOTE: If you do a good job of sorting features you can break out of this loop
@@ -1201,12 +1203,16 @@ public class AccumuloIndex {
       String sfName = config.getString("slotFillQueries", "sf13+sf14");
       List<KbpQuery> queries = TacKbp.getKbpSfQueries(sfName);
       
-      int stepsPerQuery = config.getInt("stepsPerQuery", 15);
+      int stepsPerQuery = config.getInt("stepsPerQuery", 50);
       
       for (KbpQuery seed : queries) {
 
         // Resolve query comm
         seed.sourceComm = ks.getCommCaching(seed.docid);
+        if (seed.sourceComm == null) {
+          Log.info("skipping b/c can't retrieve query comm: " + seed);
+          continue;
+        }
 
         PkbpSearching ps = new PkbpSearching(ks, seed, rand);
         ps.verbose = true;
@@ -1235,10 +1241,14 @@ public class AccumuloIndex {
       public double getMentionWeight() {
         double m = 0;
         double s = 0;
+        int n = 0;
         for (SitSearchResult ss : mentions) {
           m = Math.max(m, ss.getScore());
           s += ss.getScore();
+          n++;
         }
+        if (n > 0)
+          s /= n;
         return (m+s)/2;
       }
       
