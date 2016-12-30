@@ -815,6 +815,20 @@ public class AccumuloIndex {
     }
     
     public IntPair computeFeatureFrequency(String triageFeat, boolean storeInCache) {
+      
+      // Try to get the value without scanning
+      int maybe = fce.getFreqExactForMostFreq(triageFeat);
+      if (maybe > 0) {
+        Log.info(triageFeat + " is a most common feat w/ freq=" + maybe);
+        // We are going to use the approximation of numToks == numDocs for the
+        // most common features, on the assumption that they matter very little.
+        int numToks = maybe;
+        int numDocs = maybe;
+        if (storeInCache)
+          storeFeatureFrequency(triageFeat, numToks, numDocs);
+        return new IntPair(numToks, numDocs);
+      }
+
       Log.info("scanning for " + triageFeat + " storeInCache=" + storeInCache);
       try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
         f2tScanner.setRange(Range.exact(triageFeat));
@@ -831,9 +845,8 @@ public class AccumuloIndex {
         // Compute a score based on how selective this feature is
         int numToks = toks.size();
         int numDocs = commUuidPrefixes.size();
-        if (storeInCache) {
+        if (storeInCache)
           storeFeatureFrequency(triageFeat, numToks, numDocs);
-        }
         Log.info("done");
         return new IntPair(numToks, numDocs);
       } catch (Exception e) {
