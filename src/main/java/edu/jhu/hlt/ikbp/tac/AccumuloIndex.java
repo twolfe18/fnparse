@@ -1176,13 +1176,20 @@ public class AccumuloIndex {
       int stepsPerQuery = config.getInt("stepsPerQuery", 15);
       
       for (KbpQuery seed : queries) {
+
+        // Resolve query comm
+        seed.sourceComm = ks.getCommCaching(seed.docid);
+
         PkbpSearching ps = new PkbpSearching(ks, seed, rand);
         ps.verbose = true;
         for (int i = 0; i < stepsPerQuery; i++) {
           Log.info("step=" + (i+1));
-          ps.expandEntity();
+          double newMentionDecay = Math.pow(0.7, i);
+          ps.expandEntity(newMentionDecay);
         }
         System.out.println();
+
+        ks.clearCommCache();
       }
     }
 
@@ -1221,7 +1228,8 @@ public class AccumuloIndex {
     // Controls search
     public DoublePair rewardForTemporalLocalityMuSigma = new DoublePair(2, 30); // = (reward, stddev), score += reward * Math.exp(-(diffInDays/stddev)^2)
     public double rewardForAttrFeats = 3;   // score += rewardForAttrFeats * sqrt(numAttrFeats)
-    public DoublePair relatedEntitySigmoid = new DoublePair(4, 2);    // first: higher value lowers prob of keeping related entities. second: temperature of sigmoid (e.g. infinity means everything is 50/50 odds of keep)
+    public DoublePair relatedEntitySigmoid = new DoublePair(6, 2);    // first: higher value lowers prob of keeping related entities. second: temperature of sigmoid (e.g. infinity means everything is 50/50 odds of keep)
+    public DoublePair xdocCorefSigmoid = new DoublePair(3, 1);
 
     // Pkb
     private KbpQuery seed;
@@ -1233,8 +1241,8 @@ public class AccumuloIndex {
 
     public PkbpSearching(KbpSearching search, KbpQuery seed, Random rand) {
       Log.info("seed=" + seed);
-
-      seed.sourceComm = search.getCommCaching(seed.docid);
+      if (seed.sourceComm == null)
+        throw new IllegalArgumentException();
 
       findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
       boolean addEmToCommIfMissing = true;
@@ -1288,7 +1296,7 @@ public class AccumuloIndex {
       return seed;
     }
     
-    public void expandEntity() throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+    public void expandEntity(double newMentionDecay) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
       // Find a SitSearchResult (essentially an EntityMention) to search off of
       ChooseOne<Entity> ce = new ChooseOne<>(rand);
       for (Entity e : entities) {
@@ -1321,13 +1329,13 @@ public class AccumuloIndex {
       
       // Add results to PBK
       for (SitSearchResult rr : res)
-        putInPkb(e, rr, r);
+        putInPkb(e, rr, r, newMentionDecay);
       
       if (verbose)
         Log.info("done");
     }
     
-    public void putInPkb(Entity e, SitSearchResult r, SitSearchResult measureRelevanceAgainst) {
+    public void putInPkb(Entity e, SitSearchResult r, SitSearchResult measureRelevanceAgainst, double newMentionDecay) {
       assert r.getCommunicationId() != null;
       if (verbose) {
         Log.info("adding to " + e + "\t" + r.getWordsInTokenizationWithHighlightedEntAndSit());
@@ -1344,14 +1352,15 @@ public class AccumuloIndex {
       
       // Add this mention to the entity which it was a search for
       {
-        double offset = 3.0;
-        double lp = r.getScore() - offset;
+        double lp = r.getScore() - xdocCorefSigmoid.first;
+        lp /= xdocCorefSigmoid.second;
         double t = 1d / (1+Math.exp(-lp));
         double d = rand.nextDouble();
         if (verbose) {
           Log.info(String.format(
-              "reject based on linking score? score=%.2f offset=%.2f thresh=%.3f draw=%.3f keep=%s",
-              r.getScore(), offset, t, d, d<=t));
+              "reject xdoc coref? score=%.2f xdocCorefSigmoid=%s thresh=%.3f draw=%.3f keep=%s",
+              r.getScore(), xdocCorefSigmoid, t, d, d<=t));
+          System.out.println();
         }
         if (d > t)
           return;
@@ -1359,6 +1368,7 @@ public class AccumuloIndex {
       }
       
       // Search for related entities
+      // TODO Multiply in the tf-idf similarity between this comm and the seed
       Communication comm = r.getCommunication();
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
@@ -1369,51 +1379,59 @@ public class AccumuloIndex {
       }
       new AddNerTypeToEntityMentions(comm);
       for (EntityMention em : IndexCommunications.getEntityMentions(comm)) {
-        
-        // NOTE: This can be multiple words with nn, e.g. "Barack Obama"
-        boolean takeNnCompounts = true;
-        boolean allowFailures = true;
-        String head = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
-        List<String> feats = IndexCommunications.getEntityMentionFeatures(
-            em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
-        
-        // For now we are assuming that if the headword is the same, it is not
-        // "related" in the sense of "related but distinct". Xdoc coref is checked above.
-        // So we are disallowing "related" entities which match a known headword
-        if (getEntityIdStartingWith(head).endsWith("X"))
-          continue;
-        
+
         String tokUuid = em.getTokens().getTokenizationId().getUuidString();
         String nerType = em.getEntityType();
         assert nerType != null;
 
         List<Feat> relevanceReasons = new ArrayList<>();
         SitSearchResult rel = new SitSearchResult(tokUuid, null, relevanceReasons);
-        rel.triageFeatures = feats;
         rel.setCommunicationId(comm.getId());
         rel.setCommunication(comm);
         rel.yhatQueryEntityNerType = nerType;
         rel.yhatQueryEntityHead = em.getTokens().getAnchorTokenIndex();
         assert rel.yhatQueryEntityHead >= 0;
+        DependencyParse deps = IndexCommunications.getPreferredDependencyParse(rel.getTokenization());
+        rel.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(rel.yhatQueryEntityHead, deps);
+        
+        // NOTE: This can be multiple words with nn, e.g. "Barack Obama"
+        boolean takeNnCompounts = true;
+        boolean allowFailures = true;
+        //String head = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
+        //String head = rel.getEntityHeadGuess();
+        String head = rel.getEntitySpanGuess();
+        List<String> feats = IndexCommunications.getEntityMentionFeatures(
+            em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
+        rel.triageFeatures = feats;
+        
+        // For now we are assuming that if the headword is the same, it is not
+        // "related" in the sense of "related but distinct". Xdoc coref is checked above.
+        // So we are disallowing "related" entities which match a known headword
+        if (getEntityIdStartingWith(head).endsWith("X"))
+          continue;
+        // TODO Just try to match this against a mention in the KKB
         
         // Score for the original search being good
         relevanceReasons.add(new Feat("searchQuality", Math.sqrt(r.getScore())));
         
         // Score whether we should add this to the PKB as a related entity
-        relevanceReasons.add(new Feat("nerType", nerTypeExploreLogProb(nerType)));
-        if (tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
-          relevanceReasons.add(new Feat("sameSent", 1.5));
+        relevanceReasons.add(new Feat("nerType", nerTypeExploreLogProb(nerType, relatedEntitySigmoid.second)));
+        //if (tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
+        //  relevanceReasons.add(new Feat("sameSent", 1.5));
+        if (!tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
+          relevanceReasons.add(new Feat("notSameSent", -5));
         if (!hasNNP(em.getTokens(), tokMap))
-          relevanceReasons.add(new Feat("noNNP", -2));
+          relevanceReasons.add(new Feat("noNNP", -3));
         
         // Reward for being temporally close to the searched entity
 //        double days = Duration.between(sourceGW.toDate(), targetGW.toDate()).abs().toDays();
         Integer days = GigawordId.daysBetween(sourceGW, targetGW);
         if (days != null) {
+          days = Math.abs(days);
           double tl = days / rewardForTemporalLocalityMuSigma.second;
-          assert tl >= 0;
+          assert tl >= 0 : "tl=" + tl;
           tl = rewardForTemporalLocalityMuSigma.first * Math.exp(-(tl*tl));
-          assert tl >= 0;
+          assert tl >= 0 : "tl=" + tl;
           relevanceReasons.add(new Feat("temporalLocality", tl));
         }
 
@@ -1421,8 +1439,7 @@ public class AccumuloIndex {
         rel.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, comm, head.split("\\s+"));
         assert measureRelevanceAgainst.attributeFeaturesR != null;
         Pair<Double, List<String>> mTT = match(measureRelevanceAgainst.attributeFeaturesR, rel.attributeFeaturesR);
-        double scale = 1;
-        rel.addToScore("attrFeatTT", 8 * scale * mTT.get1());
+        rel.addToScore("attrFeatTT", 8 * mTT.get1());
         int nAttrFeat = rel.attributeFeaturesR.size();
         relevanceReasons.add(new Feat("nAttrFeat", Math.sqrt(nAttrFeat+1d) * rewardForAttrFeats));
 
@@ -1443,6 +1460,8 @@ public class AccumuloIndex {
             Log.info("related entity: " + rel.getWordsInTokenizationWithHighlightedEntAndSit());
             //Log.info("related entity: " + rel.triageFeatures);
           }
+          for (Feat f : relevanceReasons)
+            f.rescale("newMentionDecay", newMentionDecay);
           this.entities.add(new Entity(id, rel));
         }
         if (verbose) System.out.println();
@@ -1471,16 +1490,21 @@ public class AccumuloIndex {
       return name;
     }
 
-    private static double nerTypeExploreLogProb(String nerType) {
+    private double nerTypeExploreLogProb(String nerType, double stdDev) {
       switch (nerType) {
       case "PER":
       case "PERSON":
-        return 0.5;
+        return 0.5 * stdDev;
+      case "GPE":
       case "ORG":
       case "ORGANIZATION":
-        return 0;
+        return 0.0 * stdDev;
+      case "MISC":
+      case "LOC":
+      case "LOCATION":
+        return -1.0 * stdDev;
       default:
-        return -2;
+        return -4.0 * stdDev;
       }
     }
   }
