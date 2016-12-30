@@ -1227,6 +1227,7 @@ public class AccumuloIndex {
       findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
       boolean addEmToCommIfMissing = true;
       findEntityMention.resolve(seed, addEmToCommIfMissing);
+      assert seed.entityMention != null;
 
       this.findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
       this.rand = rand;
@@ -1243,13 +1244,24 @@ public class AccumuloIndex {
       canonical.setCommunication(seed.sourceComm);
       canonical.yhatQueryEntityNerType = seed.entity_type;
 
-    // TODO
-      canonical.triageFeatures = null;
+      TokenObservationCounts tokObs = null;
+      TokenObservationCounts tokObsLc = null;
+      Map<String, Tokenization> tokMap = new HashMap<>();
+      for (Tokenization tok : new TokenizationIter(seed.sourceComm)) {
+        Object old = tokMap.put(tok.getUuid().getUuidString(), tok);
+        assert old == null;
+      }
+      boolean takeNnCompounts = true;
+      boolean allowFailures = true;
+      EntityMention em = seed.entityMention;
+      String head = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
+      canonical.triageFeatures = IndexCommunications.getEntityMentionFeatures(
+          em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
 
       findEntitiesAndSituations(canonical, search.df, false);
       DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
-      int head = canonical.yhatQueryEntityHead;
-      canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(head, deps);
+      int headToken = canonical.yhatQueryEntityHead;
+      canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(headToken, deps);
 
       String id = "seed/" + seed.id;
       this.entities.add(new Entity(id, canonical));
