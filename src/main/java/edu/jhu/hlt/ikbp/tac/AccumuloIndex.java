@@ -786,8 +786,8 @@ public class AccumuloIndex {
       return weights.getCount(keys.get(rank));
     }
     
-    /** returns null if any of the common features don't have a score unless treatFeatsWithoutScoreAsZero=true */
-    public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget, boolean treatFeatsWithoutScoreAsZero) {
+    /** returns null if any of the common features don't have a score unless computeFeatFreqScoresAsNeeded=true */
+    public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget, boolean computeFeatFreqScoresAsNeeded) {
       // TODO Consider using some jaccard-like denominator for source/target features
       if (triageFeatsSource == null)
         throw new IllegalArgumentException();
@@ -799,13 +799,9 @@ public class AccumuloIndex {
       for (String f : triageFeatsTarget) {
         if (!common.contains(f))
           continue;
-        Double s = getFeatureScore(f);
-        if (s == null) {
-          if (treatFeatsWithoutScoreAsZero)
-            s = 0d;
-          else
-            return null;
-        }
+        Double s = getFeatureScore(f, computeFeatFreqScoresAsNeeded);
+        if (s == null)
+          return null;
         score += s;
       }
       return score;
@@ -859,9 +855,16 @@ public class AccumuloIndex {
 
     /** returns null if this feature has not been searched for, and thus had its frequency computed */
     public Double getFeatureScore(String f) {
+      return getFeatureScore(f, false);
+    }
+    public Double getFeatureScore(String f, boolean computeIfNecessary) {
       IntPair tc = feat2tokCommFreq.get(f);
-      if (tc == null)
-        return null;
+      if (tc == null) {
+        if (computeIfNecessary)
+          tc = computeFeatureFrequency(f, true);
+        else
+          return null;
+      }
       return getFeatureScore(tc.first, tc.second);
     }
 
@@ -1578,10 +1581,12 @@ public class AccumuloIndex {
           if (ss.triageFeatures == null)
             throw new RuntimeException();
 
-          // TODO Need to come up with a real solution to the issue of
-          // features from related mentions not being in the featFreq cache already.
-          boolean treatFeatsWithoutScoreAsZero = true;
-          Double s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures, treatFeatsWithoutScoreAsZero);
+          // Note: when this is true (needed b/c of related mentions which haven't
+          // been triage searched before), this may cause a large slowdown due to
+          // extra queries being run. These values are cached through, so perhaps
+          // it will be OK when the cache is warm.
+          boolean computeFeatFreqAsNeeded = true;
+          Double s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures, computeFeatFreqAsNeeded);
           if (verbose) {
             System.out.println("ss.triageFeats: " + ss.triageFeatures);
             System.out.println("r.triageFeats:  " + r.triageFeatures);
@@ -1673,6 +1678,7 @@ public class AccumuloIndex {
         double lpNewEnt = centralityScore;
         lpNewEnt -= linkingScore;                           // if it might not be NIL, then don't make it a new entity
         lpNewEnt -= 0.25 * Math.sqrt(entities.size() + 1);  // don't grow the PKB indefinitely
+        lpNewEnt += estimatePrecisionOfTriageFeatures(r);   // a proxy for whether this is a common entity or not
         double pNewEnt = 1 / (1 + Math.exp(-lpNewEnt));
         double t = rand.nextDouble();
         if (t < pNewEnt) {
@@ -1687,6 +1693,27 @@ public class AccumuloIndex {
           ec.increment("linkRel/prune");
         }
       }
+    }
+    
+    public double estimatePrecisionOfTriageFeatures(SitSearchResult r) {
+      if (r.triageFeatures == null)
+        throw new IllegalArgumentException();
+      boolean computeIfNecessary = true;
+      TriageSearch ts = search.getTriageSearch();
+      List<Double> c = new ArrayList<>();
+      for (String tf : r.triageFeatures) {
+        double p = ts.getFeatureScore(tf, computeIfNecessary);
+        c.add(p);
+      }
+      // Bias towards most specific features
+      Collections.sort(c);
+      Collections.reverse(c);
+      Average a = new Average.Exponential(0.5);
+      for (int i = 0; i < 4 && i < c.size(); i++)
+        a.add(c.get(i));
+      double p = a.getAverage();
+      Log.info("p=" + p + " c=" + c + " feats=" + r.triageFeatures);
+      return p;
     }
 
     /**
