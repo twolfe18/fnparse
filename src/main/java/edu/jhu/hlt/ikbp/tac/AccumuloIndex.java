@@ -1233,6 +1233,7 @@ public class AccumuloIndex {
 
     // Pkb
     private KbpQuery seed;
+    private StringTermVec seedTermVec;
     private List<Entity> entities;
     private Set<String> knownComms;
     // TODO situations
@@ -1243,6 +1244,8 @@ public class AccumuloIndex {
       Log.info("seed=" + seed);
       if (seed.sourceComm == null)
         throw new IllegalArgumentException();
+      
+      seedTermVec = new StringTermVec(seed.sourceComm);
 
       findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
       boolean addEmToCommIfMissing = true;
@@ -1368,8 +1371,11 @@ public class AccumuloIndex {
       }
       
       // Search for related entities
-      // TODO Multiply in the tf-idf similarity between this comm and the seed
+      // Multiply in the tf-idf similarity between this comm and the seed
       Communication comm = r.getCommunication();
+      StringTermVec commVec = new StringTermVec(comm);
+      double tfidf = search.df.tfIdfCosineSim(seedTermVec, commVec);
+
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
       Map<String, Tokenization> tokMap = new HashMap<>();
@@ -1395,8 +1401,8 @@ public class AccumuloIndex {
         rel.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(rel.yhatQueryEntityHead, deps);
         
         // NOTE: This can be multiple words with nn, e.g. "Barack Obama"
-        boolean takeNnCompounts = true;
-        boolean allowFailures = true;
+//        boolean takeNnCompounts = true;
+//        boolean allowFailures = true;
         //String head = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
         //String head = rel.getEntityHeadGuess();
         String head = rel.getEntitySpanGuess();
@@ -1422,6 +1428,9 @@ public class AccumuloIndex {
           relevanceReasons.add(new Feat("notSameSent", -5));
         if (!hasNNP(em.getTokens(), tokMap))
           relevanceReasons.add(new Feat("noNNP", -3));
+        
+        // Reward for this comm looking like the seed
+        relevanceReasons.add(new Feat("seedTfIdf", 10 * (tfidf - 0.5)));
         
         // Reward for being temporally close to the searched entity
 //        double days = Duration.between(sourceGW.toDate(), targetGW.toDate()).abs().toDays();

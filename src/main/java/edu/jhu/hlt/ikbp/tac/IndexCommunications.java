@@ -2002,11 +2002,13 @@ public class IndexCommunications implements AutoCloseable {
     
     @Override
     public String toString() {
-      String s = String.format("%-20s %.2f", name, weight);
+//      String s = String.format("%-20s %.2f", name, weight);
+      String s = String.format("%s %.2f", name, weight);
       if (justifications == null)
         return s;
       String j = StringUtils.join(", ", justifications);
-      return String.format("%-26s b/c %s", s, j);
+//      return String.format("%-26s b/c %s", s, j);
+      return String.format("%s b/c %s", s, j);
     }
   }
   
