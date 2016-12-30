@@ -786,8 +786,8 @@ public class AccumuloIndex {
       return weights.getCount(keys.get(rank));
     }
     
-    /** returns null if any of the common features don't have a score */
-    public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget) {
+    /** returns null if any of the common features don't have a score unless treatFeatsWithoutScoreAsZero=true */
+    public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget, boolean treatFeatsWithoutScoreAsZero) {
       // TODO Consider using some jaccard-like denominator for source/target features
       if (triageFeatsSource == null)
         throw new IllegalArgumentException();
@@ -800,8 +800,12 @@ public class AccumuloIndex {
         if (!common.contains(f))
           continue;
         Double s = getFeatureScore(f);
-        if (s == null)
-          return null;
+        if (s == null) {
+          if (treatFeatsWithoutScoreAsZero)
+            s = 0d;
+          else
+            return null;
+        }
         score += s;
       }
       return score;
@@ -1361,6 +1365,10 @@ public class AccumuloIndex {
       List<Feat> relevantReasons;
       
       public Entity(String id, SitSearchResult canonical, List<Feat> relevanceReasons) {
+        if (id == null)
+          throw new IllegalArgumentException();
+        if (canonical == null)
+          throw new IllegalArgumentException();
         this.id = id;
         this.mentions = new ArrayList<>();
         this.mentions.add(canonical);
@@ -1415,8 +1423,6 @@ public class AccumuloIndex {
     public PkbpSearching(KbpSearching search, KbpQuery seed, double seedWeight, Random rand) {
       Log.info("seed=" + seed);
       if (seed.sourceComm == null)
-        throw new IllegalArgumentException();
-      if (seed.entityMention == null)
         throw new IllegalArgumentException();
       
       this.rand = rand;
@@ -1546,7 +1552,17 @@ public class AccumuloIndex {
         for (SitSearchResult ss : e.mentions) {
           if (ss.triageFeatures == null)
             throw new RuntimeException();
-          Double s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures);
+
+          // TODO Need to come up with a real solution to the issue of
+          // features from related mentions not being in the featFreq cache already.
+          boolean treatFeatsWithoutScoreAsZero = true;
+          Double s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures, treatFeatsWithoutScoreAsZero);
+          if (verbose) {
+            System.out.println("ss.triageFeats: " + ss.triageFeatures);
+            System.out.println("r.triageFeats:  " + r.triageFeatures);
+            System.out.println("score:          " + s);
+            System.out.println();
+          }
           if (s == null)
             s = 0d;
           triage.add(s);
@@ -1597,7 +1613,7 @@ public class AccumuloIndex {
       ChooseOne<SitSearchResult> cr = new ChooseOne<>(rand);
       for (SitSearchResult r : e.mentions) {
         // This score measures quality of link to the entity
-        double w = r.getScore();
+        double w = Math.max(1e-8, r.getScore());
         if (verbose)
           Log.info("considering weight=" + w + "\t" + r);
         cr.offer(r, w);
