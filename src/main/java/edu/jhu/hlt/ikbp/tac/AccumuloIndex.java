@@ -926,7 +926,7 @@ public class AccumuloIndex {
       
       // Sort features by an upper bound on their cardinality (number of toks which contain this feature)
       fce.sortByFreqUpperBoundAsc(triageFeats);
-      Log.info("after sorting feats by freq: " + fce.showFreqs(triageFeats));
+      Log.info("after sorting feats by freq: " + fce.showFreqUpperBounds(triageFeats));
       
       // Features which have a score below this value cannot introduce new
       // tokenizations to the result set, only add to the score of tokenizations
