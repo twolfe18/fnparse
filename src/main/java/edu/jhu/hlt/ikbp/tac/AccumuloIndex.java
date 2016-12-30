@@ -812,6 +812,31 @@ public class AccumuloIndex {
         feat2tokCommFreq.clear();
     }
     
+    public IntPair computeFeatureFrequency(String triageFeat, boolean storeInCache) {
+      try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
+        f2tScanner.setRange(Range.exact(triageFeat));
+
+        // Collect all of the tokenizations which this feature co-occurs with
+        List<String> toks = new ArrayList<>();
+        Set<String> commUuidPrefixes = new HashSet<>();
+        for (Entry<Key, Value> e : f2tScanner) {
+          String tokUuid = e.getKey().getColumnQualifier().toString();
+          toks.add(tokUuid);
+          commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
+        }
+
+        // Compute a score based on how selective this feature is
+        int numToks = toks.size();
+        int numDocs = commUuidPrefixes.size();
+        if (storeInCache) {
+          storeFeatureFrequency(triageFeat, numToks, numDocs);
+        }
+        return new IntPair(numToks, numDocs);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    
     public IntPair getFeatureFrequency(String triageFeature) {
       if (feat2tokCommFreq == null)
         throw new IllegalStateException();
