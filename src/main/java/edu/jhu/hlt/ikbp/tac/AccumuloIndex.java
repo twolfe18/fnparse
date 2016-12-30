@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
+import java.rmi.activation.UnknownGroupException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -776,6 +777,13 @@ public class AccumuloIndex {
       Log.info("deserializing bloom filter from " + bfFile.getPath());
       expensiveFeaturesBF = (BloomFilter<String>) FileUtil.deserialize(bfFile);
     }
+    
+    private static <R> double rank(Counts.Pseudo<R> weights, int rank) {
+      List<R> keys = weights.getKeysSortedByCount(true);
+      if (keys.size() >= rank)
+        rank = keys.size()-1;
+      return weights.getCount(keys.get(rank));
+    }
 
     /**
      * @param triageFeats are generated from {@link IndexCommunications#getEntityMentionFeatures(String, String[], String, TokenObservationCounts, TokenObservationCounts)}
@@ -874,6 +882,26 @@ public class AccumuloIndex {
               tokUuid2MatchedFeatures.put(t, wfs);
             }
             wfs.add(new WeightedFeature(f, p));
+          }
+          
+          
+          // Find the score of the maxToksPreDocRetrieval^th Tokenization so far
+          // Measure the ratio between this number and an upper bound on the amount of mass to be given out
+          // You can get an upper bound by taking this feat's score (p) and assuming that all the remaining features get the same score
+          int remainingFeats = triageFeats.size() - (fi+1);
+          double upperBoundOnRemainingMass = p * remainingFeats;
+          double lastTokScore = rank(tokUuid2score, maxToksPreDocRetrieval);
+          double goodTokScore = rank(tokUuid2score, 50);
+          double safetyFactor = 5;
+          if ((lastTokScore+goodTokScore)/2 > safetyFactor * upperBoundOnRemainingMass) {
+            Log.info("probably don't need any other feats,"
+                + " fi=" + fi
+                + " remainingFeats=" + remainingFeats
+                + " boundOnRemainingMass=" + upperBoundOnRemainingMass
+                + " lastTokScore=" + lastTokScore
+                + " goodTokScore=" + goodTokScore
+                + " maxToksPreDocRetrieval=" + maxToksPreDocRetrieval);
+            break;
           }
         }
         // NOTE: If you do a good job of sorting features you can break out of this loop
