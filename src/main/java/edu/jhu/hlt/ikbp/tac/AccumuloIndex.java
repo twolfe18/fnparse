@@ -847,6 +847,7 @@ public class AccumuloIndex {
               + " p=" + p);
           
           // Update the running score for all tokenizations
+          boolean first = true;
           for (String t : toks) {
             boolean canAdd = p > minScoreForNewTok || tokUuid2score.getCount(t) > 0;
             if (!canAdd) {
@@ -856,7 +857,7 @@ public class AccumuloIndex {
             tokUuid2score.update(t, p);
             
             int nt = tokUuid2score.numNonZero();
-            if (nt % 20000 == 0) {
+            if (first && nt % 20000 == 0) {
               System.out.println("numToks=" + nt
                   + " during featIdx=" + (fi+1)
                   + " of=" + triageFeats.size()
@@ -865,6 +866,7 @@ public class AccumuloIndex {
                   + " minScoreForNewTok=" + minScoreForNewTok
                   + " tokFeatTooSmall=" + tokFeatTooSmall);
             }
+            first = false;
 
             List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
             if (wfs == null) {
@@ -1219,7 +1221,7 @@ public class AccumuloIndex {
     // Controls search
     public DoublePair rewardForTemporalLocalityMuSigma = new DoublePair(2, 30); // = (reward, stddev), score += reward * Math.exp(-(diffInDays/stddev)^2)
     public double rewardForAttrFeats = 3;   // score += rewardForAttrFeats * sqrt(numAttrFeats)
-    public DoublePair relatedEntitySigmoid = new DoublePair(3, 2);    // first: higher value lowers prob of keeping related entities. second: temperature of sigmoid (e.g. infinity means everything is 50/50 odds of keep)
+    public DoublePair relatedEntitySigmoid = new DoublePair(4, 2);    // first: higher value lowers prob of keeping related entities. second: temperature of sigmoid (e.g. infinity means everything is 50/50 odds of keep)
 
     // Pkb
     private KbpQuery seed;
@@ -1393,7 +1395,7 @@ public class AccumuloIndex {
         // Score whether we should add this to the PKB as a related entity
         relevanceReasons.add(new Feat("nerType", nerTypeExploreLogProb(nerType)));
         if (tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
-          relevanceReasons.add(new Feat("sameSent", 1));
+          relevanceReasons.add(new Feat("sameSent", 1.5));
         if (!hasNNP(em.getTokens(), tokMap))
           relevanceReasons.add(new Feat("noNNP", -2));
         
@@ -1411,7 +1413,7 @@ public class AccumuloIndex {
         // Reward for having attribute features
         rel.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, comm, head.split("\\s+"));
         int nAttrFeat = rel.attributeFeaturesR.size();
-        relevanceReasons.add(new Feat("nAttrFeat", nAttrFeat * rewardForAttrFeats));
+        relevanceReasons.add(new Feat("nAttrFeat", Math.sqrt(nAttrFeat+1d) * rewardForAttrFeats));
 
         // Decide to keep or not
         double lp = rel.getScore() - relatedEntitySigmoid.first;
@@ -1432,9 +1434,12 @@ public class AccumuloIndex {
           }
           this.entities.add(new Entity(id, rel));
         }
+        if (verbose) System.out.println();
       }
 
       // TODO Search for related situations
+
+      if (verbose) System.out.println();
     }
     
     private boolean hasNNP(TokenRefSequence trs, Map<String, Tokenization> tokMap) {
@@ -1459,12 +1464,12 @@ public class AccumuloIndex {
       switch (nerType) {
       case "PER":
       case "PERSON":
-        return 2;
+        return 0.5;
       case "ORG":
       case "ORGANIZATION":
-        return 1;
+        return 0;
       default:
-        return -1;
+        return -2;
       }
     }
   }
