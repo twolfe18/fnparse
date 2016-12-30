@@ -326,6 +326,9 @@ public class NNPSense {
         for (String nameHead : nameHeads) {
           if (nameHead.equalsIgnoreCase(tok.getText())) {
             int source = tok.getTokenIndex();
+            String sourcePos = pos.get(source).getTag();
+            if (!sourcePos.toUpperCase().startsWith("NNP"))
+              continue;
             List<Pair<Integer, LL<Dependency>>> paths = kHop(source, 4, deps);
             for (Pair<Integer, LL<Dependency>> p : paths) {
               int dest = p.get1();

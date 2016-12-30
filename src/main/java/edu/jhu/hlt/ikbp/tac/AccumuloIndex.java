@@ -788,6 +788,7 @@ public class AccumuloIndex {
     
     /** returns null if any of the common features don't have a score unless computeFeatFreqScoresAsNeeded=true */
     public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget, boolean computeFeatFreqScoresAsNeeded) {
+      Log.info("source=" + triageFeatsSource + " target=" + triageFeatsTarget + " computeFeatFreqScoresAsNeeded=" + computeFeatFreqScoresAsNeeded);
       // TODO Consider using some jaccard-like denominator for source/target features
       if (triageFeatsSource == null)
         throw new IllegalArgumentException();
@@ -804,6 +805,7 @@ public class AccumuloIndex {
           return null;
         score += s;
       }
+      Log.info("done");
       return score;
     }
 
@@ -813,6 +815,7 @@ public class AccumuloIndex {
     }
     
     public IntPair computeFeatureFrequency(String triageFeat, boolean storeInCache) {
+      Log.info("scanning for " + triageFeat + " storeInCache=" + storeInCache);
       try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
         f2tScanner.setRange(Range.exact(triageFeat));
 
@@ -831,6 +834,7 @@ public class AccumuloIndex {
         if (storeInCache) {
           storeFeatureFrequency(triageFeat, numToks, numDocs);
         }
+        Log.info("done");
         return new IntPair(numToks, numDocs);
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -869,6 +873,18 @@ public class AccumuloIndex {
     }
 
     public double getFeatureScore(int numToks, int numDocs) {
+
+      // Assume we've seen everything at least a few times
+      int m = 3;
+      if (numToks < m) {
+        Log.info("numToks correction: " + numToks + " => " + m);
+        numToks = m;
+      }
+      if (numDocs < m) {
+        Log.info("numDocs correction: " + numDocs + " => " + m);
+        numDocs = m;
+      }
+
       double freq = (2d * numToks * numDocs) / (numToks + numDocs);
       double p = (triageFeatNBPrior + 1) / (triageFeatNBPrior + freq);
       System.out.println("triage:"
@@ -1570,12 +1586,16 @@ public class AccumuloIndex {
         // TODO Products of features below
         
         // Cosine similarity
+        if (verboseLinking)
+          Log.info("cosine sim");
         StringTermVec eDocVec = e.getDocVec();
         StringTermVec rDocVec = new StringTermVec(r.getCommunication());
         double tfidfCosine = search.df.tfIdfCosineSim(eDocVec, rDocVec);
         fs.add(new Feat("tfidfCosine", 10 * (tfidfCosine - 0.5)));
         
         // Average triage feature similarity
+        if (verboseLinking)
+          Log.info("triage feats");
         Average triage = new Average.Uniform();
         for (SitSearchResult ss : e.mentions) {
           if (ss.triageFeatures == null)
@@ -1586,8 +1606,10 @@ public class AccumuloIndex {
           // extra queries being run. These values are cached through, so perhaps
           // it will be OK when the cache is warm.
           boolean computeFeatFreqAsNeeded = true;
-          Double s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures, computeFeatFreqAsNeeded);
-          if (verbose) {
+          Double s = null;
+          if (r.triageFeatures.size() < 10 && ss.triageFeatures.size() < 10)
+            s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures, computeFeatFreqAsNeeded);
+          if (verboseLinking) {
             System.out.println("ss.triageFeats: " + ss.triageFeatures);
             System.out.println("r.triageFeats:  " + r.triageFeatures);
             System.out.println("score:          " + s);
@@ -1600,6 +1622,8 @@ public class AccumuloIndex {
         fs.add(new Feat("triageFeatsAvg", triage.getAverage()));
         
         // Attribute Features
+        if (verboseLinking)
+          Log.info("attr feats");
         double attrFeatScore = 0;
         for (SitSearchResult ss : e.mentions) {
           String nameHeadQ = ss.getEntityHeadGuess();
@@ -1665,6 +1689,8 @@ public class AccumuloIndex {
      * 2) Conditioned on (1) decide whether to prune or add to PKB based on centrality score
      */
     public void linkRelatedEntity(SitSearchResult r, List<Feat> relevanceReasons) {
+      if (verbose)
+        Log.info("starting relevanceReasons=" + relevanceReasons);
       Pair<Entity, List<Feat>> link = linkAgainstPkb(r);
       double linkingScore = Feat.sum(link.get2());
       if (linkingScore > 4) {
@@ -1693,6 +1719,8 @@ public class AccumuloIndex {
           ec.increment("linkRel/prune");
         }
       }
+      if (verbose)
+        Log.info("done");
     }
     
     public double estimatePrecisionOfTriageFeatures(SitSearchResult r, double tolerance) {
@@ -1701,6 +1729,8 @@ public class AccumuloIndex {
       
       // Sort by freq
       search.fce.sortByFreqUpperBoundAsc(r.triageFeatures);
+      if (verbose)
+        Log.info("triageFeats=" + r.triageFeatures);
 
       boolean computeIfNecessary = true;
       TriageSearch ts = search.getTriageSearch();
@@ -1713,7 +1743,11 @@ public class AccumuloIndex {
         // Exit early based on estimate of mass remaining
         int remaining = r.triageFeatures.size()-(i+1);
         if (p*remaining < tolerance) {
-          Log.info("breaking tol=" + tolerance + " p=" + p + " remaining=" + remaining + " i=" + i);
+          Log.info("breaking1 tol=" + tolerance + " p=" + p + " remaining=" + remaining + " i=" + i);
+          break;
+        }
+        if (i >= 8) {
+          Log.info("breaking2 i=" + i);
           break;
         }
       }
@@ -1780,6 +1814,10 @@ public class AccumuloIndex {
 
 
         List<Feat> relevanceReasons = new ArrayList<>();
+        
+        // Long mentions are costly to do search on...
+        int nt = em.getTokens().getTokenIndexList().size();
+        relevanceReasons.add(new Feat("mentionTooLong", -Math.sqrt(nt+1)));
         
         // To be relevant, the new mention must indeed be coreferent with the entity searched for
         relevanceReasons.add(new Feat("searchQuality", Math.sqrt(newMention.getScore())));
