@@ -328,6 +328,8 @@ public class TacKbp {
   }
   
   public static String tacNerTypesToStanfordNerType(String nerType) {
+    if (nerType == null)
+      throw new IllegalArgumentException();
     switch (nerType) {
     case "PER":
       return "PERSON";

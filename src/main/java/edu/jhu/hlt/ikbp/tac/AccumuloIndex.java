@@ -1228,6 +1228,7 @@ public class AccumuloIndex {
       boolean addEmToCommIfMissing = true;
       findEntityMention.resolve(seed, addEmToCommIfMissing);
       assert seed.entityMention != null;
+      assert seed.entity_type != null;
 
       this.findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
       this.rand = rand;
@@ -1239,7 +1240,9 @@ public class AccumuloIndex {
       if (seed.entityMention == null)
         throw new IllegalArgumentException();
       String tokUuid = seed.entityMention.getTokens().getTokenizationId().getUuidString();
-      SitSearchResult canonical = new SitSearchResult(tokUuid, null, Collections.emptyList());
+      List<Feat> scoreFeats = new ArrayList<>();
+      scoreFeats.add(new Feat("seed", 5));
+      SitSearchResult canonical = new SitSearchResult(tokUuid, null, scoreFeats);
       canonical.setCommunicationId(seed.docid);
       canonical.setCommunication(seed.sourceComm);
       canonical.yhatQueryEntityNerType = seed.entity_type;
@@ -1275,7 +1278,9 @@ public class AccumuloIndex {
       // Find a SitSearchResult (essentially an EntityMention) to search off of
       ChooseOne<Entity> ce = new ChooseOne<>(rand);
       for (Entity e : entities) {
-        double w = Math.exp(e.getMentionWeight());
+        //double w = Math.exp(e.getMentionWeight());
+        double w = e.getMentionWeight();
+        w = w*w;
         if (verbose) Log.info("considering weight=" + w + "\t" + e);
         ce.offer(e, w);
       }
@@ -1285,7 +1290,9 @@ public class AccumuloIndex {
 
       ChooseOne<SitSearchResult> cr = new ChooseOne<>(rand);
       for (SitSearchResult r : e.mentions) {
-        double w = Math.exp(r.getScore());
+        //double w = Math.exp(r.getScore());
+        double w = r.getScore();
+        w = w*w;
         if (verbose) Log.info("considering weight=" + w + "\t" + r);
         cr.offer(r, w);
       }
@@ -1352,6 +1359,7 @@ public class AccumuloIndex {
             em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
         
         String nerType = em.getEntityType();
+        assert nerType != null;
         
         String tokUuid = em.getTokens().getTokenizationId().getUuidString();
         List<Feat> relevanceReasons = new ArrayList<>();
@@ -1361,6 +1369,7 @@ public class AccumuloIndex {
         SitSearchResult rel = new SitSearchResult(tokUuid, null, relevanceReasons);
         rel.triageFeatures = feats;
         rel.setCommunicationId(comm.getId());
+        rel.yhatQueryEntityNerType = nerType;
         
         double offset = 2;
         double lp = rel.getScore() - offset;
@@ -1368,7 +1377,7 @@ public class AccumuloIndex {
         double d = rand.nextDouble();
         if (verbose) {
           Log.info(String.format(
-              "keep related entity? ner=%s head=%s offset=%.2 thresh=%.3f draw=%.3f keep=%s reasons=%s",
+              "keep related entity? ner=%s head=%s offset=%.2f thresh=%.3f draw=%.3f keep=%s reasons=%s",
               nerType, head, offset, t, d, d<t, relevanceReasons));
         }
         if (d < t) {
@@ -1474,12 +1483,14 @@ public class AccumuloIndex {
       double t = rand.nextDouble() * Z;
       double s = 0;
       int n = obj.size();
+      if (n == 0)
+        throw new IllegalStateException("no positive-weight items have been added!");
       for (int i = 0; i < n; i++) {
         s += weights.get(i);
         if (s >= t)
           return obj.get(i);
       }
-      throw new RuntimeException();
+      throw new RuntimeException("Z=" + Z + " t=" + t + " s=" + s + " n=" + n + " weights=" + weights);
     }
   }
   
@@ -1556,7 +1567,10 @@ public class AccumuloIndex {
     }
 
     public List<SitSearchResult> entityMentionSearch(SitSearchResult query) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      Log.info("working on " + query);
       assert query.getCommunicationId() != null;
+      assert query.yhatQueryEntityNerType != null;
+      assert query.yhatQueryEntityHead >= 0;
       TIMER.start("kbpQuery/setup");
 
       // 1a) Retrieve the context Communication
@@ -1580,12 +1594,17 @@ public class AccumuloIndex {
         query.importantTerms = df.importantTerms(queryContext, 20);
       
       // 2) Extract entity mention features
+      if (query.yhatQueryEntitySpan == null) {
+        DependencyParse deps = IndexCommunications.getPreferredDependencyParse(query.getTokenization());
+        query.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(query.yhatQueryEntityHead, deps);
+      }
       // TODO Remove headwords, switch to purely a key-word based retrieval model.
       // NOTE that headwords must match the headwords extracted during the indexing phrase.
-      String[] headwords = new String[] {};
 //      String entityName = q.name;
 //      String entityType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
       String entityName = query.getEntitySpanGuess();
+      //String[] headwords = new String[] {};
+      String[] headwords = entityName.split("\\s+");
       String entityType = TacKbp.tacNerTypesToStanfordNerType(query.yhatQueryEntityNerType);
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
@@ -1594,6 +1613,9 @@ public class AccumuloIndex {
       
       // 3) Search
       List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
+      // Set all results to be the same NER type as input
+      for (SitSearchResult r : res)
+        r.yhatQueryEntityNerType = query.yhatQueryEntityNerType;
 
       // 4-5) Retrieve communications and prune
       {
