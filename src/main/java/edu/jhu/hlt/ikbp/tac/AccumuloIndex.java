@@ -1398,12 +1398,15 @@ public class AccumuloIndex {
           relevanceReasons.add(new Feat("noNNP", -2));
         
         // Reward for being temporally close to the searched entity
-        double days = Duration.between(sourceGW.toDate(), targetGW.toDate()).abs().toDays();
-        double tl = days / rewardForTemporalLocalityMuSigma.second;
-        assert tl >= 0;
-        tl = rewardForTemporalLocalityMuSigma.first * Math.exp(-(tl*tl));
-        assert tl >= 0;
-        relevanceReasons.add(new Feat("temporalLocality", tl));
+//        double days = Duration.between(sourceGW.toDate(), targetGW.toDate()).abs().toDays();
+        Integer days = GigawordId.daysBetween(sourceGW, targetGW);
+        if (days != null) {
+          double tl = days / rewardForTemporalLocalityMuSigma.second;
+          assert tl >= 0;
+          tl = rewardForTemporalLocalityMuSigma.first * Math.exp(-(tl*tl));
+          assert tl >= 0;
+          relevanceReasons.add(new Feat("temporalLocality", tl));
+        }
 
         // Reward for having attribute features
         rel.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, comm, head.split("\\s+"));

@@ -1,9 +1,13 @@
 package edu.jhu.hlt.ikbp.tac;
 
 import java.io.Serializable;
+import java.text.SimpleDateFormat;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -84,6 +88,23 @@ public class GigawordId implements Serializable {
     return matchesLang(other) && source != null && source.equals(other.source);
   }
   
+  // this is ugly
+  private static final SimpleDateFormat F = new SimpleDateFormat("dd MM yyyy");
+  public static Integer daysBetween(GigawordId g1, GigawordId g2) {
+    if (!g1.isValid() || !g2.isValid())
+      return null;
+    try {
+      Date d1 = F.parse(g1.day + " " + g1.month + " " + g1.year);
+      Date d2 = F.parse(g2.day + " " + g2.month + " " + g2.year);
+      long diff = d1.getTime() - d2.getTime();
+      long d = TimeUnit.DAYS.convert(diff, TimeUnit.MILLISECONDS);
+      assert d < Integer.MAX_VALUE;
+      return (int) d;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+  
   public static void main(String[] args) {
     List<String> ids = new ArrayList<>();
     ids.add("NYT_ENG_19941104.0002");
@@ -98,5 +119,10 @@ public class GigawordId implements Serializable {
       System.out.println(g + "\t" + g.source);
       System.out.println(g + "\t" + g.lang);
     }
+    
+    
+    GigawordId g1 = new GigawordId("WPB_ENG_20100826.0077");
+    GigawordId g2 = new GigawordId("NYT_ENG_19941104.0002");
+    System.out.println(Duration.between(g1.toDate(), g2.toDate()));
   }
 }
