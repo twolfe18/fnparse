@@ -1318,7 +1318,7 @@ public class AccumuloIndex {
     public void putInPkb(Entity e, SitSearchResult r) {
       assert r.getCommunicationId() != null;
       if (verbose) {
-        Log.info("adding to " + e);
+        Log.info("adding to " + e + "\t" + r.getWordsInTokenizationWithHighlightedEntAndSit());
         ShowResult.showQResult(r, r.getCommunication(), 120, true);
       }
 
@@ -1370,9 +1370,13 @@ public class AccumuloIndex {
           relevanceReasons.add(new Feat("sameSent", 1));
         if (!hasNNP(em.getTokens(), tokMap))
           relevanceReasons.add(new Feat("noNNP", -2));
+
+      // TODO have reward for having attribute features
+
         SitSearchResult rel = new SitSearchResult(tokUuid, null, relevanceReasons);
         rel.triageFeatures = feats;
         rel.setCommunicationId(comm.getId());
+        rel.setCommunication(comm);
         rel.yhatQueryEntityNerType = nerType;
         rel.yhatQueryEntityHead = em.getTokens().getAnchorTokenIndex();
         assert rel.yhatQueryEntityHead >= 0;
@@ -1389,6 +1393,10 @@ public class AccumuloIndex {
         if (d < t) {
           // TODO Presumably new entity (check?)
           String id = getEntityIdStartingWith(head);
+          if (verbose) {
+            Log.info("related entity: " + rel.getWordsInTokenizationWithHighlightedEntAndSit());
+            //Log.info("related entity: " + rel.triageFeatures);
+          }
           this.entities.add(new Entity(id, rel));
         }
       }
@@ -1622,7 +1630,7 @@ public class AccumuloIndex {
       String entityName = query.getEntitySpanGuess();
       //String[] headwords = new String[] {};
       String[] headwords = entityName.split("\\s+");    // TODO Filter to NNP words?
-      String entityType = TacKbp.tacNerTypesToStanfordNerType(query.yhatQueryEntityNerType);
+      String entityType = query.yhatQueryEntityNerType;
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
       List<String> triageFeats = IndexCommunications.getEntityMentionFeatures(entityName, headwords, entityType, tokObs, tokObsLc);

@@ -331,11 +331,14 @@ public class TacKbp {
     if (nerType == null)
       throw new IllegalArgumentException();
     switch (nerType) {
+    case "PERSON":
     case "PER":
       return "PERSON";
+    case "ORGANIZATION":
     case "ORG":
     case "GPE":
       return "ORGANIZATION";
+    case "LOCATION":
     case "LOC":
       return "LOCATION";
     default:

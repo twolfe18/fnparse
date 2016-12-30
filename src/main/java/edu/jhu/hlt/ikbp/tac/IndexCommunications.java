@@ -1355,6 +1355,10 @@ public class IndexCommunications implements AutoCloseable {
   }
     
   private static Tokenization findTok(String tokUuid, Communication comm) {
+    if (tokUuid == null)
+      throw new IllegalArgumentException();
+    if (comm == null)
+      throw new IllegalArgumentException();
     Tokenization t = null;
     for (Section section : comm.getSectionList()) {
       for (Sentence sentence : section.getSentenceList()) {
