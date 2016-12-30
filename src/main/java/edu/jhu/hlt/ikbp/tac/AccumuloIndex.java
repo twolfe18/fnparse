@@ -60,6 +60,8 @@ import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
+import edu.jhu.hlt.concrete.TokenRefSequence;
+import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.access.FetchRequest;
@@ -1366,10 +1368,14 @@ public class AccumuloIndex {
         relevanceReasons.add(new Feat("nerType", nerTypeExploreLogProb(nerType)));
         if (tokUuid.equals(r.getTokenization().getUuid().getUuidString()))
           relevanceReasons.add(new Feat("sameSent", 1));
+        if (!hasNNP(em.getTokens(), tokMap))
+          relevanceReasons.add(new Feat("noNNP", -2));
         SitSearchResult rel = new SitSearchResult(tokUuid, null, relevanceReasons);
         rel.triageFeatures = feats;
         rel.setCommunicationId(comm.getId());
         rel.yhatQueryEntityNerType = nerType;
+        rel.yhatQueryEntityHead = em.getTokens().getAnchorTokenIndex();
+        assert rel.yhatQueryEntityHead >= 0;
         
         double offset = 2;
         double lp = rel.getScore() - offset;
@@ -1388,6 +1394,17 @@ public class AccumuloIndex {
       }
 
       // TODO Search for related situations
+    }
+    
+    private boolean hasNNP(TokenRefSequence trs, Map<String, Tokenization> tokMap) {
+      Tokenization toks = tokMap.get(trs.getTokenizationId().getUuidString());
+      TokenTagging pos = IndexCommunications.getPreferredPosTags(toks);
+      for (int t : trs.getTokenIndexList()) {
+        String p = pos.getTaggedTokenList().get(t).getTag();
+        if (p.equalsIgnoreCase("NNP"))
+          return true;
+      }
+      return false;
     }
 
     private String getEntityIdStartingWith(String name) {
@@ -1604,7 +1621,7 @@ public class AccumuloIndex {
 //      String entityType = TacKbp.tacNerTypesToStanfordNerType(q.entity_type);
       String entityName = query.getEntitySpanGuess();
       //String[] headwords = new String[] {};
-      String[] headwords = entityName.split("\\s+");
+      String[] headwords = entityName.split("\\s+");    // TODO Filter to NNP words?
       String entityType = TacKbp.tacNerTypesToStanfordNerType(query.yhatQueryEntityNerType);
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
