@@ -15,9 +15,6 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.directory.server.kerberos.shared.crypto.encryption.DesCbcCrcEncryption;
-import org.junit.runner.Describable;
-
 import com.google.common.collect.Iterators;
 
 import edu.jhu.hlt.concrete.Communication;
@@ -45,6 +42,17 @@ import edu.jhu.prim.set.IntHashSet;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.TokenizationIter;
 
+/**
+ * Extract some basic features about either and event or situation
+ * (currently these are just length k hops from a headword in a dep parse)
+ * so you have a feature vector for every item. Now do top down clustering
+ * on the binary feature vectors. Recursively split the data where a split
+ * is good if it has high entropy (a 50/50 split would be ideal, splits
+ * based on rare features are bad) and if it reduces the n-dim gaussian
+ * (diag sigma) variance of the feature vectors on either side of the split.
+ * 
+ * @author travis
+ */
 public class TopDownClustering {
   
   static class StringAlph {
