@@ -89,6 +89,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
@@ -824,30 +825,34 @@ public class AccumuloIndex {
         // most common features, on the assumption that they matter very little.
         int numToks = maybe;
         int numDocs = maybe;
-        if (storeInCache)
-          storeFeatureFrequency(triageFeat, numToks, numDocs);
+        //if (storeInCache)
+        //  storeFeatureFrequency(triageFeat, numToks, numDocs);
         return new IntPair(numToks, numDocs);
       }
 
       Log.info("scanning for " + triageFeat + " storeInCache=" + storeInCache);
+      TIMER.start("computeFeatureFrequency/scan");
       try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
         f2tScanner.setRange(Range.exact(triageFeat));
 
         // Collect all of the tokenizations which this feature co-occurs with
-        List<String> toks = new ArrayList<>();
+        int numToks = 0;
+        //List<String> toks = new ArrayList<>();
         Set<String> commUuidPrefixes = new HashSet<>();
         for (Entry<Key, Value> e : f2tScanner) {
           String tokUuid = e.getKey().getColumnQualifier().toString();
-          toks.add(tokUuid);
+          //toks.add(tokUuid);
+          numToks++;
           commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
         }
 
         // Compute a score based on how selective this feature is
-        int numToks = toks.size();
+        //int numToks = toks.size();
         int numDocs = commUuidPrefixes.size();
         if (storeInCache)
           storeFeatureFrequency(triageFeat, numToks, numDocs);
         Log.info("done");
+        TIMER.stop("computeFeatureFrequency/scan");
         return new IntPair(numToks, numDocs);
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -1402,12 +1407,16 @@ public class AccumuloIndex {
           continue;
         }
 
-        double seedWeight = config.getDouble("seedWeight", 10);
+        double seedWeight = config.getDouble("seedWeight", 30);
         PkbpSearching ps = new PkbpSearching(ks, seed, seedWeight, rand);
         ps.verbose = true;
         for (int i = 0; i < stepsPerQuery; i++) {
           Log.info("step=" + (i+1));
           ps.expandEntity();
+
+          System.out.println();
+          System.out.println("TIMER:");
+          System.out.println(TIMER);
         }
         System.out.println();
 
@@ -1535,6 +1544,8 @@ public class AccumuloIndex {
     }
     
     public void expandEntity() throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      TIMER.start("expandEntity");
+
       // Find a SitSearchResult (essentially an EntityMention) to search off of
       Pair<Entity, SitSearchResult> er = chooseMentionToExpand();
       Entity e = er.get1();
@@ -1570,6 +1581,17 @@ public class AccumuloIndex {
           // Check related mentions (do this once per doc)
           if (knownComms.add(newMention.getCommunicationId())) {
             List<Pair<SitSearchResult, List<Feat>>> relevant = extractRelatedEntities(er.get1(), newMention);
+            if (verbose) {
+              Log.info("found " + relevant.size() + " relevant mentions in " + newMention.getCommunicationId());
+            }
+
+            int m = 30;
+            if (relevant.size() > m) {
+              Log.info("pruning " + relevant.size() + " mentions down to " + m);
+              Collections.shuffle(relevant);
+              relevant = relevant.subList(0, m);
+            }
+
             for (Pair<SitSearchResult, List<Feat>> rel : relevant) {
               ec.increment("expandEnt/searchResult/relMention");
               linkRelatedEntity(rel.get1(), rel.get2());
@@ -1584,32 +1606,44 @@ public class AccumuloIndex {
         Log.info("event counts:");
         for (String k : ec.getKeysSorted())
           System.out.printf("%-26s % 5d\n", k, ec.getCount(k));
+        System.out.println();
+        System.out.println("TIMER:");
+        System.out.println(TIMER);
+        System.out.println();
         Log.info("done");
       }
+      TIMER.stop("expandEntity");
     }
     
     private Pair<Entity, List<Feat>> linkAgainstPkb(SitSearchResult r) {
+      TIMER.start("linkAgainstPkb");
       if (r.triageFeatures == null)
         throw new RuntimeException();
       ArgMax<Pair<Entity, List<Feat>>> a = new ArgMax<>();
       TriageSearch ts = search.getTriageSearch();
       for (Entity e : entities) {
         List<Feat> fs = new ArrayList<>();
+        //fs.add(new Feat("intercept", -1));
         
         // TODO Products of features below
         
         // Cosine similarity
         if (verboseLinking)
-          Log.info("cosine sim");
+          Log.info("cosine sim for " + e.id);
         StringTermVec eDocVec = e.getDocVec();
         StringTermVec rDocVec = new StringTermVec(r.getCommunication());
         double tfidfCosine = search.df.tfIdfCosineSim(eDocVec, rDocVec);
-        fs.add(new Feat("tfidfCosine", 10 * (tfidfCosine - 0.5)));
+        if (tfidfCosine > 0.95) {
+          Log.info("tfidf cosine same doc, adjusting down " + tfidfCosine + " => 0.75");
+          tfidfCosine = 0.75;   // same doc
+        }
+        fs.add(new Feat("tfidfCosine", 0.25 * (tfidfCosine - 0.5)));
         
         // Average triage feature similarity
         if (verboseLinking)
-          Log.info("triage feats");
+          Log.info("triage feats for " + e.id);
         Average triage = new Average.Uniform();
+        double triageMax = 0;
         for (SitSearchResult ss : e.mentions) {
           if (ss.triageFeatures == null)
             throw new RuntimeException();
@@ -1620,8 +1654,8 @@ public class AccumuloIndex {
           // it will be OK when the cache is warm.
           boolean computeFeatFreqAsNeeded = true;
           Double s = null;
-          if (r.triageFeatures.size() < 10 && ss.triageFeatures.size() < 10)
-            s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures, computeFeatFreqAsNeeded);
+          //if (r.triageFeatures.size() < 10 && ss.triageFeatures.size() < 10)
+          s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures, computeFeatFreqAsNeeded);
           if (verboseLinking) {
             System.out.println("ss.triageFeats: " + ss.triageFeatures);
             System.out.println("r.triageFeats:  " + r.triageFeatures);
@@ -1631,12 +1665,17 @@ public class AccumuloIndex {
           if (s == null)
             s = 0d;
           triage.add(s);
+          if (s > triageMax)
+            triageMax = s;
         }
-        fs.add(new Feat("triageFeatsAvg", triage.getAverage()));
+        fs.add(new Feat("triageFeatsAvg", 6 * triage.getAverage()));
+        fs.add(new Feat("triageFeatsMax", 3 * triageMax));
+        fs.add(new Feat("triageFeatsAvgTfIdf", 40 * (0.1 + tfidfCosine) * triage.getAverage()));
+        fs.add(new Feat("triageFeatsMaxTfIdf", 20 * (0.1 + tfidfCosine) * triageMax));
         
         // Attribute Features
         if (verboseLinking)
-          Log.info("attr feats");
+          Log.info("attr feats for " + e.id);
         double attrFeatScore = 0;
         for (SitSearchResult ss : e.mentions) {
           String nameHeadQ = ss.getEntityHeadGuess();
@@ -1657,14 +1696,27 @@ public class AccumuloIndex {
         }
         a.offer(new Pair<>(e, fs), score);
       }
-      return a.get();
+      TIMER.stop("linkAgainstPkb");
+      Pair<Entity, List<Feat>> best = a.get();
+      if (verbose) {
+        //System.out.println("best link for " + r.getEntitySpanGuess() + " is " + best.get1().id
+        //    + " with score=" + Feat.sum(best.get2()) + "\t" + best.get2());
+        System.out.printf("best link for=%-24s is=%-24s score=%.3f %s\n",
+          StringUtils.trim(r.getEntitySpanGuess(), 20), StringUtils.trim(best.get1().id, 20),
+          Feat.sum(best.get2()), best.get2());
+        System.out.println();
+      }
+      return best;
     }
     
     private Pair<Entity, SitSearchResult> chooseMentionToExpand() {
+      TIMER.start("chooseMentionToExpand");
+      if (verbose)
+        Log.info("nPkbEntities=" + entities.size());
       ChooseOne<Entity> ce = new ChooseOne<>(rand);
       for (Entity e : entities) {
         // This score characterizes centrality to the PKB/seed
-        double w = e.getRelevanceWeight();
+        double w = Math.max(0d, e.getRelevanceWeight());
         if (verbose)
           Log.info("considering weight=" + w + "\t" + e);
         ce.offer(e, w);
@@ -1678,16 +1730,23 @@ public class AccumuloIndex {
         ec.increment("chooseMentionToExpand/seedEnt");
 
       ChooseOne<SitSearchResult> cr = new ChooseOne<>(rand);
+      if (verbose)
+        Log.info("nMentions=" + e.mentions.size() + " for=" + e.id);
       for (SitSearchResult r : e.mentions) {
         // This score measures quality of link to the entity
         double w = Math.max(1e-8, r.getScore());
-        if (verbose)
-          Log.info("considering weight=" + w + "\t" + r);
+        if (verbose) {
+          Log.info("considering weight=" + w + "\t" + r.getEntitySpanGuess());
+          System.out.println(r.getWordsInTokenizationWithHighlightedEntAndSit());
+        }
         cr.offer(r, w);
       }
       SitSearchResult r = cr.choose();
-      if (verbose)
-        Log.info("chose " + r);
+      if (verbose) {
+        Log.info("chose " + r.getEntitySpanGuess());
+        System.out.println(r.getWordsInTokenizationWithHighlightedEntAndSit());
+      }
+      TIMER.stop("chooseMentionToExpand");
       return new Pair<>(e, r);
     }
     
@@ -1702,6 +1761,7 @@ public class AccumuloIndex {
      * 2) Conditioned on (1) decide whether to prune or add to PKB based on centrality score
      */
     public void linkRelatedEntity(SitSearchResult r, List<Feat> relevanceReasons) {
+      TIMER.start("linkRelatedEntity");
       if (verbose)
         Log.info("starting relevanceReasons=" + relevanceReasons);
       Pair<Entity, List<Feat>> link = linkAgainstPkb(r);
@@ -1709,19 +1769,35 @@ public class AccumuloIndex {
       if (linkingScore > 4) {
         // Link
         Entity e = link.get1();
+        if (verbose)
+          Log.info("LINKING " + r.getEntitySpanGuess() + " to " + e.id);
         e.mentions.add(r);
         ec.increment("linkRel/pkbEnt");
       } else {
         // Decide whether to create a new entity
         double centralityScore = Feat.sum(relevanceReasons);
-        double lpNewEnt = centralityScore;
-        lpNewEnt -= linkingScore;                                 // if it might not be NIL, then don't make it a new entity
-        lpNewEnt -= 0.25 * Math.sqrt(entities.size() + 1);        // don't grow the PKB indefinitely
-        lpNewEnt += estimatePrecisionOfTriageFeatures(r, 0.01);   // a proxy for whether this is a common entity or not
+
+        List<Feat> fNewEnt = new ArrayList<>();
+
+        fNewEnt.add(new Feat("relevance", 0.1 * centralityScore));    // only link relevant things
+        fNewEnt.add(new Feat("linkQual", -2 * Math.max(0, linkingScore)));    // if it might not be NIL, then don't make it a new entity
+        fNewEnt.add(new Feat("pkbSize", -0.05 * Math.sqrt(entities.size()+1)));    // don't grow the PKB indefinitely
+        fNewEnt.add(new Feat("triagePrec", 1 * (10*estimatePrecisionOfTriageFeatures(r, 0.01) - 2.0)));  // a proxy for whether this is a common entity or not
+
+        double lpNewEnt = Feat.sum(fNewEnt);
         double pNewEnt = 1 / (1 + Math.exp(-lpNewEnt));
         double t = rand.nextDouble();
+
+        if (verbose) {
+          //Log.info("mention=" + r.getEntitySpanGuess() + "\tpNewEnt=" + pNewEnt + " lpNewEnt=" + lpNewEnt + " fNewEnt=" + fNewEnt);
+          Log.info(String.format("%-38s pNewEnt=%.2f draw=%.2f lpNewEnt=%+.3f fNewEnt=%s",
+            StringUtils.trim(r.getEntitySpanGuess(), 34), pNewEnt, t, lpNewEnt, fNewEnt));
+        }
+          
         if (t < pNewEnt) {
           // New entity
+          if (verbose)
+            Log.info("NEW ENTITY " + r.getEntitySpanGuess());
           String id = r.getEntitySpanGuess().replaceAll("\\s+", "_");
           Entity e = new Entity(id, r, relevanceReasons);
           entities.add(e);
@@ -1729,14 +1805,18 @@ public class AccumuloIndex {
         } else {
           // Prune this mention
           // no-op
+          if (verbose)
+            Log.info("PRUNING " + r.getEntitySpanGuess());
           ec.increment("linkRel/prune");
         }
       }
       if (verbose)
         Log.info("done");
+      TIMER.stop("linkRelatedEntity");
     }
     
     public double estimatePrecisionOfTriageFeatures(SitSearchResult r, double tolerance) {
+      TIMER.start("estimatePrecisionOfTriageFeatures");
       if (r.triageFeatures == null)
         throw new IllegalArgumentException();
       
@@ -1768,11 +1848,17 @@ public class AccumuloIndex {
       // Bias towards most specific features
       Collections.sort(c);
       Collections.reverse(c);
-      Average a = new Average.Exponential(0.5);
-      for (int i = 0; i < 4 && i < c.size(); i++)
-        a.add(c.get(i));
-      double p = a.getAverage();
-      Log.info("p=" + p + " c=" + c + " feats=" + r.triageFeatures);
+      //Average a = new Average.Exponential(0.5);
+      double p = 0;
+      //for (int i = 0; i < 4 && i < c.size(); i++) {
+      for (int i = 0; i < c.size(); i++) {
+        //a.add(c.get(i));
+        p += c.get(i);
+      }
+      //double p = a.getAverage();
+      if (verbose)
+        Log.info("p=" + p + " c=" + c + " ent=" + r.getEntitySpanGuess() + " feats=" + r.triageFeatures);
+      TIMER.stop("estimatePrecisionOfTriageFeatures");
       return p;
     }
 
@@ -1785,6 +1871,7 @@ public class AccumuloIndex {
      * This method doesn't modify the PKB/state of this instance.
      */
     public List<Pair<SitSearchResult, List<Feat>>> extractRelatedEntities(Entity relevantTo, SitSearchResult newMention) {
+      TIMER.start("extractRelatedEntities");
       List<Pair<SitSearchResult, List<Feat>>> out = new ArrayList<>();
       ec.increment("exRel");
 
@@ -1842,14 +1929,16 @@ public class AccumuloIndex {
         // Nominal mentions are dis-preferred due to difficulty in doing xdoc coref for them, etc
         if (!hasNNP(em.getTokens(), tokMap))
           relevanceReasons.add(new Feat("noNNP", -3));
+        if (hasV(em.getTokens(), tokMap))
+          relevanceReasons.add(new Feat("hasV", -2));
 
         // Having attribute features like "PERSON-nn-Dr." is good, discriminating features help coref
         rel.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, comm, head.split("\\s+"));
         int nAttrFeat = rel.attributeFeaturesR.size();
-        relevanceReasons.add(new Feat("nAttrFeat", Math.sqrt(nAttrFeat+1d) * rewardForAttrFeats));
+        relevanceReasons.add(new Feat("nAttrFeat", (Math.sqrt(nAttrFeat+1d)-1) * rewardForAttrFeats));
         
         // Reward for this comm looking like the seed
-        relevanceReasons.add(new Feat("tfidfWithSeed", 10 * (tfidfWithSeed - 0.5)));
+        relevanceReasons.add(new Feat("tfidfWithSeed", 8 * (tfidfWithSeed - 0.5)));
         
         // TODO Add this back
 //      GigawordId sourceGW = new GigawordId(measureRelevanceAgainst.getCommunicationId());
@@ -1870,7 +1959,7 @@ public class AccumuloIndex {
 //        }
 
         // Decide to keep or not
-        double lp = rel.getScore() - relatedEntitySigmoid.first;
+        double lp = Feat.sum(relevanceReasons) - relatedEntitySigmoid.first;
         lp /= relatedEntitySigmoid.second;
         double t = 1 / (1+Math.exp(-lp));
         double d = rand.nextDouble();
@@ -1885,6 +1974,7 @@ public class AccumuloIndex {
           out.add(new Pair<>(rel, relevanceReasons));
         }
       }
+      TIMER.stop("extractRelatedEntities");
       return out;
     }
     
@@ -1894,6 +1984,17 @@ public class AccumuloIndex {
       for (int t : trs.getTokenIndexList()) {
         String p = pos.getTaggedTokenList().get(t).getTag();
         if (p.equalsIgnoreCase("NNP"))
+          return true;
+      }
+      return false;
+    }
+    
+    private boolean hasV(TokenRefSequence trs, Map<String, Tokenization> tokMap) {
+      Tokenization toks = tokMap.get(trs.getTokenizationId().getUuidString());
+      TokenTagging pos = IndexCommunications.getPreferredPosTags(toks);
+      for (int t : trs.getTokenIndexList()) {
+        String p = pos.getTaggedTokenList().get(t).getTag();
+        if (p.toUpperCase().startsWith("V"))
           return true;
       }
       return false;
