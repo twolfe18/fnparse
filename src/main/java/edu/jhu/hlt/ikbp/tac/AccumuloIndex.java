@@ -1865,6 +1865,11 @@ public class AccumuloIndex {
     if (r.yhatEntitySituation < 0 || r.yhatQueryEntityHead < 0)
       return false;
     EC.increment("findEntitiesAndSituations/entSitsSelected");
+
+    // Set the entity span
+    DependencyParse deps = IndexCommunications.getPreferredDependencyParse(r.getTokenization());
+    r.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(r.yhatQueryEntityHead, deps);
+
     return true;
   }
 
