@@ -117,48 +117,6 @@ public class PkbpSearching {
     }
   }
 
-  static class Entity implements Serializable {
-    private static final long serialVersionUID = 6258694570076400637L;
-
-    String id;
-    List<SitSearchResult> mentions;
-    /** Reasons why this entity is central to the PKB/seed */
-    List<Feat> relevantReasons;
-
-    public Entity(String id, SitSearchResult canonical, List<Feat> relevanceReasons) {
-      if (id == null)
-        throw new IllegalArgumentException();
-      if (canonical == null)
-        throw new IllegalArgumentException();
-      this.id = id;
-      this.mentions = new ArrayList<>();
-      this.mentions.add(canonical);
-      this.relevantReasons = relevanceReasons;
-      Log.info(this);
-    }
-
-    public double getRelevanceWeight() {
-      return Feat.sum(relevantReasons);
-    }
-
-    @Override
-    public String toString() {
-      return "(Entity id=" + id + " nMentions=" + mentions.size() + " weight=" + getRelevanceWeight() + ")";
-    }
-
-    public StringTermVec getDocVec() {
-      StringTermVec tvAll = new StringTermVec();
-      Set<String> seenComms = new HashSet<>();
-      for (SitSearchResult s : mentions) {
-        if (seenComms.add(s.getCommunicationId())) {
-          StringTermVec tv = new StringTermVec(s.getCommunication());
-          tvAll.add(tv);
-        }
-      }
-      return tvAll;
-    }
-  }
-
   /** SEARCH, LINK, PRUNE, or NEW_ENTITY */
   static class Action implements Serializable {
     private static final long serialVersionUID = 1057136776248973712L;
@@ -185,7 +143,7 @@ public class PkbpSearching {
   // Pkb
   private KbpQuery seed;
   private StringTermVec seedTermVec;
-  private List<PkbpSearching.Entity> entities;
+  private List<PkbpSearchingEntity> entities;
   private Set<String> knownComms;
   // TODO situations
   private List<PkbpSearching.Action> actions;
@@ -246,7 +204,7 @@ public class PkbpSearching {
     String id = "seed/" + head;
     List<Feat> relevanceReasons = new ArrayList<>();
     relevanceReasons.add(new Feat("seed", seedWeight));
-    this.entities.add(new Entity(id, canonical, relevanceReasons));
+    this.entities.add(new PkbpSearchingEntity(id, canonical, relevanceReasons));
     this.actions.add(new Action("NEW_ENTITY", canonical));
   }
 
@@ -258,8 +216,8 @@ public class PkbpSearching {
     AccumuloIndex.TIMER.start("expandEntity");
 
     // Find a SitSearchResult (essentially an EntityMention) to search off of
-    Pair<PkbpSearching.Entity, SitSearchResult> er = chooseMentionToExpand();
-    PkbpSearching.Entity e = er.get1();
+    Pair<PkbpSearchingEntity, SitSearchResult> er = chooseMentionToExpand();
+    PkbpSearchingEntity e = er.get1();
 
     ec.increment("expandEnt");
     if (e.id.startsWith("seed"))
@@ -288,7 +246,7 @@ public class PkbpSearching {
         ec.increment("expandEnt/searchResult/link");
 
         // Link this entity
-        e.mentions.add(newMention);
+        e.addMention(newMention);
 
         // Check related mentions (do this once per doc)
         if (knownComms.add(newMention.getCommunicationId())) {
@@ -327,13 +285,13 @@ public class PkbpSearching {
     AccumuloIndex.TIMER.stop("expandEntity");
   }
 
-  private Pair<PkbpSearching.Entity, List<Feat>> linkAgainstPkb(SitSearchResult r) {
+  private Pair<PkbpSearchingEntity, List<Feat>> linkAgainstPkb(SitSearchResult r) {
     AccumuloIndex.TIMER.start("linkAgainstPkb");
     if (r.triageFeatures == null)
       throw new RuntimeException();
-    ArgMax<Pair<PkbpSearching.Entity, List<Feat>>> a = new ArgMax<>();
+    ArgMax<Pair<PkbpSearchingEntity, List<Feat>>> a = new ArgMax<>();
     TriageSearch ts = search.getTriageSearch();
-    for (PkbpSearching.Entity e : entities) {
+    for (PkbpSearchingEntity e : entities) {
       List<Feat> fs = new ArrayList<>();
       //fs.add(new Feat("intercept", -1));
 
@@ -356,7 +314,7 @@ public class PkbpSearching {
         Log.info("triage feats for " + e.id);
       Average triage = new Average.Uniform();
       double triageMax = 0;
-      for (SitSearchResult ss : e.mentions) {
+      for (SitSearchResult ss : e) {
         if (ss.triageFeatures == null)
           throw new RuntimeException();
 
@@ -389,7 +347,7 @@ public class PkbpSearching {
       if (verboseLinking)
         Log.info("attr feats for " + e.id);
       double attrFeatScore = 0;
-      for (SitSearchResult ss : e.mentions) {
+      for (SitSearchResult ss : e) {
         String nameHeadQ = ss.getEntityHeadGuess();
         List<String> attrCommQ = NNPSense.extractAttributeFeatures(null, ss.getCommunication(), nameHeadQ, nameHeadQ);
         List<String> attrTokQ = NNPSense.extractAttributeFeatures(ss.tokUuid, ss.getCommunication(), nameHeadQ, nameHeadQ);
@@ -409,7 +367,7 @@ public class PkbpSearching {
       a.offer(new Pair<>(e, fs), score);
     }
     AccumuloIndex.TIMER.stop("linkAgainstPkb");
-    Pair<PkbpSearching.Entity, List<Feat>> best = a.get();
+    Pair<PkbpSearchingEntity, List<Feat>> best = a.get();
     if (verbose) {
       //System.out.println("best link for " + r.getEntitySpanGuess() + " is " + best.get1().id
       //    + " with score=" + Feat.sum(best.get2()) + "\t" + best.get2());
@@ -421,19 +379,19 @@ public class PkbpSearching {
     return best;
   }
 
-  private Pair<PkbpSearching.Entity, SitSearchResult> chooseMentionToExpand() {
+  private Pair<PkbpSearchingEntity, SitSearchResult> chooseMentionToExpand() {
     AccumuloIndex.TIMER.start("chooseMentionToExpand");
     if (verbose)
       Log.info("nPkbEntities=" + entities.size());
-    ChooseOne<PkbpSearching.Entity> ce = new ChooseOne<>(rand);
-    for (PkbpSearching.Entity e : entities) {
+    ChooseOne<PkbpSearchingEntity> ce = new ChooseOne<>(rand);
+    for (PkbpSearchingEntity e : entities) {
       // This score characterizes centrality to the PKB/seed
       double w = Math.max(0d, e.getRelevanceWeight());
       if (verbose)
         Log.info("considering weight=" + w + "\t" + e);
       ce.offer(e, w);
     }
-    PkbpSearching.Entity e = ce.choose();
+    PkbpSearchingEntity e = ce.choose();
     if (verbose)
       Log.info("chose " + e);
 
@@ -443,8 +401,8 @@ public class PkbpSearching {
 
     ChooseOne<SitSearchResult> cr = new ChooseOne<>(rand);
     if (verbose)
-      Log.info("nMentions=" + e.mentions.size() + " for=" + e.id);
-    for (SitSearchResult r : e.mentions) {
+      Log.info("nMentions=" + e.numMentions() + " for=" + e.id);
+    for (SitSearchResult r : e) {
       // This score measures quality of link to the entity
       double w = Math.max(1e-8, r.getScore());
       if (verbose) {
@@ -476,14 +434,14 @@ public class PkbpSearching {
     AccumuloIndex.TIMER.start("linkRelatedEntity");
     if (verbose)
       Log.info("starting relevanceReasons=" + relevanceReasons);
-    Pair<PkbpSearching.Entity, List<Feat>> link = linkAgainstPkb(r);
-    PkbpSearching.Entity e = link.get1();
+    Pair<PkbpSearchingEntity, List<Feat>> link = linkAgainstPkb(r);
+    PkbpSearchingEntity e = link.get1();
     double linkingScore = Feat.sum(link.get2());
     if (linkingScore > 4) {
       // Link
       if (verbose)
         Log.info("LINKING " + r.getEntitySpanGuess() + " to " + e.id);
-      e.mentions.add(r);
+      e.addMention(r);
       actions.add(new Action("LINKING", e, r));
       ec.increment("linkRel/pkbEnt");
     } else {
@@ -512,7 +470,7 @@ public class PkbpSearching {
         if (verbose)
           Log.info("NEW ENTITY " + r.getEntitySpanGuess());
         String id = r.getEntitySpanGuess().replaceAll("\\s+", "_");
-        PkbpSearching.Entity newEnt = new Entity(id, r, relevanceReasons);
+        PkbpSearchingEntity newEnt = new PkbpSearchingEntity(id, r, relevanceReasons);
         entities.add(newEnt);
         actions.add(new Action("NEW_ENTITY", e, r));
         ec.increment("linkRel/newEnt");
@@ -585,7 +543,7 @@ public class PkbpSearching {
    * 
    * This method doesn't modify the PKB/state of this instance.
    */
-  public List<Pair<SitSearchResult, List<Feat>>> extractRelatedEntities(PkbpSearching.Entity relevantTo, SitSearchResult newMention) {
+  public List<Pair<SitSearchResult, List<Feat>>> extractRelatedEntities(PkbpSearchingEntity relevantTo, SitSearchResult newMention) {
     AccumuloIndex.TIMER.start("extractRelatedEntities");
     List<Pair<SitSearchResult, List<Feat>>> out = new ArrayList<>();
     ec.increment("exRel");
