@@ -18,10 +18,15 @@ import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.util.TokenizationIter;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.Pipeline;
 
 /**
  * Extracts events by using a dependency tree
@@ -295,9 +300,17 @@ public class DependencySyntaxEvents {
 
   public static void main(String[] mainArgs) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(mainArgs);
-    try (AutoCloseableIterator<Communication> iter = IndexCommunications.getCommunicationsForIngest(config)) {
+    // redis-server --dir data/sit-search/sit-feat-counts-redis --port 7379
+    TimeMarker tm = new TimeMarker();
+    long situations = 0, comms = 0, args = 0;
+    String host = config.getString("redis.host");
+    int port = config.getInt("redis.port");
+    try (AutoCloseableIterator<Communication> iter = IndexCommunications.getCommunicationsForIngest(config);
+        Jedis j = new Jedis(host, port)) {
       while (iter.hasNext()) {
         Communication c = iter.next();
+        comms++;
+        Pipeline p = j.pipelined();       // pipeline/batch for each communication
         for (Tokenization t : new TokenizationIter(c)) {
           DependencyParse d = IndexCommunications.getPreferredDependencyParse(t);
           TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
@@ -316,22 +329,30 @@ public class DependencySyntaxEvents {
           if (entHeads.size() < 2)
             continue;
 
-          System.out.println(show(t));
-          for (int ent : entHeads) {
-            System.out.println("ent: " + ent + "\t" + t.getTokenList().getTokenList().get(ent).getText());
-          }
-          System.out.println();
+//          System.out.println(show(t));
+//          for (int ent : entHeads) {
+//            System.out.println("ent: " + ent + "\t" + t.getTokenList().getTokenList().get(ent).getText());
+//          }
+//          System.out.println();
 
           CoverArgumentsWithPredicates idfk = new CoverArgumentsWithPredicates(t, d, entHeads);
           for (Entry<Integer, Set<String>> e : idfk.getSituations().entrySet()) {
+            situations++;
+            args++;
             List<String> fs = new ArrayList<>(e.getValue());
             Collections.sort(fs);
             for (String f : fs) {
-              assert f.indexOf('=') > 0;
-              System.out.println(e.getKey() + "\t" + f);
+//              System.out.println(e.getKey() + "\t" + f);
+              p.incr(f);
             }
           }
-          System.out.println();
+//          System.out.println();
+        }
+        p.sync();
+        
+        if (tm.enoughTimePassed(10)) {
+          Log.info("comms=" + comms + " sits=" + situations
+              + " args=" + args + " curDoc=" + c.getId() + "\t" + Describe.memoryUsage());
         }
       }
     }
