@@ -22,6 +22,7 @@ import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
@@ -51,16 +52,19 @@ public class PkbpSearching implements Serializable {
   public static void playback(PkbpSearching ps) {
     Log.info("playing back " + ps);
     for (Action a : ps.actions) {
-      System.out.println(a);
+      if (a.arguments.size() == 2) {
+        PkbpSearchingEntity e = (PkbpSearchingEntity) a.arguments.get(0);
+        SitSearchResult m = (SitSearchResult) a.arguments.get(1);
+        System.out.printf("%-8s %-28s %s\n", a.type, e.id, m.getWordsInTokenizationWithHighlightedEntAndSit());
+      } else {
+        System.out.println("unexpected: " + a.type + "\t" + StringUtils.join("\t", a.arguments));
+      }
     }
     System.out.println();
   }
 
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-    Random rand = config.getRandom();
-    KbpSearching ks = new KbpSearching(config);
-    
     
     // Playback a result which was computed and then serialized
     File playbackPkbpFile = config.getFile("playbackPkbpFile", null);
@@ -72,6 +76,8 @@ public class PkbpSearching implements Serializable {
       return;
     }
     
+    Random rand = config.getRandom();
+    KbpSearching ks = new KbpSearching(config);
 
     String sfName = config.getString("slotFillQueries", "sf13+sf14");
     List<KbpQuery> queries = TacKbp.getKbpSfQueries(sfName);
@@ -205,8 +211,9 @@ public class PkbpSearching implements Serializable {
     String id = "seed/" + head;
     List<Feat> relevanceReasons = new ArrayList<>();
     relevanceReasons.add(new Feat("seed", seedWeight));
-    this.entities.add(new PkbpSearchingEntity(id, canonical, relevanceReasons));
-    this.actions.add(new Action("NEW_ENTITY", canonical));
+    PkbpSearchingEntity e = new PkbpSearchingEntity(id, canonical, relevanceReasons);
+    this.entities.add(e);
+    this.actions.add(new Action("NEW_ENTITY", e, canonical));
   }
 
   public KbpQuery getSeed() {
@@ -375,6 +382,7 @@ public class PkbpSearching implements Serializable {
       System.out.printf("best link for=%-24s is=%-24s score=%.3f %s\n",
           StringUtils.trim(r.getEntitySpanGuess(), 20), StringUtils.trim(best.get1().id, 20),
           Feat.sum(best.get2()), best.get2());
+      System.out.println(Describe.memoryUsage());
       System.out.println();
     }
     return best;
@@ -473,7 +481,8 @@ public class PkbpSearching implements Serializable {
         String id = r.getEntitySpanGuess().replaceAll("\\s+", "_");
         PkbpSearchingEntity newEnt = new PkbpSearchingEntity(id, r, relevanceReasons);
         entities.add(newEnt);
-        actions.add(new Action("NEW_ENTITY", e, r));
+//        actions.add(new Action("NEW_ENTITY", e, r));
+        actions.add(new Action("NEW_ENTITY", newEnt, r, e));
         ec.increment("linkRel/newEnt");
       } else {
         // Prune this mention
