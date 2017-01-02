@@ -43,7 +43,9 @@ public class DependencySyntaxEvents {
     }
     if (h.isEmpty())
       return null;
-    assert h.size() == 1;
+    //assert h.size() == 1;
+    if (h.size() > 1)
+      Log.info("warning: not a tree: " + deps.getMetadata());
     if (h.get(0).isSetGov())
       return h.get(0).getGov();
     return -1;
@@ -137,7 +139,7 @@ public class DependencySyntaxEvents {
       heads = new Dependency[n];
       for (Dependency d : deps.getDependencyList()) {
         if (heads[d.getDep()] != null)
-          throw new IllegalArgumentException("not a tree");
+          throw new IllegalArgumentException("not a tree: " + deps.getMetadata());
         heads[d.getDep()] = d;
       }
 
@@ -148,6 +150,8 @@ public class DependencySyntaxEvents {
       while (!queue.isEmpty()) {
         Path p = queue.pop();
         Dependency h = heads[p.head];
+        if (h == null)
+          continue;
         Path pp = new Path(h, p);
         if (pp.head < 0) {
           // root
@@ -302,11 +306,13 @@ public class DependencySyntaxEvents {
     ExperimentProperties config = ExperimentProperties.init(mainArgs);
     // redis-server --dir data/sit-search/sit-feat-counts-redis --port 7379
     TimeMarker tm = new TimeMarker();
-    long situations = 0, comms = 0, args = 0;
+    long situations = 0, comms = 0, ents = 0;
     String host = config.getString("redis.host");
     int port = config.getInt("redis.port");
+    List<String> fs = null;
     try (AutoCloseableIterator<Communication> iter = IndexCommunications.getCommunicationsForIngest(config);
         Jedis j = new Jedis(host, port)) {
+      iterator:
       while (iter.hasNext()) {
         Communication c = iter.next();
         comms++;
@@ -328,6 +334,7 @@ public class DependencySyntaxEvents {
 
           if (entHeads.size() < 2)
             continue;
+          ents += entHeads.size();
 
 //          System.out.println(show(t));
 //          for (int ent : entHeads) {
@@ -335,11 +342,16 @@ public class DependencySyntaxEvents {
 //          }
 //          System.out.println();
 
-          CoverArgumentsWithPredicates idfk = new CoverArgumentsWithPredicates(t, d, entHeads);
+          CoverArgumentsWithPredicates idfk = null;
+          try {
+            idfk = new CoverArgumentsWithPredicates(t, d, entHeads);
+          } catch (IllegalArgumentException e) {
+            e.printStackTrace();
+            continue iterator;
+          }
           for (Entry<Integer, Set<String>> e : idfk.getSituations().entrySet()) {
             situations++;
-            args++;
-            List<String> fs = new ArrayList<>(e.getValue());
+            fs = new ArrayList<>(e.getValue());
             Collections.sort(fs);
             for (String f : fs) {
 //              System.out.println(e.getKey() + "\t" + f);
@@ -352,7 +364,8 @@ public class DependencySyntaxEvents {
         
         if (tm.enoughTimePassed(10)) {
           Log.info("comms=" + comms + " sits=" + situations
-              + " args=" + args + " curDoc=" + c.getId() + "\t" + Describe.memoryUsage());
+              + " ents=" + ents + " curDoc=" + c.getId() + "\t" + Describe.memoryUsage());
+          System.out.println("curFeats=" + fs);
         }
       }
     }

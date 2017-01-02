@@ -45,7 +45,8 @@ import edu.jhu.util.TokenizationIter;
 /**
  * Search outwards starting with a {@link KbpQuery} seed.
  */
-public class PkbpSearching {
+public class PkbpSearching implements Serializable {
+  private static final long serialVersionUID = 3891008944720961213L;
   
   public static void playback(PkbpSearching ps) {
     Log.info("playing back " + ps);
@@ -106,7 +107,7 @@ public class PkbpSearching {
 
         // Serialize the results for later
         if (outputDir != null) {
-          File out = new File(outputDir, seed.id + "_kbpStep" + i + ".jser.gz");
+          File out = new File(outputDir, seed.id + "_kbpStep" + (i+1) + ".jser.gz");
           Log.info("saving PKB to " + out.getPath());
           FileUtil.serialize(ps, out);
         }
