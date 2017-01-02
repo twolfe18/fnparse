@@ -244,11 +244,14 @@ public class DependencySyntaxEvents {
 
       } else {
         String predPos = pos.getTaggedTokenList().get(left.head).getTag();
-        String predLemma = lemma.getTaggedTokenList().get(left.head).getTag();
+        String predLemma = lemma.getTaggedTokenList().get(left.head).getTag()
+            + "." + predPos.charAt(0);
         String lw = AccumuloIndex.words(ll, t);
         String rw = AccumuloIndex.words(rr, t);
         fs.add("type=predicate." + predPos.charAt(0));
         fs.add("lemma=" + predLemma);
+        fs.add("word=" + t.getTokenList().getTokenList().get(left.head).getText());
+        fs.add("pos=" + predPos);
         if (!predPos.startsWith("V"))
           fs.add("pos=" + predPos);
         
