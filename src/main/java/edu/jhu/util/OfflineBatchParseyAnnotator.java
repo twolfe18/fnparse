@@ -232,11 +232,13 @@ public class OfflineBatchParseyAnnotator {
   }
   
   public Communication annotate(Communication c) {
-    Log.info("starting comm=" + c.getId());
+    if (verbose)
+      Log.info("starting comm=" + c.getId());
     ec.increment("annotate");
     Pair<byte[], byte[]> buf = commId2conll.get(c.getId());
     if (buf != null) {
-      Log.info("returning from memory");
+      if (verbose)
+        Log.info("returning from memory");
       ec.increment("annotate/fromMemo");
       return annotateFromMemory(c, buf.get1(), buf.get2());
     }

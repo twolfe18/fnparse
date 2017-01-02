@@ -1969,6 +1969,13 @@ public class IndexCommunications implements AutoCloseable {
   public static class Feat implements Serializable {
     private static final long serialVersionUID = -2723964704627341786L;
     
+    public static final Comparator<Feat> BY_NAME = new Comparator<Feat>() {
+      @Override
+      public int compare(Feat o1, Feat o2) {
+        return o1.name.compareTo(o2.name);
+      }
+    };
+    
     public static double sum(Iterable<Feat> features) {
       double s = 0;
       for (Feat f : features)
