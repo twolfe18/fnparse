@@ -309,7 +309,7 @@ public class PkbpSearching implements Serializable {
     String sfName = config.getString("slotFillQueries", "sf13+sf14");
     List<KbpQuery> queries = TacKbp.getKbpSfQueries(sfName);
 
-    int stepsPerQuery = config.getInt("stepsPerQuery", 20);
+    int stepsPerQuery = config.getInt("stepsPerQuery", 12);
     double seedWeight = config.getDouble("seedWeight", 30);
     Log.info("stepsPerQuery=" + stepsPerQuery + " seedWeight=" + seedWeight);
 
@@ -459,8 +459,8 @@ public class PkbpSearching implements Serializable {
       ec.increment("expandEnt/seed");
 
     // Do the search
-    actions.add(new Action("SEARCH", e, er.get2()));
     List<SitSearchResult> res = search.entityMentionSearch(er.get2());
+    actions.add(new Action("SEARCH", e, er.get2(), res));
     if (verbose)
       Log.info("found " + res.size() + " results for " + er.get2());
 
