@@ -79,6 +79,8 @@ public class DependencySyntaxEvents {
     int head;
     Dependency dep;
     Path prev;
+    
+    private String _relStrCache = null;
 
     public Path(int head) {
       this.head = head;
@@ -103,15 +105,18 @@ public class DependencySyntaxEvents {
     }
     
     public String relationStr() {
-      StringBuilder sb = new StringBuilder();
-      for (Path cur = this; cur != null; cur = cur.prev) {
-        if (cur.dep != null) {
-          if (sb.length() > 0)
-            sb.append('-');
-          sb.append(cur.dep.getEdgeType());
+      if (_relStrCache == null) {
+        StringBuilder sb = new StringBuilder();
+        for (Path cur = this; cur != null; cur = cur.prev) {
+          if (cur.dep != null) {
+            if (sb.length() > 0)
+              sb.append('-');
+            sb.append(cur.dep.getEdgeType());
+          }
         }
+        _relStrCache = sb.toString();
       }
-      return sb.toString();
+      return _relStrCache;
     }
   }
 
@@ -169,16 +174,6 @@ public class DependencySyntaxEvents {
       return situation2features;
     }
 
-    private String words(Span s) {
-      StringBuilder sb = new StringBuilder();
-      for (int i = s.start; i < s.end; i++) {
-        if (i > s.start)
-          sb.append('_');
-        sb.append(t.getTokenList().getTokenList().get(i).getText());
-      }
-      return sb.toString();
-    }
-
     private void unify(Path left, Path right) {
       assert left.head == right.head;
 
@@ -198,8 +193,10 @@ public class DependencySyntaxEvents {
 
       if (this.args.contains(new Integer(left.head))) {
         fs.add("type=relation");
-        fs.add("arg1=" + words(ll));
-        fs.add("arg2=" + words(rr));
+        String a1 = AccumuloIndex.words(ll, t);
+        String a2 = AccumuloIndex.words(rr, t);
+        fs.add("arg1=" + a1);
+        fs.add("arg2=" + a2);
         
         Deque<Dependency> dep = new ArrayDeque<>();
         for (Path cur = left; cur != null; cur = cur.prev)
@@ -211,7 +208,6 @@ public class DependencySyntaxEvents {
         
         for (int lex = 0; lex < dep.size(); lex++) {
           StringBuilder sb = new StringBuilder();
-          sb.append("deprel=");
           Dependency prev = null;
           int i = 0;
           for (Dependency cur : dep) {
@@ -238,13 +234,21 @@ public class DependencySyntaxEvents {
             sb.append(cur.getEdgeType());
             prev = cur;
           }
-          fs.add(sb.toString());
+          String deprel = sb.toString();
+          fs.add("deprel=" + deprel);
+          if (lex == 0) {
+            fs.add("deprelA1=" + deprel + "/" + a1);
+            fs.add("deprelA2=" + deprel + "/" + a2);
+          }
         }
 
       } else {
         String predPos = pos.getTaggedTokenList().get(left.head).getTag();
+        String predLemma = lemma.getTaggedTokenList().get(left.head).getTag();
+        String lw = AccumuloIndex.words(ll, t);
+        String rw = AccumuloIndex.words(rr, t);
         fs.add("type=predicate." + predPos.charAt(0));
-        fs.add("lemma=" + lemma.getTaggedTokenList().get(left.head).getTag());
+        fs.add("lemma=" + predLemma);
         if (!predPos.startsWith("V"))
           fs.add("pos=" + predPos);
         
@@ -254,10 +258,14 @@ public class DependencySyntaxEvents {
           }
         }
 
-        fs.add("arg/" + words(ll));
-        fs.add("arg/" + words(rr));
-        fs.add("argD/" + left.relationStr() + "/" + words(ll));
-        fs.add("argD/" + right.relationStr() + "/" + words(rr));
+        fs.add("argA/" + lw);
+        fs.add("argA/" + rw);
+        fs.add("argB/" + lw + "/" + predLemma);
+        fs.add("argB/" + rw + "/" + predLemma);
+        fs.add("argC/" + lw + "/" + left.relationStr());
+        fs.add("argC/" + rw + "/" + right.relationStr());
+        fs.add("argD/" + lw + "/" + left.relationStr() + "/" + predLemma);
+        fs.add("argD/" + rw + "/" + right.relationStr() + "/" + predLemma);
       }
     }
 
@@ -301,6 +309,23 @@ public class DependencySyntaxEvents {
    * Ok, lets just dictate that every feature has a predicate location, and by convention for any path we choose this to be the shallowest token
    * If this shallowest token is the same, then we call this the target and union all feature bags with the same target
    */
+  
+  public static List<Integer> extractEntityHeads(Tokenization t) {
+    DependencyParse d = IndexCommunications.getPreferredDependencyParse(t);
+    TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
+    int n = pos.getTaggedTokenListSize();
+    assert n == t.getTokenList().getTokenListSize();
+    List<Integer> entHeads = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      assert i == pos.getTaggedTokenList().get(i).getTokenIndex();
+
+      // Look for an NNP(S)? whose parent is not an NNP
+      if (!rootNNP(i, pos, d))
+        continue;
+      entHeads.add(i);
+    }
+    return entHeads;
+  }
 
   public static void main(String[] mainArgs) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(mainArgs);
@@ -322,15 +347,7 @@ public class DependencySyntaxEvents {
           TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
           int n = pos.getTaggedTokenListSize();
           assert n == t.getTokenList().getTokenListSize();
-          List<Integer> entHeads = new ArrayList<>();
-          for (int i = 0; i < n; i++) {
-            assert i == pos.getTaggedTokenList().get(i).getTokenIndex();
-
-            // Look for an NNP(S)? whose parent is not an NNP
-            if (!rootNNP(i, pos, d))
-              continue;
-            entHeads.add(i);
-          }
+          List<Integer> entHeads = extractEntityHeads(t);
 
           if (entHeads.size() < 2)
             continue;

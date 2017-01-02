@@ -83,6 +83,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
@@ -145,7 +146,16 @@ public class AccumuloIndex {
     return c;
   }
 
-  
+  public static String words(Span s, Tokenization t) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = s.start; i < s.end; i++) {
+      if (i > s.start)
+        sb.append('_');
+      sb.append(t.getTokenList().getTokenList().get(i).getText());
+    }
+    return sb.toString();
+  }
+
   /** Returns the set of inserts for this comm, all things we are indexing (across all tables) */
   public static List<Pair<Text, Mutation>> buildMutations(Communication comm) {
     List<Pair<Text, Mutation>> mut = new ArrayList<>();
@@ -1770,6 +1780,18 @@ public class AccumuloIndex {
     Log.info("done, kept=" + kept + " overwrote=" + overwrote);
   }
   
+  public static List<Communication> extractCommunications(List<SitSearchResult> res) {
+    Set<String> ids = new HashSet<>();
+    List<Communication> l = new ArrayList<>();
+    for (SitSearchResult s : res) {
+      if (ids.add(s.getCommunicationId())) {
+        Communication c = s.getCommunication();
+        assert c != null;
+        l.add(c);
+      }
+    }
+    return l;
+  }
   
 
   /**
