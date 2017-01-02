@@ -257,6 +257,9 @@ public class NNPSense {
   }
 
   // TODO Put this in tutils
+  /**
+   * returned values are (pathEndpointTokenIndex, path)
+   */
   public static List<Pair<Integer, LL<Dependency>>> kHop(int from, int k, DependencyParse deps) {
     List<Pair<Integer, LL<Dependency>>> paths = new ArrayList<>();
     paths.add(new Pair<>(from, null));
