@@ -15,10 +15,24 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
- * Compactly represents an upper bound on the count of a set of elements
+ * Compactly represents an upper bound on the count of elements
  * where you are only allowed to increment counts.
  *
  * http://theory.stanford.edu/~tim/s15/l/l2.pdf
+ * Note: This contains a good description of how to implement
+ * epsilon-heavy-hitters on top of count-min-sketch, where you
+ * maintain approximate counts for every item in the stream,
+ * and promote HHs in and out of a heap (which I believe also
+ * needs a key->location map/index).
+ * 
+ * Conservative updates (Estan and Varghese, 2002)
+ * https://www.umiacs.umd.edu/~jags/pdfs/LSNLPsketchWAC10.pdf
+ * Briefly: say an item hashes to counters with values {4,2,1}.
+ * You would say that its sketch count is 1. With a normal
+ * increment, you would update all the counters to {5,3,2}, but
+ * this is un-necessary: you could just as well only update the
+ * min to get to {4,2,2}.
+ * 
  * @author travis
  */
 public class CountMinSketch implements Serializable {
@@ -28,21 +42,36 @@ public class CountMinSketch implements Serializable {
   protected int logb;
   protected int[][] z;
   protected long ninc;
+  protected boolean conservativeUpdates;
   
   /**
    * @param nHash higher values tighten probabilistic bound on relative error
    * @param logCountersPerHash higher values tighten bias (expected absolute error)
+   * @param conservativeUpdates should basically almost always be true
    */
-  public CountMinSketch(int nHash, int logCountersPerHash) {
+  public CountMinSketch(int nHash, int logCountersPerHash, boolean conservativeUpdates) {
     if (logCountersPerHash < 0)
       throw new IllegalAccessError();
     z = new int[nHash][1<<logCountersPerHash];
     logb = logCountersPerHash;
     nhash = nHash;
     ninc = 0;
+    this.conservativeUpdates = conservativeUpdates;
     
     long bytes = 4 * nHash * (1L<<logCountersPerHash);
     Log.info("using " + (bytes/(1L<<20)) + " MB, requires " + (nhash*logb) + " bits of hash per element");
+  }
+  
+  private static int extractHash(int i, byte[] hasheBytes, int logb) {
+    int hi = 0;
+    int bitStart = logb * i;
+    int bitStop = logb * (i+1);
+    for (int j = bitStart; j < bitStop; j++) {
+      byte b = hasheBytes[j/8];
+      b = (byte) ((b >> (j%8)) & 1);
+      hi = (hi<<1) + b;
+    }
+    return hi;
   }
   
   /**
@@ -55,17 +84,17 @@ public class CountMinSketch implements Serializable {
       throw new IllegalArgumentException("hashes.length=" + hashes.length + " nhash=" + nhash + " logb=" + logb);
     int m = Integer.MAX_VALUE;
     for (int i = 0; i < nhash; i++) {
-      int hi = 0;
-      int bitStart = logb * i;
-      int bitStop = logb * (i+1);
-      for (int j = bitStart; j < bitStop; j++) {
-        byte b = hashes[j/8];
-        b = (byte) ((b >> (j%8)) & 1);
-        hi = (hi<<1) + b;
-      }
-      if (increment)
+      int hi = extractHash(i, hashes, logb);
+      if (increment && !conservativeUpdates)
         z[i][hi]++;
       m = Math.min(m, z[i][hi]);
+    }
+    if (increment && conservativeUpdates) {
+      for (int i = 0; i < nhash; i++) {
+        int hi = extractHash(i, hashes, logb);
+        if (z[i][hi] == m)
+          z[i][hi]++;
+      }
     }
     if (increment)
       ninc++;
@@ -88,8 +117,8 @@ public class CountMinSketch implements Serializable {
     private transient HashFunction hf;
     private transient Charset cs;
 
-    public StringCountMinSketch(int nHash, int logCountersPerHash) {
-      super(nHash, logCountersPerHash);
+    public StringCountMinSketch(int nHash, int logCountersPerHash, boolean conservativeUpdates) {
+      super(nHash, logCountersPerHash, conservativeUpdates);
       hf = Hashing.goodFastHash(nhash * logb);
     }
 
@@ -105,12 +134,14 @@ public class CountMinSketch implements Serializable {
   
   public static void main(String[] args) throws Exception {
 
-    int nHash = 10;     // higher values tighten probabilistic bound on relative error
-    int logCountersPerHash = 18;    // higher values tighten bias (expected absolute error)
-    StringCountMinSketch cms = new StringCountMinSketch(nHash, logCountersPerHash);
+    int nHash = 8;     // higher values tighten probabilistic bound on relative error
+    int logCountersPerHash = 16;    // higher values tighten bias (expected absolute error)
+    boolean conservativeUpdates = true;
+    StringCountMinSketch cms = new StringCountMinSketch(nHash, logCountersPerHash, conservativeUpdates);
     Counts<String> exact = new Counts<>();
 
-    File f = new File("/tmp/english.txt");
+//    File f = new File("/tmp/english.txt");
+    File f = new File("data/english.txt");
     Log.info("reading " + f.getPath());
     try (BufferedReader r = FileUtil.getReader(f)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {

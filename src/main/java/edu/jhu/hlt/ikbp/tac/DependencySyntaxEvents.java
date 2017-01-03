@@ -553,10 +553,11 @@ public class DependencySyntaxEvents {
   public static void countFeatures(ExperimentProperties config, Zomg z) throws Exception {
     TimeMarker tm = new TimeMarker();
     long situations = 0, comms = 0, ents = 0;
-    // 10 * 20 = 40MB
+    // 4B/int * 10 * 2^20 = 40MB
     int nHash = 10;
     int logCountersPerHash = 20;
-    StringCountMinSketch counts = new StringCountMinSketch(nHash, logCountersPerHash);
+    boolean conservativeUpdates = true;
+    StringCountMinSketch counts = new StringCountMinSketch(nHash, logCountersPerHash, conservativeUpdates);
     File output = config.getFile("output");
     TimeMarker outputTm = new TimeMarker();
     double outputEvery = config.getDouble("outputEvery", 120);
@@ -618,12 +619,12 @@ public class DependencySyntaxEvents {
     private Map<String, List<String>> lu2fs;    // e.g. "be.VGB" -> ["framenet/foo", "probank/bar"]
     
     public Zomg() {
-      this(10, 20);
+      this(10, 20, true);
     }
-    public Zomg(int nHash, int logCountersPerHash) {
-      cx = new StringCountMinSketch(nHash, logCountersPerHash);
-      cy = new StringCountMinSketch(nHash, logCountersPerHash);
-      cyx = new StringCountMinSketch(nHash, logCountersPerHash);
+    public Zomg(int nHash, int logCountersPerHash, boolean conservativeUpdates) {
+      cx = new StringCountMinSketch(nHash, logCountersPerHash, conservativeUpdates);
+      cy = new StringCountMinSketch(nHash, logCountersPerHash, conservativeUpdates);
+      cyx = new StringCountMinSketch(nHash, logCountersPerHash, conservativeUpdates);
       lu2fs = new HashMap<>();
       try {
         count(new File("data/srl-reldata/framenet/srl.facts.gz"));
