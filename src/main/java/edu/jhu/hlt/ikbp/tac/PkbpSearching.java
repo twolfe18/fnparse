@@ -5,6 +5,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -40,6 +41,7 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.DoublePair;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
@@ -64,7 +66,7 @@ public class PkbpSearching implements Serializable {
     // detect entity heads in that tokenization and run DependencySyntaxEvents
     // run parsey first?
     List<SitSearchResult> res = new ArrayList<>();
-    for (Action a : actions) {
+    for (Action a : history) {
       if (a.type.equals("SEARCH")) {
         res.addAll((List<SitSearchResult>) a.arguments.get(2));
       }
@@ -100,12 +102,19 @@ public class PkbpSearching implements Serializable {
     try (RedisSitFeatFrequency rsitf = new RedisSitFeatFrequency("localhost", 8567, topK)) {
       List<PkbpSearchingSituation> events = new ArrayList<>();
       for (SitSearchResult r : res) {
-        playbackResult(r, events, rsitf);
+        extractAndLinkSituations(r, events, rsitf);
       }
     }
   }
 
-  public void playbackResult(SitSearchResult r, List<PkbpSearchingSituation> events, RedisSitFeatFrequency rsitf) {
+  /*
+   * TODO Modify this so that instead of accepting a FULL LIST of all situations,
+   * 1) Do the entity linking against PKB entities
+   * 2) For every entityMention->entity link, consider situationMention->situation link s.t. entity in situation.args
+   */
+  public void extractAndLinkSituations(SitSearchResult r, List<PkbpSearchingSituation> knownSituations, RedisSitFeatFrequency rsitf) {
+    
+    // 1) Extract situation mentions and their entity arguments in the given Tokenization
     System.out.println("considering SitSearchResult: " + r.getWordsInTokenizationWithHighlightedEntAndSit());
     DependencyParse deps = IndexCommunications.getPreferredDependencyParse(r.getTokenization());
     List<Integer> entities = DependencySyntaxEvents.extractEntityHeads(r.getTokenization());
@@ -130,17 +139,20 @@ public class PkbpSearching implements Serializable {
       System.out.println("\tsituation at=" + s + " sit=" + r.getTokenization().getTokenList().getTokenList().get(s).getText());
     System.out.println();
 
-    // laptop: ssh -fNL 8567:test2:7379 test2b
-    // laptop: redis-cli -p 8567    # for some reason -h localhost makes it not work
+
+    // 2) For each situation, try to link it to a known situation
+    // for now we are using a list of situations as our PKB over situations
     for (Entry<Integer, Set<String>> e : sit2feat.entrySet()) {
+      // laptop: ssh -fNL 8567:test2:7379 test2b
+      // laptop: redis-cli -p 8567    # for some reason -h localhost makes it not work
       int pred = e.getKey();
       Set<String> sf = e.getValue();
       System.out.println("considering situation at=" + pred
           + " word=" + r.getTokenization().getTokenList().getTokenList().get(pred).getText());
-      if (events.isEmpty()) {
+      if (knownSituations.isEmpty()) {
         // Just add the first event, no questions asked
         PkbpSearchingSitMention sm = PkbpSearchingSitMention.convert(pred, sitEx, rsitf::getScore);
-        events.add(new PkbpSearchingSituation(sm));
+        knownSituations.add(new PkbpSearchingSituation(sm));
         continue;
       }
 
@@ -148,12 +160,12 @@ public class PkbpSearching implements Serializable {
       PkbpSearchingSitMention cur = PkbpSearchingSitMention.convert(pred, sitEx, rsitf::getScore);
 
       ArgMax<Pair<PkbpSearchingSituation, List<Feat>>> bestSit = new ArgMax<>();
-      for (int i = 0; i < events.size(); i++) {
-        List<Feat> sim = events.get(i).similarity(sf2f);
-        bestSit.offer(new Pair<>(events.get(i), sim), Feat.sum(sim));
+      for (int i = 0; i < knownSituations.size(); i++) {
+        List<Feat> sim = knownSituations.get(i).similarity(sf2f);
+        bestSit.offer(new Pair<>(knownSituations.get(i), sim), Feat.sum(sim));
         
         System.out.println("entity.mentions {");
-        for (PkbpSearchingSitMention sm : events.get(i).mentions) {
+        for (PkbpSearchingSitMention sm : knownSituations.get(i).mentions) {
           System.out.println("  =>" + sm.showPredInContext());
           System.out.println("      " + sortAndPrune(sm.feat2score, 5));
         }
@@ -181,7 +193,7 @@ public class PkbpSearching implements Serializable {
         best.get1().addMention(cur);
       } else {
         System.out.println("NEW_SITUATION");
-        events.add(new PkbpSearchingSituation(cur));
+        knownSituations.add(new PkbpSearchingSituation(cur));
       }
       System.out.println();
       System.out.println();
@@ -420,6 +432,9 @@ public class PkbpSearching implements Serializable {
   }
 
   
+  /**
+   * @deprecated use the {@link RedisSitFeatFrequency} version of this function
+   */
   public static double similarity(Set<String> sitFeat, Set<String> sitMentionFeats) {
     Set<String> i = new HashSet<>();
     i.addAll(sitMentionFeats);
@@ -505,6 +520,19 @@ public class PkbpSearching implements Serializable {
     }
   }
 
+  /** n-entities => list of situations containing these entities */
+  static class PkbEntry {
+    int id;
+    double salience;    // for ranking PkbEntries to show to the user based on their query
+    List<PkbpSearchingEntity> args;   // for now: length=2 and arg0 is always the seed entity
+    List<PkbpSearchingSituation> situations;    // should this be mentions instead of situations?
+  }
+
+  // Input: Seed
+  private KbpQuery seed;
+  private StringTermVec seedTermVec;
+
+  // Searching
   private transient KbpSearching search;
   private transient TacQueryEntityMentionResolver findEntityMention;
   private Random rand;
@@ -515,25 +543,82 @@ public class PkbpSearching implements Serializable {
   public DoublePair relatedEntitySigmoid = new DoublePair(6, 2);    // first: higher value lowers prob of keeping related entities. second: temperature of sigmoid (e.g. infinity means everything is 50/50 odds of keep)
   public DoublePair xdocCorefSigmoid = new DoublePair(3, 1);
 
-  // Pkb
-  private KbpQuery seed;
-  private StringTermVec seedTermVec;
+  // OLD PKB
+  /** @deprecated */
   private List<PkbpSearchingEntity> entities;
+  /** @deprecated */
   private Set<String> knownComms;
   // TODO situations
-  private List<PkbpSearching.Action> actions;
+  
+  // NEW PKB
+  /*
+   * To mimic the hyper-graph used in Uberts:
+   * every node must have an id
+   * edges are encoded via adjacency maps
+   * edges should be added in one place and never/carefully removed
+   */
+  List<PkbEntry> entries;
+  /** Keys are features which would get you most of the way (scoring-wise) towards a LINK */
+  Map<String, LL<PkbpSearchingEntity>> discF2Ent;
+  Map<String, LL<PkbpSearchingSituation>> discF2Sit;
+  
+//  Map<PkbpSearchingEntity, LL<PkbEntry>> ent2Entries;
+//  Map<PkbpSearchingSituation, LL<PkbEntry>> sit2Entries;
+  
+  // 1) Search off of an entry
+  // 2) for each result: either LINK or NEW entry
+  //    2a) extract all arguments at the mention level, try to link them to entities
+  //    2b) after linking entity arguments, LINK to a situation iff you have an entity link and 
+  //    (LINK can happen n+ times, but NEW can only happen if there are NO LINKs)
+  // 3) if you LINK to more than one result, push onto the agenda an action for merging those entries
+  
+  /** SEARCH(entry) s.t. entry.args contains seed or LINK(entry,entry) */
+  Deque<Action> agenda;
+  
 
+  // History
+  private List<Action> history;
+  
+
+  // Debugging
   Counts<String> ec = new Counts<>();
-
   public boolean verbose = false;
   public boolean verboseLinking = true;
+  
+  
+  
+  public void foo() {
+    Action a = agenda.pop();
+    switch (a.type) {
+    case "SEARCH":
+      search((List) a.arguments);
+      break;
+    case "LINK":
+      break;
+    default:
+      throw new RuntimeException("idk: " + a);
+    }
+  }
+  
+  public void search(List<PkbpSearchingEntity> ents) {
+    // Do a query for the intersection of each of these entities
+    
+    // For each result extract entity arguments and situations
+    
+    // For each result, try to link all arguments
+    
+    // For each result, try to link all situations based on known entity links + sit features
+  }
+  
+  
+
 
   public PkbpSearching(KbpSearching search, KbpQuery seed, double seedWeight, Random rand) {
     Log.info("seed=" + seed);
     if (seed.sourceComm == null)
       throw new IllegalArgumentException();
 
-    this.actions = new ArrayList<>();
+    this.history = new ArrayList<>();
     this.rand = rand;
     this.search = search;
     this.seed = seed;
@@ -581,7 +666,7 @@ public class PkbpSearching implements Serializable {
     relevanceReasons.add(new Feat("seed", seedWeight));
     PkbpSearchingEntity e = new PkbpSearchingEntity(id, canonical, relevanceReasons);
     this.entities.add(e);
-    this.actions.add(new Action("NEW_ENTITY", e, canonical));
+    this.history.add(new Action("NEW_ENTITY", e, canonical));
   }
 
   public KbpQuery getSeed() {
@@ -601,7 +686,7 @@ public class PkbpSearching implements Serializable {
 
     // Do the search
     List<SitSearchResult> res = search.entityMentionSearch(er.get2());
-    actions.add(new Action("SEARCH", e, er.get2(), res));
+    history.add(new Action("SEARCH", e, er.get2(), res));
     if (verbose)
       Log.info("found " + res.size() + " results for " + er.get2());
 
@@ -661,7 +746,11 @@ public class PkbpSearching implements Serializable {
     AccumuloIndex.TIMER.stop("expandEntity");
   }
 
-  private Pair<PkbpSearchingEntity, List<Feat>> linkAgainstPkb(SitSearchResult r) {
+  /*
+   * TODO Make this method more general so that I can take something more like (entityHead:int, context:Tokenization)
+   * and maybe some memoized stuff like triage/attr features.
+   */
+  private Pair<PkbpSearchingEntity, List<Feat>> linkEntityMentionToPkb(SitSearchResult r) {
     AccumuloIndex.TIMER.start("linkAgainstPkb");
     if (r.triageFeatures == null)
       throw new RuntimeException();
@@ -811,7 +900,7 @@ public class PkbpSearching implements Serializable {
     AccumuloIndex.TIMER.start("linkRelatedEntity");
     if (verbose)
       Log.info("starting relevanceReasons=" + relevanceReasons);
-    Pair<PkbpSearchingEntity, List<Feat>> link = linkAgainstPkb(r);
+    Pair<PkbpSearchingEntity, List<Feat>> link = linkEntityMentionToPkb(r);
     PkbpSearchingEntity e = link.get1();
     double linkingScore = Feat.sum(link.get2());
     if (linkingScore > 4) {
@@ -819,7 +908,7 @@ public class PkbpSearching implements Serializable {
       if (verbose)
         Log.info("LINKING " + r.getEntitySpanGuess() + " to " + e.id);
       e.addMention(r);
-      actions.add(new Action("LINKING", e, r));
+      history.add(new Action("LINKING", e, r));
       ec.increment("linkRel/pkbEnt");
     } else {
       // Decide whether to create a new entity
@@ -850,14 +939,14 @@ public class PkbpSearching implements Serializable {
         PkbpSearchingEntity newEnt = new PkbpSearchingEntity(id, r, relevanceReasons);
         entities.add(newEnt);
 //        actions.add(new Action("NEW_ENTITY", e, r));
-        actions.add(new Action("NEW_ENTITY", newEnt, r, e));
+        history.add(new Action("NEW_ENTITY", newEnt, r, e));
         ec.increment("linkRel/newEnt");
       } else {
         // Prune this mention
         // no-op
         if (verbose)
           Log.info("PRUNING " + r.getEntitySpanGuess());
-        actions.add(new Action("PRUNE", e, r));
+        history.add(new Action("PRUNE", e, r));
         ec.increment("linkRel/prune");
       }
     }

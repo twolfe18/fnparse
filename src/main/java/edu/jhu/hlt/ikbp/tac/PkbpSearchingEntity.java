@@ -11,6 +11,7 @@ import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
  * To a first approximation: a list of mentions with an id.
@@ -21,7 +22,9 @@ class PkbpSearchingEntity implements Serializable, Iterable<SitSearchResult> {
   private static final long serialVersionUID = 6258694570076400637L;
 
   public final String id;
+
   private List<SitSearchResult> mentions;
+
   /** Reasons why this entity is central to the PKB/seed */
   List<Feat> relevantReasons;
 
