@@ -1,9 +1,13 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.io.File;
+import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,18 +19,35 @@ import java.util.Set;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Dependency;
 import edu.jhu.hlt.concrete.DependencyParse;
+import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.Token;
+import edu.jhu.hlt.concrete.TokenList;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.data.WordNetPosUtil;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator;
+import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
+import edu.jhu.hlt.uberts.io.RelationFileIterator;
+import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
+import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.CountMinSketch.StringCountMinSketch;
 import edu.jhu.util.TokenizationIter;
-import redis.clients.jedis.Jedis;
-import redis.clients.jedis.Pipeline;
+import edu.mit.jwi.IRAMDictionary;
+import edu.mit.jwi.item.IIndexWord;
+import edu.mit.jwi.item.IPointer;
+import edu.mit.jwi.item.ISynset;
+import edu.mit.jwi.item.ISynsetID;
+import edu.mit.jwi.item.IWord;
+import edu.mit.jwi.item.IWordID;
 
 /**
  * Extracts events by using a dependency tree
@@ -122,9 +143,13 @@ public class DependencySyntaxEvents {
 
   static class CoverArgumentsWithPredicates {
     // Input
+    Communication c;
     Tokenization t;
     DependencyParse deps;
     List<Integer> args;
+    
+    // Optional Input
+    LL<String>[] synsets;   // indexed by token (in this Tokenization)
 
     // Processing
     Dependency[] heads;
@@ -133,12 +158,14 @@ public class DependencySyntaxEvents {
 
     // Output
     Map<Integer, Set<String>> situation2features;    // key is predicate word index, values are features for that situation
+    Map<Integer, BitSet> situation2args;
 
-    public CoverArgumentsWithPredicates(Tokenization t, DependencyParse deps, List<Integer> args) {
+    public CoverArgumentsWithPredicates(Communication c, Tokenization t, DependencyParse deps, List<Integer> args) {
       int n = t.getTokenList().getTokenListSize();
       this.t = t;
       this.deps = deps;
       this.situation2features = new HashMap<>();
+      this.situation2args = new HashMap<>();
       this.args = args;
 
       heads = new Dependency[n];
@@ -170,6 +197,169 @@ public class DependencySyntaxEvents {
       }
     }
     
+    Map<Integer, List<Feat>> situation2frames = new HashMap<>();
+    
+    static class Foo {
+      String y;
+      double score, scoreExp;
+      List<Feat> s;
+      
+      public Foo(String y, List<Feat> s) {
+        this.y = y;
+        this.s = s;
+        this.score = Feat.sum(s);
+      }
+      
+      public static final Comparator<Foo> BY_SCORE_DESC = new Comparator<Foo>() {
+        @Override
+        public int compare(Foo o1, Foo o2) {
+          assert Double.isFinite(o1.score);
+          assert !Double.isNaN(o1.score);
+          assert Double.isFinite(o2.score);
+          assert !Double.isNaN(o2.score);
+          if (o1.score > o2.score)
+            return -1;
+          if (o1.score < o2.score)
+            return +1;
+          return 0;
+        }
+      };
+    }
+
+    public void annotateSituations(Zomg z) {
+      double cover = 0.9;
+      TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
+      for (int pred : situation2features.keySet()) {
+        List<String> fx = z.features(pred, deps, pos, t);
+        List<String> ys = z.possibleFrames(pred, deps, pos, t);
+        List<Foo> foos = new ArrayList<>();
+        double m = Double.NEGATIVE_INFINITY;
+        for (String y : ys) {
+          List<Feat> sy = z.score(y, fx);
+          Foo f = new Foo(y, sy);
+          foos.add(f);
+          m = Math.max(m, f.score);
+        }
+        
+        // Set the max to a reasonable constant
+        double Z = 0;
+        for (Foo f : foos) {
+          f.score = (4-m) + f.score;
+          f.scoreExp = Math.exp(f.score);
+          Z += f.scoreExp;
+        }
+        
+        Collections.sort(foos, Foo.BY_SCORE_DESC);
+        List<Feat> ff = new ArrayList<>();
+        double p = 0;
+        for (Foo f : foos) {
+          p += f.scoreExp;
+          ff.add(new Feat(f.y, f.score));
+          if (p/Z > cover)
+            break;
+        }
+//        System.out.println("frames=" + ff);
+        Object old = situation2frames.put(pred, ff);
+        assert old == null;
+      }
+    }
+    
+    /**
+     * @deprecated
+     * @param wn
+     */
+    @SuppressWarnings("unchecked")
+    public void useSynsetSetFeatures(IRAMDictionary wn) {
+      int n = t.getTokenList().getTokenListSize();
+      synsets = new LL[n];
+
+//      TargetPruningData tpd = TargetPruningData.getInstance();
+//      WordnetStemmer stemmer = tpd.getStemmer();
+      
+      TokenTagging lemmas = IndexCommunications.getPreferredLemmas(t);
+      TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
+      for (int i = 0; i < n; i++) {
+        String lemma = lemmas.getTaggedTokenList().get(i).getTag();
+        assert i == lemmas.getTaggedTokenList().get(i).getTokenIndex();
+        String ptbPosTag = pos.getTaggedTokenList().get(i).getTag();
+        assert i == pos.getTaggedTokenList().get(i).getTokenIndex();
+
+        edu.mit.jwi.item.POS tag = WordNetPosUtil.ptb2wordNet(ptbPosTag);
+        if (tag == null) {
+//          Log.info("warning: couldn't look up ptbTag=" + ptbPosTag);
+          continue;
+        }
+        
+        // TODO Try with jwi lemmatizer (vs stanford), count number of successful lookups
+//        String w = word.trim().replace("_", "");
+//        if (w.length() == 0)
+//          continue;
+//        List<String> stems = stemmer.findStems(w, tag);
+//        if (stems == null || stems.size() == 0)
+//          continue;
+//        IRAMDictionary dict = tpd.getWordnetDict();
+//        IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
+//        if (ti == null || ti.getWordIDs().isEmpty())
+//          continue;
+//        IWordID t = ti.getWordIDs().get(0);
+//        IWord iw = dict.getWord(t);
+        
+        IIndexWord x = wn.getIndexWord(lemma, tag);
+        if (x == null) {
+          if (!ptbPosTag.startsWith("NNP") && !ptbPosTag.equals("CD"))
+            Log.info("warning: couldn't look up lemma=" + lemma + " tag=" + tag);
+        } else {
+          int a = 0, b = 0, c = 0;
+          Set<String> uniq = new HashSet<>();
+          String s;
+          for (IWordID iw : x.getWordIDs()) {
+            IWord w = wn.getWord(iw);
+            ISynset ss = w.getSynset();
+            
+            
+//            w.getSenseKey().
+            System.out.println("iw=" + iw + "\tgloss=" + ss.getGloss());
+            
+            
+            // Related words
+            for (Entry<IPointer, List<IWordID>> rss : w.getRelatedMap().entrySet()) {
+              String rel = rss.getKey().getSymbol();
+              for (IWordID rwid : rss.getValue()) {
+                IWord rw = wn.getWord(rwid);
+                if (uniq.add(s = "wnRW/" + rel + "/" + rw.getSynset())) {
+                  synsets[i] = new LL<>(s, synsets[i]);
+                  a++;
+                }
+              }
+            }
+            
+            // Synset
+            if (uniq.add(s = ss.getID().toString())) {
+              synsets[i] = new LL<>("wnSS/" + s, synsets[i]);
+              b++;
+            }
+
+            // Related synsets
+            for (Entry<IPointer, List<ISynsetID>> rss : w.getSynset().getRelatedMap().entrySet()) {
+              String rel = rss.getKey().getSymbol();
+              for (ISynsetID rssid : rss.getValue()) {
+                if (uniq.add(s = "wnRSS/" + rel + "/" + rssid.toString())) {
+                  synsets[i] = new LL<>(s, synsets[i]);
+                  c++;
+                }
+              }
+            }
+          }
+          String word = t.getTokenList().getTokenList().get(i).getText();
+          System.out.printf("word=%-16s lemma=%-14s pos=%-5s a=%d b=%d c=%d %s\n", word, lemma, tag, a, b, c, synsets[i]);
+        }
+      }
+    }
+    
+    public Map<Integer, BitSet> getArguments() {
+      return situation2args;
+    }
+    
     public Map<Integer, Set<String>> getSituations() {
       return situation2features;
     }
@@ -182,6 +372,14 @@ public class DependencySyntaxEvents {
         fs = new HashSet<>();
         situation2features.put(left.head, fs);
       }
+      
+      BitSet args = situation2args.get(left.head);
+      if (args == null) {
+        args = new BitSet();
+        situation2args.put(left.head, args);
+      }
+      args.set(left.getLast().head);
+      args.set(right.getLast().head);
 
       TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
       TokenTagging lemma = IndexCommunications.getPreferredLemmas(t);
@@ -260,6 +458,13 @@ public class DependencySyntaxEvents {
             fs.add("dsyn/" + d.getEdgeType() + "=" + t.getTokenList().getTokenList().get(d.getDep()).getText());
           }
         }
+        
+        /*
+         * I have sort of deviated from what I have with attribute features.
+         * Attribute features split entities which were put into the same bucket using something like a headword (or feature-match in general)
+         * With situations, entity-valued arguments are really the only positive-evidence that two situations are the same
+         * And realistically, we should have things like lemma, synset, or frame splitting them
+         */
 
         fs.add("argA/" + lw);
         fs.add("argA/" + rw);
@@ -332,19 +537,36 @@ public class DependencySyntaxEvents {
 
   public static void main(String[] mainArgs) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(mainArgs);
-    // redis-server --dir data/sit-search/sit-feat-counts-redis --port 7379
+    File modelFile = config.getFile("modelFile");
+    Zomg z;
+    if (modelFile.isFile()) {
+      Log.info("deserializing from " + modelFile.getPath());
+      z = (Zomg) FileUtil.deserialize(modelFile);
+    } else {
+      z = new Zomg();
+      FileUtil.serialize(z, modelFile);
+    }
+    countFeatures(config, z);
+    Log.info("done");
+  }
+  
+  public static void countFeatures(ExperimentProperties config, Zomg z) throws Exception {
     TimeMarker tm = new TimeMarker();
     long situations = 0, comms = 0, ents = 0;
-    String host = config.getString("redis.host");
-    int port = config.getInt("redis.port");
+    // 10 * 20 = 40MB
+    int nHash = 10;
+    int logCountersPerHash = 20;
+    StringCountMinSketch counts = new StringCountMinSketch(nHash, logCountersPerHash);
+    File output = config.getFile("output");
+    TimeMarker outputTm = new TimeMarker();
+    double outputEvery = config.getDouble("outputEvery", 120);
+//    IRAMDictionary wn = TargetPruningData.getInstance().getWordnetDict();
     List<String> fs = null;
-    try (AutoCloseableIterator<Communication> iter = IndexCommunications.getCommunicationsForIngest(config);
-        Jedis j = new Jedis(host, port)) {
+    try (AutoCloseableIterator<Communication> iter = IndexCommunications.getCommunicationsForIngest(config)) {
       iterator:
       while (iter.hasNext()) {
         Communication c = iter.next();
         comms++;
-        Pipeline p = j.pipelined();       // pipeline/batch for each communication
         for (Tokenization t : new TokenizationIter(c)) {
           DependencyParse d = IndexCommunications.getPreferredDependencyParse(t);
           TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
@@ -356,15 +578,11 @@ public class DependencySyntaxEvents {
             continue;
           ents += entHeads.size();
 
-//          System.out.println(show(t));
-//          for (int ent : entHeads) {
-//            System.out.println("ent: " + ent + "\t" + t.getTokenList().getTokenList().get(ent).getText());
-//          }
-//          System.out.println();
-
           CoverArgumentsWithPredicates idfk = null;
           try {
-            idfk = new CoverArgumentsWithPredicates(t, d, entHeads);
+            idfk = new CoverArgumentsWithPredicates(c, t, d, entHeads);
+//            idfk.useSynsetSetFeatures(wn);
+            idfk.annotateSituations(z);
           } catch (IllegalArgumentException e) {
             e.printStackTrace();
             continue iterator;
@@ -372,20 +590,189 @@ public class DependencySyntaxEvents {
           for (Entry<Integer, Set<String>> e : idfk.getSituations().entrySet()) {
             situations++;
             fs = new ArrayList<>(e.getValue());
-            Collections.sort(fs);
-            for (String f : fs) {
-//              System.out.println(e.getKey() + "\t" + f);
-              p.incr(f);
-            }
+            for (Feat f : idfk.situation2frames.get(e.getKey()))
+              fs.add(f.name);
+            for (String f : fs)
+              counts.apply(f, true);
           }
-//          System.out.println();
         }
-        p.sync();
         
         if (tm.enoughTimePassed(10)) {
           Log.info("comms=" + comms + " sits=" + situations
               + " ents=" + ents + " curDoc=" + c.getId() + "\t" + Describe.memoryUsage());
           System.out.println("curFeats=" + fs);
+          
+          if (outputTm.enoughTimePassed(outputEvery)) {
+            Log.info("serializing count-min sketch to " + output.getPath());
+            FileUtil.serialize(counts, output);
+          }
+        }
+      }
+    }
+  }
+  
+  static class Zomg implements Serializable {
+    private static final long serialVersionUID = -8232003611293244877L;
+
+    private StringCountMinSketch cx, cy, cyx;
+    private Map<String, List<String>> lu2fs;    // e.g. "be.VGB" -> ["framenet/foo", "probank/bar"]
+    
+    public Zomg() {
+      this(10, 20);
+    }
+    public Zomg(int nHash, int logCountersPerHash) {
+      cx = new StringCountMinSketch(nHash, logCountersPerHash);
+      cy = new StringCountMinSketch(nHash, logCountersPerHash);
+      cyx = new StringCountMinSketch(nHash, logCountersPerHash);
+      lu2fs = new HashMap<>();
+      try {
+        count(new File("data/srl-reldata/framenet/srl.facts.gz"));
+        count(new File("data/srl-reldata/propbank-withParsey-fineFrames/srl.facts.gz"));
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    
+    public List<Feat> score(String y, List<String> fx) {
+      List<Feat> f = new ArrayList<>();
+
+      double logcy = Math.log(cy.apply(y, false)+1d);
+      f.add(new Feat(y, logcy));
+
+      for (String fxi : fx) {
+        String fyx = y + "/" + fxi;
+        double logcyx = Math.log(cyx.apply(fyx, false)+1d);
+        f.add(new Feat(fyx, logcyx - logcy));
+      }
+      
+//      System.out.printf("y=%-32s score=%.3f syx=%s\n", y, Feat.sum(f), PkbpSearching.sortAndPrune(f, 6));
+
+      return f;
+    }
+    
+    public List<String> possibleFrames(int pred, DependencyParse deps, TokenTagging pos, Tokenization t) {
+      String lu = t.getTokenList().getTokenList().get(pred).getText();
+      List<String> fs = lu2fs.get(lu);
+      if (fs == null)
+        return Collections.emptyList();
+      return fs;
+    }
+
+    private List<String> features(int pred, DependencyParse deps, TokenTagging pos, Tokenization t) {
+      List<String> fx = new ArrayList<>();
+      String predWord = t.getTokenList().getTokenList().get(pred).getText();
+      String predPos = pos.getTaggedTokenList().get(pred).getTag();
+      fx.add("word/" + predWord);
+      fx.add("word/" + predWord + "." + predPos);
+      fx.add("pos/" + predPos);
+      int k = 5;
+      List<Pair<Integer, LL<Dependency>>> paths = NNPSense.kHop(pred, k, deps);
+      pathloop:
+      for (Pair<Integer, LL<Dependency>> path : paths) {
+        if (path.get2() == null)
+          continue;
+        StringBuilder sb = new StringBuilder();
+        sb.append("dsyn/");
+        int to = path.get1();
+        int len = 0;
+        for (LL<Dependency> cur = path.get2(); cur != null; cur = cur.next) {
+          Dependency d = cur.item;
+          boolean up = d.getDep() == to;
+          assert up || d.getGov() == to;
+          
+          if (d.getEdgeType().equals("punct"))
+            continue pathloop;
+          
+          sb.append(d.getEdgeType());
+          sb.append(up ? ">" : "<");
+          
+          to = up ? d.getGov() : d.getDep();
+          len++;
+        }
+        String arg = t.getTokenList().getTokenList().get(path.get1()).getText();
+        fx.add(sb.toString());
+        sb.append('/');
+        sb.append(arg);
+        fx.add(sb.toString());
+        fx.add("dsyn/len" + len + "path/" + arg);
+      }
+      return fx;
+    }
+    
+    private void count(File f) throws Exception {
+      Log.info("reading " + f.getPath());
+      TimeMarker tm = new TimeMarker();
+      int nd = 0, nf = 0;
+      try (RelationFileIterator rfi = new RelationFileIterator(f, false);
+          ManyDocRelationFileIterator md = new ManyDocRelationFileIterator(rfi, true)) {
+        while (md.hasNext()) {
+          RelDoc doc = md.next();
+          List<RelLine> frames = doc.findLinesOfRelation("predicate2");
+          if (frames.isEmpty())
+            continue;
+          List<RelLine> words = doc.findLinesOfRelation("word2");
+          List<RelLine> pos = doc.findLinesOfRelation("pos2");
+          List<RelLine> deps = doc.findLinesOfRelation("dsyn3-parsey");
+          
+          Tokenization t = new Tokenization();
+          t.setTokenList(new TokenList());
+          for (RelLine wl : words) {
+            t.getTokenList().addToTokenList(new Token()
+                .setTokenIndex(Integer.parseInt(wl.tokens[2]))
+                .setText(wl.tokens[3]));
+          }
+
+          DependencyParse d = new DependencyParse();
+          t.addToDependencyParseList(d);
+          for (RelLine dl : deps) {
+            d.addToDependencyList(new Dependency()
+                .setGov(Integer.parseInt(dl.tokens[2]))
+                .setDep(Integer.parseInt(dl.tokens[3]))
+                .setEdgeType(dl.tokens[4]));
+          }
+
+          TokenTagging p = new TokenTagging();
+          t.addToTokenTaggingList(p);
+          p.setTaggingType("POS");
+          for (RelLine pl : pos) {
+            p.addToTaggedTokenList(new TaggedToken()
+                .setTokenIndex(Integer.parseInt(pl.tokens[2]))
+                .setTag(pl.tokens[3]));
+          }
+
+          TokenTagging y = new TokenTagging();
+          t.addToTokenTaggingList(y);
+          y.setTaggingType("frames");
+          for (RelLine fl : frames) {
+            y.addToTaggedTokenList(new TaggedToken()
+                .setTokenIndex(Span.inverseShortString(fl.tokens[2]).start)
+                .setTag(fl.tokens[3]));
+          }
+
+          // Count
+          for (TaggedToken frame : y.getTaggedTokenList()) {
+            List<String> fx = features(frame.getTokenIndex(), d, p, t);
+            for (String fxi : fx) {
+//              System.out.println("cyx: " + frame.getTag() + "/" + fxi);
+              cyx.apply(frame.getTag() + "/" + fxi, true);
+              cy.apply(frame.getTag(), true);
+              cx.apply(fxi, true);
+            }
+
+            String lu = t.getTokenList().getTokenList().get(frame.getTokenIndex()).getText();
+            List<String> fs = lu2fs.get(lu);
+            if (fs == null) {
+              fs = new ArrayList<>();
+              lu2fs.put(lu, fs);
+            }
+            if (!fs.contains(frame.getTag()))
+              fs.add(frame.getTag());
+            nf++;
+          }
+          nd++;
+          
+          if (tm.enoughTimePassed(5))
+            Log.info("ndoc=" + nd + " nframe=" + nf);
         }
       }
     }

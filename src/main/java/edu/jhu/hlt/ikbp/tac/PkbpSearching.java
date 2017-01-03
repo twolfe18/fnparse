@@ -4,14 +4,17 @@ import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
@@ -34,6 +37,7 @@ import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Average;
+import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.DoublePair;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -56,16 +60,6 @@ public class PkbpSearching implements Serializable {
   
   public void playback(ExperimentProperties config) throws Exception {
     Log.info("playing back");
-//    for (Action a : ps.actions) {
-//      if (a.arguments.size() == 2) {
-//        PkbpSearchingEntity e = (PkbpSearchingEntity) a.arguments.get(0);
-//        SitSearchResult m = (SitSearchResult) a.arguments.get(1);
-//        System.out.printf("%-8s %-28s %s\n", a.type, e.id, m.getWordsInTokenizationWithHighlightedEntAndSit());
-//      } else {
-//        System.out.println("unexpected: " + a.type + "\t" + StringUtils.join("\t", a.arguments));
-//      }
-//    }
-    
     
     // (for now) For every SitSearchResult coming from arg3 of a SEARCH,
     // detect entity heads in that tokenization and run DependencySyntaxEvents
@@ -103,96 +97,278 @@ public class PkbpSearching implements Serializable {
     
     // Run event extraction on all of the tokenization/SitSearchResults.
     // At the same time do a mock PKB population run, filling in events
-    List<Set<String>> events = new ArrayList<>();
-    for (SitSearchResult r : res) {
-      System.out.println("considering SitSearchResult: " + r.getWordsInTokenizationWithHighlightedEntAndSit());
-      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(r.getTokenization());
-      List<Integer> entities = DependencySyntaxEvents.extractEntityHeads(r.getTokenization());
-      if (entities.size() < 2) {
-        System.out.println("skipping b/c to few entities");
+    int topK = 1_000_000;
+    try (RedisSitFeatFrequency rsitf = new RedisSitFeatFrequency("localhost", 8567, topK)) {
+      List<Situation> events = new ArrayList<>();
+      for (SitSearchResult r : res) {
+        playbackResult(r, events, rsitf);
+      }
+    }
+  }
+
+  public void playbackResult(SitSearchResult r, List<Situation> events, RedisSitFeatFrequency rsitf) {
+    System.out.println("considering SitSearchResult: " + r.getWordsInTokenizationWithHighlightedEntAndSit());
+    DependencyParse deps = IndexCommunications.getPreferredDependencyParse(r.getTokenization());
+    List<Integer> entities = DependencySyntaxEvents.extractEntityHeads(r.getTokenization());
+    if (entities.size() < 2) {
+      System.out.println("skipping b/c to few entities");
+      return;
+    }
+    for (int e : entities) {
+      Span es = IndexCommunications.nounPhraseExpand(e, deps);
+      String s = AccumuloIndex.words(es, r.getTokenization());
+      System.out.println("\tentity at=" + e + "\tent=" + s);
+    }
+    System.out.println();
+
+    CoNLLX.VERBOSE = false;
+    DependencySyntaxEvents.CoverArgumentsWithPredicates sitEx =
+        new DependencySyntaxEvents.CoverArgumentsWithPredicates(
+            r.getCommunication(), r.getTokenization(), deps, entities);
+
+    Map<Integer, Set<String>> sit2feat = sitEx.getSituations();
+    for (int s : sit2feat.keySet())
+      System.out.println("\tsituation at=" + s + " sit=" + r.getTokenization().getTokenList().getTokenList().get(s).getText());
+    System.out.println();
+
+    // laptop: ssh -fNL 8567:test2:7379 test2b
+    // laptop: redis-cli -p 8567    # for some reason -h localhost makes it not work
+    for (Entry<Integer, Set<String>> e : sit2feat.entrySet()) {
+      int pred = e.getKey();
+      Set<String> sf = e.getValue();
+      System.out.println("considering situation at=" + pred
+          + " word=" + r.getTokenization().getTokenList().getTokenList().get(pred).getText());
+      if (events.isEmpty()) {
+        // Just add the first event, no questions asked
+        SitMention sm = SitMention.convert(pred, sitEx, rsitf::getScore);
+        events.add(new Situation(sm));
         continue;
       }
-      for (int e : entities) {
-        Span es = IndexCommunications.nounPhraseExpand(e, deps);
-        String s = AccumuloIndex.words(es, r.getTokenization());
-        System.out.println("\tentity at=" + e + "\tent=" + s);
-      }
-      System.out.println();
 
-      CoNLLX.VERBOSE = false;
-      DependencySyntaxEvents.CoverArgumentsWithPredicates sitEx =
-          new DependencySyntaxEvents.CoverArgumentsWithPredicates(r.getTokenization(), deps, entities);
+      Map<String, Double> sf2f = rsitf.getFrequenciesM(sf);
+      SitMention cur = SitMention.convert(pred, sitEx, rsitf::getScore);
 
-      Map<Integer, Set<String>> sit2feat = sitEx.getSituations();
-      for (int s : sit2feat.keySet())
-        System.out.println("\tsituation at=" + s + " sit=" + r.getTokenization().getTokenList().getTokenList().get(s).getText());
-      System.out.println();
-
-      // laptop: ssh -fNL 8567:test2:7379 test2b
-      // laptop: redis-cli -p 8567    # for some reason -h localhost makes it not work
-      try (RedisSitFeatFrequency rsitf = new RedisSitFeatFrequency("localhost", 8567)) {
-        for (Entry<Integer, Set<String>> e : sit2feat.entrySet()) {
-          Set<String> sf = e.getValue();
-          System.out.println("considering situation at=" + e.getKey()
-          + " word=" + r.getTokenization().getTokenList().getTokenList().get(e.getKey()).getText());
-          if (events.isEmpty()) {
-            // Just add the first event, no questions asked
-            events.add(sf);
-            continue;
-          }
-          ArgMax<Pair<Integer, List<Feat>>> bestSit = new ArgMax<>();
-          for (int i = 0; i < events.size(); i++) {
-//            double sim = similarity(events.get(i), sf);
-            List<Feat> simF = rsitf.similarity(events.get(i), sf);
-            double sim = Feat.sum(simF);
-            bestSit.offer(new Pair<>(i, simF), sim);
-          }
-          Pair<Integer, List<Feat>> c = bestSit.get();
-          Set<String> bs = events.get(c.get1());
-          System.out.println("bestScore=" + bestSit.getBestScore());
-          System.out.println("intersect=" + sortAndPrune(c.get2(), 0.01));
-          System.out.println("best=" + bs);
-          System.out.println("this=" + sf);
-          if (bestSit.getBestScore() >= 0.4) {
-            System.out.println("LINK_SITUATION");
-          } else {
-            // Flip a coin for NEW vs PRUNE
-            if (rand.nextBoolean()) {
-              System.out.println("NEW_SITUATION");
-              events.add(sf);
-            } else {
-              System.out.println("PRUNE_SITUATION");
-            }
-          }
-          System.out.println();
+      ArgMax<Pair<Situation, List<Feat>>> bestSit = new ArgMax<>();
+      for (int i = 0; i < events.size(); i++) {
+        List<Feat> sim = events.get(i).similarity(sf2f);
+        bestSit.offer(new Pair<>(events.get(i), sim), Feat.sum(sim));
+        
+        System.out.println("entity.mentions {");
+        for (SitMention sm : events.get(i).mentions) {
+          System.out.println("  =>" + sm.showPredInContext());
+          System.out.println("      " + sortAndPrune(sm.feat2score, 5));
         }
-        System.out.println("RedisSitFeatFrequency event counts:");
-        System.out.println(rsitf.ec);
+        System.out.println("}");
+        System.out.println("cur.mention: " + cur.showPredInContext());
+        System.out.println("sim: " + sortAndPrune(sim, 5));
         System.out.println();
       }
+
+      System.out.println();
+      Pair<Situation, List<Feat>> best = bestSit.get();
+      System.out.println("best entity.mentions {");
+      for (SitMention sm : best.get1().mentions) {
+        System.out.println("  =>" + sm.showPredInContext());
+        System.out.println("      " + sortAndPrune(sm.feat2score, 5));
+      }
+      System.out.println("}");
+      System.out.println("best cur.mention: " + cur.showPredInContext());
+      System.out.println("best sim: " + sortAndPrune(best.get2(), 5));
+      System.out.println("best score: " + Feat.sum(best.get2()));
+      System.out.println();
+
+      if (bestSit.getBestScore() >= 1.5) {
+        System.out.println("LINK_SITUATION");
+        best.get1().addMention(cur);
+      } else {
+        System.out.println("NEW_SITUATION");
+        events.add(new Situation(cur));
+      }
+      System.out.println();
+      System.out.println();
     }
     System.out.println();
   }
   
+  public static class SitMention {
+    Communication c;
+    Tokenization t;
+    DependencyParse d;
+    int pred;
+    int[] args;   // sorted
+    Map<String, Double> feat2score;
+    
+    public static SitMention convert(int pred, DependencySyntaxEvents.CoverArgumentsWithPredicates events, Function<String, Double> featureScoring) {
+      BitSet args = events.getArguments().get(pred);
+      int[] a = new int[args.cardinality()];
+      for (int i=0, aa = args.nextSetBit(0); aa >= 0; aa = args.nextSetBit(aa+1), i++)
+        a[i] = aa;
+      SitMention sm = new SitMention(pred, a, events.deps, events.t, events.c);
+      sm.feat2score = new HashMap<>();
+      for (String feat : events.getSituations().get(pred)) {
+        double s = featureScoring.apply(feat);
+        Object old = sm.feat2score.put(feat, s);
+        assert old == null;
+      }
+      return sm;
+    }
+    
+    public SitMention(int pred, int[] args, DependencyParse d, Tokenization t, Communication c) {
+      this.pred = pred;
+      this.args = args;
+      this.d = d;
+      this.t = t;
+      this.c = c;
+    }
+    
+    public String showPredInContext() {
+      return "(SM " + showWithTag(t, Span.widthOne(pred), "PRED") + ")";
+    }
+  }
+  
+  public static String showWithTag(Tokenization t, Span mark, String tag) {
+    return showWithTag(t, mark, "<" + tag + ">", "</" + tag + ">");
+  }
+
+  public static String showWithTag(Tokenization t, Span mark, String openTag, String closeTag) {
+    StringBuilder sb = new StringBuilder();
+    int n = t.getTokenList().getTokenListSize();
+    for (int i = 0; i < n; i++) {
+      String w = t.getTokenList().getTokenList().get(i).getText();
+      if (i > 0)
+        sb.append(' ');
+      if (i == mark.start)
+        sb.append(openTag);
+      sb.append(w);
+      if (i == mark.end-1)
+        sb.append(closeTag);
+    }
+    return sb.toString();
+  }
+  
+  public static class Situation {
+    Map<String, Double> feat2score;
+    List<SitMention> mentions;
+    
+    public Situation(SitMention canonical) {
+      this.mentions = new ArrayList<>();
+      this.mentions.add(canonical);
+      this.feat2score = new HashMap<>();
+      if (canonical.feat2score != null)
+        this.feat2score.putAll(canonical.feat2score);
+    }
+    
+    public List<Feat> similarity(Map<String, Double> feat2score) {
+      List<Feat> f = new ArrayList<>();
+      for (Entry<String, Double> e : feat2score.entrySet()) {
+        Double alt = this.feat2score.get(e.getKey());
+        if (alt != null) {
+          f.add(new Feat(e.getKey(), Math.sqrt(alt * e.getValue())));
+        }
+      }
+      return f;
+    }
+    
+    public void addMention(SitMention m) {
+      this.mentions.add(m);
+      for (Entry<String, Double> e : m.feat2score.entrySet()) {
+        double p = feat2score.getOrDefault(e.getKey(), 0d);
+        feat2score.put(e.getKey(), e.getValue() + p);
+      }
+    }
+  }
+  
+  public static List<Feat> sortAndPrune(Map<String, Double> in, double eps) {
+    List<Feat> l = new ArrayList<>();
+    for (Entry<String,  Double> e : in.entrySet()) {
+      l.add(new Feat(e.getKey(), e.getValue()));
+    }
+    return sortAndPrune(l, eps);
+  }
+
+  public static List<Feat> sortAndPrune(Map<String, Double> in, int topk) {
+    List<Feat> l = new ArrayList<>();
+    for (Entry<String,  Double> e : in.entrySet()) {
+      l.add(new Feat(e.getKey(), e.getValue()));
+    }
+    return sortAndPrune(l, topk);
+  }
+
   public static List<Feat> sortAndPrune(List<Feat> in, double eps) {
     List<Feat> out = new ArrayList<>();
     for (Feat f : in)
       if (Math.abs(f.weight) > eps)
         out.add(f);
-    Collections.sort(out, Feat.BY_NAME);
+//    Collections.sort(out, Feat.BY_NAME);
+    return out;
+  }
+
+  public static List<Feat> sortAndPrune(List<Feat> in, int topk) {
+    List<Feat> out = new ArrayList<>();
+    out.addAll(in);
+    Collections.sort(out, Feat.BY_SCORE_DESC);
+    while (out.size() > topk)
+      out.remove(out.size()-1);
+//    Collections.sort(out, Feat.BY_NAME);
     return out;
   }
   
+  /**
+   * TODO optional memoization
+   */
   static class RedisSitFeatFrequency implements AutoCloseable {
     private Jedis j;
     public Counts<String> ec;
-    public RedisSitFeatFrequency(String host, int port) {
+
+    public Beam<String> topK;
+    private Map<String, Integer> topKTable;
+
+    /**
+     * @param topK maintain this many of the most frequent features in an LRU cache. Set to <=0 to disable
+     */
+    public RedisSitFeatFrequency(String host, int port, int topK) {
       ec = new Counts<>();
       j = new Jedis(host, port);
       j.connect();
       Log.info("connected via jedis host=" + host + " port=" + port);
+      
+      if (topK > 0) {
+        this.topK = Beam.getMostEfficientImpl(topK);
+        this.topKTable = new HashMap<>();
+      }
     }
+    
+    private void store(String feature, int freq) {
+      if (topK.push(feature, freq)) {
+        ec.increment("cache/clear");
+        topKTable.clear();
+      }
+    }
+    
+    private Integer freqMemo(String feature) {
+      assert topK != null;
+      if (topKTable.isEmpty()) {
+        ec.increment("cache/build");
+        Iterator<Beam.Item<String>> iter = topK.itemIterator();
+        while (iter.hasNext()) {
+          Beam.Item<String> i = iter.next();
+          Object old = topKTable.put(i.getItem(), (int) i.getScore());
+          assert old == null;
+        }
+      }
+      return topKTable.get(feature);
+    }
+
     public int frequency(String feature) {
+      if (topK != null) {
+        Integer v = freqMemo(feature);
+        if (v != null) {
+          ec.increment("cache/hit");
+          return v;
+        }
+        ec.increment("cache/miss");
+      }
+
       String c = j.get(feature);
       if (c == null) {
 //        System.out.println("unknown feature: " + feature);
@@ -200,8 +376,12 @@ public class PkbpSearching implements Serializable {
         return 0;
       }
       ec.increment("freq/succ");
-      return Integer.parseUnsignedInt(c);
+      int v = Integer.parseUnsignedInt(c);
+      if (topK != null && v > 3)
+        store(feature, v);
+      return v;
     }
+
     @Override
     public void close() throws Exception {
       Log.info("closing");
@@ -214,6 +394,36 @@ public class PkbpSearching implements Serializable {
         l.add(s);
       Collections.sort(l);
       return l;
+    }
+
+    public List<Feat> getFrequenciesL(Iterable<String> feats) {
+      Set<String> seen = new HashSet<>();
+      List<Feat> l = new ArrayList<>();
+      for (String feat : feats) {
+        if (seen.add(feat)) {
+          double f = frequency(feat);
+          double k = 10;
+          double p = (k + 1) / (k + f);
+          l.add(new Feat(feat, p));
+        }
+      }
+      return l;
+    }
+
+    public Map<String, Double> getFrequenciesM(Iterable<String> feats) {
+      Map<String, Double> m = new HashMap<>();
+      for (Feat f : getFrequenciesL(feats)) {
+        Object old = m.put(f.name, f.weight);
+        assert old == null;
+      }
+      return m;
+    }
+    
+    public double getScore(String s) {
+      double f = frequency(s);
+      double k = 10;
+      double p = (k + 1) / (k + f);
+      return p;
     }
     
     public List<Feat> similarity(Iterable<String> sitFeat, Iterable<String> mentionFeat) {
@@ -244,11 +454,10 @@ public class PkbpSearching implements Serializable {
       List<Feat> i = new ArrayList<>();
       double n = 0, d = 0.01;
       for (String s : union) {
+//        System.out.println("f=" + f + " p=" + p + " feat=" + s);
         double f = frequency(s);
-        
         double k = 10;
         double p = (k + 1) / (k + f);
-//        System.out.println("f=" + f + " p=" + p + " feat=" + s);
 
         if (f < 3)
           continue;

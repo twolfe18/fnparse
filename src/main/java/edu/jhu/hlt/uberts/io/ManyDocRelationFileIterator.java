@@ -63,7 +63,7 @@ public class ManyDocRelationFileIterator implements Iterator<RelDoc>, AutoClosea
     public List<RelLine> findLinesOfRelation(String relationName) {
       List<RelLine> r = new ArrayList<>();
       for (RelLine l : items)
-        if (relationName.equals(l.tokens[0]))
+        if (relationName.equals(l.tokens[1]))
           r.add(l);
       return r;
     }

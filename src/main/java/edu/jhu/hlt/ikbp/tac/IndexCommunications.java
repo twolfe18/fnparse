@@ -1975,6 +1975,20 @@ public class IndexCommunications implements AutoCloseable {
         return o1.name.compareTo(o2.name);
       }
     };
+    public static final Comparator<Feat> BY_SCORE_DESC = new Comparator<Feat>() {
+      @Override
+      public int compare(Feat o1, Feat o2) {
+        assert !Double.isNaN(o1.weight);
+        assert Double.isFinite(o1.weight);
+        assert !Double.isNaN(o2.weight);
+        assert Double.isFinite(o2.weight);
+        if (o1.weight > o2.weight)
+          return -1;
+        if (o2.weight > o1.weight)
+          return +1;
+        return 0;
+      }
+    };
     
     public static double sum(Iterable<Feat> features) {
       double s = 0;
