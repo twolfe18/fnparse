@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,7 +13,6 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
-import java.util.function.Function;
 
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
@@ -48,6 +46,7 @@ import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.ChooseOne;
+import edu.jhu.util.CountMinSketch;
 import edu.jhu.util.OfflineBatchParseyAnnotator;
 import edu.jhu.util.TokenizationIter;
 import redis.clients.jedis.Jedis;
@@ -99,14 +98,14 @@ public class PkbpSearching implements Serializable {
     // At the same time do a mock PKB population run, filling in events
     int topK = 1_000_000;
     try (RedisSitFeatFrequency rsitf = new RedisSitFeatFrequency("localhost", 8567, topK)) {
-      List<Situation> events = new ArrayList<>();
+      List<PkbpSearchingSituation> events = new ArrayList<>();
       for (SitSearchResult r : res) {
         playbackResult(r, events, rsitf);
       }
     }
   }
 
-  public void playbackResult(SitSearchResult r, List<Situation> events, RedisSitFeatFrequency rsitf) {
+  public void playbackResult(SitSearchResult r, List<PkbpSearchingSituation> events, RedisSitFeatFrequency rsitf) {
     System.out.println("considering SitSearchResult: " + r.getWordsInTokenizationWithHighlightedEntAndSit());
     DependencyParse deps = IndexCommunications.getPreferredDependencyParse(r.getTokenization());
     List<Integer> entities = DependencySyntaxEvents.extractEntityHeads(r.getTokenization());
@@ -140,21 +139,21 @@ public class PkbpSearching implements Serializable {
           + " word=" + r.getTokenization().getTokenList().getTokenList().get(pred).getText());
       if (events.isEmpty()) {
         // Just add the first event, no questions asked
-        SitMention sm = SitMention.convert(pred, sitEx, rsitf::getScore);
-        events.add(new Situation(sm));
+        PkbpSearchingSitMention sm = PkbpSearchingSitMention.convert(pred, sitEx, rsitf::getScore);
+        events.add(new PkbpSearchingSituation(sm));
         continue;
       }
 
       Map<String, Double> sf2f = rsitf.getFrequenciesM(sf);
-      SitMention cur = SitMention.convert(pred, sitEx, rsitf::getScore);
+      PkbpSearchingSitMention cur = PkbpSearchingSitMention.convert(pred, sitEx, rsitf::getScore);
 
-      ArgMax<Pair<Situation, List<Feat>>> bestSit = new ArgMax<>();
+      ArgMax<Pair<PkbpSearchingSituation, List<Feat>>> bestSit = new ArgMax<>();
       for (int i = 0; i < events.size(); i++) {
         List<Feat> sim = events.get(i).similarity(sf2f);
         bestSit.offer(new Pair<>(events.get(i), sim), Feat.sum(sim));
         
         System.out.println("entity.mentions {");
-        for (SitMention sm : events.get(i).mentions) {
+        for (PkbpSearchingSitMention sm : events.get(i).mentions) {
           System.out.println("  =>" + sm.showPredInContext());
           System.out.println("      " + sortAndPrune(sm.feat2score, 5));
         }
@@ -165,9 +164,9 @@ public class PkbpSearching implements Serializable {
       }
 
       System.out.println();
-      Pair<Situation, List<Feat>> best = bestSit.get();
+      Pair<PkbpSearchingSituation, List<Feat>> best = bestSit.get();
       System.out.println("best entity.mentions {");
-      for (SitMention sm : best.get1().mentions) {
+      for (PkbpSearchingSitMention sm : best.get1().mentions) {
         System.out.println("  =>" + sm.showPredInContext());
         System.out.println("      " + sortAndPrune(sm.feat2score, 5));
       }
@@ -182,48 +181,12 @@ public class PkbpSearching implements Serializable {
         best.get1().addMention(cur);
       } else {
         System.out.println("NEW_SITUATION");
-        events.add(new Situation(cur));
+        events.add(new PkbpSearchingSituation(cur));
       }
       System.out.println();
       System.out.println();
     }
     System.out.println();
-  }
-  
-  public static class SitMention {
-    Communication c;
-    Tokenization t;
-    DependencyParse d;
-    int pred;
-    int[] args;   // sorted
-    Map<String, Double> feat2score;
-    
-    public static SitMention convert(int pred, DependencySyntaxEvents.CoverArgumentsWithPredicates events, Function<String, Double> featureScoring) {
-      BitSet args = events.getArguments().get(pred);
-      int[] a = new int[args.cardinality()];
-      for (int i=0, aa = args.nextSetBit(0); aa >= 0; aa = args.nextSetBit(aa+1), i++)
-        a[i] = aa;
-      SitMention sm = new SitMention(pred, a, events.deps, events.t, events.c);
-      sm.feat2score = new HashMap<>();
-      for (String feat : events.getSituations().get(pred)) {
-        double s = featureScoring.apply(feat);
-        Object old = sm.feat2score.put(feat, s);
-        assert old == null;
-      }
-      return sm;
-    }
-    
-    public SitMention(int pred, int[] args, DependencyParse d, Tokenization t, Communication c) {
-      this.pred = pred;
-      this.args = args;
-      this.d = d;
-      this.t = t;
-      this.c = c;
-    }
-    
-    public String showPredInContext() {
-      return "(SM " + showWithTag(t, Span.widthOne(pred), "PRED") + ")";
-    }
   }
   
   public static String showWithTag(Tokenization t, Span mark, String tag) {
@@ -244,38 +207,6 @@ public class PkbpSearching implements Serializable {
         sb.append(closeTag);
     }
     return sb.toString();
-  }
-  
-  public static class Situation {
-    Map<String, Double> feat2score;
-    List<SitMention> mentions;
-    
-    public Situation(SitMention canonical) {
-      this.mentions = new ArrayList<>();
-      this.mentions.add(canonical);
-      this.feat2score = new HashMap<>();
-      if (canonical.feat2score != null)
-        this.feat2score.putAll(canonical.feat2score);
-    }
-    
-    public List<Feat> similarity(Map<String, Double> feat2score) {
-      List<Feat> f = new ArrayList<>();
-      for (Entry<String, Double> e : feat2score.entrySet()) {
-        Double alt = this.feat2score.get(e.getKey());
-        if (alt != null) {
-          f.add(new Feat(e.getKey(), Math.sqrt(alt * e.getValue())));
-        }
-      }
-      return f;
-    }
-    
-    public void addMention(SitMention m) {
-      this.mentions.add(m);
-      for (Entry<String, Double> e : m.feat2score.entrySet()) {
-        double p = feat2score.getOrDefault(e.getKey(), 0d);
-        feat2score.put(e.getKey(), e.getValue() + p);
-      }
-    }
   }
   
   public static List<Feat> sortAndPrune(Map<String, Double> in, double eps) {
@@ -315,6 +246,7 @@ public class PkbpSearching implements Serializable {
   
   /**
    * TODO optional memoization
+   * @deprecated use {@link CountMinSketch} generated by {@link DependencySyntaxEvents}
    */
   static class RedisSitFeatFrequency implements AutoCloseable {
     private Jedis j;
