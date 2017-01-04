@@ -376,6 +376,11 @@ public class PkbpSearching implements Serializable {
    */
   public void outerLoop() throws Exception {
     
+    if (queue.isEmpty()) {
+      Log.info("there are no items in the queue, done");
+      return;
+    }
+    
     // This is a tuple of entities which we haven't searched for yet
     // where at least one entity is the seed entity
     PkbpResult searchFor = queue.pop();
@@ -473,12 +478,13 @@ public class PkbpSearching implements Serializable {
       List<Pair<PkbpEntity, PkbpEntity.Mention>> outputEntityLinks,
       List<Pair<PkbpSituation, PkbpSituation.Mention>> outputSituationLinks) {
     
-    Log.info("processing " + searchResult);
-    
     Communication c = searchResult.getCommunication();
     Tokenization t = searchResult.getTokenization();
+    Log.info("processing " + searchResult + "\tc=" + c.getId() + " t=" + t.getUuid().getUuidString());
+    
     if (!seenCommToks.add(new Pair<>(c.getId(), t.getUuid().getUuidString()))) {
       // We've already processed this sentence
+      Log.info("we've processed this comm+tok before, returning early");
       return;
     }
     
@@ -488,6 +494,7 @@ public class PkbpSearching implements Serializable {
     
     // Extract arguments/entities
     List<Integer> entHeads = DependencySyntaxEvents.extractEntityHeads(t);
+    Log.info("found " + entHeads.size() + " heads");
     // Extract situations
     DependencySyntaxEvents.CoverArgumentsWithPredicates se =
         new DependencySyntaxEvents.CoverArgumentsWithPredicates(c, t, deps, entHeads);
@@ -517,6 +524,7 @@ public class PkbpSearching implements Serializable {
           entityArgs.add(e);
       }
       PkbpSituation.Mention sm = new PkbpSituation.Mention(s.getKey(), args, deps, t, c);
+      Log.info("found " + entLinks + " links to support linking the sitMention " + sm);
       Pair<PkbpSituation, List<Feat>> sl = linkSituation(sm, entityArgs);
       if (sl != null) {
         outputSituationLinks.add(new Pair<>(sl.get1(), sm));
@@ -676,8 +684,10 @@ public class PkbpSearching implements Serializable {
 //  }
 
   private Pair<PkbpEntity, List<Feat>> linkEntityMentionToPkb(PkbpEntity.Mention r) {
+    Log.info("working on " + r);
     AccumuloIndex.TIMER.start("linkAgainstPkb");
     if (r.triageFeatures == null) {
+      Log.info("computing triage feats");
 
       if (r.deps == null)
         r.deps = IndexCommunications.getPreferredDependencyParse(r.toks);
@@ -694,6 +704,7 @@ public class PkbpSearching implements Serializable {
       r.triageFeatures = Feat.promote(1, IndexCommunications.getEntityMentionFeatures(
           mentionText, headwords, r.nerType, tokObs, tokObsLc));
     }
+    Log.info("linking against " + entity2situation.size() + " entities in PKB");
     ArgMax<Pair<PkbpEntity, List<Feat>>> a = new ArgMax<>();
     TriageSearch ts = search.getTriageSearch();
     for (PkbpEntity e : entity2situation.keySet()) {
@@ -716,7 +727,7 @@ public class PkbpSearching implements Serializable {
 
       // Average triage feature similarity
       if (verboseLinking)
-        Log.info("triage feats for " + e.id);
+        Log.info("triage feats for " + e.id + " which has " + e.numMentions() + " mentions");
       Average triage = new Average.Uniform();
       double triageMax = 0;
       for (PkbpEntity.Mention ss : e) {
@@ -758,7 +769,6 @@ public class PkbpSearching implements Serializable {
         String nameHeadQ = ss.getEntityHeadGuess();
         List<String> attrCommQ = NNPSense.extractAttributeFeatures(null, ss.getCommunication(), nameHeadQ, nameHeadQ);
         List<String> attrTokQ = NNPSense.extractAttributeFeatures(ss.tokUuid, ss.getCommunication(), nameHeadQ, nameHeadQ);
-//        AttrFeatMatch afm = new AttrFeatMatch(attrCommQ, attrTokQ, r);
         AttrFeatMatch afm = new AttrFeatMatch(attrCommQ, attrTokQ, r.getEntityHeadGuess(), r.getTokenization(), r.getCommunication());
         attrFeatScore += Feat.avg(afm.getFeatures());
       }

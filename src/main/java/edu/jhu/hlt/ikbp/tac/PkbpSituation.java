@@ -46,7 +46,10 @@ public class PkbpSituation implements Serializable {
     }
 
     public String showPredInContext() {
-      return "(SM " + PkbpSearching.showWithTag(toks, Span.widthOne(head), "PRED") + ")";
+      List<String> a = new ArrayList<>();
+      for (int aa : args)
+        a.add(getTokenization().getTokenList().getTokenList().get(aa).getText() + "@" + aa);
+      return "(SM args=" + a + " " + PkbpSearching.showWithTag(toks, Span.widthOne(head), "PRED") + ")";
     }
   }
 

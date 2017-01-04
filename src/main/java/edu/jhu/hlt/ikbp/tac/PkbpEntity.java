@@ -48,6 +48,18 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     public Mention(int head, Tokenization toks, DependencyParse deps, Communication comm) {
       super(head, toks, deps, comm);
     }
+
+    @Override
+    public String toString() {
+      String t = tokUuid.substring(0, 3);
+      t += "..";
+      t += tokUuid.substring(tokUuid.length()-4);
+      String nTf = triageFeatures == null ? "null" : "" + triageFeatures.size();
+      String nAf = "(c=" + (attrCommFeatures == null ? "null" : attrCommFeatures.size());
+      nAf += ",t=" + (attrTokFeatures == null ? "null" : attrTokFeatures.size()) + ")";
+      return "(EM tok=" + t + " h=" + head + " s=" + Span.safeShortString(span) + " t=" + nerType
+          + " nTf=" + nTf + " nAf=" + nAf + ")";
+    }
     
     public String getEntityHeadGuess() {
       return toks.getTokenList().getTokenList().get(head).getText();
