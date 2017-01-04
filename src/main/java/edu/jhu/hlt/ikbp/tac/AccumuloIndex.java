@@ -1284,18 +1284,20 @@ public class AccumuloIndex {
   public static void attrFeatureReranking(String sourceName, String sourceTok, Communication sourceComm, List<SitSearchResult> res) {
     TIMER.start("attrFeatureReranking");
     String nameHeadQ = NNPSense.extractNameHead(sourceName);
-    
     List<String> attrCommQ = NNPSense.extractAttributeFeatures(null, sourceComm, nameHeadQ);
     List<String> attrTokQ = NNPSense.extractAttributeFeatures(sourceTok, sourceComm, nameHeadQ);
-
     Log.info(sourceName + " attribute features: " + attrCommQ);
+    attrFeatureReranking(attrCommQ, attrTokQ, res);
+  }
+
+  public static void attrFeatureReranking(List<String> attrCommQ, List<String> attrTokQ, List<SitSearchResult> res) {
     for (SitSearchResult r : res) {
 
-      // This is not only dis-allowed in evaluation, but will screw up
-      // the scores by having all the attribute features trivially match
-      if (sourceComm.getId().equals(r.getCommunicationId())) {
-        continue;
-      }
+//      // This is not only dis-allowed in evaluation, but will screw up
+//      // the scores by having all the attribute features trivially match
+//      if (sourceComm.getId().equals(r.getCommunicationId())) {
+//        continue;
+//      }
 
       String nameHeadR = r.getEntityHeadGuess();
 

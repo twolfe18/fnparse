@@ -384,22 +384,44 @@ public class PkbpSearching implements Serializable {
     TriageSearch ts = search.getTriageSearch();
     StringTermVec docContext = new StringTermVec();
     Set<String> triageFeats = new HashSet<>();
+    List<Feat> attrComm = new ArrayList<>();
+    List<Feat> attrTok = new ArrayList<>();
     for (PkbpEntity e : searchFor.getArguments()) {
       for (PkbpEntity.Mention m : e) {
         docContext.add(m.context);
         for (Feat ft : m.triageFeatures)
           triageFeats.add(ft.name);
+        
+        attrComm.addAll(m.attrCommFeatures);
+        attrTok.addAll(m.attrTokFeatures);
       }
     }
 
-    // Perform the search
+    // Perform triage search
     List<SitSearchResult> mentions = ts.search(new ArrayList<>(triageFeats), docContext, search.df);
+
+    // Resolve the communications
+    for (SitSearchResult ss : mentions) {
+      Communication c = search.getCommCaching(ss.getCommunicationId());
+      assert c != null;
+      ss.setCommunication(c);
+    }
+
+    // Compute and score attribute features
+    boolean dedup = true;
+    List<String> attrCommQ = Feat.demote(attrComm, dedup);
+    List<String> attrTokQ = Feat.demote(attrTok, dedup);
+    AccumuloIndex.attrFeatureReranking(attrCommQ, attrTokQ, mentions);
+
+    // Scan the results
     Map<PkbpEntity.Mention, LL<PkbpEntity>> entDups = new HashMap<>();
     Map<PkbpSituation.Mention, LL<PkbpSituation>> sitDups = new HashMap<>();
     for (SitSearchResult s : mentions) {
+      PkbpEntity.Mention em = new PkbpEntity.Mention(s);
       List<Pair<PkbpEntity, PkbpEntity.Mention>> entityLinks = new ArrayList<>();
       List<Pair<PkbpSituation, PkbpSituation.Mention>> situationLinks = new ArrayList<>();
-      processOneMention(s.getTokenization(), s.getCommunication(), entityLinks, situationLinks);
+//      processOneMention(s.getTokenization(), s.getCommunication(), entityLinks, situationLinks);
+      processOneMention(em, entityLinks, situationLinks);
       
       // Check for dups
       for (Pair<PkbpEntity, PkbpEntity.Mention> e : entityLinks)
@@ -431,16 +453,21 @@ public class PkbpSearching implements Serializable {
     throw new RuntimeException("implement me");
   }
   
-  public void processOneMention(Tokenization t, Communication c,
+//  public void processOneMention(Tokenization t, Communication c,
+  public void processOneMention(PkbpEntity.Mention searchResult,
       List<Pair<PkbpEntity, PkbpEntity.Mention>> outputEntityLinks,
       List<Pair<PkbpSituation, PkbpSituation.Mention>> outputSituationLinks) {
     
+    Communication c = searchResult.getCommunication();
+    Tokenization t = searchResult.getTokenization();
     if (!seenCommToks.add(new Pair<>(c.getId(), t.getUuid().getUuidString()))) {
       // We've already processed this sentence
       return;
     }
     
-    DependencyParse deps = IndexCommunications.getPreferredDependencyParse(t);
+    if (searchResult.deps == null)
+      searchResult.deps = IndexCommunications.getPreferredDependencyParse(t);
+    DependencyParse deps = searchResult.deps;
     
     // Extract arguments/entities
     List<Integer> entHeads = DependencySyntaxEvents.extractEntityHeads(t);
