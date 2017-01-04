@@ -399,18 +399,33 @@ public class PkbpSearching implements Serializable {
 
     // Perform triage search
     List<SitSearchResult> mentions = ts.search(new ArrayList<>(triageFeats), docContext, search.df);
+    Log.info("triage search returned " + mentions.size() + " mentions for " + searchFor);
 
     // Resolve the communications
+    Log.info("resolving communications for results");
     for (SitSearchResult ss : mentions) {
       Communication c = search.getCommCaching(ss.getCommunicationId());
       assert c != null;
       ss.setCommunication(c);
+    }
+    
+    // Highlight the searched for entity mention
+    {
+    List<SitSearchResult> pruned = new ArrayList<>();
+    for (SitSearchResult ss : mentions) {
+      boolean verbose = false;
+      if (AccumuloIndex.findEntitiesAndSituations(ss, search.df, verbose))
+        pruned.add(ss);
+    }
+    Log.info("[filter] lost " + (mentions.size()-pruned.size()) + " mentions due to query head finding failure");
+    mentions = pruned;
     }
 
     // Compute and score attribute features
     boolean dedup = true;
     List<String> attrCommQ = Feat.demote(attrComm, dedup);
     List<String> attrTokQ = Feat.demote(attrTok, dedup);
+    Log.info("doing attribute feature reranking, attrTokQ=" + attrTokQ);
     AccumuloIndex.attrFeatureReranking(attrCommQ, attrTokQ, mentions);
 
     // Scan the results
@@ -458,6 +473,8 @@ public class PkbpSearching implements Serializable {
       List<Pair<PkbpEntity, PkbpEntity.Mention>> outputEntityLinks,
       List<Pair<PkbpSituation, PkbpSituation.Mention>> outputSituationLinks) {
     
+    Log.info("processing " + searchResult);
+    
     Communication c = searchResult.getCommunication();
     Tokenization t = searchResult.getTokenization();
     if (!seenCommToks.add(new Pair<>(c.getId(), t.getUuid().getUuidString()))) {
@@ -476,6 +493,7 @@ public class PkbpSearching implements Serializable {
         new DependencySyntaxEvents.CoverArgumentsWithPredicates(c, t, deps, entHeads);
     
     // Link args
+    Log.info("linking args...");
     Map<Integer, PkbpEntity> entLinks = new HashMap<>();
     for (int entHead : entHeads) {
       PkbpEntity.Mention m = new PkbpEntity.Mention(entHead, t, deps, c);
@@ -488,6 +506,7 @@ public class PkbpSearching implements Serializable {
     }
     
     // Link sits
+    Log.info("linking sits...");
     for (Entry<Integer, Set<String>> s : se.getSituations().entrySet()) {
       BitSet bsArgs = se.getArguments().get(s.getKey());
       int[] args = DependencySyntaxEvents.bs2a(bsArgs);

@@ -1299,6 +1299,8 @@ public class AccumuloIndex {
 //        continue;
 //      }
 
+      if (r.yhatQueryEntityHead < 0)
+        throw new IllegalArgumentException();
       String nameHeadR = r.getEntityHeadGuess();
 
       List<String> attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadR);
