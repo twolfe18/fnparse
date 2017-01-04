@@ -603,6 +603,8 @@ public class PkbpSearching implements Serializable {
     PkbpResult r = new PkbpResult();
     r.addArgument(e);
     this.queue.addLast(r);
+
+    this.entity2situation.put(e, null);
   }
 
   public KbpQuery getSeed() {

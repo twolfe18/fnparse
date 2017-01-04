@@ -39,6 +39,7 @@ public class PkbpMention implements Serializable {
     this.comm = comm;
     this.deps = deps;
     this.toks = toks;
+    this.tokUuid = tokUuid;
     this.head = head;
     this.feats = new ArrayList<>();
   }
