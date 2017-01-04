@@ -1990,6 +1990,28 @@ public class IndexCommunications implements AutoCloseable {
       }
     };
     
+    public static List<String> demote(Iterable<Feat> feats, boolean dedup) {
+      Set<String> uniq = new HashSet<>();
+      List<String> out = new ArrayList<>();
+      for (Feat f : feats)
+        if (!dedup || uniq.add(f.name))
+          out.add(f.name);
+      return out;
+    }
+    
+    public static List<Feat> promote(double value, Iterable<String> feats) {
+      return promote(value, false, feats);
+    }
+
+    public static List<Feat> promote(double value, boolean dedup, Iterable<String> feats) {
+      Set<String> seen = new HashSet<>();
+      List<Feat> out = new ArrayList<>();
+      for (String f : feats)
+        if (!dedup || seen.add(f))
+          out.add(new Feat(f, value));
+      return out;
+    }
+    
     public static double sum(Iterable<Feat> features) {
       double s = 0;
       for (Feat f : features)

@@ -12,6 +12,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.function.Function;
 
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
@@ -236,6 +237,21 @@ public class FeatureCardinalityEstimator implements Serializable {
       sb.append("c(" + f + ")=" + c);
     }
     return sb.toString();
+  }
+
+  public <T> void sortByFreqUpperBoundAsc(List<T> feats, Function<T, String> view) {
+    Collections.sort(feats, new Comparator<T>() {
+      @Override
+      public int compare(T o1, T o2) {
+        int f1 = getFreqUpperBound(view.apply(o1));
+        int f2 = getFreqUpperBound(view.apply(o2));
+        if (f1 < f2)
+          return -1;
+        if (f1 > f2)
+          return +1;
+        return 0;
+      }
+    });
   }
   
   public void sortByFreqUpperBoundAsc(List<String> feats) {

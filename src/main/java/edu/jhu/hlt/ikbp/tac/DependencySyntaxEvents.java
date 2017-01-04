@@ -518,6 +518,14 @@ public class DependencySyntaxEvents {
    * If this shallowest token is the same, then we call this the target and union all feature bags with the same target
    */
   
+  public static int[] bs2a(BitSet bs) {
+    int[] a = new int[bs.cardinality()];
+    int j = 0;
+    for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i+1))
+      a[j++] = i;
+    return a;
+  }
+  
   public static List<Integer> extractEntityHeads(Tokenization t) {
     DependencyParse d = IndexCommunications.getPreferredDependencyParse(t);
     TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
