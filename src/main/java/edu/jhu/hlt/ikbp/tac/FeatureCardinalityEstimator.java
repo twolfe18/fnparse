@@ -36,6 +36,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.map.IntIntHashMap;
+import edu.jhu.util.CountMinSketch;
 
 /**
  * Provides an upper bound on the number of entries corresponding
@@ -51,6 +52,8 @@ import edu.jhu.prim.map.IntIntHashMap;
  * 
  * TODO Consider doing log-log trick and only storing the order of magnitude
  * within a bucket.
+ * 
+ * @see CountMinSketch for al alternative (doesn't have exact top-K, but should be considerable smaller)
  *
  * @author travis
  */

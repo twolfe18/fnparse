@@ -553,14 +553,18 @@ public class PkbpSearching implements Serializable {
     canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(canonical.yhatQueryEntityHead, deps);
 
     String head = canonical.getEntitySpanGuess();
-    canonical.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, seed.sourceComm, head.split("\\s+"));
+//    canonical.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, seed.sourceComm, head.split("\\s+"));
 
     //      String id = "seed/" + seed.id;
     String id = "seed/" + head;
     List<Feat> relevanceReasons = new ArrayList<>();
     relevanceReasons.add(new Feat("seed", seedWeight));
+
     PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
     canonical2.context = new StringTermVec(seed.sourceComm);
+    canonical2.attrCommFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(null, seed.sourceComm, head.split("\\s+")));
+    canonical2.attrTokFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(tokUuid, seed.sourceComm, head.split("\\s+")));
+
     PkbpEntity e = new PkbpEntity(id, canonical2, relevanceReasons);
 //    this.entities.add(e);
     this.history.add(new Action("NEW_ENTITY", e, canonical));
