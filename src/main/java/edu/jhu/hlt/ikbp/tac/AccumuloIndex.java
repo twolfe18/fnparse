@@ -525,8 +525,11 @@ public class AccumuloIndex {
     private TDeserializer deser;
 
     public AccumuloCommRetrieval(ExperimentProperties config) throws Exception {
-      Instance inst = new ZooKeeperInstance(
-          SimpleAccumuloConfig.DEFAULT_INSTANCE, SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
+      String zks = SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS;
+      String i = SimpleAccumuloConfig.DEFAULT_INSTANCE;
+      Log.info("connecting to: inst=" + i + " zks=" + zks);
+      Instance inst = new ZooKeeperInstance(i, zks);
+      Log.info("connecting to " + inst);
       conn = inst.getConnector("reader", new PasswordToken("an accumulo reader"));
       deser = new TDeserializer(SimpleAccumulo.COMM_SERIALIZATION_PROTOCOL);
     }
@@ -1398,7 +1401,9 @@ public class AccumuloIndex {
       commRet = new AccumuloCommRetrieval(config);
       commRetCache = new HashMap<>();
 
-      fce = (FeatureCardinalityEstimator) FileUtil.deserialize(config.getExistingFile("featureCardinalityEstimator"));
+      File fceF = config.getExistingFile("featureCardinalityEstimator");
+      Log.info("loading feature cardinality estimates from " + fceF.getPath());
+      fce = (FeatureCardinalityEstimator) FileUtil.deserialize(fceF);
       // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
       // e.g.
       // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
