@@ -2,6 +2,7 @@ package edu.jhu.hlt.ikbp.tac;
 
 import java.io.File;
 import java.io.Serializable;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -535,6 +536,11 @@ public class PkbpSearching implements Serializable {
     PkbpEntity e = new PkbpEntity(id, canonical2, relevanceReasons);
 //    this.entities.add(e);
     this.history.add(new Action("NEW_ENTITY", e, canonical));
+    
+    this.queue = new ArrayDeque<>();
+    PkbpResult r = new PkbpResult();
+    r.args.add(e);
+    this.queue.addLast(r);
   }
 
   public KbpQuery getSeed() {
