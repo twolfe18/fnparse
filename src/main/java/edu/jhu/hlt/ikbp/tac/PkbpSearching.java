@@ -532,6 +532,8 @@ public class PkbpSearching implements Serializable {
     if (seed.sourceComm == null)
       throw new IllegalArgumentException();
 
+    seenCommToks = new HashSet<>();
+
     this.history = new ArrayList<>();
     this.rand = rand;
     this.search = search;

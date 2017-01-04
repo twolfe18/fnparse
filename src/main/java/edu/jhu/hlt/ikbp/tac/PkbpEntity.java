@@ -42,7 +42,6 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       span = ss.yhatQueryEntitySpan;
       nerType = ss.yhatQueryEntityNerType;
       triageFeatures = Feat.promote(1, ss.triageFeatures);
-      attrTokFeatures = Feat.promote(1, ss.attributeFeaturesR);
     }
 
     public Mention(int head, Tokenization toks, DependencyParse deps, Communication comm) {
