@@ -532,7 +532,8 @@ public class PkbpSearching implements Serializable {
     if (seed.sourceComm == null)
       throw new IllegalArgumentException();
 
-    seenCommToks = new HashSet<>();
+    this.seenCommToks = new HashSet<>();
+    this.entity2situation = new HashMap<>();
 
     this.history = new ArrayList<>();
     this.rand = rand;
@@ -677,7 +678,15 @@ public class PkbpSearching implements Serializable {
   private Pair<PkbpEntity, List<Feat>> linkEntityMentionToPkb(PkbpEntity.Mention r) {
     AccumuloIndex.TIMER.start("linkAgainstPkb");
     if (r.triageFeatures == null) {
-      assert r.nerType != null;
+
+      if (r.deps == null)
+        r.deps = IndexCommunications.getPreferredDependencyParse(r.toks);
+
+      assert r.head >= 0;
+      if (r.span == null)
+        r.span = IndexCommunications.nounPhraseExpand(r.head, r.deps);
+
+      //assert r.nerType != null;
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
       String mentionText = r.getEntitySpanGuess();
@@ -768,11 +777,13 @@ public class PkbpSearching implements Serializable {
     AccumuloIndex.TIMER.stop("linkAgainstPkb");
     Pair<PkbpEntity, List<Feat>> best = a.get();
     if (verbose) {
-      //System.out.println("best link for " + r.getEntitySpanGuess() + " is " + best.get1().id
-      //    + " with score=" + Feat.sum(best.get2()) + "\t" + best.get2());
-      System.out.printf("best link for=%-24s is=%-24s score=%.3f %s\n",
-          StringUtils.trim(r.getEntitySpanGuess(), 20), StringUtils.trim(best.get1().id, 20),
-          Feat.sum(best.get2()), best.get2());
+      if (best == null) {
+        System.out.println("best link NONE!");
+      } else {
+        System.out.printf("best link for=%-24s is=%-24s score=%.3f %s\n",
+            StringUtils.trim(r.getEntitySpanGuess(), 20), StringUtils.trim(best.get1().id, 20),
+            Feat.sum(best.get2()), best.get2());
+      }
       System.out.println(Describe.memoryUsage());
       System.out.println();
     }
