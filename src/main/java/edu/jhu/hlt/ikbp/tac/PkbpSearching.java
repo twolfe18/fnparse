@@ -676,8 +676,15 @@ public class PkbpSearching implements Serializable {
 
   private Pair<PkbpEntity, List<Feat>> linkEntityMentionToPkb(PkbpEntity.Mention r) {
     AccumuloIndex.TIMER.start("linkAgainstPkb");
-    if (r.triageFeatures == null)
-      throw new RuntimeException();
+    if (r.triageFeatures == null) {
+      assert r.nerType != null;
+      TokenObservationCounts tokObs = null;
+      TokenObservationCounts tokObsLc = null;
+      String mentionText = r.getEntitySpanGuess();
+      String[] headwords = mentionText.split("\\s+");
+      r.triageFeatures = Feat.promote(1, IndexCommunications.getEntityMentionFeatures(
+          mentionText, headwords, r.nerType, tokObs, tokObsLc));
+    }
     ArgMax<Pair<PkbpEntity, List<Feat>>> a = new ArgMax<>();
     TriageSearch ts = search.getTriageSearch();
     for (PkbpEntity e : entity2situation.keySet()) {

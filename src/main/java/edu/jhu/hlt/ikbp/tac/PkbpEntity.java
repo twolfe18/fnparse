@@ -9,6 +9,7 @@ import java.util.Set;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
+import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
@@ -49,15 +50,46 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     }
     
     public String getEntityHeadGuess() {
-      throw new RuntimeException("implement me");
+      return toks.getTokenList().getTokenList().get(head).getText();
     }
 
     public String getEntitySpanGuess() {
-      throw new RuntimeException("implement me");
+      StringBuilder sb = new StringBuilder();
+      for (int i = span.start; i < span.end; i++) {
+        if (sb.length() > 0)
+          sb.append(' ');
+        sb.append(toks.getTokenList().getTokenList().get(i).getText());
+      }
+      return sb.toString();
     }
     
     public String getWordsInTokenizationWithHighlightedEntAndSit() {
-      throw new RuntimeException("implement me");
+      return getWordsInTokenizationWithHighlightedEntAndSit(true);
+    }
+
+    public String getWordsInTokenizationWithHighlightedEntAndSit(boolean includeCommTokId) {
+      StringBuilder sb = new StringBuilder();
+      if (includeCommTokId) {
+        sb.append(getCommTokIdShort());
+        sb.append(':');
+      }
+      if (head < 0)
+        sb.append(" noEnt");
+      List<Token> toks = this.toks.getTokenList().getTokenList();
+      for (Token t : toks) {
+        sb.append(' ');
+        if (t.getTokenIndex() == span.start)
+          sb.append("[ENT]");
+        sb.append(t.getText());
+        if (t.getTokenIndex() == span.end-1)
+          sb.append("[/ENT]");
+      }
+      return sb.toString();
+    }
+
+    /** returns "commId/tokUuidSuf" */
+    public String getCommTokIdShort() {
+      return getCommunicationId() + "/" + tokUuid.substring(tokUuid.length()-4, tokUuid.length());
     }
   }
 
