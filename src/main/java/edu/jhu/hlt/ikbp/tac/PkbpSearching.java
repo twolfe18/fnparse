@@ -384,7 +384,7 @@ public class PkbpSearching implements Serializable {
     TriageSearch ts = search.getTriageSearch();
     StringTermVec docContext = new StringTermVec();
     Set<String> triageFeats = new HashSet<>();
-    for (PkbpEntity e : searchFor.args) {
+    for (PkbpEntity e : searchFor.getArguments()) {
       for (PkbpEntity.Mention m : e) {
         docContext.add(m.context);
         for (Feat ft : m.triageFeatures)
@@ -533,13 +533,14 @@ public class PkbpSearching implements Serializable {
     List<Feat> relevanceReasons = new ArrayList<>();
     relevanceReasons.add(new Feat("seed", seedWeight));
     PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
+    canonical2.context = new StringTermVec(seed.sourceComm);
     PkbpEntity e = new PkbpEntity(id, canonical2, relevanceReasons);
 //    this.entities.add(e);
     this.history.add(new Action("NEW_ENTITY", e, canonical));
     
     this.queue = new ArrayDeque<>();
     PkbpResult r = new PkbpResult();
-    r.args.add(e);
+    r.addArgument(e);
     this.queue.addLast(r);
   }
 

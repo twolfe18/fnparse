@@ -9,8 +9,8 @@ public class PkbpResult implements Serializable {
   private static final long serialVersionUID = -3661191613878095335L;
 
   //  double salience;    // for ranking PkbEntries to show to the user based on their query
-  List<PkbpEntity> args;   // for now: length=2 and arg0 is always the seed entity
-  List<PkbpSituation> situations;    // should this be mentions instead of situations?
+  private List<PkbpEntity> args;   // for now: length=2 and arg0 is always the seed entity
+  private List<PkbpSituation> situations;    // should this be mentions instead of situations?
   
   public PkbpResult() {
     args = new ArrayList<>();
@@ -30,5 +30,17 @@ public class PkbpResult implements Serializable {
     s += Math.sqrt(m + 1);
     
     return s;
+  }
+  
+  public Iterable<PkbpEntity> getArguments() {
+    return args;
+  }
+  
+  public void addArgument(PkbpEntity entity) {
+    args.add(entity);
+  }
+  
+  public void addSituation(PkbpSituation sit) {
+    situations.add(sit);
   }
 }
