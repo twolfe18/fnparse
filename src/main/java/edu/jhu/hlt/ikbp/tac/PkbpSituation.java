@@ -13,6 +13,7 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Span;
 
 public class PkbpSituation implements Serializable {
@@ -83,11 +84,11 @@ public class PkbpSituation implements Serializable {
     return f;
   }
   
-  public void addMention(Mention m) {
-    this.mentions.add(m);
+  public void addMention(PkbpSituation.Mention m) {//, Map<PkbpEntity, LL<PkbpSituation>> inverseMapping) {
     for (Feat f : m.getFeatures()) {
       double p = feat2score.getOrDefault(f.name, 0d);
       feat2score.put(f.name, f.weight + p);
     }
+    this.mentions.add(m);
   }
 }

@@ -3,6 +3,9 @@ package edu.jhu.hlt.ikbp.tac;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
+import edu.jhu.hlt.tutils.LL;
 
 /** n-entities => list of situations containing these entities */
 public class PkbpResult implements Serializable {
@@ -61,11 +64,13 @@ public class PkbpResult implements Serializable {
     return args;
   }
   
-  public void addArgument(PkbpEntity entity) {
+  public void addArgument(PkbpEntity entity, Map<PkbpEntity, LL<PkbpResult>> invMapping) {
     args.add(entity);
+    invMapping.put(entity, new LL<>(this, invMapping.get(entity)));
   }
   
-  public void addSituation(PkbpSituation sit) {
+  public void addSituation(PkbpSituation sit, Map<PkbpSituation, LL<PkbpResult>> invMapping) {
     situations.add(sit);
+    invMapping.put(sit, new LL<>(this, invMapping.get(sit)));
   }
 }
