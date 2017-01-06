@@ -45,7 +45,6 @@ import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
-import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
@@ -437,19 +436,11 @@ public class PkbpSearching implements Serializable {
     canonical.setCommunication(seed.sourceComm);
     canonical.yhatQueryEntityNerType = seed.entity_type;
 
-    TokenObservationCounts tokObs = null;
-    TokenObservationCounts tokObsLc = null;
     Map<String, Tokenization> tokMap = new HashMap<>();
     for (Tokenization tok : new TokenizationIter(seed.sourceComm)) {
       Object old = tokMap.put(tok.getUuid().getUuidString(), tok);
       assert old == null;
     }
-    EntityMention em = seed.entityMention;
-    boolean takeNnCompounts = true;
-    boolean allowFailures = true;
-    String headEM = IndexCommunications.headword(em.getTokens(), tokMap, takeNnCompounts, allowFailures);
-    canonical.triageFeatures = IndexCommunications.getEntityMentionFeatures(
-        em.getText(), headEM.split("\\s+"), em.getEntityType(), tokObs, tokObsLc);
 
     // sets head token, needs triage feats and comm
     AccumuloIndex.findEntitiesAndSituations(canonical, search.df, false);
@@ -915,24 +906,9 @@ public class PkbpSearching implements Serializable {
   private List<EntLink> linkEntityMention(PkbpEntity.Mention r, double defaultScoreOfCreatingNewEntity) {
     Log.info("working on " + r);
     AccumuloIndex.TIMER.start("linkAgainstPkb");
-    if (r.triageFeatures == null) {
-      Log.info("computing triage feats");
+    if (r.triageFeatures == null)
+      throw new IllegalArgumentException();
 
-      if (r.deps == null)
-        r.deps = IndexCommunications.getPreferredDependencyParse(r.toks);
-
-      assert r.head >= 0;
-      if (r.span == null)
-        r.span = IndexCommunications.nounPhraseExpand(r.head, r.deps);
-
-      //assert r.nerType != null;
-      TokenObservationCounts tokObs = null;
-      TokenObservationCounts tokObsLc = null;
-      String mentionText = r.getEntitySpanGuess();
-      String[] headwords = mentionText.split("\\s+");
-      r.triageFeatures = Feat.promote(1, IndexCommunications.getEntityMentionFeatures(
-          mentionText, headwords, r.nerType, tokObs, tokObsLc));
-    }
     Log.info("linking against " + memb_e2s.size() + " entities in PKB");
     ArgMax<Pair<PkbpEntity, List<Feat>>> a = new ArgMax<>();
     TriageSearch ts = search.getTriageSearch();
@@ -1251,22 +1227,11 @@ public class PkbpSearching implements Serializable {
       DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
 
       // Create a new SitSearchResult which could be relevant and fill in known data
-//      SitSearchResult rel = new SitSearchResult(tokUuid, null, new ArrayList<>());
       int headIdx = em.getTokens().getAnchorTokenIndex();
       PkbpEntity.Mention rel = new PkbpEntity.Mention(headIdx, toks, deps, comm);
       rel.nerType = nerType;
-//      rel.yhatQueryEntityHead = em.getTokens().getAnchorTokenIndex();
-//      assert rel.yhatQueryEntityHead >= 0;
       assert rel.head >= 0;
       rel.span = IndexCommunications.nounPhraseExpand(rel.head, deps);
-      // NOTE: This can be multiple words with nn, e.g. "Barack Obama"
-      String head = rel.getEntitySpanGuess();
-      TokenObservationCounts tokObs = null;
-      TokenObservationCounts tokObsLc = null;
-      List<String> feats = IndexCommunications.getEntityMentionFeatures(
-          head, head.split("\\s+"), em.getEntityType(), tokObs, tokObsLc);
-      //em.getText(), new String[] {head}, em.getEntityType(), tokObs, tokObsLc);
-      rel.triageFeatures = Feat.promote(1, feats);
 
 
       List<Feat> relevanceReasons = new ArrayList<>();
@@ -1322,7 +1287,7 @@ public class PkbpSearching implements Serializable {
       if (verbose) {
         Log.info(String.format(
             "keep related entity? ner=%s head=%s relatedEntitySigmoidOffset=%s thresh=%.3f draw=%.3f keep=%s reasons=%s",
-            nerType, head, relatedEntitySigmoid, t, d, d<t, relevanceReasons));
+            nerType, rel.getEntityHeadGuess(), relatedEntitySigmoid, t, d, d<t, relevanceReasons));
       }
       ec.increment("exRel/mention");
       if (d < t) {

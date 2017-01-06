@@ -16,6 +16,7 @@ import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.TokenObservationCounts;
 
 /**
  * To a first approximation: a list of mentions with an id.
@@ -42,7 +43,14 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
           ss.getCommunication());
       span = ss.yhatQueryEntitySpan;
       nerType = ss.yhatQueryEntityNerType;
-      triageFeatures = Feat.promote(1, ss.triageFeatures);
+      
+      String mentionText = getEntitySpanGuess();
+      String[] headwords = mentionText.split("\\s+");
+      TokenObservationCounts tokObs = null;
+      TokenObservationCounts tokObsLc = null;
+      triageFeatures = Feat.promote(1, IndexCommunications.getEntityMentionFeatures(
+          mentionText, headwords, nerType, tokObs, tokObsLc));
+//      triageFeatures = Feat.promote(1, ss.triageFeatures);
     }
 
     public Mention(int head, Tokenization toks, DependencyParse deps, Communication comm) {
