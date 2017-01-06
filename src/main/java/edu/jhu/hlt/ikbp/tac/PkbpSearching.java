@@ -459,29 +459,14 @@ public class PkbpSearching implements Serializable {
     DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
     canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(canonical.yhatQueryEntityHead, deps);
 
-    String head = canonical.getEntitySpanGuess();
-//    canonical.attributeFeaturesR = NNPSense.extractAttributeFeatures(tokUuid, seed.sourceComm, head.split("\\s+"));
-
-    //      String id = "seed/" + seed.id;
-//    String id = "seed/" + head;
     List<Feat> relevanceReasons = new ArrayList<>();
     relevanceReasons.add(new Feat("seed", seedWeight));
 
     PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
-    canonical2.context = new StringTermVec(seed.sourceComm);
-    canonical2.attrCommFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(null, seed.sourceComm, head.split("\\s+")));
-    canonical2.attrTokFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(tokUuid, seed.sourceComm, head.split("\\s+")));
-
-//    PkbpEntity e = new PkbpEntity(id, canonical2, relevanceReasons);
-//    this.entities.add(e);
-//    this.history.add(new Action("NEW_ENTITY", e, canonical));
-    
-    this.queue = new ArrayDeque<>();
-//    PkbpResult r = new PkbpResult();
-//    r.addArgument(e, memb_e2r);
-//    this.queue.addLast(r);
-//
-//    this.memb_e2s.put(e, null);
+    assert canonical2.getCommunication() != null;
+    canonical2.getContext();
+    canonical2.getAttrCommFeatures();
+    canonical2.getAttrTokFeatures();
     
     Pair<List<EntLink>, List<SitLink>> p = proposeLinks(canonical2);
     // New entity for the searched-for mention
@@ -500,6 +485,9 @@ public class PkbpSearching implements Serializable {
     PkbpResult r0 = new PkbpResult("seed");
     best.target.addMention(best.source);
     r0.addArgument(best.target, memb_e2r);
+    
+    this.queue = new ArrayDeque<>();
+    this.queue.add(r0);
   }
   
 
@@ -530,12 +518,11 @@ public class PkbpSearching implements Serializable {
     List<Feat> attrTok = new ArrayList<>();
     for (PkbpEntity e : searchFor.getArguments()) {
       for (PkbpEntity.Mention m : e) {
-        docContext.add(m.context);
+        docContext.add(m.getContext());
         for (Feat ft : m.triageFeatures)
           triageFeats.add(ft.name);
-        
-        attrComm.addAll(m.attrCommFeatures);
-        attrTok.addAll(m.attrTokFeatures);
+        attrComm.addAll(m.getAttrCommFeatures());
+        attrTok.addAll(m.getAttrTokFeatures());
       }
     }
 
@@ -1302,9 +1289,9 @@ public class PkbpSearching implements Serializable {
         relevanceReasons.add(new Feat("hasV", -2));
 
       // Having attribute features like "PERSON-nn-Dr." is good, discriminating features help coref
-      rel.attrCommFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(null, comm, head.split("\\s+")));
-      rel.attrTokFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(tokUuid, comm, head.split("\\s+")));
-      int nAttrFeat = rel.attrTokFeatures.size();
+//      rel.attrCommFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(null, comm, head.split("\\s+")));
+//      rel.attrTokFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(tokUuid, comm, head.split("\\s+")));
+      int nAttrFeat = rel.getAttrTokFeatures().size();
       relevanceReasons.add(new Feat("nAttrFeat", (Math.sqrt(nAttrFeat+1d)-1) * rewardForAttrFeats));
 
       // Reward for this comm looking like the seed

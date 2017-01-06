@@ -25,7 +25,7 @@ public class PkbpMention implements Serializable {
   public final int head;
   private List<Feat> feats;
   
-  StringTermVec context;
+  private StringTermVec context;
   
   public PkbpMention(int head, Tokenization toks, DependencyParse deps, Communication comm) {
     this(head, toks.getUuid().getUuidString(), toks, deps, comm.getId(), comm);
@@ -43,6 +43,13 @@ public class PkbpMention implements Serializable {
     this.tokUuid = tokUuid;
     this.head = head;
     this.feats = new ArrayList<>();
+  }
+  
+  public StringTermVec getContext() {
+    if (context == null) {
+      context = new StringTermVec(getCommunication());
+    }
+    return context;
   }
   
   @Override

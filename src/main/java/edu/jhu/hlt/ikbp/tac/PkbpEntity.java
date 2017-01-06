@@ -32,8 +32,8 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     Span span;  // should contain the head
     String nerType;
     List<Feat> triageFeatures;
-    List<Feat> attrCommFeatures;
-    List<Feat> attrTokFeatures;
+    private List<Feat> attrCommFeatures;
+    private List<Feat> attrTokFeatures;
     
     public Mention(SitSearchResult ss) {
       this(ss.yhatQueryEntityHead,
@@ -64,6 +64,22 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
           + " nAf=" + nAf
           + " t=" + t
           + ")";
+    }
+    
+    public List<Feat> getAttrCommFeatures() {
+      if (attrCommFeatures == null) {
+        attrCommFeatures = Feat.promote(1,
+            NNPSense.extractAttributeFeatures(null, getCommunication(), getEntitySpanGuess().split("\\s+")));
+      }
+      return attrCommFeatures;
+    }
+    
+    public List<Feat> getAttrTokFeatures() {
+      if (attrTokFeatures == null) {
+        attrTokFeatures = Feat.promote(1,
+            NNPSense.extractAttributeFeatures(tokUuid, getCommunication(), getEntitySpanGuess().split("\\s+")));
+      }
+      return attrTokFeatures;
     }
     
     public String getEntityHeadGuess() {
