@@ -11,6 +11,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -366,7 +367,7 @@ public class PkbpSearching implements Serializable {
   Set<Pair<String, String>> seenCommToks;
 
   // IO
-  List<PkbpResult> output;
+  LinkedHashMap<List<String>, PkbpResult> output; // keys are sorted lists of PkbpResult ids
   Deque<PkbpResult> queue;    // TODO change element type, will want to have actions on here like "merge two situations"
   // Currently every element here is implicitly "search for situations involving these arguments and link ents/sits hanging off the results"
   
@@ -479,7 +480,7 @@ public class PkbpSearching implements Serializable {
         best = el;
       }
     }
-    PkbpResult r0 = new PkbpResult();
+    PkbpResult r0 = new PkbpResult("seed");
     best.target.addMention(best.source);
     r0.addArgument(best.target, memb_e2r);
   }
@@ -580,6 +581,64 @@ public class PkbpSearching implements Serializable {
         entDups.put(el.source, new LL<>(el.target, entDups.get(el.source)));
       for (SitLink sl : exSL)
         sitDups.put(sl.source, new LL<>(sl.target, sitDups.get(sl.source)));
+      
+
+//      // Try to link this SitSearchResult to an existing PkbResult.
+//      // If none exists, then possibly create a new PkbResult.
+//      // The triage set of PkbResult to attempt to link to is the union of PkbpResults which ents/sits belong to
+//      // Use e2r and s2r
+//      // 1) Look up candidate set
+//      Map<String, PkbpResult> possibleRelevantResults = new HashMap<>();
+//      for (EntLink el : exEL) {
+//        for (LL<PkbpResult> cur = memb_e2r.get(el.target); cur != null; cur = cur.next) {
+//          PkbpResult r = cur.item;
+//          Object old = possibleRelevantResults.put(r.id, r);
+//          assert old == null : "PkbResult id=" + r.id + " is not uniq, old=" + old + " new=" + r;
+//        }
+//      }
+//      for (SitLink sl : exSL) {
+//        for (LL<PkbpResult> cur = memb_s2r.get(sl.target); cur != null; cur = cur.next) {
+//          PkbpResult r = cur.item;
+//          Object old = possibleRelevantResults.put(r.id, r);
+//          assert old == null : "PkbResult id=" + r.id + " is not uniq, old=" + old + " new=" + r;
+//        }
+//      }
+//      // 2) Link against candidate set
+//      // TODO
+      
+      
+      // By nature of linking to PkbpEntities and PkbpSituations, we are already adding SitSearchResults/PkbpMentions to the PkbpResults
+      // The only question is whether we should create a *NEW* PkbpResult.
+      // We do this every time we have a pair of entities which we haven't seen before
+      int ne = exEL.size();
+      Log.info("trying to link to PkbResults based on pairs from nEntLink=" + ne);
+      for (int i = 0; i < ne-1; i++) {
+        for (int j = i+1; j < ne; j++) {
+          
+          PkbpEntity ei = exEL.get(i).target;
+          PkbpEntity ej = exEL.get(j).target;
+          
+          List<String> rKey = new ArrayList<>();
+          if (ei.id.compareTo(ej.id) < 0) {
+            rKey.add(ei.id);
+            rKey.add(ej.id);
+          } else {
+            rKey.add(ej.id);
+            rKey.add(ei.id);
+          }
+          
+          PkbpResult r = output.get(rKey);
+          if (r == null) {
+            String id = String.format("r%02d_%s_%s", output.size(), rKey.get(0), rKey.get(1));
+            r = new PkbpResult(id);
+            Log.info("new result, queing search for: " + r);
+            output.put(rKey, r);
+            queue.add(r);
+          } else {
+            Log.info("result already exists: " + r);
+          }
+        }
+      }
     }
     
     // For mentions which appear in more than one ent/sit, consider merging them
@@ -832,7 +891,6 @@ public class PkbpSearching implements Serializable {
 //    AccumuloIndex.TIMER.stop("expandEntity");
 //  }
 
-//  private Pair<PkbpEntity, List<Feat>> linkEntityMentionToPkb(PkbpEntity.Mention r) {
   /**
    * Returns [newEntity, bestLink, secondBestLink, ...]
    * 
@@ -898,7 +956,6 @@ public class PkbpSearching implements Serializable {
         Double s = null;
         List<String> ssTf = Feat.demote(ss.triageFeatures, false);
         List<String> rTf = Feat.demote(r.triageFeatures, false);
-//        s = ts.scoreTriageFeatureIntersectionSimilarity(ss.triageFeatures, r.triageFeatures, computeFeatFreqAsNeeded);
         s = ts.scoreTriageFeatureIntersectionSimilarity(ssTf, rTf, computeFeatFreqAsNeeded);
         if (verboseLinking) {
           System.out.println("ss.triageFeats: " + ss.triageFeatures);
@@ -953,19 +1010,22 @@ public class PkbpSearching implements Serializable {
       System.out.println(Describe.memoryUsage());
       System.out.println();
     }
-//    return best;
 
     List<EntLink> el = new ArrayList<>();
 
     // New entity
-    List<Feat> score = new ArrayList<>();
-    score.add(new Feat("intercept", defaultScoreOfCreatingNewEntity));
-    score.add(new Feat("competingLinkIsGood", Math.min(0, -Feat.sum(best.get2()))));
-    PkbpEntity newEnt = new PkbpEntity("id", r, score);
-    el.add(new EntLink(r, newEnt, score, true));
+    List<Feat> newEntFeat = new ArrayList<>();
+    newEntFeat.add(new Feat("intercept", defaultScoreOfCreatingNewEntity));
+    String id = r.getEntitySpanGuess();   // TODO
+    PkbpEntity newEnt = new PkbpEntity(id, r, newEntFeat);
+    el.add(new EntLink(r, newEnt, newEntFeat, true));
     
     // Best link
-    el.add(new EntLink(r, best.get1(), best.get2(), false));
+    if (best != null) {
+      List<Feat> ls = best.get2();
+      el.add(new EntLink(r, best.get1(), ls, false));
+      newEntFeat.add(new Feat("competingLinkIsGood", Math.min(0, -Feat.sum(ls))));
+    }
     
     // Show links for debugging
     for (int i = 0; i < el.size(); i++) {

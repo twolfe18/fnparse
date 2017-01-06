@@ -10,12 +10,16 @@ import edu.jhu.hlt.tutils.LL;
 /** n-entities => list of situations containing these entities */
 public class PkbpResult implements Serializable {
   private static final long serialVersionUID = -3661191613878095335L;
+  
+  /** we need an id b/c we maintain s2r and e2r, and we have to de-duplicate results across the union */
+  public final String id;
 
   //  double salience;    // for ranking PkbEntries to show to the user based on their query
   private List<PkbpEntity> args;   // for now: length=2 and arg0 is always the seed entity
   private List<PkbpSituation> situations;    // should this be mentions instead of situations?
   
-  public PkbpResult() {
+  public PkbpResult(String id) {
+    this.id = id;
     args = new ArrayList<>();
     situations = new ArrayList<>();
   }
@@ -37,7 +41,9 @@ public class PkbpResult implements Serializable {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("(PR args=");
+    sb.append("(PR ");
+    sb.append(id);
+    sb.append(" args=");
     sb.append(argHeads());
     sb.append(" sits=");
     sb.append(sitHeads());
