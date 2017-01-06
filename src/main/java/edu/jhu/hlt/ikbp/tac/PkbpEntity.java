@@ -38,23 +38,23 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     
     public Mention(SitSearchResult ss) {
       this(ss.yhatQueryEntityHead,
+          ss.yhatQueryEntitySpan,
+          ss.yhatQueryEntityNerType,
           ss.getTokenization(),
           IndexCommunications.getPreferredDependencyParse(ss.getTokenization()),
           ss.getCommunication());
-      span = ss.yhatQueryEntitySpan;
-      nerType = ss.yhatQueryEntityNerType;
-      
+    }
+
+    public Mention(int head, Span span, String nerType, Tokenization toks, DependencyParse deps, Communication comm) {
+      super(head, toks, deps, comm);
+      this.span = span;
+      this.nerType = nerType;
       String mentionText = getEntitySpanGuess();
       String[] headwords = mentionText.split("\\s+");
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
       triageFeatures = Feat.promote(1, IndexCommunications.getEntityMentionFeatures(
           mentionText, headwords, nerType, tokObs, tokObsLc));
-//      triageFeatures = Feat.promote(1, ss.triageFeatures);
-    }
-
-    public Mention(int head, Tokenization toks, DependencyParse deps, Communication comm) {
-      super(head, toks, deps, comm);
     }
 
     @Override

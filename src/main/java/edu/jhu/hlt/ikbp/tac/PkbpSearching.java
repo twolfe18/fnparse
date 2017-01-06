@@ -45,6 +45,7 @@ import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
@@ -299,6 +300,7 @@ public class PkbpSearching implements Serializable {
         continue;
       }
 
+/*
       PkbpSearching ps = null;
       try {
         ps = new PkbpSearching(ks, seed, seedWeight, rand);
@@ -307,7 +309,9 @@ public class PkbpSearching implements Serializable {
         Log.info("[filter] skipping query: " + seed);
         continue;
       }
-      ps.verbose = true;
+*/
+      PkbpSearching ps = new PkbpSearching(ks, seed, seedWeight, rand);
+      //ps.verbose = true;
       for (int i = 0; i < stepsPerQuery; i++) {
         Log.info("step=" + (i+1));
 //        ps.expandEntity();
@@ -443,6 +447,13 @@ public class PkbpSearching implements Serializable {
     }
 
     // sets head token, needs triage feats and comm
+    String mentionText = seed.entityMention.getText();
+    String[] headwords = mentionText.split("\\s+");
+    String nerType = seed.entity_type;
+    TokenObservationCounts tokObs = null;
+    TokenObservationCounts tokObsLc = null;
+    canonical.triageFeatures = IndexCommunications.getEntityMentionFeatures(
+          mentionText, headwords, nerType, tokObs, tokObsLc);
     AccumuloIndex.findEntitiesAndSituations(canonical, search.df, false);
 
     DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
@@ -456,6 +467,7 @@ public class PkbpSearching implements Serializable {
     canonical2.getContext();
     canonical2.getAttrCommFeatures();
     canonical2.getAttrTokFeatures();
+    assert canonical2.triageFeatures != null;
     
     Pair<List<EntLink>, List<SitLink>> p = proposeLinks(canonical2);
     // New entity for the searched-for mention
@@ -499,6 +511,7 @@ public class PkbpSearching implements Serializable {
     // This is a tuple of entities which we haven't searched for yet
     // where at least one entity is the seed entity
     PkbpResult searchFor = queue.pop();
+    //assert searchFor.args.size() > 0;
     
     // Build a view of all the entities in this result
     TriageSearch ts = search.getTriageSearch();
@@ -506,8 +519,10 @@ public class PkbpSearching implements Serializable {
     Set<String> triageFeats = new HashSet<>();
     List<Feat> attrComm = new ArrayList<>();
     List<Feat> attrTok = new ArrayList<>();
+    int nm = 0;
     for (PkbpEntity e : searchFor.getArguments()) {
       for (PkbpEntity.Mention m : e) {
+        nm++;
         docContext.add(m.getContext());
         for (Feat ft : m.triageFeatures)
           triageFeats.add(ft.name);
@@ -515,6 +530,7 @@ public class PkbpSearching implements Serializable {
         attrTok.addAll(m.getAttrTokFeatures());
       }
     }
+    assert nm > 0;
 
     // Perform triage search
     List<SitSearchResult> mentions = ts.search(new ArrayList<>(triageFeats), docContext, search.df);
@@ -623,8 +639,10 @@ public class PkbpSearching implements Serializable {
           
           PkbpResult r = output.get(rKey);
           if (r == null) {
-            String id = String.format("r%02d_%s_%s", output.size(), rKey.get(0), rKey.get(1));
+            String id = String.format("r%03d:%s+%s", output.size(), rKey.get(0), rKey.get(1));
             r = new PkbpResult(id);
+            r.addArgument(ei, memb_e2r);
+            r.addArgument(ej, memb_e2r);
             Log.info("new result, queing search for: " + r);
             output.put(rKey, r);
             queue.add(r);
@@ -673,7 +691,7 @@ public class PkbpSearching implements Serializable {
     
     @Override
     public String toString() {
-      return String.format("(EL %s => %s b/c %s)",
+      return String.format("(EntLink %s => %s b/c %s)",
           source, target, sortAndPrune(score, 5));
     }
   }
@@ -696,7 +714,7 @@ public class PkbpSearching implements Serializable {
     
     @Override
     public String toString() {
-      return String.format("(SL %s => %s b/c %s nContingentUpon=%d)",
+      return String.format("(SitLink %s => %s b/c %s nContingentUpon=%d)",
           source, target, sortAndPrune(score, 4), contingentUpon.size());
     }
   }
@@ -715,8 +733,8 @@ public class PkbpSearching implements Serializable {
 
     // Higher numbers mean less linking
     // TODO Include threshold for PRUNE
-    double defaultScoreOfCreatingNewEntity = 2;
-    double defaultNewSitScore = 2;
+    double defaultScoreOfCreatingNewEntity = -1;
+    double defaultNewSitScore = -1;
 
     Pair<List<EntLink>, List<SitLink>> links = new Pair<>(new ArrayList<>(), new ArrayList<>());
     
@@ -733,6 +751,8 @@ public class PkbpSearching implements Serializable {
     if (searchResult.deps == null)
       searchResult.deps = IndexCommunications.getPreferredDependencyParse(t);
     DependencyParse deps = searchResult.deps;
+
+    TokenTagging ner = IndexCommunications.getPreferredNerTags(t);
     
     // Extract arguments/entities
     List<Integer> entHeads = DependencySyntaxEvents.extractEntityHeads(t);
@@ -754,19 +774,24 @@ public class PkbpSearching implements Serializable {
     Log.info("linking " + entHeads.size() + " entMentions/args to PKB");
     Map<Integer, EntLink> entLinks = new HashMap<>();
     for (int entHead : entHeads) {
-      PkbpEntity.Mention m = new PkbpEntity.Mention(entHead, t, deps, c);
+      Span span = IndexCommunications.nounPhraseExpand(entHead, deps);
+      String nerType = ner.getTaggedTokenList().get(entHead).getTag();
+      PkbpEntity.Mention m = new PkbpEntity.Mention(entHead, span, nerType, t, deps, c);
       List<EntLink> el = linkEntityMention(m, defaultScoreOfCreatingNewEntity);
       assert el.size() > 0;
       assert el.get(0).newEntity;
-      if (el.size() == 1 || Feat.sum(el.get(0).score) > 0) {
+      if (el.size() == 1 || Feat.sum(el.get(0).score) < 0) {
         // New
+        Log.info("NEW ENTITY: " + el.get(0));
         entLinks.put(entHead, el.get(0));
       } else {
         // Link
+        Log.info("LINK ENTITY: " + el.get(1));
         entLinks.put(entHead, el.get(1));
       }
     }
     links.get1().addAll(entLinks.values());
+    System.out.println();
     
     // Link sits
     Log.info("linking " + se.getSituations().size() + " sitMentions to PKB");
@@ -782,14 +807,17 @@ public class PkbpSearching implements Serializable {
       PkbpSituation.Mention sm = new PkbpSituation.Mention(s.getKey(), args, deps, t, c);
       Log.info("found " + entityArgs.size() + " links to support linking the sitMention " + sm);
       List<SitLink> sl = linkSituation(sm, entityArgs, defaultNewSitScore);
-      if (sl.size() == 1 || Feat.sum(sl.get(0).score) > 0) {
+      if (sl.size() == 1 || Feat.sum(sl.get(0).score) < 0) {
         // New
+        Log.info("NEW SITUATION: " + sl.get(0));
         links.get2().add(sl.get(0));
       } else {
         // Link
+        Log.info("LINK SITUATION: " + sl.get(1));
         links.get2().add(sl.get(1));
       }
     }
+    System.out.println();
     
     
     /*
@@ -814,6 +842,7 @@ public class PkbpSearching implements Serializable {
      */
 
     Log.info("done, returning " + links.get1().size() + " ent links and " + links.get2().size() + " sit links");
+    System.out.println();
     return links;
   }
   
@@ -909,10 +938,10 @@ public class PkbpSearching implements Serializable {
     if (r.triageFeatures == null)
       throw new IllegalArgumentException();
 
-    Log.info("linking against " + memb_e2s.size() + " entities in PKB");
+    Log.info("linking against " + memb_e2r.size() + " entities in PKB");
     ArgMax<Pair<PkbpEntity, List<Feat>>> a = new ArgMax<>();
     TriageSearch ts = search.getTriageSearch();
-    for (PkbpEntity e : memb_e2s.keySet()) {
+    for (PkbpEntity e : memb_e2r.keySet()) {
       List<Feat> fs = new ArrayList<>();
       //fs.add(new Feat("intercept", -1));
 
@@ -1007,7 +1036,7 @@ public class PkbpSearching implements Serializable {
     // New entity
     List<Feat> newEntFeat = new ArrayList<>();
     newEntFeat.add(new Feat("intercept", defaultScoreOfCreatingNewEntity));
-    String id = r.getEntitySpanGuess();   // TODO
+    String id = r.getEntitySpanGuess().replaceAll("\\s+", "_");
     PkbpEntity newEnt = new PkbpEntity(id, r, newEntFeat);
     el.add(new EntLink(r, newEnt, newEntFeat, true));
     
@@ -1194,10 +1223,8 @@ public class PkbpSearching implements Serializable {
    * 
    * This method doesn't modify the PKB/state of this instance.
    */
-//  public List<Pair<SitSearchResult, List<Feat>>> extractRelatedEntities(PkbpEntity relevantTo, SitSearchResult newMention) {
   public List<Pair<PkbpEntity.Mention, List<Feat>>> extractRelatedEntities(PkbpEntity relevantTo, SitSearchResult newMention) {
     AccumuloIndex.TIMER.start("extractRelatedEntities");
-//    List<Pair<SitSearchResult, List<Feat>>> out = new ArrayList<>();
     List<Pair<PkbpEntity.Mention, List<Feat>>> out = new ArrayList<>();
     ec.increment("exRel");
 
@@ -1228,10 +1255,9 @@ public class PkbpSearching implements Serializable {
 
       // Create a new SitSearchResult which could be relevant and fill in known data
       int headIdx = em.getTokens().getAnchorTokenIndex();
-      PkbpEntity.Mention rel = new PkbpEntity.Mention(headIdx, toks, deps, comm);
-      rel.nerType = nerType;
-      assert rel.head >= 0;
-      rel.span = IndexCommunications.nounPhraseExpand(rel.head, deps);
+      assert headIdx >= 0;
+      Span span = IndexCommunications.nounPhraseExpand(headIdx, deps);
+      PkbpEntity.Mention rel = new PkbpEntity.Mention(headIdx, span, nerType, toks, deps, comm);
 
 
       List<Feat> relevanceReasons = new ArrayList<>();
