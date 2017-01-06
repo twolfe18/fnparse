@@ -306,6 +306,7 @@ public class PkbpSearching implements Serializable {
       } catch (Exception e) {
         e.printStackTrace();
         Log.info("[filter] skipping query: " + seed);
+        continue;
       }
       ps.verbose = true;
       for (int i = 0; i < stepsPerQuery; i++) {
@@ -409,10 +410,6 @@ public class PkbpSearching implements Serializable {
     Log.info("seed=" + seed);
     if (seed.sourceComm == null)
       throw new IllegalArgumentException();
-    if (seed.entityMention == null)
-      throw new IllegalArgumentException();
-    if (!seed.entityMention.isSetText() || seed.entityMention.getText().isEmpty())
-      throw new IllegalArgumentException();
 
     this.seenCommToks = new HashSet<>();
 
@@ -431,6 +428,7 @@ public class PkbpSearching implements Serializable {
     boolean addEmToCommIfMissing = true;
     findEntityMention.resolve(seed, addEmToCommIfMissing);
     assert seed.entityMention != null;
+    assert seed.entityMention.isSetText();
     assert seed.entity_type != null;
 
     String tokUuid = seed.entityMention.getTokens().getTokenizationId().getUuidString();
@@ -488,6 +486,7 @@ public class PkbpSearching implements Serializable {
     
     this.queue = new ArrayDeque<>();
     this.queue.add(r0);
+    this.output = new LinkedHashMap<>();
   }
   
 

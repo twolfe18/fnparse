@@ -926,6 +926,8 @@ public class AccumuloIndex {
      */
     public List<SitSearchResult> search(List<String> triageFeats, StringTermVec docContext, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
       Log.info("starting, triageFeats=" + triageFeats);
+      if (triageFeats.isEmpty())
+        throw new IllegalArgumentException();
       if (batchTimeoutSeconds > 0)
         Log.info("[filter] using a timeout of " + batchTimeoutSeconds + " seconds for f2t query");
 
