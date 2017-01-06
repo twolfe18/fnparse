@@ -440,7 +440,6 @@ public class PkbpSearching implements Serializable {
       PkbpEntity.Mention em = new PkbpEntity.Mention(s);
       List<Pair<PkbpEntity, PkbpEntity.Mention>> entityLinks = new ArrayList<>();
       List<Pair<PkbpSituation, PkbpSituation.Mention>> situationLinks = new ArrayList<>();
-//      processOneMention(s.getTokenization(), s.getCommunication(), entityLinks, situationLinks);
       processOneMention(em, entityLinks, situationLinks);
       
       // Check for dups
@@ -473,14 +472,16 @@ public class PkbpSearching implements Serializable {
     throw new RuntimeException("implement me");
   }
   
-//  public void processOneMention(Tokenization t, Communication c,
   public void processOneMention(PkbpEntity.Mention searchResult,
       List<Pair<PkbpEntity, PkbpEntity.Mention>> outputEntityLinks,
       List<Pair<PkbpSituation, PkbpSituation.Mention>> outputSituationLinks) {
     
+    double entLinkThresh = 3;
+    double sitLinkThresh = 1.5;
+    
     Communication c = searchResult.getCommunication();
     Tokenization t = searchResult.getTokenization();
-    Log.info("processing " + searchResult + "\tc=" + c.getId() + " t=" + t.getUuid().getUuidString());
+    Log.info("processing " + searchResult + "\tc=" + c.getId() + " t=" + t.getUuid().getUuidString().substring(t.getUuid().getUuidString().length()-5));
     
     if (!seenCommToks.add(new Pair<>(c.getId(), t.getUuid().getUuidString()))) {
       // We've already processed this sentence
@@ -505,7 +506,9 @@ public class PkbpSearching implements Serializable {
     for (int entHead : entHeads) {
       PkbpEntity.Mention m = new PkbpEntity.Mention(entHead, t, deps, c);
       Pair<PkbpEntity, List<Feat>> l = linkEntityMentionToPkb(m);
-      if (l != null) {
+      if (l != null && Feat.sum(l.get2()) > entLinkThresh) {
+        Log.info("linking ent");
+        l.get1().addMention(m);
         outputEntityLinks.add(new Pair<>(l.get1(), m));
         Object old = entLinks.put(entHead, l.get1());
         assert old == null;
@@ -526,10 +529,32 @@ public class PkbpSearching implements Serializable {
       PkbpSituation.Mention sm = new PkbpSituation.Mention(s.getKey(), args, deps, t, c);
       Log.info("found " + entLinks + " links to support linking the sitMention " + sm);
       Pair<PkbpSituation, List<Feat>> sl = linkSituation(sm, entityArgs);
-      if (sl != null) {
+      if (sl != null && Feat.sum(sl.get2()) > sitLinkThresh) {
+        Log.info("linking sit");
+        sl.get1().addMention(sm);
         outputSituationLinks.add(new Pair<>(sl.get1(), sm));
+
+        // Update entity2situations
+        for (PkbpEntity ea : entityArgs) {
+          // TODO we could be adding this situation to this list twice!
+          entity2situation.put(ea, new LL<>(sl.get1(), entity2situation.get(ea)));
+        }
       }
     }
+    
+    
+    // Update Results
+    /*
+     * Not clear how to do this!
+     * A result is essentially a tuple of entities with some situations hanging off,
+     * so the question becomes whether any of the entities or situations created/linked
+     * here introduce any new keys (entity tuples) or values (situations).
+     * 
+     * TODO I can linear scan to see if there are any new entity tuples, but ... this is crappy...
+     * if an entity tuple is the key, how to efficiently check?
+     * induce an ordering over elements of a set (in this case a set of entities),
+     * then the key is a sorted list of elements (ints/indices)
+     */
   }
   
   

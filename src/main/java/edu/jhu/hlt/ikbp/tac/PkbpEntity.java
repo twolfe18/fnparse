@@ -57,7 +57,7 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       String nTf = triageFeatures == null ? "null" : "" + triageFeatures.size();
       String nAf = "(c=" + (attrCommFeatures == null ? "null" : attrCommFeatures.size());
       nAf += ",t=" + (attrTokFeatures == null ? "null" : attrTokFeatures.size()) + ")";
-      return "(EM tok=" + t + " h=" + head + " s=" + Span.safeShortString(span) + " t=" + nerType
+      return "(EM tok=" + t + " h=" + head + " s=" + Span.safeShortString(span) + " neType=" + nerType
           + " nTf=" + nTf + " nAf=" + nAf + ")";
     }
     
@@ -122,6 +122,26 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     this.mentions = new ArrayList<>();
     addMention(canonical);
     Log.info(this);
+  }
+  
+  @Override
+  public int hashCode() {
+    return id.hashCode();
+  }
+  
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof PkbpEntity) {
+      PkbpEntity e = (PkbpEntity) other;
+      return id.equals(e.id);
+    }
+    return false;
+  }
+  
+  public String getCanonicalHeadString() {
+    if (mentions.isEmpty())
+      return "NA";
+    return mentions.get(0).getHeadString();
   }
   
   public void addMention(Mention mention) {

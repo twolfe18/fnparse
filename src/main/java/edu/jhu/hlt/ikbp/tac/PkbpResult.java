@@ -17,6 +17,31 @@ public class PkbpResult implements Serializable {
     situations = new ArrayList<>();
   }
   
+  public List<String> argHeads() {
+    List<String> a = new ArrayList<>();
+    for (PkbpEntity e : args)
+      a.add(e.getCanonicalHeadString());
+    return a;
+  }
+
+  public List<String> sitHeads() {
+    List<String> a = new ArrayList<>();
+    for (PkbpSituation s : situations)
+      a.add(s.getCanonicalHeadString());
+    return a;
+  }
+
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("(PR args=");
+    sb.append(argHeads());
+    sb.append(" sits=");
+    sb.append(sitHeads());
+    sb.append(String.format(" salience=%.2f)", getSalience()));
+    return sb.toString();
+  }
+  
   public double getSalience() {
     double s = 0;
     

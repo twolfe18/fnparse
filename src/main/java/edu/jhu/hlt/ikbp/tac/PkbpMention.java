@@ -9,6 +9,7 @@ import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.tutils.hash.Hash;
 
 public class PkbpMention implements Serializable {
   private static final long serialVersionUID = 795646509667723395L;
@@ -42,6 +43,24 @@ public class PkbpMention implements Serializable {
     this.tokUuid = tokUuid;
     this.head = head;
     this.feats = new ArrayList<>();
+  }
+  
+  @Override
+  public int hashCode() {
+    return Hash.mix(tokUuid.hashCode(), head);
+  }
+  
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof PkbpMention) {
+      PkbpMention m = (PkbpMention) other;
+      return head == m.head && tokUuid.equals(m.tokUuid);
+    }
+    return false;
+  }
+
+  public String getHeadString() {
+    return getTokenization().getTokenList().getTokenList().get(head).getText();
   }
   
   public String getCommunicationId() {

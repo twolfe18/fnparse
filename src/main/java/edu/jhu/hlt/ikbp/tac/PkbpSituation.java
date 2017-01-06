@@ -66,6 +66,12 @@ public class PkbpSituation implements Serializable {
     }
   }
   
+  public String getCanonicalHeadString() {
+    if (mentions.isEmpty())
+      return "NA";
+    return mentions.get(0).getHeadString();
+  }
+  
   public List<Feat> similarity(Map<String, Double> feat2score) {
     List<Feat> f = new ArrayList<>();
     for (Entry<String, Double> e : feat2score.entrySet()) {
