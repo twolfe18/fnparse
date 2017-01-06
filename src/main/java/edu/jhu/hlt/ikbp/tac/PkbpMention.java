@@ -46,6 +46,17 @@ public class PkbpMention implements Serializable {
   }
   
   @Override
+  public String toString() {
+    String[] cn = getClass().getName().split("\\.");
+    return "(" + cn[cn.length-1] + " h=" + getHeadString() + "@" + head + " in " + getCommTokIdShort() + ")";
+  }
+    
+  /** returns "commId/tokUuidSuf" */
+  public String getCommTokIdShort() {
+    return getCommunicationId() + "/" + tokUuid.substring(tokUuid.length()-4, tokUuid.length());
+  }
+  
+  @Override
   public int hashCode() {
     return Hash.mix(tokUuid.hashCode(), head);
   }

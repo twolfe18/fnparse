@@ -13,7 +13,6 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
-import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Span;
 
 public class PkbpSituation implements Serializable {
@@ -65,6 +64,18 @@ public class PkbpSituation implements Serializable {
       Object old = this.feat2score.put(f.name, f.weight);
       assert old == null;
     }
+  }
+  
+  @Override
+  public String toString() {
+    return String.format("(Sit heads=%s feats=%s)", getHeads(), PkbpSearching.sortAndPrune(feat2score, 4));
+  }
+  
+  public List<String> getHeads() {
+    List<String> h = new ArrayList<>();
+    for (PkbpSituation.Mention sm : mentions)
+      h.add(sm.getHeadString());
+    return h;
   }
   
   public String getCanonicalHeadString() {

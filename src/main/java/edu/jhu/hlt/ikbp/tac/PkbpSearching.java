@@ -749,6 +749,15 @@ public class PkbpSearching implements Serializable {
     
     // Extract arguments/entities
     List<Integer> entHeads = DependencySyntaxEvents.extractEntityHeads(t);
+    if (!entHeads.contains(searchResult.head)) {
+      Log.info("search result head was not extracted as an argument by DependencySyntaxEvents"
+          + " (nFound=" + entHeads.size() + "), adding it anyway");
+      for (int h : entHeads)
+        System.out.println("  found:  " + new PkbpMention(h, t, deps, c));
+      System.out.println("  adding: " + searchResult);
+      entHeads.add(searchResult.head);
+      Collections.sort(entHeads);
+    }
     //Log.info("found " + entHeads.size() + " heads");
     // Extract situations
     DependencySyntaxEvents.CoverArgumentsWithPredicates se =
