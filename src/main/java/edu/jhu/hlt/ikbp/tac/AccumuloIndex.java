@@ -114,6 +114,8 @@ import edu.jhu.util.TokenizationIter;
  * @author travis
  */
 public class AccumuloIndex {
+  
+  public static boolean SHOW_TRIAGE_FEAT_SCORES = false;
 
   public final static Counts<String> EC = new Counts<>(); // event counts
   public final static MultiTimer TIMER = new MultiTimer();
@@ -910,12 +912,14 @@ public class AccumuloIndex {
 
       double freq = (2d * numToks * numDocs) / (numToks + numDocs);
       double p = (triageFeatNBPrior + 1) / (triageFeatNBPrior + freq);
-      System.out.println("triage:"
-          + " numToks=" + numToks
-          + " numDocs=" + numDocs
-          + " freq=" + freq
-          + " triageFeatNBPrior=" + triageFeatNBPrior
-          + " p=" + p);
+      if (SHOW_TRIAGE_FEAT_SCORES) {
+        System.out.println("triage:"
+            + " numToks=" + numToks
+            + " numDocs=" + numDocs
+            + " freq=" + freq
+            + " triageFeatNBPrior=" + triageFeatNBPrior
+            + " p=" + p);
+      }
       return p;
     }
 

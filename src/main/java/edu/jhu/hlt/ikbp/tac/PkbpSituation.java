@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -15,7 +16,7 @@ import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Span;
 
-public class PkbpSituation implements Serializable {
+public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Mention> {
   private static final long serialVersionUID = 8496181770153129315L;
 
   public static class Mention extends PkbpMention implements Serializable {
@@ -101,5 +102,10 @@ public class PkbpSituation implements Serializable {
       feat2score.put(f.name, f.weight + p);
     }
     this.mentions.add(m);
+  }
+
+  @Override
+  public Iterator<Mention> iterator() {
+    return mentions.iterator();
   }
 }

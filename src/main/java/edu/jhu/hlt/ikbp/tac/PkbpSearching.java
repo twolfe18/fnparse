@@ -312,6 +312,7 @@ public class PkbpSearching implements Serializable {
 */
       PkbpSearching ps = new PkbpSearching(ks, seed, seedWeight, rand);
       //ps.verbose = true;
+      //ps.verboseLinking = true;
       for (int i = 0; i < stepsPerQuery; i++) {
         Log.info("step=" + (i+1));
 //        ps.expandEntity();
@@ -357,24 +358,11 @@ public class PkbpSearching implements Serializable {
   private Random rand;
 
   // Controls search
-  public DoublePair rewardForTemporalLocalityMuSigma = new DoublePair(2, 30); // = (reward, stddev), score += reward * Math.exp(-(diffInDays/stddev)^2)
+//  public DoublePair rewardForTemporalLocalityMuSigma = new DoublePair(2, 30); // = (reward, stddev), score += reward * Math.exp(-(diffInDays/stddev)^2)
+//  public DoublePair xdocCorefSigmoid = new DoublePair(3, 1);
   public double rewardForAttrFeats = 3;   // score += rewardForAttrFeats * sqrt(numAttrFeats)
   public DoublePair relatedEntitySigmoid = new DoublePair(6, 2);    // first: higher value lowers prob of keeping related entities. second: temperature of sigmoid (e.g. infinity means everything is 50/50 odds of keep)
-  public DoublePair xdocCorefSigmoid = new DoublePair(3, 1);
 
-//  // OLD PKB
-//  /** @deprecated */
-//  private List<PkbpEntity> entities;
-//  /** @deprecated */
-//  private Set<String> knownComms;
-  
-  // NEW PKB
-  /*
-   * To mimic the hyper-graph used in Uberts:
-   * every node must have an id
-   * edges are encoded via adjacency maps
-   * edges should be added in one place and never/carefully removed
-   */
 
   Set<Pair<String, String>> seenCommToks;
 
@@ -406,7 +394,7 @@ public class PkbpSearching implements Serializable {
   // Debugging
   Counts<String> ec = new Counts<>();
   public boolean verbose = false;
-  public boolean verboseLinking = true;
+  public boolean verboseLinking = false;
 
 
   public PkbpSearching(KbpSearching search, KbpQuery seed, double seedWeight, Random rand) {
@@ -640,7 +628,8 @@ public class PkbpSearching implements Serializable {
           PkbpResult r = output.get(rKey);
           if (r == null) {
             String id = String.format("r%03d:%s+%s", output.size(), rKey.get(0), rKey.get(1));
-            r = new PkbpResult(id);
+            boolean containsSeed = ei.equals(seed) || ej.equals(seed);
+            r = new PkbpResult(id, containsSeed);
             r.addArgument(ei, memb_e2r);
             r.addArgument(ej, memb_e2r);
             Log.info("new result, queing search for: " + r);
