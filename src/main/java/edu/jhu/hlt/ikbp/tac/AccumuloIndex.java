@@ -795,8 +795,9 @@ public class AccumuloIndex {
     }
     
     /** returns null if any of the common features don't have a score unless computeFeatFreqScoresAsNeeded=true */
-    public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget, boolean computeFeatFreqScoresAsNeeded) {
-      Log.info("source=" + triageFeatsSource + " target=" + triageFeatsTarget + " computeFeatFreqScoresAsNeeded=" + computeFeatFreqScoresAsNeeded);
+    public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget, boolean computeFeatFreqScoresAsNeeded, boolean verbose) {
+      if (verbose)
+        Log.info("source=" + triageFeatsSource + " target=" + triageFeatsTarget + " computeFeatFreqScoresAsNeeded=" + computeFeatFreqScoresAsNeeded);
       // TODO Consider using some jaccard-like denominator for source/target features
       if (triageFeatsSource == null)
         throw new IllegalArgumentException();
@@ -813,7 +814,8 @@ public class AccumuloIndex {
           return null;
         score += s;
       }
-      Log.info("done");
+      if (verbose)
+        Log.info("done");
       return score;
     }
 
@@ -827,7 +829,7 @@ public class AccumuloIndex {
       // Try to get the value without scanning
       int maybe = fce.getFreqExactForMostFreq(triageFeat);
       if (maybe > 0) {
-        Log.info(triageFeat + " is a most common feat w/ freq=" + maybe);
+        //Log.info(triageFeat + " is a most common feat w/ freq=" + maybe);
         // We are going to use the approximation of numToks == numDocs for the
         // most common features, on the assumption that they matter very little.
         int numToks = maybe;
