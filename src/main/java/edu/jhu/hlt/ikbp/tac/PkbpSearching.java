@@ -300,7 +300,13 @@ public class PkbpSearching implements Serializable {
         continue;
       }
 
-      PkbpSearching ps = new PkbpSearching(ks, seed, seedWeight, rand);
+      PkbpSearching ps = null;
+      try {
+        ps = new PkbpSearching(ks, seed, seedWeight, rand);
+      } catch (Exception e) {
+        e.printStackTrace();
+        Log.info("[filter] skipping query: " + seed);
+      }
       ps.verbose = true;
       for (int i = 0; i < stepsPerQuery; i++) {
         Log.info("step=" + (i+1));
@@ -402,6 +408,10 @@ public class PkbpSearching implements Serializable {
   public PkbpSearching(KbpSearching search, KbpQuery seed, double seedWeight, Random rand) {
     Log.info("seed=" + seed);
     if (seed.sourceComm == null)
+      throw new IllegalArgumentException();
+    if (seed.entityMention == null)
+      throw new IllegalArgumentException();
+    if (!seed.entityMention.isSetText() || seed.entityMention.getText().isEmpty())
       throw new IllegalArgumentException();
 
     this.seenCommToks = new HashSet<>();
