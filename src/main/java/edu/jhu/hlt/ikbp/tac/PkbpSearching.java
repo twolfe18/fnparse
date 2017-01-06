@@ -243,12 +243,13 @@ public class PkbpSearching implements Serializable {
     // New
     List<Feat> newSitFeats = new ArrayList<>();
     newSitFeats.add(new Feat("intercept", defaultScoreForNewSituation));
-    newSitFeats.add(new Feat("goodCompetingLink", Math.min(0, -Feat.sum(a.get().get2()))));
     PkbpSituation newSit = new PkbpSituation(mention);
     links.add(new SitLink(Collections.emptyList(), mention, newSit, newSitFeats, true));
     
-    if (a.numOffers() == 0) {
-      links.add(new SitLink(entityArgsUsed, mention, a.get().get1(), a.get().get2(), false));
+    if (a.numOffers() > 0) {
+      List<Feat> af = a.get().get2();
+      links.add(new SitLink(entityArgsUsed, mention, a.get().get1(), af, false));
+      newSitFeats.add(new Feat("goodCompetingLink", Math.min(0, -Feat.sum(af))));
     }
 
     // Show links for debugging
@@ -290,6 +291,7 @@ public class PkbpSearching implements Serializable {
     }
 
     for (KbpQuery seed : queries) {
+      Log.info("working on seed=" + seed);
 
       // Resolve query comm
       seed.sourceComm = ks.getCommCaching(seed.docid);
@@ -382,9 +384,9 @@ public class PkbpSearching implements Serializable {
   // Membership graph.
   // Inverse links like s2e, r2e, and r2s are encoded by the
   // objects themselves (in this case s, r, and r respectively)
-  Map<PkbpEntity, LL<PkbpSituation>> memb_e2s;
-  Map<PkbpEntity, LL<PkbpResult>> memb_e2r;
-  Map<PkbpSituation, LL<PkbpResult>> memb_s2r;
+  transient Map<PkbpEntity, LL<PkbpSituation>> memb_e2s;
+  transient Map<PkbpEntity, LL<PkbpResult>> memb_e2r;
+  transient Map<PkbpSituation, LL<PkbpResult>> memb_s2r;
   
 
   // History (for debugging/running offline)
@@ -475,10 +477,15 @@ public class PkbpSearching implements Serializable {
     // New entity for the searched-for mention
     EntLink best = null;
     for (EntLink el : p.get1()) {
-      if (el.source == canonical2) {
+      if (el.source.equals(canonical2)) {
         assert best == null;
         best = el;
       }
+    }
+    if (best == null) {
+      System.err.flush();
+      System.out.flush();
+      throw new RuntimeException("fail to link " + canonical2);
     }
     PkbpResult r0 = new PkbpResult("seed");
     best.target.addMention(best.source);
@@ -742,13 +749,13 @@ public class PkbpSearching implements Serializable {
     
     // Extract arguments/entities
     List<Integer> entHeads = DependencySyntaxEvents.extractEntityHeads(t);
-    Log.info("found " + entHeads.size() + " heads");
+    //Log.info("found " + entHeads.size() + " heads");
     // Extract situations
     DependencySyntaxEvents.CoverArgumentsWithPredicates se =
         new DependencySyntaxEvents.CoverArgumentsWithPredicates(c, t, deps, entHeads);
 
     // Link args
-    Log.info("linking args...");
+    Log.info("linking " + entHeads.size() + " entMentions/args to PKB");
     Map<Integer, EntLink> entLinks = new HashMap<>();
     for (int entHead : entHeads) {
       PkbpEntity.Mention m = new PkbpEntity.Mention(entHead, t, deps, c);
@@ -763,9 +770,10 @@ public class PkbpSearching implements Serializable {
         entLinks.put(entHead, el.get(1));
       }
     }
+    links.get1().addAll(entLinks.values());
     
     // Link sits
-    Log.info("linking sits...");
+    Log.info("linking " + se.getSituations().size() + " sitMentions to PKB");
     for (Entry<Integer, Set<String>> s : se.getSituations().entrySet()) {
       BitSet bsArgs = se.getArguments().get(s.getKey());
       int[] args = DependencySyntaxEvents.bs2a(bsArgs);
@@ -776,7 +784,7 @@ public class PkbpSearching implements Serializable {
           entityArgs.add(e);
       }
       PkbpSituation.Mention sm = new PkbpSituation.Mention(s.getKey(), args, deps, t, c);
-      Log.info("found " + entLinks + " links to support linking the sitMention " + sm);
+      Log.info("found " + entityArgs.size() + " links to support linking the sitMention " + sm);
       List<SitLink> sl = linkSituation(sm, entityArgs, defaultNewSitScore);
       if (sl.size() == 1 || Feat.sum(sl.get(0).score) > 0) {
         // New
@@ -808,6 +816,8 @@ public class PkbpSearching implements Serializable {
      * Whenever you call addMention/addEntity/addSituation, you are forced
      * to provide an inverted adjacency list so coherence is always gauranteed.
      */
+
+    Log.info("done, returning " + links.get1().size() + " ent links and " + links.get2().size() + " sit links");
     return links;
   }
   

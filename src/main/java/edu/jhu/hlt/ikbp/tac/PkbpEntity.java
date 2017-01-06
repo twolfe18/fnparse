@@ -57,8 +57,13 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       String nTf = triageFeatures == null ? "null" : "" + triageFeatures.size();
       String nAf = "(c=" + (attrCommFeatures == null ? "null" : attrCommFeatures.size());
       nAf += ",t=" + (attrTokFeatures == null ? "null" : attrTokFeatures.size()) + ")";
-      return "(EM tok=" + t + " h=" + head + " s=" + Span.safeShortString(span) + " neType=" + nerType
-          + " nTf=" + nTf + " nAf=" + nAf + ")";
+      return "(EM h=" + getEntityHeadGuess() + "@" + head
+          + " neType=" + nerType
+          + " s=" + Span.safeShortString(span)
+          + " nTf=" + nTf
+          + " nAf=" + nAf
+          + " t=" + t
+          + ")";
     }
     
     public String getEntityHeadGuess() {
