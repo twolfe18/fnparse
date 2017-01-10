@@ -110,7 +110,8 @@ public class PkbpResult implements Serializable {
   
   public void addArgument(PkbpEntity entity, Map<PkbpEntity, LL<PkbpResult>> invMapping) {
     args.add(entity);
-    invMapping.put(entity, new LL<>(this, invMapping.get(entity)));
+    if (invMapping != null)
+      invMapping.put(entity, new LL<>(this, invMapping.get(entity)));
   }
 
   public List<PkbpSituation> getSituations() {
