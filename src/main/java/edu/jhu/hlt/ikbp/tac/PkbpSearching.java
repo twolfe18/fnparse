@@ -245,13 +245,16 @@ public class PkbpSearching implements Serializable {
       List<SitLink> outputNewSit,
       List<SitLink> outputLinkSit) {
     boolean verbose = true;
+    boolean vv = false;
     assert outputLinkSit.isEmpty();
     assert outputNewSit.isEmpty();
     if (verbose) {
       Log.info("starting on:  " + mention);
-      System.out.println("nEntityArgs=" + entityArgs.size());
-      for (int i = 0; i < entityArgs.size(); i++)
-        System.out.printf("entityArg(%d)=%s\n", i, entityArgs.get(i));
+      if (vv) {
+        System.out.println("nEntityArgs=" + entityArgs.size());
+        for (int i = 0; i < entityArgs.size(); i++)
+          System.out.printf("entityArg(%d)=%s\n", i, entityArgs.get(i));
+      }
     }
     
     /*
@@ -275,11 +278,13 @@ public class PkbpSearching implements Serializable {
         EntLink ej = entityArgs.get(j);
         List<String> rKey = generateOutputKey(ei.target, ej.target);
         if (rKey == null) {
-          Log.info("SKIP (no key) i=" + i + " j=" + j + " rKey=" + rKey);
+          if (vv)
+            Log.info("SKIP (no key) i=" + i + " j=" + j + " rKey=" + rKey);
           continue;
         }
         if (!outputUniqCoreArgs.add(rKey)) {
-          Log.info("SKIP (not uniq) i=" + i + " j=" + j + " rKey=" + rKey);
+          if (vv)
+            Log.info("SKIP (not uniq) i=" + i + " j=" + j + " rKey=" + rKey);
           continue;
         }
         
@@ -302,7 +307,7 @@ public class PkbpSearching implements Serializable {
         // What situations contain both of these entities as core arguments?
         LL<PkbpSituation> si = memb_e2s.get(ei.target);
         LL<PkbpSituation> sj = memb_e2s.get(ej.target);
-        if (verbose) {
+        if (vv) {
           Log.info("[LINK_SIT] i=" + i + " n=" + n + " ei=" + ei);
           Log.info("[LINK_SIT] j=" + j + " n=" + n + " ej=" + ej);
           System.out.println("[LINK_SIT] sits which ei partipates in: " + LL.toList(si));
@@ -319,7 +324,7 @@ public class PkbpSearching implements Serializable {
             List<Feat> score = scoreSitLink(sit, mention);
             outputLinkSit.add(new SitLink(contingentUpon, mention, sit, score, false));
             anyCommon = true;
-            if (verbose) {
+            if (vv) {
               System.out.println("[LINK_SIT] common: " + sit);
               System.out.println("[LINK_SIT] score:  " + Feat.sum(score) + " " + sortAndPrune(score, 5));
               System.out.println();
@@ -337,7 +342,7 @@ public class PkbpSearching implements Serializable {
           score.addAll(interestingEntityMention(ei.source));
           score.addAll(interestingEntityMention(ej.source));
           outputNewSit.add(new SitLink(contingentUpon, mention, target, score, true));
-          if (verbose) {
+          if (vv) {
             System.out.println("[NEW_SIT] no common situations, considering new one");
             System.out.println("[NEW_SIT] score:  " + Feat.sum(score) + " " + sortAndPrune(score, 5));
             System.out.println();
@@ -437,6 +442,7 @@ public class PkbpSearching implements Serializable {
       Log.info("inputDir=" + inputDir.getPath());
     }
 
+    StringCountMinSketch sfCms = null;
     for (KbpQuery seed : queries) {
       Log.info("working on seed=" + seed);
 
@@ -454,7 +460,13 @@ public class PkbpSearching implements Serializable {
         ps = (PkbpSearching) FileUtil.deserialize(f);
         ps.restoreCommsInInitialResultsCache();
       } else {
-        ps = new PkbpSearching(ks, seed, seedWeight, rand);
+        if (sfCms == null) {
+          // e.g. /export/projects/twolfe/sit-search/situation-feature-counts/count-min-sketch-v2/cag-cms.jser
+          File sitFeatFreqCms = config.getExistingFile("sitFeatFreqCms");
+          Log.info("loading sitFeatFreqCms=" + sitFeatFreqCms.getPath());
+          sfCms = (StringCountMinSketch) FileUtil.deserialize(sitFeatFreqCms);
+        }
+        ps = new PkbpSearching(ks, sfCms, seed, seedWeight, rand);
       }
       //ps.verbose = true;
       //ps.verboseLinking = true;
@@ -543,10 +555,12 @@ public class PkbpSearching implements Serializable {
   public boolean verboseLinking = false;
 
 
-  public PkbpSearching(KbpSearching search, KbpQuery seed, double seedWeight, Random rand) {
+  public PkbpSearching(KbpSearching search, StringCountMinSketch sitFeatCms, KbpQuery seed, double seedWeight, Random rand) {
     Log.info("seed=" + seed);
     if (seed.sourceComm == null)
       throw new IllegalArgumentException();
+
+    this.sitFeatCms = sitFeatCms;
     
     this.commRetCache = search.getCommRetCache();
     this.initialResultsCache = new HashMap<>();
@@ -608,11 +622,14 @@ public class PkbpSearching implements Serializable {
     
     Pair<List<EntLink>, List<SitLink>> p = proposeLinks(canonical2);
     // New entity for the searched-for mention
+    Set<String> exUniq = new HashSet<>();   // proposeLinks doesn't de-duplicate links
     EntLink best = null;
     for (EntLink el : p.get1()) {
       if (!el.newEntity)
         continue;
       if (el.source.head != canonical2.head)
+        continue;
+      if (!exUniq.add(linkStr(el)))
         continue;
       Log.info("setup EntLink: " + el);
       if (el.source.equals(canonical2)) {
@@ -1035,7 +1052,7 @@ public class PkbpSearching implements Serializable {
     
     Communication c = searchResult.getCommunication();
     Tokenization t = searchResult.getTokenization();
-    Log.info("processing " + searchResult + "\tc=" + c.getId() + " t=" + t.getUuid().getUuidString().substring(t.getUuid().getUuidString().length()-5));
+    Log.info("processing " + searchResult);// + "\tc=" + c.getId() + " t=" + t.getUuid().getUuidString().substring(t.getUuid().getUuidString().length()-5));
     
     if (!seenCommToks.add(new Pair<>(c.getId(), t.getUuid().getUuidString()))) {
       // We've already processed this sentence
@@ -1141,7 +1158,7 @@ public class PkbpSearching implements Serializable {
         sm.addFeature(new Feat(f, p));
       }
       if (verbose) {
-        Log.info("args=" + Arrays.toString(args) + " yields entityArgs=" + entityArgs + " sm=" + sm);
+        Log.info("args=" + Arrays.toString(args) + " yields nEntityArgs=" + entityArgs.size() + " sm=" + sm);
       }
 
       // Generate candidate SitLinks

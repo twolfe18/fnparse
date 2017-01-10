@@ -150,7 +150,7 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     this.relevantReasons = relevanceReasons;
     this.mentions = new ArrayList<>();
     addMention(canonical);
-    Log.info(this);
+    //Log.info(this);
   }
   
   @Override
