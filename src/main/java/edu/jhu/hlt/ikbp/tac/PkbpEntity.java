@@ -187,7 +187,9 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 
   @Override
   public String toString() {
-    return "(PkbpEntity id=" + id + " nMentions=" + mentions.size() + " weight=" + getRelevanceWeight() + ")";
+    return "(PkbpEntity id=" + id
+        + " nMentions=" + mentions.size()
+        + " weight=" + getRelevanceWeight() + ")";
   }
 
   public StringTermVec getDocVec() {

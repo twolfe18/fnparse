@@ -478,12 +478,23 @@ public class PkbpSearching implements Serializable {
     PkbpResult r0 = new PkbpResult("seed", true);
     best.target.addMention(best.source);
     r0.addArgument(best.target, memb_e2r);
+
+    this.seenCommToks.add(new Pair<>(
+        canonical2.getCommunication().getId(),
+        canonical2.getTokenization().getUuid().getUuidString()));
     
     this.queue = new ArrayDeque<>();
     this.queue.add(r0);
     this.output = new LinkedHashMap<>();
   }
   
+  private static String linkStr(EntLink el) {
+    return "el/" + el.source.getCommTokIdShort() + "/" + el.target.id;
+  }
+  private static String linkStr(SitLink el) {
+    String tid = StringUtils.join("-", el.target.getHeads());
+    return "sl/" + el.source.getCommTokIdShort() + "/" + tid;
+  }
 
   /**
    * 1) choose a tuple of entities to search for (one of which will be the seed entity)
@@ -560,21 +571,30 @@ public class PkbpSearching implements Serializable {
     Map<PkbpSituation.Mention, LL<PkbpSituation>> sitDups = new HashMap<>();
     for (SitSearchResult s : mentions) {
       PkbpEntity.Mention em = new PkbpEntity.Mention(s);
+      TokenTagging ner = IndexCommunications.getPreferredNerTags(em.getTokenization());
+      em.nerType = ner.getTaggedTokenList().get(em.head).getTag();
       Pair<List<EntLink>, List<SitLink>> x = proposeLinks(em);
       
       // Execute the linking operations
+      Set<String> exUniq = new HashSet<>();
       List<EntLink> exEL = new ArrayList<>();
       List<SitLink> exSL = new ArrayList<>();
       for (EntLink el : x.get1()) {
-        el.target.addMention(el.source);
-        exEL.add(el);
-      }
-      for (SitLink sl : x.get2()) {
-        sl.target.addMention(sl.source);
-        exSL.add(sl);
-        for (EntLink el : sl.contingentUpon) {
+        if (exUniq.add(linkStr(el))) {
           el.target.addMention(el.source);
           exEL.add(el);
+        }
+      }
+      for (SitLink sl : x.get2()) {
+        if (exUniq.add(linkStr(sl))) {
+          sl.target.addMention(sl.source);
+          exSL.add(sl);
+          for (EntLink el : sl.contingentUpon) {
+            if (exUniq.add(linkStr(el))) {
+              el.target.addMention(el.source);
+              exEL.add(el);
+            }
+          }
         }
       }
       
@@ -620,6 +640,9 @@ public class PkbpSearching implements Serializable {
           
           PkbpEntity ei = exEL.get(i).target;
           PkbpEntity ej = exEL.get(j).target;
+
+          if (ei == ej)
+            continue;
           
           List<String> rKey = new ArrayList<>();
           if (ei.id.compareTo(ej.id) < 0) {
@@ -637,11 +660,11 @@ public class PkbpSearching implements Serializable {
             r = new PkbpResult(id, containsSeed);
             r.addArgument(ei, memb_e2r);
             r.addArgument(ej, memb_e2r);
-            Log.info("new result, queing search for: " + r);
+            Log.info("NEW RESULT, queing search for: " + r);
             output.put(rKey, r);
             queue.add(r);
           } else {
-            Log.info("result already exists: " + r);
+            Log.info("LINK RESULT, already exists: " + r);
           }
         }
       }
@@ -650,6 +673,10 @@ public class PkbpSearching implements Serializable {
       System.out.println();
       System.out.println("TIMER:");
       System.out.println(TIMER);
+      System.out.println();
+
+      System.out.println();
+      showResults();
       System.out.println();
     }
     
@@ -668,6 +695,38 @@ public class PkbpSearching implements Serializable {
         considerMergingSituations(sits);
     }
     TIMER.stop("dedupSits");
+
+    Log.info("done");
+  }
+
+  public void showResults() {
+    Log.info("nResult=" + output.size());
+    for (Entry<List<String>, PkbpResult> e : output.entrySet()) {
+      System.out.println("key: " + e.getKey());
+      showResult(e.getValue());
+      System.out.println();
+    }
+    System.out.println();
+  }
+
+  public void showResult(PkbpResult r) {
+    System.out.println(r);
+    int i = 0;
+    for (PkbpEntity e : r.getArguments()) {
+      System.out.printf("arg(%d): %s\n", i, e);
+      for (PkbpEntity.Mention em : e) {
+        System.out.printf("\t%s\n", em.getWordsInTokenizationWithHighlightedEntAndSit());
+      }
+      i++;
+    }
+    i = 0;
+    for (PkbpSituation s : r.getSituations()) {
+      System.out.printf("sit(%d): %s\n", i, s);
+      for (PkbpSituation.Mention sm : s) {
+        System.out.printf("\t%s\n", sm.showPredInContext());
+      }
+      i++;
+    }
   }
 
   public void considerMergingSituations(List<PkbpSituation> sits) {
@@ -786,7 +845,32 @@ public class PkbpSearching implements Serializable {
       List<EntLink> el = linkEntityMention(m, defaultScoreOfCreatingNewEntity);
       assert el.size() > 0;
       assert el.get(0).newEntity;
-      if (el.size() == 1 || Feat.sum(el.get(0).score) < 0) {
+      for (int i = 1; i < el.size(); i++)
+        assert !el.get(i).newEntity;
+
+      if (el.size() == 1) {
+        Log.info("NEW ENTITY (no choice): " + el.get(0));
+        entLinks.put(entHead, el.get(0));
+      } else if (Feat.sum(el.get(1).score) > 1.5) {
+        Log.info("LINK ENTITY: " + el.get(1));
+        entLinks.put(entHead, el.get(1));
+      } else {
+        // Maybe keep...
+        List<Feat> fKeep = interestingEntityMention(el.get(0).source);
+        double pKeep = 1 / (1 + Math.exp(-Feat.sum(fKeep)));
+        double d = rand.nextDouble();
+        System.out.println("[maybe new] pKeep=" + pKeep + " draw=" + d + "\t" + sortAndPrune(fKeep, 5) + "\t" + el.get(0).source);
+        if (d < pKeep) {
+          Log.info("NEW ENTITY (looks interesting): " + el.get(0));
+          entLinks.put(entHead, el.get(0));
+        } else {
+          // prune
+          Log.info("PRUNE ENTITY (not interesting): " + el.get(0));
+        }
+      }
+
+/*
+      if (el.size() == 1 || Feat.sum(el.get(0).score) > 0) {
         // New
         Log.info("NEW ENTITY: " + el.get(0));
         entLinks.put(entHead, el.get(0));
@@ -795,6 +879,7 @@ public class PkbpSearching implements Serializable {
         Log.info("LINK ENTITY: " + el.get(1));
         entLinks.put(entHead, el.get(1));
       }
+*/
     }
     links.get1().addAll(entLinks.values());
     System.out.println();
@@ -814,7 +899,7 @@ public class PkbpSearching implements Serializable {
       PkbpSituation.Mention sm = new PkbpSituation.Mention(s.getKey(), args, deps, t, c);
       Log.info("found " + entityArgs.size() + " links to support linking the sitMention " + sm);
       List<SitLink> sl = linkSituation(sm, entityArgs, defaultNewSitScore);
-      if (sl.size() == 1 || Feat.sum(sl.get(0).score) < 0) {
+      if (sl.size() == 1 || Feat.sum(sl.get(0).score) > 0) {
         // New
         Log.info("NEW SITUATION: " + sl.get(0));
         links.get2().add(sl.get(0));
@@ -1052,17 +1137,38 @@ public class PkbpSearching implements Serializable {
     // Best link
     if (best != null) {
       List<Feat> ls = best.get2();
+      System.out.println("best ls.sum=" + Feat.sum(ls) + " ls=" + ls);
       el.add(new EntLink(r, best.get1(), ls, false));
       newEntFeat.add(new Feat("competingLinkIsGood", Math.min(0, -Feat.sum(ls))));
     }
     
     // Show links for debugging
-    for (int i = 0; i < el.size(); i++) {
-      Log.info(i + "\t" + el.get(i));
-    }
+    for (int i = 0; i < el.size(); i++)
+      System.out.println(i + "\t" + el.get(i));
+    System.out.println();
 
     TIMER.stop("linkEntityMention");
     return el;
+  }
+
+  public List<Feat> interestingEntityMention(PkbpEntity.Mention m) {
+    List<Feat> fs = new ArrayList<>();
+
+    String ner = m.getHeadNer();
+    double nerW = nerTypeExploreLogProb(ner, 1d);
+    fs.add(new Feat("ner=" + ner, nerW));
+
+    double tol = 0.01;
+    double prec = estimatePrecisionOfTriageFeatures(m, tol);
+    double freq = 1/prec;
+    double k = 10;
+    double p = (k + 1) / (k + freq);
+    fs.add(new Feat("wordFreq", p));
+
+    double tfidf = search.df.tfIdfCosineSim(seedTermVec, m.getContext());
+    fs.add(new Feat("tfidfWithSeed", 5 * tfidf));
+
+    return fs;
   }
 
 //  private Pair<PkbpEntity, PkbpEntity.Mention> chooseMentionToExpand() {

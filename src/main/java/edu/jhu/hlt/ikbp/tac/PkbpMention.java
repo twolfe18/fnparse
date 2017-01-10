@@ -7,6 +7,7 @@ import java.util.List;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.hash.Hash;
@@ -43,6 +44,11 @@ public class PkbpMention implements Serializable {
     this.tokUuid = tokUuid;
     this.head = head;
     this.feats = new ArrayList<>();
+  }
+
+  public String getHeadNer() {
+    TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
+    return ner.getTaggedTokenList().get(head).getTag();
   }
   
   public StringTermVec getContext() {

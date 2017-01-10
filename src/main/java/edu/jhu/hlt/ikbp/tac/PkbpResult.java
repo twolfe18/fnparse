@@ -108,6 +108,10 @@ public class PkbpResult implements Serializable {
     args.add(entity);
     invMapping.put(entity, new LL<>(this, invMapping.get(entity)));
   }
+
+  public Iterable<PkbpSituation> getSituations() {
+    return situations;
+  }
   
   public void addSituation(PkbpSituation sit, Map<PkbpSituation, LL<PkbpResult>> invMapping) {
     situations.add(sit);
