@@ -24,9 +24,18 @@ public class PkbpMention implements Serializable {
   DependencyParse deps;
 
   public final int head;
-  private List<Feat> feats;     // e.g. ???
+
+  /**
+   * for entity mentions: triage features
+   * for situation mentions: {@link DependencySyntaxEvents.CoverArgumentsWithPredicates#situation2features}
+   */
+  private List<Feat> feats;
   
+  /**
+   * term-freq vector for document containing this mention
+   */
   private StringTermVec context;
+
   
   public PkbpMention(int head, Tokenization toks, DependencyParse deps, Communication comm) {
     this(head, toks.getUuid().getUuidString(), toks, deps, comm.getId(), comm);

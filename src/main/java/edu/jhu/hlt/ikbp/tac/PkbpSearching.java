@@ -18,6 +18,10 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 
+import org.apache.accumulo.core.client.AccumuloException;
+import org.apache.accumulo.core.client.AccumuloSecurityException;
+import org.apache.accumulo.core.client.TableNotFoundException;
+
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
@@ -402,30 +406,35 @@ public class PkbpSearching implements Serializable {
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
 
-    // Playback a result which was computed and then serialized
-    File playbackPkbpFile = config.getFile("playbackPkbpFile", null);
-    if (playbackPkbpFile != null) {
-      Log.info("deserializing playbackPkbpFile=" + playbackPkbpFile);
-      PkbpSearching ps = (PkbpSearching) FileUtil.deserialize(playbackPkbpFile);
-      ps.playback(config);
-      Log.info("done");
-      return;
-    }
+//    // Playback a result which was computed and then serialized
+//    File playbackPkbpFile = config.getFile("playbackPkbpFile", null);
+//    if (playbackPkbpFile != null) {
+//      Log.info("deserializing playbackPkbpFile=" + playbackPkbpFile);
+//      PkbpSearching ps = (PkbpSearching) FileUtil.deserialize(playbackPkbpFile);
+//      ps.playback(config);
+//      Log.info("done");
+//      return;
+//    }
     
     Random rand = config.getRandom();
-    KbpSearching ks = new KbpSearching(config);
+    KbpSearching ks = new KbpSearching(config, new HashMap<>());
 
     String sfName = config.getString("slotFillQueries", "sf13+sf14");
     List<KbpQuery> queries = TacKbp.getKbpSfQueries(sfName);
 
-    int stepsPerQuery = config.getInt("stepsPerQuery", 12);
+    int stepsPerQuery = config.getInt("stepsPerQuery", 1);
     double seedWeight = config.getDouble("seedWeight", 30);
     Log.info("stepsPerQuery=" + stepsPerQuery + " seedWeight=" + seedWeight);
 
     File outputDir = config.getFile("outputDir", null);
     if (outputDir != null) {
       outputDir.mkdirs();
-      Log.info("outputDirs=" + outputDir.getPath());
+      Log.info("outputDir=" + outputDir.getPath());
+    }
+    File inputDir = config.getFile("inputDir", null);
+    if (inputDir != null) {
+      assert outputDir == null;
+      Log.info("inputDir=" + inputDir.getPath());
     }
 
     for (KbpQuery seed : queries) {
@@ -438,37 +447,27 @@ public class PkbpSearching implements Serializable {
         continue;
       }
 
-/*
-      PkbpSearching ps = null;
-      try {
+      PkbpSearching ps;
+      if (inputDir != null) {
+        File f = new File(inputDir, seed.id + ".jser.gz");
+        Log.info("loading PkbpSearching from " + f.getPath());
+        ps = (PkbpSearching) FileUtil.deserialize(f);
+        ps.restoreCommsInInitialResultsCache();
+      } else {
         ps = new PkbpSearching(ks, seed, seedWeight, rand);
-      } catch (Exception e) {
-        e.printStackTrace();
-        Log.info("[filter] skipping query: " + seed);
-        continue;
       }
-*/
-      PkbpSearching ps = new PkbpSearching(ks, seed, seedWeight, rand);
       //ps.verbose = true;
       //ps.verboseLinking = true;
-      for (int i = 0; i < stepsPerQuery; i++) {
-        Log.info("step=" + (i+1));
-//        ps.expandEntity();
-        ps.outerLoop();
+      PkbpResult searchFor = ps.queue.pop();
+      ps.outerLoop(searchFor);
 
-        System.out.println();
-        System.out.println("TIMER:");
-        System.out.println(TIMER);
-        System.out.println();
-
-        // Serialize the results for later
-        if (outputDir != null) {
-          File out = new File(outputDir, seed.id + "_kbpStep" + (i+1) + ".jser.gz");
-          Log.info("saving PKB to " + out.getPath());
-          FileUtil.serialize(ps, out);
-        }
+      // Serialize the results for later
+      if (outputDir != null) {
+        File out = new File(outputDir, seed.id + ".jser.gz");
+        Log.info("saving PKB to " + out.getPath());
+        ps.dropCommsFromInitialResultsCache();
+        FileUtil.serialize(ps, out);
       }
-      System.out.println();
 
       ks.clearCommCache();
     }
@@ -502,17 +501,21 @@ public class PkbpSearching implements Serializable {
   public double rewardForAttrFeats = 3;   // score += rewardForAttrFeats * sqrt(numAttrFeats)
   public DoublePair relatedEntitySigmoid = new DoublePair(6, 2);    // first: higher value lowers prob of keeping related entities. second: temperature of sigmoid (e.g. infinity means everything is 50/50 odds of keep)
 
+  // Caching/memoization
+  private HashMap<String, Communication> commRetCache;
+  private HashMap<String, List<SitSearchResult>> initialResultsCache;   // key is a KbpResult.id, values should NOT have communications set
 
+  /** Instances of (comm,tokenization) which have been processed once, after which should be skipped */
   Set<Pair<String, String>> seenCommToks;
 
   // IO
   /** @deprecated use the simplified scenario of linking to situations */
   LinkedHashMap<List<String>, PkbpResult> output; // keys are sorted lists of PkbpEntity ids
-//  LinkedHashMap<List<String>, PkbpSituation> output2; // keys are sorted lists of PkbpEntity ids
   Deque<PkbpResult> queue;    // TODO change element type, will want to have actions on here like "merge two situations"
   // Currently every element here is implicitly "search for situations involving these arguments and link ents/sits hanging off the results"
   
-  StringCountMinSketch sitFeatCms;
+  /** Stores the (approximate) frequency of situation features, used for string match weighting in situation coref */
+  private StringCountMinSketch sitFeatCms;
 
   // Inverted indices for objects
 //  /** Keys are features which would get you most of the way (scoring-wise) towards a LINK */
@@ -544,6 +547,9 @@ public class PkbpSearching implements Serializable {
     Log.info("seed=" + seed);
     if (seed.sourceComm == null)
       throw new IllegalArgumentException();
+    
+    this.commRetCache = search.getCommRetCache();
+    this.initialResultsCache = new HashMap<>();
 
     this.seenCommToks = new HashSet<>();
 
@@ -619,7 +625,7 @@ public class PkbpSearching implements Serializable {
       System.out.flush();
       throw new RuntimeException("fail to link " + canonical2);
     }
-    PkbpResult r0 = new PkbpResult("seed", true);
+    PkbpResult r0 = new PkbpResult("seed/" + seed.id, true);
     best.target.addMention(best.source);
     r0.addArgument(best.target, memb_e2r);
 
@@ -640,28 +646,37 @@ public class PkbpSearching implements Serializable {
     String tid = StringUtils.join("-", el.target.getHeads());
     return "sl/" + el.source.getCommTokIdShort() + "/" + el.source.head + "/" + tid;
   }
-
+  
   /**
-   * 1) choose a tuple of entities to search for (one of which will be the seed entity)
-   * 2) for each resulting tokenization: extract entMentions and sitMentions
-   * 3) for each resulting tok, entMention: try to link to ent, possible create new entity if entMention looks good
-   * 4) for each resulting tok, sitMention: try to link to a sit if it shares a resolved entity & sitFeatScores are good
-   * 5) go back and find any sitMentions which link to 2+ situations, consider linking them
-   * 6) go back and find any entMentions which link to 2+ entities, consider linking them
+   * Do this before serializing this instance so as to de-duplicate
+   * {@link Communication}s which are pointed to by many results.
    */
-  public void outerLoop() throws Exception {
-    boolean verbose = true;
-    
-    if (queue.isEmpty()) {
-      Log.info("there are no items in the queue, done");
-      return;
+  private void dropCommsFromInitialResultsCache() {
+    Log.info("dropping comms...");
+    for (List<SitSearchResult> mentions : initialResultsCache.values())
+      for (SitSearchResult ss : mentions)
+        ss.setCommunication(null);
+    Log.info("done");
+  }
+  private void restoreCommsInInitialResultsCache() {
+    Log.info("starting...");
+    for (List<SitSearchResult> mentions : initialResultsCache.values()) {
+      for (SitSearchResult ss : mentions) {
+        if (ss.getCommunication() != null)
+          continue;
+        Communication c = search.getCommCaching(ss.getCommunicationId());
+        ss.setCommunication(c);
+      }
     }
-    
-    // This is a tuple of entities which we haven't searched for yet
-    // where at least one entity is the seed entity
-    PkbpResult searchFor = queue.pop();
-    //assert searchFor.args.size() > 0;
-    
+    Log.info("done");
+  }
+  
+  private List<SitSearchResult> initialSearch(PkbpResult searchFor) throws Exception {
+    List<SitSearchResult> mentions = null;
+    if (initialResultsCache != null && (mentions = initialResultsCache.get(searchFor.id)) != null) {
+      return mentions;
+    }
+
     // Build a view of all the entities in this result
     TriageSearch ts = search.getTriageSearch();
     StringTermVec docContext = new StringTermVec();
@@ -682,7 +697,7 @@ public class PkbpSearching implements Serializable {
     assert nm > 0;
 
     // Perform triage search
-    List<SitSearchResult> mentions = ts.search(new ArrayList<>(triageFeats), docContext, search.df);
+    mentions = ts.search(new ArrayList<>(triageFeats), docContext, search.df);
     Log.info("triage search returned " + mentions.size() + " mentions for " + searchFor);
 
     // Resolve the communications
@@ -692,6 +707,44 @@ public class PkbpSearching implements Serializable {
       assert c != null;
       ss.setCommunication(c);
     }
+    
+    // Store in cache
+    if (initialResultsCache != null) {
+      initialResultsCache.put(searchFor.id, mentions);
+    }
+    
+    return mentions;
+  }
+
+  /**
+   * 1) choose a tuple of entities to search for (one of which will be the seed entity)
+   * 2) for each resulting tokenization: extract entMentions and sitMentions
+   * 3) for each resulting tok, entMention: try to link to ent, possible create new entity if entMention looks good
+   * 4) for each resulting tok, sitMention: try to link to a sit if it shares a resolved entity & sitFeatScores are good
+   * 5) go back and find any sitMentions which link to 2+ situations, consider linking them
+   * 6) go back and find any entMentions which link to 2+ entities, consider linking them
+   */
+  public void outerLoop(PkbpResult searchFor) throws Exception {
+    boolean verbose = true;
+    
+    // Build a view of all the entities in this result
+    StringTermVec docContext = new StringTermVec();
+    Set<String> triageFeats = new HashSet<>();
+    List<Feat> attrComm = new ArrayList<>();
+    List<Feat> attrTok = new ArrayList<>();
+    for (PkbpEntity e : searchFor.getArguments()) {
+      for (PkbpEntity.Mention m : e) {
+        docContext.add(m.getContext());
+        for (Feat ft : m.triageFeatures)
+          triageFeats.add(ft.name);
+        attrComm.addAll(m.getAttrCommFeatures());
+        attrTok.addAll(m.getAttrTokFeatures());
+      }
+    }
+    
+    // NOTE: This can be memoized!
+    // Perform the initial search (triage features and attribute feature reranking)
+    List<SitSearchResult> mentions = initialSearch(searchFor);
     
     // Highlight the searched for entity mention
     {
@@ -1072,7 +1125,8 @@ public class PkbpSearching implements Serializable {
       Log.info("linking " + se.getSituations().size() + " sitMentions to PKB");
     TIMER.start("linkingSituations");
     for (Entry<Integer, Set<String>> s : se.getSituations().entrySet()) {
-      BitSet bsArgs = se.getArguments().get(s.getKey());
+      int pred = s.getKey();
+      BitSet bsArgs = se.getArguments().get(pred);
       int[] args = DependencySyntaxEvents.getSetIndicesInSortedOrder(bsArgs);
       List<EntLink> entityArgs = new ArrayList<>();
       for (int a : args) {
@@ -1081,6 +1135,11 @@ public class PkbpSearching implements Serializable {
           entityArgs.add(e);
       }
       PkbpSituation.Mention sm = new PkbpSituation.Mention(s.getKey(), args, deps, t, c);
+      for (String f : se.situation2features.get(pred)) {
+        int freq = sitFeatCms.apply(f, false);
+        double p = search.getTriageSearch().getFeatureScore(freq, freq);
+        sm.addFeature(new Feat(f, p));
+      }
       if (verbose) {
         Log.info("args=" + Arrays.toString(args) + " yields entityArgs=" + entityArgs + " sm=" + sm);
       }
@@ -1102,7 +1161,8 @@ public class PkbpSearching implements Serializable {
       // If [preds with] n=0, then consider which NEW_SIT action might be best
       Map<Integer, ArgMax<SitLink>> bestNewLinks = new HashMap<>();
       for (SitLink nl : newSits) {
-        int pred = nl.source.getPred();
+        int prd = nl.source.getPred();
+        assert prd == pred : "i'm confused, prd=" + prd + " pred=" + pred;
         int n = linksPerPred.getCount(pred);
         if (n == 0) {
           ArgMax<SitLink> a = bestNewLinks.get(pred);

@@ -1409,9 +1409,9 @@ public class AccumuloIndex {
 
     ComputeIdf df;
     
-    public KbpSearching(ExperimentProperties config) throws Exception {
+    public KbpSearching(ExperimentProperties config, HashMap<String, Communication> commRetCache) throws Exception {
       commRet = new AccumuloCommRetrieval(config);
-      commRetCache = new HashMap<>();
+      this.commRetCache = commRetCache;
 
       File fceF = config.getExistingFile("featureCardinalityEstimator");
       Log.info("loading feature cardinality estimates from " + fceF.getPath());
@@ -1452,6 +1452,10 @@ public class AccumuloIndex {
     
     public TriageSearch getTriageSearch() {
       return triageSearch;
+    }
+    
+    public HashMap<String, Communication> getCommRetCache() {
+      return commRetCache;
     }
     
     public void clearCommCache() {

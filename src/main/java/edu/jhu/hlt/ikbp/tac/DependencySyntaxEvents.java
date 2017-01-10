@@ -159,6 +159,7 @@ public class DependencySyntaxEvents {
     // Output
     Map<Integer, Set<String>> situation2features;    // key is predicate word index, values are features for that situation
     Map<Integer, BitSet> situation2args;
+    Map<Integer, List<Feat>> situation2frames;
 
     public CoverArgumentsWithPredicates(Communication c, Tokenization t, DependencyParse deps, List<Integer> args) {
       int n = t.getTokenList().getTokenListSize();
@@ -197,22 +198,20 @@ public class DependencySyntaxEvents {
       }
     }
     
-    Map<Integer, List<Feat>> situation2frames = new HashMap<>();
-    
-    static class Foo {
+    static class Labeling {
       String y;
       double score, scoreExp;
       List<Feat> s;
       
-      public Foo(String y, List<Feat> s) {
+      public Labeling(String y, List<Feat> s) {
         this.y = y;
         this.s = s;
         this.score = Feat.sum(s);
       }
       
-      public static final Comparator<Foo> BY_SCORE_DESC = new Comparator<Foo>() {
+      public static final Comparator<Labeling> BY_SCORE_DESC = new Comparator<Labeling>() {
         @Override
-        public int compare(Foo o1, Foo o2) {
+        public int compare(Labeling o1, Labeling o2) {
           assert Double.isFinite(o1.score);
           assert !Double.isNaN(o1.score);
           assert Double.isFinite(o2.score);
@@ -226,33 +225,35 @@ public class DependencySyntaxEvents {
       };
     }
 
-    public void annotateSituations(Zomg z) {
+    public void annotateSituations(NaiveBayesFrameIdModel z) {
+      assert situation2frames == null;
+      situation2frames = new HashMap<>();
       double cover = 0.9;
       TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
       for (int pred : situation2features.keySet()) {
         List<String> fx = z.features(pred, deps, pos, t);
         List<String> ys = z.possibleFrames(pred, deps, pos, t);
-        List<Foo> foos = new ArrayList<>();
+        List<Labeling> foos = new ArrayList<>();
         double m = Double.NEGATIVE_INFINITY;
         for (String y : ys) {
           List<Feat> sy = z.score(y, fx);
-          Foo f = new Foo(y, sy);
+          Labeling f = new Labeling(y, sy);
           foos.add(f);
           m = Math.max(m, f.score);
         }
         
         // Set the max to a reasonable constant
         double Z = 0;
-        for (Foo f : foos) {
+        for (Labeling f : foos) {
           f.score = (4-m) + f.score;
           f.scoreExp = Math.exp(f.score);
           Z += f.scoreExp;
         }
         
-        Collections.sort(foos, Foo.BY_SCORE_DESC);
+        Collections.sort(foos, Labeling.BY_SCORE_DESC);
         List<Feat> ff = new ArrayList<>();
         double p = 0;
-        for (Foo f : foos) {
+        for (Labeling f : foos) {
           p += f.scoreExp;
           ff.add(new Feat(f.y, f.score));
           if (p/Z > cover)
@@ -546,19 +547,19 @@ public class DependencySyntaxEvents {
   public static void main(String[] mainArgs) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(mainArgs);
     File modelFile = config.getFile("modelFile");
-    Zomg z;
+    NaiveBayesFrameIdModel z;
     if (modelFile.isFile()) {
       Log.info("deserializing from " + modelFile.getPath());
-      z = (Zomg) FileUtil.deserialize(modelFile);
+      z = (NaiveBayesFrameIdModel) FileUtil.deserialize(modelFile);
     } else {
-      z = new Zomg();
+      z = new NaiveBayesFrameIdModel();
       FileUtil.serialize(z, modelFile);
     }
     countFeatures(config, z);
     Log.info("done");
   }
   
-  public static void countFeatures(ExperimentProperties config, Zomg z) throws Exception {
+  public static void countFeatures(ExperimentProperties config, NaiveBayesFrameIdModel z) throws Exception {
     TimeMarker tm = new TimeMarker();
     long situations = 0, comms = 0, ents = 0;
     // 4B/int * 10 * 2^20 = 40MB
@@ -620,16 +621,16 @@ public class DependencySyntaxEvents {
     }
   }
   
-  static class Zomg implements Serializable {
+  static class NaiveBayesFrameIdModel implements Serializable {
     private static final long serialVersionUID = -8232003611293244877L;
 
     private StringCountMinSketch cx, cy, cyx;
     private Map<String, List<String>> lu2fs;    // e.g. "be.VGB" -> ["framenet/foo", "probank/bar"]
     
-    public Zomg() {
+    public NaiveBayesFrameIdModel() {
       this(10, 20, true);
     }
-    public Zomg(int nHash, int logCountersPerHash, boolean conservativeUpdates) {
+    public NaiveBayesFrameIdModel(int nHash, int logCountersPerHash, boolean conservativeUpdates) {
       cx = new StringCountMinSketch(nHash, logCountersPerHash, conservativeUpdates);
       cy = new StringCountMinSketch(nHash, logCountersPerHash, conservativeUpdates);
       cyx = new StringCountMinSketch(nHash, logCountersPerHash, conservativeUpdates);
