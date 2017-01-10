@@ -15,6 +15,7 @@ import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.StringUtils;
 
 public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Mention> {
   private static final long serialVersionUID = 8496181770153129315L;
@@ -45,6 +46,25 @@ public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Menti
     public Mention(int pred, int[] args, DependencyParse d, Tokenization t, Communication c) {
       super(pred, t, d, c);
       this.args = args;
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder ps = new StringBuilder();
+      ps.append(getTokenization().getTokenList().getTokenList().get(head).getText());
+      ps.append("@" + head);
+
+      StringBuilder as = new StringBuilder();
+      for (int a : args) {
+        if (as.length() > 0)
+          as.append(", ");
+        as.append(getTokenization().getTokenList().getTokenList().get(a).getText());
+        as.append("@" + a);
+      }
+
+      String fs = StringUtils.join(", ", Feat.sortAndPrune(getFeatures(), 4));
+
+      return String.format("(SM pred=%s args=[%s] feats=[%s] loc=%s)", ps, as, fs, getCommTokIdShort());
     }
 
     public int getPred() {
@@ -93,7 +113,13 @@ public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Menti
   
   @Override
   public String toString() {
-    return String.format("(Sit heads=%s feats=%s)", getHeads(), Feat.sortAndPrune(feat2score, 4));
+    List<String> ca = null;
+    if (coreArguments != null) {
+      ca = new ArrayList<>();
+      for (PkbpEntity a : coreArguments)
+        ca.add(a.id);
+    }
+    return String.format("(Sit heads=%s coreArgs=%s feats=%s)", getHeads(), ca, Feat.sortAndPrune(feat2score, 4));
   }
   
   public List<String> getHeads() {

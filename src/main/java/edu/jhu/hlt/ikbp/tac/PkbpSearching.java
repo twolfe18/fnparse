@@ -243,6 +243,12 @@ public class PkbpSearching implements Serializable {
     boolean verbose = true;
     assert outputLinkSit.isEmpty();
     assert outputNewSit.isEmpty();
+    if (verbose) {
+      Log.info("starting on:  " + mention);
+      System.out.println("nEntityArgs=" + entityArgs.size());
+      for (int i = 0; i < entityArgs.size(); i++)
+        System.out.printf("entityArg(%d)=%s\n", i, entityArgs.get(i));
+    }
     
     /*
      * What would a simpler entity+situation linking model look look like?
@@ -256,17 +262,22 @@ public class PkbpSearching implements Serializable {
      * for every pair of linked arg entities, lookup all situations (lets define one per ent pair for now) and decide link/prune
      */
 
+    // TODO Switch from pairs to n-tuples, including n=1
     Set<List<String>> outputUniqCoreArgs = new HashSet<>();
     int n = entityArgs.size();
     for (int i = 0; i < n-1; i++) {
-      for (int j = 0; j < n; j++) {
+      for (int j = i+1; j < n; j++) {
         EntLink ei = entityArgs.get(i);
         EntLink ej = entityArgs.get(j);
         List<String> rKey = generateOutputKey(ei.target, ej.target);
-        if (rKey == null)
+        if (rKey == null) {
+          Log.info("SKIP (no key) i=" + i + " j=" + j + " rKey=" + rKey);
           continue;
-        if (!outputUniqCoreArgs.add(rKey))
+        }
+        if (!outputUniqCoreArgs.add(rKey)) {
+          Log.info("SKIP (not uniq) i=" + i + " j=" + j + " rKey=" + rKey);
           continue;
+        }
         
         /*
          * TODO What is the difference between linking using
@@ -289,7 +300,7 @@ public class PkbpSearching implements Serializable {
         LL<PkbpSituation> sj = memb_e2s.get(ej.target);
         if (verbose) {
           Log.info("[LINK_SIT] i=" + i + " n=" + n + " ei=" + ei);
-          Log.info("[LINK_SIT] j=" + j + " n=" + n + " ei=" + ei);
+          Log.info("[LINK_SIT] j=" + j + " n=" + n + " ej=" + ej);
           System.out.println("[LINK_SIT] sits which ei partipates in: " + LL.toList(si));
           System.out.println("[LINK_SIT] sits which ej partipates in: " + LL.toList(sj));
         }
@@ -593,8 +604,13 @@ public class PkbpSearching implements Serializable {
     // New entity for the searched-for mention
     EntLink best = null;
     for (EntLink el : p.get1()) {
+      if (!el.newEntity)
+        continue;
+      if (el.source.head != canonical2.head)
+        continue;
+      Log.info("setup EntLink: " + el);
       if (el.source.equals(canonical2)) {
-        assert best == null;
+        assert best == null : "multiple new links";
         best = el;
       }
     }
@@ -634,6 +650,7 @@ public class PkbpSearching implements Serializable {
    * 6) go back and find any entMentions which link to 2+ entities, consider linking them
    */
   public void outerLoop() throws Exception {
+    boolean verbose = true;
     
     if (queue.isEmpty()) {
       Log.info("there are no items in the queue, done");
@@ -680,8 +697,7 @@ public class PkbpSearching implements Serializable {
     {
     List<SitSearchResult> pruned = new ArrayList<>();
     for (SitSearchResult ss : mentions) {
-      boolean verbose = false;
-      if (AccumuloIndex.findEntitiesAndSituations(ss, search.df, verbose))
+      if (AccumuloIndex.findEntitiesAndSituations(ss, search.df, false))
         pruned.add(ss);
     }
     Log.info("[filter] lost " + (mentions.size()-pruned.size()) + " mentions due to query head finding failure");
@@ -709,28 +725,37 @@ public class PkbpSearching implements Serializable {
       // but in general the safest way to do this is to choose links according to the SitLinks
       // (and their contingentUpon:EntLinks), and then only add un-problematic EntLinks which
       // are not associated with a SitLink.
+      Object old;
       Set<String> exUniq = new HashSet<>();
       Map<Integer, Object> headToken2linkTarget = new HashMap<>();  // ensures that we aren't linking a mention to two different things
       List<EntLink> exEL = new ArrayList<>();
       List<SitLink> exSL = new ArrayList<>();
       for (EntLink el : x.get1()) {
         if (exUniq.add(linkStr(el))) {
+          if (verbose) System.out.println("ADDING: " + el);
           el.target.addMention(el.source);
           exEL.add(el);
-          assert headToken2linkTarget.put(el.source.head, el.target) == null;
+          old = headToken2linkTarget.put(el.source.head, el.target);
+          assert old == null : "el.source=" + el.source + " old=" + old;
         }
       }
       for (SitLink sl : x.get2()) {
         if (exUniq.add(linkStr(sl))) {
+          if (verbose) System.out.println("ADDING: " + sl);
           sl.target.addMention(sl.source);
           exSL.add(sl);
-          assert headToken2linkTarget.put(sl.source.head, sl.target) == null;
+          // relations can have a headword which is an entity headword
+          // i.e. it is not gauranteed to be disjoint with all other mentions.
+          //old = headToken2linkTarget.put(sl.source.head, sl.target);
+          //assert old == null : "sl.source=" + sl.source + " old=" + old;
           for (EntLink el : sl.contingentUpon) {
             if (exUniq.add(linkStr(el))) {
+              if (verbose) System.out.println("ADDING: " + el);
               el.target.addMention(el.source);
               memb_e2s.put(el.target, new LL<>(sl.target, memb_e2s.get(el.target)));
               exEL.add(el);
-              assert headToken2linkTarget.put(el.source.head, el.target) == null;
+              old = headToken2linkTarget.put(el.source.head, el.target);
+              assert old == null : "el.source=" + el.source + " old=" + old;
             }
           }
         }
@@ -771,7 +796,7 @@ public class PkbpSearching implements Serializable {
 //          }
 //        }
 //      }
-      TIMER.stop("linkResults");
+//      TIMER.stop("linkResults");
 
       System.out.println();
       System.out.println("TIMER:");
@@ -1056,12 +1081,15 @@ public class PkbpSearching implements Serializable {
           entityArgs.add(e);
       }
       PkbpSituation.Mention sm = new PkbpSituation.Mention(s.getKey(), args, deps, t, c);
-      if (verbose)
-        Log.info("found " + entityArgs.size() + " links to support linking the sitMention " + sm);
+      if (verbose) {
+        Log.info("args=" + Arrays.toString(args) + " yields entityArgs=" + entityArgs + " sm=" + sm);
+      }
 
+      // Generate candidate SitLinks
       List<SitLink> newSits = new ArrayList<>();
       List<SitLink> linkSits = new ArrayList<>();
       linkSituationNew(sm, entityArgs, newSits, linkSits);
+
       // Try LINK_SIT first, and allow n>=0 through
       Counts<Integer> linksPerPred = new Counts<>();
       for (SitLink sl : linkSits) {
@@ -1195,12 +1223,14 @@ public class PkbpSearching implements Serializable {
    * length of the returned list is either 1 (empty PKB) or 2 [newEnt,bestLink].
    */
   private List<EntLink> linkEntityMention(PkbpEntity.Mention r, double defaultScoreOfCreatingNewEntity) {
-    Log.info("working on " + r);
+    if (verboseLinking)
+      Log.info("working on " + r);
     TIMER.start("linkEntityMention");
     if (r.triageFeatures == null)
       throw new IllegalArgumentException();
 
-    Log.info("linking against " + memb_e2r.size() + " entities in PKB");
+    if (verboseLinking)
+      Log.info("linking against " + memb_e2r.size() + " entities in PKB");
     ArgMax<Pair<PkbpEntity, List<Feat>>> a = new ArgMax<>();
     TriageSearch ts = search.getTriageSearch();
     for (PkbpEntity e : memb_e2r.keySet()) {

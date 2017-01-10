@@ -545,23 +545,7 @@ public class AccumuloIndex {
 
     private Communication getAccumulo(String commId) {
       TIMER.start("commRet/acc/scan");
-      
-//      boolean del = false;
-//      try (BatchDeleter x = conn.createBatchDeleter("simple_accumulo_dev", new Authorizations(), 4, new BatchWriterConfig())) {
-//        x.fetchColumn(new Text("comm_bytes"), new Text(""));
-//        if (del) {
-//          x.delete();
-//        } else {
-//          for (Entry<Key, Value> e : x) {
-//            System.out.println(e.getKey().getRow().toString());
-//          }
-//        }
-//      } catch (TableNotFoundException | MutationsRejectedException e1) {
-//      }
-      
-      
-      try (Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations());
-          BatchWriter bw = conn.createBatchWriter("", new BatchWriterConfig())) {
+      try (Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations())) {
         s.setRange(Range.exact(commId));
         Iterator<Entry<Key, Value>> iter = s.iterator();
         if (!iter.hasNext()) {
