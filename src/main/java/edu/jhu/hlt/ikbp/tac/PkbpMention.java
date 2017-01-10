@@ -24,7 +24,7 @@ public class PkbpMention implements Serializable {
   DependencyParse deps;
 
   public final int head;
-  private List<Feat> feats;
+  private List<Feat> feats;     // e.g. ???
   
   private StringTermVec context;
   

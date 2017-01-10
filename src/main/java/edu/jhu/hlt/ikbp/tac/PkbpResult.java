@@ -8,7 +8,11 @@ import java.util.Map;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.LL;
 
-/** n-entities => list of situations containing these entities */
+/**
+ * A entry in the mapping n-entities => list of situations containing these entities as participants.
+ * 
+ * @author travis
+ */
 public class PkbpResult implements Serializable {
   private static final long serialVersionUID = -3661191613878095335L;
   
@@ -100,7 +104,7 @@ public class PkbpResult implements Serializable {
     return m;
   }
   
-  public Iterable<PkbpEntity> getArguments() {
+  public List<PkbpEntity> getArguments() {
     return args;
   }
   
@@ -109,7 +113,7 @@ public class PkbpResult implements Serializable {
     invMapping.put(entity, new LL<>(this, invMapping.get(entity)));
   }
 
-  public Iterable<PkbpSituation> getSituations() {
+  public List<PkbpSituation> getSituations() {
     return situations;
   }
   

@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiPredicate;
@@ -1989,6 +1990,43 @@ public class IndexCommunications implements AutoCloseable {
         return 0;
       }
     };
+
+
+    public static List<Feat> sortAndPrune(Map<String, Double> in, double eps) {
+      List<Feat> l = new ArrayList<>();
+      for (Entry<String,  Double> e : in.entrySet()) {
+        l.add(new Feat(e.getKey(), e.getValue()));
+      }
+      return sortAndPrune(l, eps);
+    }
+
+    public static List<Feat> sortAndPrune(Map<String, Double> in, int topk) {
+      List<Feat> l = new ArrayList<>();
+      for (Entry<String,  Double> e : in.entrySet()) {
+        l.add(new Feat(e.getKey(), e.getValue()));
+      }
+      return sortAndPrune(l, topk);
+    }
+
+    public static List<Feat> sortAndPrune(Iterable<Feat> in, double eps) {
+      List<Feat> out = new ArrayList<>();
+      for (Feat f : in)
+        if (Math.abs(f.weight) > eps)
+          out.add(f);
+      //    Collections.sort(out, Feat.BY_NAME);
+      return out;
+    }
+
+    public static List<Feat> sortAndPrune(Iterable<Feat> in, int topk) {
+      List<Feat> out = new ArrayList<>();
+      for (Feat f : in)
+        out.add(f);
+      Collections.sort(out, Feat.BY_SCORE_DESC);
+      while (out.size() > topk)
+        out.remove(out.size()-1);
+      //    Collections.sort(out, Feat.BY_NAME);
+      return out;
+    }
     
     public static List<String> demote(Iterable<Feat> feats, boolean dedup) {
       Set<String> uniq = new HashSet<>();

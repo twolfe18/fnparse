@@ -54,6 +54,8 @@ import edu.jhu.util.OfflineBatchParseyAnnotator;
 import edu.jhu.util.TokenizationIter;
 import redis.clients.jedis.Jedis;
 
+import static edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat.sortAndPrune;
+
 /**
  * Search outwards starting with a {@link KbpQuery} seed.
  */
@@ -110,10 +112,12 @@ public class PkbpSearching implements Serializable {
     }
   }
 
-  /*
+  /**
    * TODO Modify this so that instead of accepting a FULL LIST of all situations,
    * 1) Do the entity linking against PKB entities
    * 2) For every entityMention->entity link, consider situationMention->situation link s.t. entity in situation.args
+   * 
+   * @deprecated this goes up to playback, see outerLoop
    */
   public void extractAndLinkSituations(SitSearchResult r, List<PkbpSituation> knownSituations, RedisSitFeatFrequency rsitf) {
     
@@ -208,32 +212,152 @@ public class PkbpSearching implements Serializable {
     assert sit.feat2score.size() > 0;
     assert mention.getFeatures().iterator().hasNext();
     List<Feat> out = new ArrayList<>();
+    
+    // General purpose feature overlap
+    // See DependencySyntaxEvents.CoverArgumentsWithPredicates for feature extraction
     for (Feat f : mention.getFeatures()) {
       Double v = sit.feat2score.get(f.name);
       if (v != null) {
         out.add(new Feat(f.name, Math.sqrt(f.weight * v)));
       }
     }
+    
+    // TODO Strong negative penalty for not linking the arguments of this mention
+    // to pre-existing arguments of this situation
+
     return out;
   }
+
+  /**
+   * Checks all situations which include at least two linked mention arguments.
+   * 
+   * This does NOT work like linkSituationOld, it returns a list of links with NEW and LINK links scattered throughout.
+   * Therefore you should check when applying these actions, for instance, that NEW(m) is mutex with LINK(m,*),
+   * whereas LINK(m,i) is not mutex with LINK(m,j).
+   */
+  public void linkSituationNew(
+      PkbpSituation.Mention mention,
+      List<EntLink> entityArgs,
+      List<SitLink> outputNewSit,
+      List<SitLink> outputLinkSit) {
+    boolean verbose = true;
+    assert outputLinkSit.isEmpty();
+    assert outputNewSit.isEmpty();
+    
+    /*
+     * What would a simpler entity+situation linking model look look like?
+     * 
+     * ents:list[entity]
+     * sits:list[situation]   where a sit has a arguments:list<entity> like result currently does
+     * 
+     * entity linking proceeds as it currently does
+     * 
+     * given a sm we know the entities via argument linking
+     * for every pair of linked arg entities, lookup all situations (lets define one per ent pair for now) and decide link/prune
+     */
+
+    Set<List<String>> outputUniqCoreArgs = new HashSet<>();
+    int n = entityArgs.size();
+    for (int i = 0; i < n-1; i++) {
+      for (int j = 0; j < n; j++) {
+        EntLink ei = entityArgs.get(i);
+        EntLink ej = entityArgs.get(j);
+        List<String> rKey = generateOutputKey(ei.target, ej.target);
+        if (rKey == null)
+          continue;
+        if (!outputUniqCoreArgs.add(rKey))
+          continue;
+        
+        /*
+         * TODO What is the difference between linking using
+         * memb_e2s:Map<Ent, Sit*> and output2:Map<EntStrKey, Situation>?
+         * the former should only be used for NEW_SITUATION actions
+         * the latter should be used for LINK_SITUATION
+         *
+         * No, this isn't entirely correct.
+         * These are two views which are do not necessarily support different needs.
+         * For instance, I could do everything with just memb_e2s.
+         * Then the process of showing results to users would involve iterating over
+         * a e2s<~>s2e join view which could then be groupBy-ed (ei,ej).
+         * Similarly, query formulation based on (ei,ej) pairs could be done in the same way.
+         * OR, at this point in THIS loop, I could fail to find an intersection of these entities
+         * and thus decide to create a new PkbpSituation for this mention and pair of (ei,ej).
+         */
+        
+        // What situations contain both of these entities as core arguments?
+        LL<PkbpSituation> si = memb_e2s.get(ei.target);
+        LL<PkbpSituation> sj = memb_e2s.get(ej.target);
+        if (verbose) {
+          Log.info("[LINK_SIT] i=" + i + " n=" + n + " ei=" + ei);
+          Log.info("[LINK_SIT] j=" + j + " n=" + n + " ei=" + ei);
+          System.out.println("[LINK_SIT] sits which ei partipates in: " + LL.toList(si));
+          System.out.println("[LINK_SIT] sits which ej partipates in: " + LL.toList(sj));
+        }
+        Set<PkbpSituation> scommon = new HashSet<>();
+        boolean anyCommon = false;
+        for (LL<PkbpSituation> cur = si; cur != null; cur = cur.next)
+          scommon.add(cur.item);
+        for (LL<PkbpSituation> cur = sj; cur != null; cur = cur.next) {
+          PkbpSituation sit = cur.item;
+          if (scommon.contains(sit)) {
+            List<EntLink> contingentUpon = Arrays.asList(ei, ej);
+            List<Feat> score = scoreSitLink(sit, mention);
+            outputLinkSit.add(new SitLink(contingentUpon, mention, sit, score, false));
+            anyCommon = true;
+            if (verbose) {
+              System.out.println("[LINK_SIT] common: " + sit);
+              System.out.println("[LINK_SIT] score:  " + Feat.sum(score) + " " + sortAndPrune(score, 5));
+              System.out.println();
+            }
+          }
+        }
+        
+        if (!anyCommon) {
+          // Consider a new situation link
+          PkbpSituation target = new PkbpSituation(mention);
+          target.addCoreArgument(ei.target);
+          target.addCoreArgument(ej.target);
+          List<EntLink> contingentUpon = Arrays.asList(ei, ej);
+          List<Feat> score = new ArrayList<>();
+          score.addAll(interestingEntityMention(ei.source));
+          score.addAll(interestingEntityMention(ej.source));
+          outputNewSit.add(new SitLink(contingentUpon, mention, target, score, true));
+          if (verbose) {
+            System.out.println("[NEW_SIT] no common situations, considering new one");
+            System.out.println("[NEW_SIT] score:  " + Feat.sum(score) + " " + sortAndPrune(score, 5));
+            System.out.println();
+          }
+        }
+      }
+    }
+    if (verbose) {
+      Log.info("done, found " + outputLinkSit.size() + " possible LINK_SITs "
+          + " and " + outputNewSit.size() + " NEW_SITs "
+          + " given nLinkedEntArgs=" + entityArgs.size() + " and mention=" + mention);
+    }
+  }
   
-  /** works the same way as linkEntity, returns [newSit, bestSitLink, secondBest, ...] */
-  public List<SitLink> linkSituation(PkbpSituation.Mention mention, List<EntLink> entityArgs, double defaultScoreForNewSituation) {
+  /**
+   * Works the same way as linkEntity, returns [newSit, bestSitLink, secondBest, ...]
+   */
+  public List<SitLink> linkSituationOld(PkbpSituation.Mention mention, List<EntLink> entityArgs, double defaultScoreForNewSituation) {
     
     List<PkbpSituation> possible = new ArrayList<>();
     List<EntLink> entityArgsUsed = new ArrayList<>();
-//    for (PkbpEntity e : entityArgs) {
     for (EntLink el : entityArgs) {
       PkbpEntity e = el.target;
       boolean used = false;
       for (LL<PkbpSituation> cur = memb_e2s.get(e); cur != null; cur = cur.next) {
+        // TODO This shouldn't be the UNION of all situations which the arguments
+        // appear in, it should be the set of situations which share at least two arguments
         possible.add(cur.item);
         used = true;
       }
       if (used)
         entityArgsUsed.add(el);
     }
-    
+
+
     ArgMax<Pair<PkbpSituation, List<Feat>>> a = new ArgMax<>();
     for (PkbpSituation sit : possible) {
       List<Feat> score = scoreSitLink(sit, mention);
@@ -371,7 +495,9 @@ public class PkbpSearching implements Serializable {
   Set<Pair<String, String>> seenCommToks;
 
   // IO
-  LinkedHashMap<List<String>, PkbpResult> output; // keys are sorted lists of PkbpResult ids
+  /** @deprecated use the simplified scenario of linking to situations */
+  LinkedHashMap<List<String>, PkbpResult> output; // keys are sorted lists of PkbpEntity ids
+//  LinkedHashMap<List<String>, PkbpSituation> output2; // keys are sorted lists of PkbpEntity ids
   Deque<PkbpResult> queue;    // TODO change element type, will want to have actions on here like "merge two situations"
   // Currently every element here is implicitly "search for situations involving these arguments and link ents/sits hanging off the results"
   
@@ -386,9 +512,11 @@ public class PkbpSearching implements Serializable {
   // Membership graph.
   // Inverse links like s2e, r2e, and r2s are encoded by the
   // objects themselves (in this case s, r, and r respectively)
-  transient Map<PkbpEntity, LL<PkbpSituation>> memb_e2s;
-  transient Map<PkbpEntity, LL<PkbpResult>> memb_e2r;
-  transient Map<PkbpSituation, LL<PkbpResult>> memb_s2r;
+  Map<PkbpEntity, LL<PkbpSituation>> memb_e2s;
+  /** @deprecated */
+  Map<PkbpEntity, LL<PkbpResult>> memb_e2r;
+  /** @deprecated */
+  Map<PkbpSituation, LL<PkbpResult>> memb_s2r;
   
 
   // History (for debugging/running offline)
@@ -486,14 +614,15 @@ public class PkbpSearching implements Serializable {
     this.queue = new ArrayDeque<>();
     this.queue.add(r0);
     this.output = new LinkedHashMap<>();
+//    this.output2 = new LinkedHashMap<>();
   }
   
   private static String linkStr(EntLink el) {
-    return "el/" + el.source.getCommTokIdShort() + "/" + el.target.id;
+    return "el/" + el.source.getCommTokIdShort() + "/" + el.source.head + "/" + el.target.id;
   }
   private static String linkStr(SitLink el) {
     String tid = StringUtils.join("-", el.target.getHeads());
-    return "sl/" + el.source.getCommTokIdShort() + "/" + tid;
+    return "sl/" + el.source.getCommTokIdShort() + "/" + el.source.head + "/" + tid;
   }
 
   /**
@@ -575,24 +704,33 @@ public class PkbpSearching implements Serializable {
       em.nerType = ner.getTaggedTokenList().get(em.head).getTag();
       Pair<List<EntLink>, List<SitLink>> x = proposeLinks(em);
       
-      // Execute the linking operations
+      // Execute the linking operations.
+      // TODO I believe this is OK since proposeLinks returns only one EntLink per entMention,
+      // but in general the safest way to do this is to choose links according to the SitLinks
+      // (and their contingentUpon:EntLinks), and then only add un-problematic EntLinks which
+      // are not associated with a SitLink.
       Set<String> exUniq = new HashSet<>();
+      Map<Integer, Object> headToken2linkTarget = new HashMap<>();  // ensures that we aren't linking a mention to two different things
       List<EntLink> exEL = new ArrayList<>();
       List<SitLink> exSL = new ArrayList<>();
       for (EntLink el : x.get1()) {
         if (exUniq.add(linkStr(el))) {
           el.target.addMention(el.source);
           exEL.add(el);
+          assert headToken2linkTarget.put(el.source.head, el.target) == null;
         }
       }
       for (SitLink sl : x.get2()) {
         if (exUniq.add(linkStr(sl))) {
           sl.target.addMention(sl.source);
           exSL.add(sl);
+          assert headToken2linkTarget.put(sl.source.head, sl.target) == null;
           for (EntLink el : sl.contingentUpon) {
             if (exUniq.add(linkStr(el))) {
               el.target.addMention(el.source);
+              memb_e2s.put(el.target, new LL<>(sl.target, memb_e2s.get(el.target)));
               exEL.add(el);
+              assert headToken2linkTarget.put(el.source.head, el.target) == null;
             }
           }
         }
@@ -604,70 +742,35 @@ public class PkbpSearching implements Serializable {
       for (SitLink sl : exSL)
         sitDups.put(sl.source, new LL<>(sl.target, sitDups.get(sl.source)));
       
-
-//      // Try to link this SitSearchResult to an existing PkbResult.
-//      // If none exists, then possibly create a new PkbResult.
-//      // The triage set of PkbResult to attempt to link to is the union of PkbpResults which ents/sits belong to
-//      // Use e2r and s2r
-//      // 1) Look up candidate set
-//      Map<String, PkbpResult> possibleRelevantResults = new HashMap<>();
-//      for (EntLink el : exEL) {
-//        for (LL<PkbpResult> cur = memb_e2r.get(el.target); cur != null; cur = cur.next) {
-//          PkbpResult r = cur.item;
-//          Object old = possibleRelevantResults.put(r.id, r);
-//          assert old == null : "PkbResult id=" + r.id + " is not uniq, old=" + old + " new=" + r;
+      
+//      // By nature of linking to PkbpEntities and PkbpSituations, we are already adding SitSearchResults/PkbpMentions to the PkbpResults
+//      // The only question is whether we should create a *NEW* PkbpResult.
+//      // We do this every time we have a pair of entities which we haven't seen before
+//      TIMER.start("linkResults");
+//      int ne = exEL.size();
+//      Log.info("trying to link to PkbpResults based on pairs from nEntLink=" + ne);
+//      for (int i = 0; i < ne-1; i++) {
+//        for (int j = i+1; j < ne; j++) {
+//          
+//          PkbpEntity ei = exEL.get(i).target;
+//          PkbpEntity ej = exEL.get(j).target;
+//          List<String> rKey = generateOutputKey(ei, ej);
+//          
+//          PkbpResult r = output.get(rKey);
+//          if (r == null) {
+//            String id = String.format("r%03d:%s+%s", output.size(), rKey.get(0), rKey.get(1));
+//            boolean containsSeed = ei.id.equals("seed") || ej.id.equals("seed");
+//            r = new PkbpResult(id, containsSeed);
+//            r.addArgument(ei, memb_e2r);
+//            r.addArgument(ej, memb_e2r);
+//            Log.info("NEW RESULT, queing search for: " + r);
+//            output.put(rKey, r);
+//            queue.add(r);
+//          } else {
+//            Log.info("LINK RESULT, already exists: " + r);
+//          }
 //        }
 //      }
-//      for (SitLink sl : exSL) {
-//        for (LL<PkbpResult> cur = memb_s2r.get(sl.target); cur != null; cur = cur.next) {
-//          PkbpResult r = cur.item;
-//          Object old = possibleRelevantResults.put(r.id, r);
-//          assert old == null : "PkbResult id=" + r.id + " is not uniq, old=" + old + " new=" + r;
-//        }
-//      }
-//      // 2) Link against candidate set
-//      // TODO
-      
-      
-      // By nature of linking to PkbpEntities and PkbpSituations, we are already adding SitSearchResults/PkbpMentions to the PkbpResults
-      // The only question is whether we should create a *NEW* PkbpResult.
-      // We do this every time we have a pair of entities which we haven't seen before
-      TIMER.start("linkResults");
-      int ne = exEL.size();
-      Log.info("trying to link to PkbpResults based on pairs from nEntLink=" + ne);
-      for (int i = 0; i < ne-1; i++) {
-        for (int j = i+1; j < ne; j++) {
-          
-          PkbpEntity ei = exEL.get(i).target;
-          PkbpEntity ej = exEL.get(j).target;
-
-          if (ei == ej)
-            continue;
-          
-          List<String> rKey = new ArrayList<>();
-          if (ei.id.compareTo(ej.id) < 0) {
-            rKey.add(ei.id);
-            rKey.add(ej.id);
-          } else {
-            rKey.add(ej.id);
-            rKey.add(ei.id);
-          }
-          
-          PkbpResult r = output.get(rKey);
-          if (r == null) {
-            String id = String.format("r%03d:%s+%s", output.size(), rKey.get(0), rKey.get(1));
-            boolean containsSeed = ei.id.equals("seed") || ej.id.equals("seed");
-            r = new PkbpResult(id, containsSeed);
-            r.addArgument(ei, memb_e2r);
-            r.addArgument(ej, memb_e2r);
-            Log.info("NEW RESULT, queing search for: " + r);
-            output.put(rKey, r);
-            queue.add(r);
-          } else {
-            Log.info("LINK RESULT, already exists: " + r);
-          }
-        }
-      }
       TIMER.stop("linkResults");
 
       System.out.println();
@@ -698,34 +801,54 @@ public class PkbpSearching implements Serializable {
 
     Log.info("done");
   }
+  
+  private static List<String> generateOutputKey(PkbpEntity ei, PkbpEntity ej) {
+    if (ei == ej)
+      return null;
+    List<String> rKey = new ArrayList<>();
+    if (ei.id.compareTo(ej.id) < 0) {
+      rKey.add(ei.id);
+      rKey.add(ej.id);
+    } else {
+      rKey.add(ej.id);
+      rKey.add(ei.id);
+    }
+    return rKey;
+  }
 
   public void showResults() {
     Log.info("nResult=" + output.size());
     for (Entry<List<String>, PkbpResult> e : output.entrySet()) {
       System.out.println("key: " + e.getKey());
-      showResult(e.getValue());
+      showResult(e.getValue(), false, true);
       System.out.println();
     }
     System.out.println();
   }
 
-  public void showResult(PkbpResult r) {
-    System.out.println(r);
+  public void showResult(PkbpResult r, boolean showArgsAndMentions, boolean showSitAndMentions) {
+    System.out.println(r.toString());
     int i = 0;
-    for (PkbpEntity e : r.getArguments()) {
-      System.out.printf("arg(%d): %s\n", i, e);
-      for (PkbpEntity.Mention em : e) {
-        System.out.printf("\t%s\n", em.getWordsInTokenizationWithHighlightedEntAndSit());
+    System.out.println("there are " + r.getArguments().size() + " args covering " + r.getEntityMentions().size() + " mentions");
+    if (showArgsAndMentions) {
+      for (PkbpEntity e : r.getArguments()) {
+        System.out.printf("arg(%d): %s\n", i, e);
+        for (PkbpEntity.Mention em : e) {
+          System.out.printf("\t%s\n", em.getWordsInTokenizationWithHighlightedEntAndSit());
+        }
+        i++;
       }
-      i++;
     }
-    i = 0;
-    for (PkbpSituation s : r.getSituations()) {
-      System.out.printf("sit(%d): %s\n", i, s);
-      for (PkbpSituation.Mention sm : s) {
-        System.out.printf("\t%s\n", sm.showPredInContext());
+    System.out.println("there are " + r.getSituations().size() + " situations covering " + r.getSituationMentions().size() + " mentions");
+    if (showSitAndMentions) {
+      i = 0;
+      for (PkbpSituation s : r.getSituations()) {
+        System.out.printf("sit(%d): %s\n", i, s);
+        for (PkbpSituation.Mention sm : s) {
+          System.out.printf("\t%s\n", sm.showPredInContext());
+        }
+        i++;
       }
-      i++;
     }
   }
 
@@ -739,7 +862,29 @@ public class PkbpSearching implements Serializable {
     throw new RuntimeException("implement me");
   }
   
-  static class EntLink {
+  static class HashEqLink {
+    private String getCharacteristicStr() {
+      if (this instanceof EntLink)
+        return linkStr((EntLink) this);
+      else if (this instanceof SitLink)
+        return linkStr((SitLink) this);
+      else throw new RuntimeException();
+    }
+    @Override
+    public int hashCode() {
+      return getCharacteristicStr().hashCode();
+    }
+    @Override
+    public boolean equals(Object other) {
+       if (other instanceof HashEqLink) {
+         HashEqLink e = (HashEqLink) other;
+         return getCharacteristicStr().equals(e.getCharacteristicStr());
+       }
+       return false;
+    }
+  }
+  
+  static class EntLink extends HashEqLink {
     PkbpEntity.Mention source;
     PkbpEntity target;
     List<Feat> score;
@@ -758,8 +903,8 @@ public class PkbpSearching implements Serializable {
           source, target, sortAndPrune(score, 5));
     }
   }
-  
-  static class SitLink {
+
+  static class SitLink extends HashEqLink {
     List<EntLink> contingentUpon;
     PkbpSituation.Mention source;
     PkbpSituation target;
@@ -788,19 +933,27 @@ public class PkbpSearching implements Serializable {
    * 
    * Returned list contains one link per entMention/sitMention near the given mention.
    *
+   * Things which are NOT handled by this method:
+   * - link deduplication: we might for instance have two identical EntLinks
+   * - updating the data structures like memb_e2s (everything within a SitLink/EntLink is fully built)
+   *
    * @param searchResult
    * @param outputEntityLinks
    * @param outputSituationLinks
    */
   public Pair<List<EntLink>, List<SitLink>> proposeLinks(PkbpEntity.Mention searchResult) {
     TIMER.start("proposeLinks");
+    
+    boolean verbose = true;
 
     // Higher numbers mean less linking
     // TODO Include threshold for PRUNE
     double defaultScoreOfCreatingNewEntity = -1;
-    double defaultNewSitScore = -1;
+//    double defaultNewSitScore = -1;
 
-    Pair<List<EntLink>, List<SitLink>> links = new Pair<>(new ArrayList<>(), new ArrayList<>());
+    List<EntLink> elinks = new ArrayList<>();
+    List<SitLink> slinks = new ArrayList<>();
+    Pair<List<EntLink>, List<SitLink>> links = new Pair<>(elinks, slinks);
     
     Communication c = searchResult.getCommunication();
     Tokenization t = searchResult.getTokenization();
@@ -808,7 +961,8 @@ public class PkbpSearching implements Serializable {
     
     if (!seenCommToks.add(new Pair<>(c.getId(), t.getUuid().getUuidString()))) {
       // We've already processed this sentence
-      Log.info("we've processed this comm+tok before, returning early");
+      if (verbose)
+        Log.info("we've processed this comm+tok before, returning early");
       TIMER.stop("proposeLinks");
       return links;
     }
@@ -822,11 +976,13 @@ public class PkbpSearching implements Serializable {
     // Extract arguments/entities
     List<Integer> entHeads = DependencySyntaxEvents.extractEntityHeads(t);
     if (!entHeads.contains(searchResult.head)) {
-      Log.info("search result head was not extracted as an argument by DependencySyntaxEvents"
-          + " (nFound=" + entHeads.size() + "), adding it anyway");
-      for (int h : entHeads)
-        System.out.println("  found:  " + new PkbpMention(h, t, deps, c));
-      System.out.println("  adding: " + searchResult);
+      if (verbose) {
+        Log.info("search result head was not extracted as an argument by DependencySyntaxEvents"
+            + " (nFound=" + entHeads.size() + "), adding it anyway");
+        for (int h : entHeads)
+          System.out.println("  found:  " + new PkbpMention(h, t, deps, c));
+        System.out.println("  adding: " + searchResult);
+      }
       entHeads.add(searchResult.head);
       Collections.sort(entHeads);
     }
@@ -836,7 +992,9 @@ public class PkbpSearching implements Serializable {
         new DependencySyntaxEvents.CoverArgumentsWithPredicates(c, t, deps, entHeads);
 
     // Link args
-    Log.info("linking " + entHeads.size() + " entMentions/args to PKB");
+    if (verbose)
+      Log.info("linking " + entHeads.size() + " entMentions/args to PKB");
+    // Map from entity head to the one and only link which this mention can go to
     Map<Integer, EntLink> entLinks = new HashMap<>();
     for (int entHead : entHeads) {
       Span span = IndexCommunications.nounPhraseExpand(entHead, deps);
@@ -849,47 +1007,48 @@ public class PkbpSearching implements Serializable {
         assert !el.get(i).newEntity;
 
       if (el.size() == 1) {
-        Log.info("NEW ENTITY (no choice): " + el.get(0));
+        if (verbose)
+          Log.info("NEW ENTITY (no choice): " + el.get(0));
         entLinks.put(entHead, el.get(0));
       } else if (Feat.sum(el.get(1).score) > 1.5) {
-        Log.info("LINK ENTITY: " + el.get(1));
+        if (verbose)
+          Log.info("LINK ENTITY: " + el.get(1));
         entLinks.put(entHead, el.get(1));
       } else {
-        // Maybe keep...
+        // Maybe keep based on how interesting this mention is
         List<Feat> fKeep = interestingEntityMention(el.get(0).source);
         double pKeep = 1 / (1 + Math.exp(-Feat.sum(fKeep)));
         double d = rand.nextDouble();
-        System.out.println("[maybe new] pKeep=" + pKeep + " draw=" + d + "\t" + sortAndPrune(fKeep, 5) + "\t" + el.get(0).source);
+        if (verbose) {
+          System.out.println("[maybe new] pKeep=" + pKeep + " draw=" + d
+              + "\t" + sortAndPrune(fKeep, 5) + "\t" + el.get(0).source);
+        }
         if (d < pKeep) {
-          Log.info("NEW ENTITY (looks interesting): " + el.get(0));
+          if (verbose)
+            Log.info("NEW ENTITY (looks interesting): " + el.get(0));
           entLinks.put(entHead, el.get(0));
         } else {
-          // prune
-          Log.info("PRUNE ENTITY (not interesting): " + el.get(0));
+          if (verbose)
+            Log.info("PRUNE ENTITY (not interesting): " + el.get(0));
         }
       }
-
-/*
-      if (el.size() == 1 || Feat.sum(el.get(0).score) > 0) {
-        // New
-        Log.info("NEW ENTITY: " + el.get(0));
-        entLinks.put(entHead, el.get(0));
-      } else {
-        // Link
-        Log.info("LINK ENTITY: " + el.get(1));
-        entLinks.put(entHead, el.get(1));
-      }
-*/
     }
-    links.get1().addAll(entLinks.values());
-    System.out.println();
+    elinks.addAll(entLinks.values());
+    if (verbose)
+      System.out.println();
+    
+
+    // By this point, entity linking is done
+    // And situation linking must respect the entity linking decisions
+
     
     // Link sits
-    Log.info("linking " + se.getSituations().size() + " sitMentions to PKB");
+    if (verbose)
+      Log.info("linking " + se.getSituations().size() + " sitMentions to PKB");
     TIMER.start("linkingSituations");
     for (Entry<Integer, Set<String>> s : se.getSituations().entrySet()) {
       BitSet bsArgs = se.getArguments().get(s.getKey());
-      int[] args = DependencySyntaxEvents.bs2a(bsArgs);
+      int[] args = DependencySyntaxEvents.getSetIndicesInSortedOrder(bsArgs);
       List<EntLink> entityArgs = new ArrayList<>();
       for (int a : args) {
         EntLink e = entLinks.get(a);
@@ -897,45 +1056,54 @@ public class PkbpSearching implements Serializable {
           entityArgs.add(e);
       }
       PkbpSituation.Mention sm = new PkbpSituation.Mention(s.getKey(), args, deps, t, c);
-      Log.info("found " + entityArgs.size() + " links to support linking the sitMention " + sm);
-      List<SitLink> sl = linkSituation(sm, entityArgs, defaultNewSitScore);
-      if (sl.size() == 1 || Feat.sum(sl.get(0).score) > 0) {
-        // New
-        Log.info("NEW SITUATION: " + sl.get(0));
-        links.get2().add(sl.get(0));
-      } else {
-        // Link
-        Log.info("LINK SITUATION: " + sl.get(1));
-        links.get2().add(sl.get(1));
+      if (verbose)
+        Log.info("found " + entityArgs.size() + " links to support linking the sitMention " + sm);
+
+      List<SitLink> newSits = new ArrayList<>();
+      List<SitLink> linkSits = new ArrayList<>();
+      linkSituationNew(sm, entityArgs, newSits, linkSits);
+      // Try LINK_SIT first, and allow n>=0 through
+      Counts<Integer> linksPerPred = new Counts<>();
+      for (SitLink sl : linkSits) {
+        if (Feat.sum(sl.score) > 2.0) {
+          slinks.add(sl);
+          elinks.addAll(sl.contingentUpon);
+          linksPerPred.increment(sl.source.head);
+        }
+      }
+      // If [preds with] n=0, then consider which NEW_SIT action might be best
+      Map<Integer, ArgMax<SitLink>> bestNewLinks = new HashMap<>();
+      for (SitLink nl : newSits) {
+        int pred = nl.source.getPred();
+        int n = linksPerPred.getCount(pred);
+        if (n == 0) {
+          ArgMax<SitLink> a = bestNewLinks.get(pred);
+          if (a == null) {
+            a = new ArgMax<>();
+            bestNewLinks.put(pred, a);
+          }
+          a.offer(nl, Feat.sum(nl.score));
+        }
+      }
+      // Take the best NEW_SIT per predicate
+      for (Entry<Integer, ArgMax<SitLink>> bnl : bestNewLinks.entrySet()) {
+        SitLink sl = bnl.getValue().get();
+        boolean ex = Feat.sum(sl.score) > 2.0;
+        if (verbose)
+          Log.info("considering NEW_SIT " + sl + " at pred=" + bnl.getKey() + " execute=" + ex);
+        if (ex) {
+          // Note these don't have core arguments yet
+          slinks.add(sl);
+          elinks.addAll(sl.contingentUpon);
+        }
       }
     }
     TIMER.stop("linkingSituations");
-    System.out.println();
-    
-    
-    /*
-     * Not clear how to do this!
-     * A result is essentially a tuple of entities with some situations hanging off,
-     * so the question becomes whether any of the entities or situations created/linked
-     * here introduce any new keys (entity tuples) or values (situations).
-     * 
-     * TODO I can linear scan to see if there are any new entity tuples, but ... this is crappy...
-     * if an entity tuple is the key, how to efficiently check?
-     * induce an ordering over elements of a set (in this case a set of entities),
-     * then the key is a sorted list of elements (ints/indices)
-     * 
-     * Ignoring computational efficiency for a moment,
-     * If mentions may belong to n>=0 entities/situations,
-     * we can apply the same logic to ent/sits belonging to n>=0 results.
-     * This just means that we need a ent->LL<result> and sit->LL<result> index
-     * 
-     * => Solved:
-     * Whenever you call addMention/addEntity/addSituation, you are forced
-     * to provide an inverted adjacency list so coherence is always gauranteed.
-     */
-
-    Log.info("done, returning " + links.get1().size() + " ent links and " + links.get2().size() + " sit links");
-    System.out.println();
+    if (verbose) {
+      System.out.println();
+      Log.info("done, returning " + links.get1().size() + " ent links and " + links.get2().size() + " sit links");
+      System.out.println();
+    }
     TIMER.stop("proposeLinks");
     return links;
   }
@@ -1499,42 +1667,6 @@ public class PkbpSearching implements Serializable {
         sb.append(closeTag);
     }
     return sb.toString();
-  }
-  
-  public static List<Feat> sortAndPrune(Map<String, Double> in, double eps) {
-    List<Feat> l = new ArrayList<>();
-    for (Entry<String,  Double> e : in.entrySet()) {
-      l.add(new Feat(e.getKey(), e.getValue()));
-    }
-    return sortAndPrune(l, eps);
-  }
-
-  public static List<Feat> sortAndPrune(Map<String, Double> in, int topk) {
-    List<Feat> l = new ArrayList<>();
-    for (Entry<String,  Double> e : in.entrySet()) {
-      l.add(new Feat(e.getKey(), e.getValue()));
-    }
-    return sortAndPrune(l, topk);
-  }
-
-  public static List<Feat> sortAndPrune(Iterable<Feat> in, double eps) {
-    List<Feat> out = new ArrayList<>();
-    for (Feat f : in)
-      if (Math.abs(f.weight) > eps)
-        out.add(f);
-//    Collections.sort(out, Feat.BY_NAME);
-    return out;
-  }
-
-  public static List<Feat> sortAndPrune(Iterable<Feat> in, int topk) {
-    List<Feat> out = new ArrayList<>();
-    for (Feat f : in)
-      out.add(f);
-    Collections.sort(out, Feat.BY_SCORE_DESC);
-    while (out.size() > topk)
-      out.remove(out.size()-1);
-//    Collections.sort(out, Feat.BY_NAME);
-    return out;
   }
   
 

@@ -24,6 +24,11 @@ public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Menti
 
     int[] args;   // sorted
 
+    /**
+     * @param pred is a predicate work index (may be an entity in the case where there isn't one, e.g. appos relation
+     * @param events stores the arguments of this predicate and features
+     * @param featureScoring assigns weights to features, tied to feature extraction
+     */
     public static Mention convert(int pred, DependencySyntaxEvents.CoverArgumentsWithPredicates events, Function<String, Double> featureScoring) {
       BitSet args = events.getArguments().get(pred);
       int[] a = new int[args.cardinality()];
@@ -54,8 +59,20 @@ public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Menti
     }
   }
 
+  /**
+   * For now: a union/sum of the features at the mention level.
+   * See DependencySyntaxEvents.CoverArgumentsWithPredicates for feature extraction.
+   */
   Map<String, Double> feat2score;
+
+  /** Instances of this situation */
   List<Mention> mentions;
+
+  /**
+   * When determining whether a sitMention is an instance of this situation, consider that
+   * the arguments to that sitMention should probably be link-able to these entities
+   */
+  List<PkbpEntity> coreArguments;
   
   public PkbpSituation(Mention canonical) {
     this.mentions = new ArrayList<>();
@@ -67,9 +84,16 @@ public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Menti
     }
   }
   
+  public void addCoreArgument(PkbpEntity e) {//, Map<PkbpEntity, LL<PkbpSituation>> e2s_inverseMapping) {
+    if (coreArguments == null)
+      coreArguments = new ArrayList<>();
+    coreArguments.add(e);
+//    e2s_inverseMapping.put(e, new LL<>(this, e2s_inverseMapping.get(e)));
+  }
+  
   @Override
   public String toString() {
-    return String.format("(Sit heads=%s feats=%s)", getHeads(), PkbpSearching.sortAndPrune(feat2score, 4));
+    return String.format("(Sit heads=%s feats=%s)", getHeads(), Feat.sortAndPrune(feat2score, 4));
   }
   
   public List<String> getHeads() {

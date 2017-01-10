@@ -22,12 +22,14 @@ import java.util.function.Function;
 
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
+import org.apache.accumulo.core.client.BatchDeleter;
 import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.BatchWriter;
 import org.apache.accumulo.core.client.BatchWriterConfig;
 import org.apache.accumulo.core.client.ClientConfiguration;
 import org.apache.accumulo.core.client.Connector;
 import org.apache.accumulo.core.client.Instance;
+import org.apache.accumulo.core.client.MutationsRejectedException;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.TableNotFoundException;
 import org.apache.accumulo.core.client.ZooKeeperInstance;
@@ -543,7 +545,23 @@ public class AccumuloIndex {
 
     private Communication getAccumulo(String commId) {
       TIMER.start("commRet/acc/scan");
-      try (Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations())) {
+      
+//      boolean del = false;
+//      try (BatchDeleter x = conn.createBatchDeleter("simple_accumulo_dev", new Authorizations(), 4, new BatchWriterConfig())) {
+//        x.fetchColumn(new Text("comm_bytes"), new Text(""));
+//        if (del) {
+//          x.delete();
+//        } else {
+//          for (Entry<Key, Value> e : x) {
+//            System.out.println(e.getKey().getRow().toString());
+//          }
+//        }
+//      } catch (TableNotFoundException | MutationsRejectedException e1) {
+//      }
+      
+      
+      try (Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations());
+          BatchWriter bw = conn.createBatchWriter("", new BatchWriterConfig())) {
         s.setRange(Range.exact(commId));
         Iterator<Entry<Key, Value>> iter = s.iterator();
         if (!iter.hasNext()) {
@@ -554,7 +572,7 @@ public class AccumuloIndex {
         if (iter.hasNext())
           Log.info("WARNING: more than one result (returning first) for commId=" + commId);
         TIMER.stop("commRet/acc/scan");
-
+        
         TIMER.start("commRet/acc/deser");
         Communication c = new Communication();
         deser.deserialize(c, e.getValue().get());
