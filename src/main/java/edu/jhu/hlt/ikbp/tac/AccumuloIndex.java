@@ -22,14 +22,12 @@ import java.util.function.Function;
 
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
-import org.apache.accumulo.core.client.BatchDeleter;
 import org.apache.accumulo.core.client.BatchScanner;
 import org.apache.accumulo.core.client.BatchWriter;
 import org.apache.accumulo.core.client.BatchWriterConfig;
 import org.apache.accumulo.core.client.ClientConfiguration;
 import org.apache.accumulo.core.client.Connector;
 import org.apache.accumulo.core.client.Instance;
-import org.apache.accumulo.core.client.MutationsRejectedException;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.TableNotFoundException;
 import org.apache.accumulo.core.client.ZooKeeperInstance;
@@ -1400,7 +1398,7 @@ public class AccumuloIndex {
 
     // Load the feature cardinality estimator, which is used during triage to
     // search through the most selective features first.
-    FeatureCardinalityEstimator fce;
+    FeatureCardinalityEstimator triageFeatureCardinalityEstimator;
     
     private TriageSearch triageSearch;
 
@@ -1410,27 +1408,37 @@ public class AccumuloIndex {
     ComputeIdf df;
     
     public KbpSearching(ExperimentProperties config, HashMap<String, Communication> commRetCache) throws Exception {
+      this(config,
+          config.getInt("maxResultsPerQuery", 30),
+          config.getDouble("maxToksPruningSafetyRatio", 5),
+          commRetCache);
+    }
+
+    public KbpSearching(
+        ExperimentProperties config,
+        int maxResultsPerQuery,
+        double maxToksPruningSafetyRatio,
+        HashMap<String, Communication> commRetCache) throws Exception {
       commRet = new AccumuloCommRetrieval(config);
       this.commRetCache = commRetCache;
 
       File fceF = config.getExistingFile("featureCardinalityEstimator");
       Log.info("loading feature cardinality estimates from " + fceF.getPath());
-      fce = (FeatureCardinalityEstimator) FileUtil.deserialize(fceF);
+      triageFeatureCardinalityEstimator = (FeatureCardinalityEstimator) FileUtil.deserialize(fceF);
       // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
       // e.g.
       // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
       // /export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
       File extraCards = config.getFile("featureCardinalityManual", null);
       if (extraCards != null)
-        fce.addFromFile(extraCards);
+        triageFeatureCardinalityEstimator.addFromFile(extraCards);
 
       // How many results per KBP query.
       // Note: each result must have its Communication fetched from the DB,
       // which is currently the most costly part of querying, so set this carefully,
       // and in coordination with maxToksPreDocRetrieval
-      maxResultsPerQuery = config.getInt("maxResultsPerQuery", 30);
+      this.maxResultsPerQuery = maxResultsPerQuery;
       // This affects pruning early in the pipeline
-      double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 5);
       maxToksPreDocRetrieval = (int) Math.max(50, maxToksPruningSafetyRatio * maxResultsPerQuery);
       Log.info("[filter] maxResultsPerQuery=" + maxResultsPerQuery
           + " maxToksPruningSafetyRatio=" + maxToksPruningSafetyRatio
@@ -1440,7 +1448,7 @@ public class AccumuloIndex {
           SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS,
           "reader",
           new PasswordToken("an accumulo reader"),
-          fce,
+          triageFeatureCardinalityEstimator,
           config.getInt("nThreadsSearch", 4),
           maxToksPreDocRetrieval,
           config.getDouble("triageFeatNBPrior", 10),

@@ -457,15 +457,17 @@ public class PkbpSearching implements Serializable {
         ps.setSeed(seed, seedWeight);
       } else {
         // Run on the grid w/ access to accumulo
-        if (ks == null)
-          ks = new KbpSearching(config, new HashMap<>());
+        if (ks == null) {
+          int maxResultsPerSearch = config.getInt("maxResultsPerQuery", 100);
+          double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 2d);
+          ks = new KbpSearching(config, maxResultsPerSearch, maxToksPruningSafetyRatio, new HashMap<>());
+        }
         if (sfCms == null) {
           // e.g. /export/projects/twolfe/sit-search/situation-feature-counts/count-min-sketch-v2/cag-cms.jser
           File sitFeatFreqCms = config.getExistingFile("sitFeatFreqCms");
           Log.info("loading sitFeatFreqCms=" + sitFeatFreqCms.getPath());
           sfCms = (StringCountMinSketch) FileUtil.deserialize(sitFeatFreqCms);
         }
-        ps = new PkbpSearching(ks, sfCms, seed, seedWeight, rand);
 
         // Resolve query comm
         seed.sourceComm = ks.getCommCaching(seed.docid);
@@ -473,6 +475,8 @@ public class PkbpSearching implements Serializable {
           Log.info("skipping b/c can't retrieve query comm: " + seed);
           continue;
         }
+
+        ps = new PkbpSearching(ks, sfCms, seed, seedWeight, rand);
       }
       //ps.verbose = true;
       //ps.verboseLinking = true;
@@ -1563,7 +1567,7 @@ public class PkbpSearching implements Serializable {
       throw new IllegalArgumentException();
 
     // Sort by freq
-    search.fce.sortByFreqUpperBoundAsc(r.triageFeatures, f -> f.name);
+    search.triageFeatureCardinalityEstimator.sortByFreqUpperBoundAsc(r.triageFeatures, f -> f.name);
     if (verbose)
       Log.info("triageFeats=" + r.triageFeatures);
 
