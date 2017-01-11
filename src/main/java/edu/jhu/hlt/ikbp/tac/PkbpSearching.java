@@ -558,8 +558,8 @@ public class PkbpSearching implements Serializable {
 //  Map<String, LL<PkbpSituation>> discF2Sit;
 
   // Membership graph.
-  // Inverse links like s2e, r2e, and r2s are encoded by the
-  // objects themselves (in this case s, r, and r respectively)
+  // Inverse links like s2e are encoded by the
+  // objects themselves (in this case s)
   Map<PkbpEntity, LL<PkbpSituation>> memb_e2s;
 
   // Debugging

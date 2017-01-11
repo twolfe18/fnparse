@@ -1392,7 +1392,9 @@ public class AccumuloIndex {
    * 1) fetching communications
    * 2) re-scoring methods like attribute features
    */
-  public static class KbpSearching {
+  public static class KbpSearching implements Serializable {
+    private static final long serialVersionUID = 8767537711510822918L;
+
     // Finds EntityMentions for query documents which just come with char offsets.
 //    private TacQueryEntityMentionResolver findEntityMention;
     
