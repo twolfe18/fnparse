@@ -541,7 +541,7 @@ public class PkbpSearching implements Serializable {
   // Caching/memoization
   /** key is a KbpResult.id, values should NOT have communications set */
   private HashMap<String, List<SitSearchResult>> initialResultsCache;
-  private HashMap<String, Communication> commRetCache;    // lives in KpbSearching
+//  private HashMap<String, Communication> commRetCache;    // lives in KpbSearching
 
   /** Instances of (comm,tokenization) which have been processed once, after which should be skipped */
   Set<Pair<String, String>> seenCommToks;
@@ -578,7 +578,7 @@ public class PkbpSearching implements Serializable {
       throw new IllegalArgumentException();
     getTacEMFinder();
     this.sitFeatCms = sitFeatCms;
-    this.commRetCache = search.getCommRetCache();
+//    this.commRetCache = search.getCommRetCache();
     this.initialResultsCache = new HashMap<>();
     this.seenCommToks = new HashSet<>();
     this.memb_e2s = new HashMap<>();
@@ -692,8 +692,8 @@ public class PkbpSearching implements Serializable {
   }
   
   private Communication getComm(String id) {
-    if (search == null)
-      return commRetCache.get(id);
+//    if (search == null)
+//      return commRetCache.get(id);
     return search.getCommCaching(id);
   }
   
