@@ -457,7 +457,8 @@ public class PkbpSearching implements Serializable {
         ps = (PkbpSearching) FileUtil.deserialize(inSearch);
         
         if (ks == null) {
-          File inKs = new File(inputDir, "KbpSearching.jser.gz");
+//          File inKs = new File(inputDir, "KbpSearching.jser.gz");
+          File inKs = new File(inputDir, "KbpSearching." + seed.id + ".jser.gz");
           Log.info("deserializing KbpSearching from " + inKs.getPath());
           ks = (KbpSearching) FileUtil.deserialize(inKs);
           ps.search = ks;
@@ -503,22 +504,29 @@ public class PkbpSearching implements Serializable {
       // Serialize the results for later
       if (outputDir != null) {
         // PkbpSearching
+        TIMER.start("serialize/PkbpSearching");
         File outSearch = new File(outputDir, seed.id + ".search.jser.gz");
         Log.info("saving PKB to " + outSearch.getPath());
         ps.dropCommsFromInitialResultsCache();
         FileUtil.serialize(ps, outSearch);
+        TIMER.stop("serialize/PkbpSearching");
 
         // KbpQuery
+        TIMER.start("serialize/KbpQuery");
         File outQuery = new File(outputDir, seed.id + ".query.jser.gz");
         Log.info("saving seed/query to " + outQuery.getPath());
         FileUtil.serialize(seed, outQuery);
+        TIMER.stop("serialize/KbpQuery");
         
         // KbpSearching
         // NOTE: Only one of these, rather than one per query.
         // It grows upon every query (stores more comms, feature freqs, etc).
-        File outKs = new File(outputDir, "KbpSearching.jser.gz");
+        TIMER.start("serialize/KbpSearching");
+//        File outKs = new File(outputDir, "KbpSearching.jser.gz");
+        File outKs = new File(outputDir, "KbpSearching." + seed.id + ".jser.gz");
         Log.info("saving KbpSearching (comm/featFreq/etc cache) to " + outKs.getPath());
         FileUtil.serialize(ks, outKs);
+        TIMER.stop("serialize/KbpSearching");
       }
 
       if (clearCachesEveryQuery)
