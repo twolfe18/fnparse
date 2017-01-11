@@ -1,5 +1,6 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,9 @@ import edu.jhu.util.TokenizationIter;
  *
  * @author travis
  */
-public class TacQueryEntityMentionResolver {
+public class TacQueryEntityMentionResolver implements Serializable {
+  private static final long serialVersionUID = -3197509087000676498L;
+
   public static boolean DEBUG = false;
   
   private AnnotationMetadata metaForNewEntityMentions;

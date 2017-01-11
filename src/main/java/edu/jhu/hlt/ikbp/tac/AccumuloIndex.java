@@ -723,11 +723,18 @@ public class AccumuloIndex {
     }
   }
 
-  public static class TriageSearch {
-    private String username;
-    private AuthenticationToken password;
-    private Authorizations auths;
-    private Connector conn;
+  public static class TriageSearch implements Serializable {
+    private static final long serialVersionUID = -5875667519520042444L;
+
+    // Accumulo-related fields
+    private transient String username;
+    private transient AuthenticationToken password;
+    private transient Authorizations auths;
+    private transient Connector conn;
+
+    // Cache/memos
+    // This is used to cache the cardinality of features which were used for triage retrieval
+    private Map<String, IntPair> feat2tokCommFreq;
 
     // Holds approximate feature cardinalities used to sort features
     // by most discriminative first.
@@ -739,14 +746,11 @@ public class AccumuloIndex {
     int maxToksPreDocRetrieval = 10 * 1000;
     double triageFeatNBPrior = 50;    // higher values penalize very frequent features less
     
+    // If true, use a batch scanner to do the words query given a communication
     boolean batchC2W;
     
     /** @deprecated should have just used batchTimeout... */
     private BloomFilter<String> expensiveFeaturesBF;
-
-    
-    // This is used to cache the cardinality of features which were used for triage retrieval
-    private Map<String, IntPair> feat2tokCommFreq;
     
     public TriageSearch(String instanceName, String zks, String username, AuthenticationToken password,
         FeatureCardinalityEstimator featureCardinalityModel,
@@ -1393,7 +1397,7 @@ public class AccumuloIndex {
 //    private TacQueryEntityMentionResolver findEntityMention;
     
     // Gets Communications (and contents/annotations) given an id
-    private AccumuloCommRetrieval commRet;
+    private transient AccumuloCommRetrieval commRet;
     private HashMap<String, Communication> commRetCache;  // contains everything commRet ever gave us
 
     // Load the feature cardinality estimator, which is used during triage to
@@ -1405,7 +1409,7 @@ public class AccumuloIndex {
     private int maxResultsPerQuery;
     private int maxToksPreDocRetrieval;
 
-    ComputeIdf df;
+    private ComputeIdf df;
     
     public KbpSearching(ExperimentProperties config, HashMap<String, Communication> commRetCache) throws Exception {
       this(config,
@@ -1456,6 +1460,10 @@ public class AccumuloIndex {
           config.getBoolean("cacheFeatureFrequencies", true));
 
       df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
+    }
+    
+    public ComputeIdf getTermFrequencies() {
+      return df;
     }
     
     public TriageSearch getTriageSearch() {

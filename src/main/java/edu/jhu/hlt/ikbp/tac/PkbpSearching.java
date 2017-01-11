@@ -1,5 +1,7 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import static edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat.sortAndPrune;
+
 import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayDeque;
@@ -24,9 +26,9 @@ import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
-import edu.jhu.hlt.concrete.search.SearchProxyService.AsyncProcessor.search;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
@@ -41,6 +43,7 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.DoublePair;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
@@ -52,8 +55,6 @@ import edu.jhu.util.CountMinSketch;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
 import edu.jhu.util.TokenizationIter;
 import redis.clients.jedis.Jedis;
-
-import static edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat.sortAndPrune;
 
 /**
  * Search outwards starting with a {@link KbpQuery} seed.
@@ -440,7 +441,7 @@ public class PkbpSearching implements Serializable {
 
     StringCountMinSketch sfCms = null;
     for (KbpQuery seed : queries) {
-      Log.info("working on seed=" + seed);
+      Log.info("working on seed=" + seed + "\t" + Describe.memoryUsage());
 
       if (inputDir != null) {
         // Run anywhere with some files caching the accumulo work
@@ -451,7 +452,13 @@ public class PkbpSearching implements Serializable {
         }
         Log.info("loading PkbpSearching from " + inSearch.getPath());
         ps = (PkbpSearching) FileUtil.deserialize(inSearch);
+        
+//        // Temporary fix
+//        ps.termFreq = new ComputeIdf(config.getExistingFile("wordDocFreq")); // e.g. data/idf/word-df.small.tsv
+
         ps.restoreCommsInInitialResultsCache();
+        ps.clearSeenCommToks();
+
         File inQuery = new File(inputDir, seed.id + ".query.jser.gz");
         seed = (KbpQuery) FileUtil.deserialize(inQuery);
         ps.setSeed(seed, seedWeight);
@@ -476,7 +483,8 @@ public class PkbpSearching implements Serializable {
           continue;
         }
 
-        ps = new PkbpSearching(ks, sfCms, seed, seedWeight, rand);
+        ComputeIdf tf = ks.getTermFrequencies();
+        ps = new PkbpSearching(ks, sfCms, tf, seed, seedWeight, rand);
       }
       //ps.verbose = true;
       //ps.verboseLinking = true;
@@ -513,12 +521,16 @@ public class PkbpSearching implements Serializable {
 
   // Input: Seed
   private KbpQuery seed;
+  private PkbpEntity seedEntity;
   private StringTermVec seedTermVec;
 
   // Searching
-  private transient KbpSearching search;
-  private transient TacQueryEntityMentionResolver findEntityMention;
+  private KbpSearching search;
+  private TacQueryEntityMentionResolver findEntityMention;
   private Random rand;
+  /** Stores the (approximate) frequency of situation features, used for string match weighting in situation coref */
+  private StringCountMinSketch sitFeatCms;
+  private ComputeIdf termFreq;
 
   // Controls search
 //  public DoublePair rewardForTemporalLocalityMuSigma = new DoublePair(2, 30); // = (reward, stddev), score += reward * Math.exp(-(diffInDays/stddev)^2)
@@ -527,8 +539,9 @@ public class PkbpSearching implements Serializable {
   public DoublePair relatedEntitySigmoid = new DoublePair(6, 2);    // first: higher value lowers prob of keeping related entities. second: temperature of sigmoid (e.g. infinity means everything is 50/50 odds of keep)
 
   // Caching/memoization
-  private HashMap<String, Communication> commRetCache;
-  private HashMap<String, List<SitSearchResult>> initialResultsCache;   // key is a KbpResult.id, values should NOT have communications set
+  /** key is a KbpResult.id, values should NOT have communications set */
+  private HashMap<String, List<SitSearchResult>> initialResultsCache;
+  private HashMap<String, Communication> commRetCache;    // lives in KpbSearching
 
   /** Instances of (comm,tokenization) which have been processed once, after which should be skipped */
   Set<Pair<String, String>> seenCommToks;
@@ -539,9 +552,6 @@ public class PkbpSearching implements Serializable {
   Deque<PkbpResult> queue;    // TODO change element type, will want to have actions on here like "merge two situations"
   // Currently every element here is implicitly "search for situations involving these arguments and link ents/sits hanging off the results"
   
-  /** Stores the (approximate) frequency of situation features, used for string match weighting in situation coref */
-  private StringCountMinSketch sitFeatCms;
-
   // Inverted indices for objects
 //  /** Keys are features which would get you most of the way (scoring-wise) towards a LINK */
 //  Map<String, LL<PkbpEntity>> discF2Ent;
@@ -558,28 +568,49 @@ public class PkbpSearching implements Serializable {
   public boolean verboseLinking = false;
 
 
-  public PkbpSearching(KbpSearching search, StringCountMinSketch sitFeatCms, KbpQuery seed, double seedWeight, Random rand) {
+  public PkbpSearching(KbpSearching search, StringCountMinSketch sitFeatCms, ComputeIdf termFreqs, KbpQuery seed, double seedWeight, Random rand) {
     Log.info("seed=" + seed);
     if (seed.sourceComm == null)
       throw new IllegalArgumentException();
-    this.findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
+    if (sitFeatCms == null)
+      throw new IllegalArgumentException();
+    if (termFreqs == null)
+      throw new IllegalArgumentException();
+    getTacEMFinder();
     this.sitFeatCms = sitFeatCms;
     this.commRetCache = search.getCommRetCache();
     this.initialResultsCache = new HashMap<>();
     this.seenCommToks = new HashSet<>();
     this.memb_e2s = new HashMap<>();
     this.rand = rand;
-    this.search = search;
     this.queue = new ArrayDeque<>();
     this.output = new LinkedHashMap<>();
+    this.search = search;
+    this.termFreq = termFreqs;
     setSeed(seed, seedWeight);
+  }
+  
+  public void clearSeenCommToks() {
+    this.seenCommToks.clear();
+  }
+  
+  private ComputeIdf getTermFrequencies() {
+    return termFreq;
+  }
+  
+  private TacQueryEntityMentionResolver getTacEMFinder() {
+    if (findEntityMention == null)
+      findEntityMention = new TacQueryEntityMentionResolver("tacQuery");
+    return findEntityMention;
   }
   
   public void setSeed(KbpQuery seed, double seedWeight) {
     this.seed = seed;
     this.seedTermVec = new StringTermVec(seed.sourceComm);
-    boolean addEmToCommIfMissing = true;
-    findEntityMention.resolve(seed, addEmToCommIfMissing);
+    if (seed.entityMention == null) {
+      boolean addEmToCommIfMissing = true;
+      getTacEMFinder().resolve(seed, addEmToCommIfMissing);
+    }
     assert seed.entityMention != null;
     assert seed.entityMention.isSetText();
     assert seed.entity_type != null;
@@ -604,7 +635,7 @@ public class PkbpSearching implements Serializable {
     TokenObservationCounts tokObsLc = null;
     canonical.triageFeatures = IndexCommunications.getEntityMentionFeatures(
           mentionText, headwords, nerType, tokObs, tokObsLc);
-    AccumuloIndex.findEntitiesAndSituations(canonical, search.df, false);
+    AccumuloIndex.findEntitiesAndSituations(canonical, getTermFrequencies(), false);
 
     DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
     canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(canonical.yhatQueryEntityHead, deps);
@@ -643,15 +674,15 @@ public class PkbpSearching implements Serializable {
     }
     PkbpResult r0 = new PkbpResult("seed/" + seed.id, true);
     best.target.addMention(best.source);
-//    r0.addArgument(best.target, memb_e2r);
     r0.addArgument(best.target, null);
+    this.seedEntity = best.target;
 
     this.seenCommToks.add(new Pair<>(
         canonical2.getCommunication().getId(),
         canonical2.getTokenization().getUuid().getUuidString()));
     this.queue.add(r0);
   }
-  
+
   private static String linkStr(EntLink el) {
     return "el/" + el.source.getCommTokIdShort() + "/" + el.source.head + "/" + el.target.id;
   }
@@ -716,7 +747,7 @@ public class PkbpSearching implements Serializable {
     assert nm > 0;
 
     // Perform triage search
-    mentions = ts.search(new ArrayList<>(triageFeats), docContext, search.df);
+    mentions = ts.search(new ArrayList<>(triageFeats), docContext, getTermFrequencies());
     Log.info("triage search returned " + mentions.size() + " mentions for " + searchFor);
 
     // Resolve the communications
@@ -769,7 +800,7 @@ public class PkbpSearching implements Serializable {
     {
     List<SitSearchResult> pruned = new ArrayList<>();
     for (SitSearchResult ss : mentions) {
-      if (AccumuloIndex.findEntitiesAndSituations(ss, search.df, false))
+      if (AccumuloIndex.findEntitiesAndSituations(ss, getTermFrequencies(), false))
         pruned.add(ss);
     }
     Log.info("[filter] lost " + (mentions.size()-pruned.size()) + " mentions due to query head finding failure");
@@ -876,7 +907,8 @@ public class PkbpSearching implements Serializable {
       System.out.println();
 
       System.out.println();
-      showResults();
+//      showResultsOld();
+      showResultsNew();
       System.out.println();
     }
     
@@ -912,8 +944,52 @@ public class PkbpSearching implements Serializable {
     }
     return rKey;
   }
+  
+  public void showResultsNew() {
+    Log.info("there are " + memb_e2s.size() + " entries in e2s");
 
-  public void showResults() {
+    // Iterate over all tuples of core arguments, where the seed is at least one of them.
+    // For now I'll just consider pairs.
+//    for (PkbpEntity e : this.memb_e2s.keySet()) {
+//      List<String> rKey = generateOutputKey(seedEntity, e);
+//      lskfds
+//    }
+    
+    // Group the situations which the seed entity participates in
+    // by their core arguments.
+    List<PkbpSituation> seedEntSits = LL.toList(memb_e2s.get(seedEntity));
+    Map<List<String>, List<PkbpSituation>> byCoreArgs = new HashMap<>();
+    for (PkbpSituation sit : seedEntSits) {
+      assert sit.coreArguments != null && sit.coreArguments.size() == 2;
+      List<String> key = generateOutputKey(sit.coreArguments.get(0), sit.coreArguments.get(1));
+      if (key == null)
+        continue;
+      List<PkbpSituation> sits = byCoreArgs.get(key);
+      if (sits == null) {
+        sits = new ArrayList<>();
+        byCoreArgs.put(key, sits);
+      }
+      sits.add(sit);
+    }
+    
+    // Show each core argument group as a cluster.
+    // You can think of each of these clusters as being the situations associated with a pair of entities.
+    // TODO Sort these pairs by some salience metric.
+    // TODO Limit the number of mentions/sit and sit/coreArgSet
+    for (List<String> key : byCoreArgs.keySet()) {
+      List<PkbpSituation> sits = byCoreArgs.get(key);
+      System.out.println(key);
+      int i = 0;
+      for (PkbpSituation sit : sits) {
+        System.out.printf("sit(%d): %s\n", i++, sit);
+        for (PkbpSituation.Mention sm : sit.mentions)
+          System.out.println("\t" + sm);
+      }
+      System.out.println();
+    }
+  }
+
+  public void showResultsOld() {
     Log.info("nResult=" + output.size());
     for (Entry<List<String>, PkbpResult> e : output.entrySet()) {
       System.out.println("key: " + e.getKey());
@@ -1323,7 +1399,7 @@ public class PkbpSearching implements Serializable {
         Log.info("cosine sim for " + e.id);
       StringTermVec eDocVec = e.getDocVec();
       StringTermVec rDocVec = new StringTermVec(r.getCommunication());
-      double tfidfCosine = search.df.tfIdfCosineSim(eDocVec, rDocVec);
+      double tfidfCosine = getTermFrequencies().tfIdfCosineSim(eDocVec, rDocVec);
       if (tfidfCosine > 0.95) {
         if (verboseLinking)
           Log.info("tfidf cosine same doc, adjusting down " + tfidfCosine + " => 0.75");
@@ -1442,7 +1518,7 @@ public class PkbpSearching implements Serializable {
     double p = (k + 1) / (k + freq);
     fs.add(new Feat("wordFreq", p));
 
-    double tfidf = search.df.tfIdfCosineSim(seedTermVec, m.getContext());
+    double tfidf = getTermFrequencies().tfIdfCosineSim(seedTermVec, m.getContext());
     fs.add(new Feat("tfidfWithSeed", 5 * tfidf));
 
     return fs;
@@ -1624,7 +1700,7 @@ public class PkbpSearching implements Serializable {
     // Compute tf-idf similarity between this comm and the seed
     Communication comm = newMention.getCommunication();
     StringTermVec commVec = new StringTermVec(comm);
-    double tfidfWithSeed = search.df.tfIdfCosineSim(seedTermVec, commVec);
+    double tfidfWithSeed = getTermFrequencies().tfIdfCosineSim(seedTermVec, commVec);
 
     // Index tokenizations by their id
     Map<String, Tokenization> tokMap = new HashMap<>();
