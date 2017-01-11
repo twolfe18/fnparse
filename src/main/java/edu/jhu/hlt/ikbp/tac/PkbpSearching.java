@@ -876,17 +876,7 @@ public class PkbpSearching implements Serializable {
       Map<Integer, Object> headToken2linkTarget = new HashMap<>();  // ensures that we aren't linking a mention to two different things
       List<EntLink> exEL = new ArrayList<>();
       List<SitLink> exSL = new ArrayList<>();
-      for (EntLink el : x.get1()) {
-        if (exUniq.add(linkStr(el))) {
-          if (verbose) System.out.println("ADDING: " + el);
-          el.target.addMention(el.source);
-          if (el.newEntity)
-            entities.add(el.target);
-          exEL.add(el);
-          old = headToken2linkTarget.put(el.source.head, el.target);
-          assert old == null : "el.source=" + el.source + " old=" + old;
-        }
-      }
+      // This needs to come first since it populates memb_e2s
       for (SitLink sl : x.get2()) {
         if (exUniq.add(linkStr(sl))) {
           if (verbose) System.out.println("ADDING: " + sl);
@@ -910,6 +900,17 @@ public class PkbpSearching implements Serializable {
               assert old == null : "el.source=" + el.source + " old=" + old;
             }
           }
+        }
+      }
+      for (EntLink el : x.get1()) {
+        if (exUniq.add(linkStr(el))) {
+          if (verbose) System.out.println("ADDING: " + el);
+          el.target.addMention(el.source);
+          if (el.newEntity)
+            entities.add(el.target);
+          exEL.add(el);
+          old = headToken2linkTarget.put(el.source.head, el.target);
+          assert old == null : "el.source=" + el.source + " old=" + old;
         }
       }
       
@@ -995,7 +996,9 @@ public class PkbpSearching implements Serializable {
   }
   
   public void showResultsNew() {
-    Log.info("e.size=" + entities.size() + " e2s.size=" + memb_e2s.size());
+    Log.info("e.size=" + entities.size()
+        + " e2s.size=" + memb_e2s.size()
+        + " situations.size=" + situations.size());
     Log.info("seedEntity: " + seedEntity);
 
     // Iterate over all tuples of core arguments, where the seed is at least one of them.
