@@ -15,8 +15,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.LongConsumer;
 
 import org.apache.accumulo.core.client.AccumuloException;
 import org.apache.accumulo.core.client.AccumuloSecurityException;
@@ -48,6 +48,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.map.IntIntHashMap;
+import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch;
 import edu.jhu.util.MaxMinSketch;
 
@@ -373,9 +374,9 @@ public class FeatureCardinalityEstimator implements Serializable {
 
   /**
    * @param update should accept (feature, (tokFreq, docFreq))
-   * @param continuation should accept (totalRowsProcessed) and show progress
+   * @param continuation should accept (currentFeature, totalRowsProcessed) and show progress
    */
-  public static void iterateFeatureTokDocCountsViaAccumulo(BiConsumer<String, IntPair> update, LongConsumer continuation, double callContinuationEveryThisManySeconds) throws TableNotFoundException, AccumuloException, AccumuloSecurityException {
+  public static void iterateFeatureTokDocCountsViaAccumulo(BiConsumer<String, IntPair> update, Consumer<Pair<String, Long>> continuation, double callContinuationEveryThisManySeconds) throws TableNotFoundException, AccumuloException, AccumuloSecurityException {
     // Bloom filter for tracking docs/feature
     final Funnel<CharSequence> fun = Funnels.stringFunnel(utf8);
     final int expInsertions = 250_000;
@@ -429,7 +430,7 @@ public class FeatureCardinalityEstimator implements Serializable {
         assert curTokCount >= curDocCount;
 
         if (tm.enoughTimePassed(callContinuationEveryThisManySeconds))
-          continuation.accept(totalEntries);
+          continuation.accept(new Pair<>(curFeature, totalEntries));
       }
       
       // Final output
@@ -665,9 +666,10 @@ public class FeatureCardinalityEstimator implements Serializable {
     boolean assumeCompacted = true;
     Log.info("feature frequency estimates will take up " + (fcnew.getBytesUsedEstimate(assumeCompacted)/(1L<<20)) + " MB");
     
-    LongConsumer continuation = numEntries -> {
-      Log.info("numEntriesProcessed=" + numEntries
+    Consumer<Pair<String, Long>> continuation = p -> {
+      Log.info("numEntriesProcessed=" + p.get2()
           + " numFeat=" + fcnew.getNumUpdates()
+          + " curFeat=" + p.get1()
           + " savingTo=" + serializeTo.getPath()
           + "\t" + Describe.memoryUsage());
       System.out.println(fcnew.showSampleFreqs());
@@ -677,7 +679,7 @@ public class FeatureCardinalityEstimator implements Serializable {
 
     Log.info("final save");
     fcnew.noMoreUpdates();
-    continuation.accept(0L);
+    continuation.accept(new Pair<>("<final>", 0L));
     
     Log.info("done");
   }
