@@ -40,6 +40,7 @@ import com.google.common.hash.Hashing;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.ikbp.tac.FeatureCardinalityEstimator.New.HeavyHitter;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Beam.Item;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -96,6 +97,11 @@ public class FeatureCardinalityEstimator implements Serializable {
       
       public double frequency() {
         return tokFreq + docFreq + f1(tokFreq, docFreq);
+      }
+      
+      @Override
+      public String toString() {
+        return String.format("(HH %s t=%d d=%d)", new String(name, utf8), tokFreq, docFreq);
       }
 
       @Override
@@ -599,8 +605,48 @@ public class FeatureCardinalityEstimator implements Serializable {
     return mostFrequentIndex.getOrDefault(feat, -1);
   }
   
+  public static void test(ExperimentProperties config) {
+    
+    System.out.println(HeavyHitter.BY_PRIORITY_ASC.compare(new HeavyHitter("foo", 1, 2), new HeavyHitter("bar", 10, 20)));
+    System.out.println(new HeavyHitter("foo", 1, 2).compareTo(new HeavyHitter("bar", 10, 20)));
+    
+    HeavyHitter hh;
+    New n = new New(2, 8, 16);
+    n.update("foo", 5, 5);
+    System.out.println(n.heavyHitters);
+    assert n.heavyHitters.peek().tokFreq == 5;
+    
+    n.update("bar", 4, 4);
+    System.out.println(n.heavyHitters);
+    hh = n.heavyHitters.peek();
+    assert 2 == n.heavyHitters.size();
+    assert "bar".equals(new String(hh.name, utf8));
+
+    n.update("baz", 6, 6);
+    System.out.println(n.heavyHitters);
+    hh = n.heavyHitters.peek();
+    System.out.println(hh);
+    assert 2 == n.heavyHitters.size();
+    assert "foo".equals(new String(hh.name, utf8));
+    
+    System.out.println(n.getNumUpdates());
+    assert 3 == n.getNumUpdates();
+    
+    System.out.println(n.getFrequency("foo"));
+    System.out.println(n.getFrequency("bar"));
+    System.out.println(n.getFrequency("baz"));
+    System.out.println(n.getFrequency("quux"));
+  }
+  
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
+    
+    if (config.getBoolean("test", false)) {
+      Log.info("running tests then existing");
+      test(config);
+      return;
+    }
+
     File serializeTo = config.getFile("output");
     double everyThisManySeconds = config.getDouble("interval", 5 * 60);
 
