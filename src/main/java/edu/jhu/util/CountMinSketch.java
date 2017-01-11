@@ -62,7 +62,7 @@ public class CountMinSketch implements Serializable {
     Log.info("using " + (bytes/(1L<<20)) + " MB, requires " + (nhash*logb) + " bits of hash per element");
   }
   
-  private static int extractHash(int i, byte[] hasheBytes, int logb) {
+  static int extractHash(int i, byte[] hasheBytes, int logb) {
     int hi = 0;
     int bitStart = logb * i;
     int bitStop = logb * (i+1);
