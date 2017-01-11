@@ -354,7 +354,9 @@ public class AccumuloIndex {
 
   
   
-  public static class ComputeIdf {
+  public static class ComputeIdf implements Serializable {
+    private static final long serialVersionUID = -8768250745761524407L;
+
     // null keys not allowed!
     private HashMap<String, Long> termFreq;
     private long numDocs;
