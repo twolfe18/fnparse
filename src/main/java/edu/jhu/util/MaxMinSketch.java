@@ -12,8 +12,6 @@ import com.google.common.hash.Hashing;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.hash.Hash;
-import edu.jhu.util.CountMinSketch.StringCountMinSketch;
 
 /**
  * Given a whole bunch of (key, count) pairs, build a data structure

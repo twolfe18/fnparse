@@ -648,6 +648,7 @@ public class PkbpSearching implements Serializable {
   }
   
   public void setSeed(KbpQuery seed, double seedWeight) {
+    Log.info("seedWeight=" + seedWeight + " seed=" + seed);
     this.seed = seed;
     this.seedTermVec = new StringTermVec(seed.sourceComm);
     if (seed.entityMention == null) {
@@ -698,8 +699,8 @@ public class PkbpSearching implements Serializable {
     Set<String> exUniq = new HashSet<>();   // proposeLinks doesn't de-duplicate links
     EntLink best = null;
     for (EntLink el : p.get1()) {
-      if (!el.newEntity)
-        continue;
+//      if (!el.newEntity)
+//        continue;
       if (el.source.head != canonical2.head)
         continue;
       if (!exUniq.add(linkStr(el)))
@@ -1126,8 +1127,8 @@ public class PkbpSearching implements Serializable {
     
     @Override
     public String toString() {
-      return String.format("(EntLink %s => %s b/c %s)",
-          source, target, sortAndPrune(score, 5));
+      return String.format("(EntLink score=%.2f b/c %s source=%s target=%s)",
+          Feat.sum(score), sortAndPrune(score, 5), source, target);
     }
   }
 
@@ -1471,23 +1472,15 @@ public class PkbpSearching implements Serializable {
         if (ss.triageFeatures == null)
           throw new RuntimeException();
 
-        // Note: when this is true (needed b/c of related mentions which haven't
-        // been triage searched before), this may cause a large slowdown due to
-        // extra queries being run. These values are cached through, so perhaps
-        // it will be OK when the cache is warm.
-        boolean computeFeatFreqAsNeeded = true;
-        Double s = null;
         List<String> ssTf = Feat.demote(ss.triageFeatures, false);
         List<String> rTf = Feat.demote(r.triageFeatures, false);
-        s = ts.scoreTriageFeatureIntersectionSimilarity(ssTf, rTf, computeFeatFreqAsNeeded, verboseLinking);
+        double s = ts.scoreTriageFeatureIntersectionSimilarity(ssTf, rTf, verboseLinking);
         if (verboseLinking) {
           System.out.println("ss.triageFeats: " + ss.triageFeatures);
           System.out.println("r.triageFeats:  " + r.triageFeatures);
           System.out.println("score:          " + s);
           System.out.println();
         }
-        if (s == null)
-          s = 0d;
         triage.add(s);
         if (s > triageMax)
           triageMax = s;
@@ -1702,12 +1695,11 @@ public class PkbpSearching implements Serializable {
     if (verbose)
       Log.info("triageFeats=" + r.triageFeatures);
 
-    boolean computeIfNecessary = true;
     TriageSearch ts = search.getTriageSearch();
     List<Double> c = new ArrayList<>();
     for (int i = 0; i < r.triageFeatures.size(); i++) {
       String tf = r.triageFeatures.get(i).name;
-      double p = ts.getFeatureScore(tf, computeIfNecessary);
+      double p = ts.getFeatureScore(tf);
       c.add(p);
 
       // Exit early based on estimate of mass remaining

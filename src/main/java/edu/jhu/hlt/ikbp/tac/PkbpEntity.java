@@ -14,7 +14,6 @@ import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 
@@ -189,7 +188,8 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
   public String toString() {
     return "(PkbpEntity id=" + id
         + " nMentions=" + mentions.size()
-        + " weight=" + getRelevanceWeight() + ")";
+        + " relevanceWeight=" + getRelevanceWeight() + ""
+        + " b/c " + Feat.sortAndPrune(relevantReasons, 3) + ")";
   }
 
   public StringTermVec getDocVec() {

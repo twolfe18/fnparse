@@ -90,6 +90,7 @@ import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.TokenizationIter;
+import edu.jhu.util.MaxMinSketch.StringMaxMinSketch;
 
 
 /**
@@ -734,13 +735,17 @@ public class AccumuloIndex {
     private transient Authorizations auths;
     private transient Connector conn;
 
-    // Cache/memos
-    // This is used to cache the cardinality of features which were used for triage retrieval
-    private Map<String, IntPair> feat2tokCommFreq;
-
-    // Holds approximate feature cardinalities used to sort features
-    // by most discriminative first.
-    private FeatureCardinalityEstimator fce;
+//    // Cache/memos
+//    // This is used to cache the cardinality of features which were used for triage retrieval
+//    private Map<String, IntPair> feat2tokCommFreq;
+//
+//    // Holds approximate feature cardinalities used to sort features
+//    // by most discriminative first.
+//    private FeatureCardinalityEstimator fce;
+    private FeatureCardinalityEstimator.New fce;
+//    
+//    /** @deprecated should have just used batchTimeout... */
+//    private BloomFilter<String> expensiveFeaturesBF;
 
     int numQueryThreads;
     int batchTimeoutSeconds = 60;
@@ -751,24 +756,22 @@ public class AccumuloIndex {
     // If true, use a batch scanner to do the words query given a communication
     boolean batchC2W;
     
-    /** @deprecated should have just used batchTimeout... */
-    private BloomFilter<String> expensiveFeaturesBF;
-    
     public TriageSearch(String instanceName, String zks, String username, AuthenticationToken password,
-        FeatureCardinalityEstimator featureCardinalityModel,
+        FeatureCardinalityEstimator.New featureCardinalityModel,
         int nThreads, int maxToksPreDocRetrieval, double triageFeatNBPrior,
-        boolean batchC2W, boolean cacheFeatureFrequencies) throws Exception {
+        boolean batchC2W) throws Exception {
+//        boolean cacheFeatureFrequencies) throws Exception {
       Log.info("maxToksPreDocRetrieval=" + maxToksPreDocRetrieval
           + " featureCardinalityModel=" + featureCardinalityModel
-          + " cacheFeatureFrequencies=" + cacheFeatureFrequencies
+//          + " cacheFeatureFrequencies=" + cacheFeatureFrequencies
           + " batchC2W=" + batchC2W
           + " triageFeatNBPrior=" + triageFeatNBPrior
           + " instanceName=" + instanceName
           + " username=" + username
           + " nThreads=" + nThreads
           + " zks=" + zks);
-      if (cacheFeatureFrequencies)
-        feat2tokCommFreq = new HashMap<>();
+//      if (cacheFeatureFrequencies)
+//        feat2tokCommFreq = new HashMap<>();
       this.maxToksPreDocRetrieval = maxToksPreDocRetrieval;
       this.triageFeatNBPrior = triageFeatNBPrior;
       this.fce = featureCardinalityModel;
@@ -783,15 +786,15 @@ public class AccumuloIndex {
       this.conn = inst.getConnector(username, password);
     }
     
-    /**
-     * Exclude certain common and un-informative features from triage search.
-     * @param bfFile is created by {@link BuildBigFeatureBloomFilters}
-     */
-    @SuppressWarnings("unchecked")
-    public void ignoreFeaturesViaBF(File bfFile) {
-      Log.info("deserializing bloom filter from " + bfFile.getPath());
-      expensiveFeaturesBF = (BloomFilter<String>) FileUtil.deserialize(bfFile);
-    }
+//    /**
+//     * Exclude certain common and un-informative features from triage search.
+//     * @param bfFile is created by {@link BuildBigFeatureBloomFilters}
+//     */
+//    @SuppressWarnings("unchecked")
+//    public void ignoreFeaturesViaBF(File bfFile) {
+//      Log.info("deserializing bloom filter from " + bfFile.getPath());
+//      expensiveFeaturesBF = (BloomFilter<String>) FileUtil.deserialize(bfFile);
+//    }
     
     private static <R> double rank(Counts.Pseudo<R> weights, int rank) {
       List<R> keys = weights.getKeysSortedByCount(true);
@@ -801,9 +804,9 @@ public class AccumuloIndex {
     }
     
     /** returns null if any of the common features don't have a score unless computeFeatFreqScoresAsNeeded=true */
-    public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget, boolean computeFeatFreqScoresAsNeeded, boolean verbose) {
+    public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget, boolean verbose) {//, boolean computeFeatFreqScoresAsNeeded, boolean verbose) {
       if (verbose)
-        Log.info("source=" + triageFeatsSource + " target=" + triageFeatsTarget + " computeFeatFreqScoresAsNeeded=" + computeFeatFreqScoresAsNeeded);
+        Log.info("source=" + triageFeatsSource + " target=" + triageFeatsTarget);// + " computeFeatFreqScoresAsNeeded=" + computeFeatFreqScoresAsNeeded);
       // TODO Consider using some jaccard-like denominator for source/target features
       if (triageFeatsSource == null)
         throw new IllegalArgumentException();
@@ -815,96 +818,101 @@ public class AccumuloIndex {
       for (String f : triageFeatsTarget) {
         if (!common.contains(f))
           continue;
-        Double s = getFeatureScore(f, computeFeatFreqScoresAsNeeded);
-        if (s == null)
-          return null;
-        score += s;
+//        Double s = getFeatureScore(f, computeFeatFreqScoresAsNeeded);
+//        if (s == null)
+//          return null;
+//        score += s;
+        score += getFeatureScore(f);
       }
       if (verbose)
         Log.info("done");
       return score;
     }
 
-    public void clearCaches() {
-      Log.info("clearing caches");
-      if (feat2tokCommFreq != null)
-        feat2tokCommFreq.clear();
-    }
+//    public void clearCaches() {
+//      Log.info("clearing caches");
+//      if (feat2tokCommFreq != null)
+//        feat2tokCommFreq.clear();
+//    }
     
-    public IntPair computeFeatureFrequency(String triageFeat, boolean storeInCache) {
-      
+//    public IntPair computeFeatureFrequency(String triageFeat, boolean storeInCache) {
       // Try to get the value without scanning
-      int maybe = fce.getFreqExactForMostFreq(triageFeat);
-      if (maybe > 0) {
-        //Log.info(triageFeat + " is a most common feat w/ freq=" + maybe);
-        // We are going to use the approximation of numToks == numDocs for the
-        // most common features, on the assumption that they matter very little.
-        int numToks = maybe;
-        int numDocs = maybe;
-        //if (storeInCache)
-        //  storeFeatureFrequency(triageFeat, numToks, numDocs);
-        return new IntPair(numToks, numDocs);
-      }
-
-      Log.info("scanning for " + triageFeat + " storeInCache=" + storeInCache);
-      TIMER.start("computeFeatureFrequency/scan");
-      try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
-        f2tScanner.setRange(Range.exact(triageFeat));
-
-        // Collect all of the tokenizations which this feature co-occurs with
-        int numToks = 0;
-        //List<String> toks = new ArrayList<>();
-        Set<String> commUuidPrefixes = new HashSet<>();
-        for (Entry<Key, Value> e : f2tScanner) {
-          String tokUuid = e.getKey().getColumnQualifier().toString();
-          //toks.add(tokUuid);
-          numToks++;
-          commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
-        }
-
-        // Compute a score based on how selective this feature is
-        //int numToks = toks.size();
-        int numDocs = commUuidPrefixes.size();
-        if (storeInCache)
-          storeFeatureFrequency(triageFeat, numToks, numDocs);
-        Log.info("done");
-        TIMER.stop("computeFeatureFrequency/scan");
-        return new IntPair(numToks, numDocs);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
+//      int maybe = fce.getFreqExactForMostFreq(triageFeat);
+//      if (maybe > 0) {
+//        //Log.info(triageFeat + " is a most common feat w/ freq=" + maybe);
+//        // We are going to use the approximation of numToks == numDocs for the
+//        // most common features, on the assumption that they matter very little.
+//        int numToks = maybe;
+//        int numDocs = maybe;
+//        //if (storeInCache)
+//        //  storeFeatureFrequency(triageFeat, numToks, numDocs);
+//        return new IntPair(numToks, numDocs);
+//      }
+//
+//      Log.info("scanning for " + triageFeat + " storeInCache=" + storeInCache);
+//      TIMER.start("computeFeatureFrequency/scan");
+//      try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
+//        f2tScanner.setRange(Range.exact(triageFeat));
+//
+//        // Collect all of the tokenizations which this feature co-occurs with
+//        int numToks = 0;
+//        //List<String> toks = new ArrayList<>();
+//        Set<String> commUuidPrefixes = new HashSet<>();
+//        for (Entry<Key, Value> e : f2tScanner) {
+//          String tokUuid = e.getKey().getColumnQualifier().toString();
+//          //toks.add(tokUuid);
+//          numToks++;
+//          commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
+//        }
+//
+//        // Compute a score based on how selective this feature is
+//        //int numToks = toks.size();
+//        int numDocs = commUuidPrefixes.size();
+//        if (storeInCache)
+//          storeFeatureFrequency(triageFeat, numToks, numDocs);
+//        Log.info("done");
+//        TIMER.stop("computeFeatureFrequency/scan");
+//        return new IntPair(numToks, numDocs);
+//      } catch (Exception e) {
+//        throw new RuntimeException(e);
+//      }
+//    }
     
     public IntPair getFeatureFrequency(String triageFeature) {
-      if (feat2tokCommFreq == null)
-        throw new IllegalStateException();
-      return feat2tokCommFreq.get(triageFeature);
+//      if (feat2tokCommFreq == null)
+//        throw new IllegalStateException();
+//      return feat2tokCommFreq.get(triageFeature);
+      return fce.getFrequency(triageFeature);
     }
     
-    public void storeFeatureFrequency(String f, int numToks, int numDocs) {
-      IntPair vcur = new IntPair(numToks, numDocs);
-      IntPair vprev = feat2tokCommFreq.get(f);
-      if (vprev == null) {
-        feat2tokCommFreq.put(f, vcur);
-      } else {
-        assert vprev.equals(vcur) : "feat=" + f + " prev=" + vprev + " cur=" + vcur;
-      }
-    }
+//    public void storeFeatureFrequency(String f, int numToks, int numDocs) {
+//      IntPair vcur = new IntPair(numToks, numDocs);
+//      IntPair vprev = feat2tokCommFreq.get(f);
+//      if (vprev == null) {
+//        feat2tokCommFreq.put(f, vcur);
+//      } else {
+//        assert vprev.equals(vcur) : "feat=" + f + " prev=" + vprev + " cur=" + vcur;
+//      }
+//    }
 
-    /** returns null if this feature has not been searched for, and thus had its frequency computed */
-    public Double getFeatureScore(String f) {
-      return getFeatureScore(f, false);
+    public double getFeatureScore(String f) {
+      IntPair c = getFeatureFrequency(f);
+      return getFeatureScore(c.first, c.second);
     }
-    public Double getFeatureScore(String f, boolean computeIfNecessary) {
-      IntPair tc = feat2tokCommFreq.get(f);
-      if (tc == null) {
-        if (computeIfNecessary)
-          tc = computeFeatureFrequency(f, true);
-        else
-          return null;
-      }
-      return getFeatureScore(tc.first, tc.second);
-    }
+//    /** returns null if this feature has not been searched for, and thus had its frequency computed */
+//    public Double getFeatureScore(String f) {
+//      return getFeatureScore(f, false);
+//    }
+//    public Double getFeatureScore(String f, boolean computeIfNecessary) {
+//      IntPair tc = feat2tokCommFreq.get(f);
+//      if (tc == null) {
+//        if (computeIfNecessary)
+//          tc = computeFeatureFrequency(f, true);
+//        else
+//          return null;
+//      }
+//      return getFeatureScore(tc.first, tc.second);
+//    }
 
     public double getFeatureScore(int numToks, int numDocs) {
 
@@ -944,19 +952,19 @@ public class AccumuloIndex {
       if (batchTimeoutSeconds > 0)
         Log.info("[filter] using a timeout of " + batchTimeoutSeconds + " seconds for f2t query");
 
-      if (expensiveFeaturesBF != null) {
-        assert false : "should not be using this anymore";
-        List<String> pruned = new ArrayList<>(triageFeats.size());
-        for (String f : triageFeats) {
-          if (expensiveFeaturesBF.mightContain(f)) {
-            System.out.println("\tpruning expensive feature: " + f);
-          } else {
-            pruned.add(f);
-          }
-        }
-        Log.info("[filter] kept " + pruned.size() + " of " + triageFeats.size() + " features");
-        triageFeats = pruned;
-      }
+//      if (expensiveFeaturesBF != null) {
+//        assert false : "should not be using this anymore";
+//        List<String> pruned = new ArrayList<>(triageFeats.size());
+//        for (String f : triageFeats) {
+//          if (expensiveFeaturesBF.mightContain(f)) {
+//            System.out.println("\tpruning expensive feature: " + f);
+//          } else {
+//            pruned.add(f);
+//          }
+//        }
+//        Log.info("[filter] kept " + pruned.size() + " of " + triageFeats.size() + " features");
+//        triageFeats = pruned;
+//      }
       
       // Make a batch scanner to retrieve all tokenization which contain any triageFeats
       TIMER.start("f2t/triage");
@@ -995,9 +1003,15 @@ public class AccumuloIndex {
           int numDocs = commUuidPrefixes.size();
           double p = getFeatureScore(numToks, numDocs);
           
-          // Store the frequency in the cache
-          if (feat2tokCommFreq != null)
-            storeFeatureFrequency(f, numToks, numDocs);
+          // Check that the estimate is valid
+          IntPair c = getFeatureFrequency(f);
+          assert numToks <= c.first;
+          assert numDocs <= c.second;
+          assert c.first >= c.second;
+          
+//          // Store the frequency in the cache
+//          if (feat2tokCommFreq != null)
+//            storeFeatureFrequency(f, numToks, numDocs);
           
           // Update the running score for all tokenizations
           boolean first = true;
@@ -1407,7 +1421,7 @@ public class AccumuloIndex {
 
     // Load the feature cardinality estimator, which is used during triage to
     // search through the most selective features first.
-    FeatureCardinalityEstimator triageFeatureCardinalityEstimator;
+    FeatureCardinalityEstimator.New triageFeatureCardinalityEstimator;
     
     private TriageSearch triageSearch;
 
@@ -1433,14 +1447,14 @@ public class AccumuloIndex {
 
       File fceF = config.getExistingFile("featureCardinalityEstimator");
       Log.info("loading feature cardinality estimates from " + fceF.getPath());
-      triageFeatureCardinalityEstimator = (FeatureCardinalityEstimator) FileUtil.deserialize(fceF);
-      // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
-      // e.g.
-      // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
-      // /export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
-      File extraCards = config.getFile("featureCardinalityManual", null);
-      if (extraCards != null)
-        triageFeatureCardinalityEstimator.addFromFile(extraCards);
+      triageFeatureCardinalityEstimator = (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceF);
+//      // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
+//      // e.g.
+//      // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
+//      // /export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
+//      File extraCards = config.getFile("featureCardinalityManual", null);
+//      if (extraCards != null)
+//        triageFeatureCardinalityEstimator.addFromFile(extraCards);
 
       // How many results per KBP query.
       // Note: each result must have its Communication fetched from the DB,
@@ -1461,8 +1475,8 @@ public class AccumuloIndex {
           config.getInt("nThreadsSearch", 4),
           maxToksPreDocRetrieval,
           config.getDouble("triageFeatNBPrior", 10),
-          config.getBoolean("batchC2W", true),
-          config.getBoolean("cacheFeatureFrequencies", true));
+          config.getBoolean("batchC2W", true));
+//          config.getBoolean("cacheFeatureFrequencies", true));
 
       df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
     }
@@ -1482,7 +1496,7 @@ public class AccumuloIndex {
     public void clearCaches() {
       Log.info("clearing cache");
       commRetCache.clear();
-      triageSearch.clearCaches();
+//      triageSearch.clearCaches();
     }
     
     public Communication getCommCaching(String commId) {
@@ -1630,15 +1644,15 @@ public class AccumuloIndex {
 
     // Load the feature cardinality estimator, which is used during triage to
     // search through the most selective features first.
-    FeatureCardinalityEstimator fce =
-        (FeatureCardinalityEstimator) FileUtil.deserialize(config.getExistingFile("featureCardinalityEstimator"));
-    // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
-    // e.g.
-    // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
-    // /export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
-    File extraCards = config.getFile("featureCardinalityManual", null);
-    if (extraCards != null)
-      fce.addFromFile(extraCards);
+    FeatureCardinalityEstimator.New fce =
+        (FeatureCardinalityEstimator.New) FileUtil.deserialize(config.getExistingFile("featureCardinalityEstimator"));
+//    // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
+//    // e.g.
+//    // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
+//    // /export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
+//    File extraCards = config.getFile("featureCardinalityManual", null);
+//    if (extraCards != null)
+//      fce.addFromFile(extraCards);
 
     // How many results per KBP query.
     // Note: each result must have its Communication fetched from the DB,
@@ -1661,12 +1675,13 @@ public class AccumuloIndex {
       config.getInt("nThreadsSearch", 4),
       maxToksPreDocRetrieval,
       config.getDouble("triageFeatNBPrior", 10),
-      config.getBoolean("batchC2W", true),
-      config.getBoolean("cacheFeatureFrequencies", true));
+      config.getBoolean("batchC2W", true));
+//      config.getBoolean("cacheFeatureFrequencies", true));
     
-    File bf = config.getFile("expensiveFeatureBloomFilter", null);
-    if (bf != null)
-      search.ignoreFeaturesViaBF(bf);
+    assert !config.containsKey("expensiveFeatureBloomFilter");
+//    File bf = config.getFile("expensiveFeatureBloomFilter", null);
+//    if (bf != null)
+//      search.ignoreFeaturesViaBF(bf);
 
     Log.info("loading word frequencies...");
     ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
