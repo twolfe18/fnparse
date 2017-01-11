@@ -427,6 +427,11 @@ public class PkbpSearching implements Serializable {
     int stepsPerQuery = config.getInt("stepsPerQuery", 1);
     double seedWeight = config.getDouble("seedWeight", 30);
     Log.info("stepsPerQuery=" + stepsPerQuery + " seedWeight=" + seedWeight);
+    
+    File fceFile = config.getExistingFile("featureCardinalityEstimator");
+    Log.info("loading FeatureCardinalityEstimator.New from=" + fceFile.getPath());
+    FeatureCardinalityEstimator.New fce =
+        (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceFile);
 
     File outputDir = config.getFile("outputDir", null);
     if (outputDir != null) {
@@ -481,7 +486,7 @@ public class PkbpSearching implements Serializable {
         if (ks == null) {
           int maxResultsPerSearch = config.getInt("maxResultsPerQuery", 100);
           double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 2d);
-          ks = new KbpSearching(config, maxResultsPerSearch, maxToksPruningSafetyRatio, new HashMap<>());
+          ks = new KbpSearching(config, fce, maxResultsPerSearch, maxToksPruningSafetyRatio, new HashMap<>());
         }
         if (sfCms == null) {
           // e.g. /export/projects/twolfe/sit-search/situation-feature-counts/count-min-sketch-v2/cag-cms.jser

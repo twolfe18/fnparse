@@ -90,7 +90,6 @@ import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.TokenizationIter;
-import edu.jhu.util.MaxMinSketch.StringMaxMinSketch;
 
 
 /**
@@ -1432,6 +1431,7 @@ public class AccumuloIndex {
     
     public KbpSearching(ExperimentProperties config, HashMap<String, Communication> commRetCache) throws Exception {
       this(config,
+          (FeatureCardinalityEstimator.New) FileUtil.deserialize(config.getExistingFile("featureCardinalityEstimator")),
           config.getInt("maxResultsPerQuery", 30),
           config.getDouble("maxToksPruningSafetyRatio", 5),
           commRetCache);
@@ -1439,15 +1439,18 @@ public class AccumuloIndex {
 
     public KbpSearching(
         ExperimentProperties config,
+        FeatureCardinalityEstimator.New fce,
         int maxResultsPerQuery,
         double maxToksPruningSafetyRatio,
         HashMap<String, Communication> commRetCache) throws Exception {
       commRet = new AccumuloCommRetrieval(config);
       this.commRetCache = commRetCache;
 
-      File fceF = config.getExistingFile("featureCardinalityEstimator");
-      Log.info("loading feature cardinality estimates from " + fceF.getPath());
-      triageFeatureCardinalityEstimator = (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceF);
+      this.triageFeatureCardinalityEstimator = fce;
+
+//      File fceF = config.getExistingFile("featureCardinalityEstimator");
+//      Log.info("loading feature cardinality estimates from " + fceF.getPath());
+//      triageFeatureCardinalityEstimator = (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceF);
 //      // You can provide a separate TSV file of special cases in case the giant FCE scan hasn't finished yet
 //      // e.g.
 //      // grep '^triage: feat=' mt100.o* | key-values numToks feat | sort -run >/export/projects/twolfe/sit-search/feature-cardinality-estimate/adhoc-b100-featureCardManual.txt
