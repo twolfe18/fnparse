@@ -438,6 +438,9 @@ public class PkbpSearching implements Serializable {
       assert outputDir == null;
       Log.info("inputDir=" + inputDir.getPath());
     }
+    
+    boolean clearCachesEveryQuery = config.getBoolean("clearCachesEveryQuery", false);
+    Log.info("clearCachesEveryQuery=" + clearCachesEveryQuery);
 
     StringCountMinSketch sfCms = null;
     for (KbpQuery seed : queries) {
@@ -452,6 +455,13 @@ public class PkbpSearching implements Serializable {
         }
         Log.info("loading PkbpSearching from " + inSearch.getPath());
         ps = (PkbpSearching) FileUtil.deserialize(inSearch);
+        
+        if (ks == null) {
+          File inKs = new File(inputDir, "KbpSearching.jser.gz");
+          Log.info("deserializing KbpSearching from " + inKs.getPath());
+          ks = (KbpSearching) FileUtil.deserialize(inKs);
+          ps.search = ks;
+        }
         
 //        // Temporary fix
 //        ps.termFreq = new ComputeIdf(config.getExistingFile("wordDocFreq")); // e.g. data/idf/word-df.small.tsv
@@ -483,8 +493,7 @@ public class PkbpSearching implements Serializable {
           continue;
         }
 
-        ComputeIdf tf = ks.getTermFrequencies();
-        ps = new PkbpSearching(ks, sfCms, tf, seed, seedWeight, rand);
+        ps = new PkbpSearching(ks, sfCms, seed, seedWeight, rand);
       }
       //ps.verbose = true;
       //ps.verboseLinking = true;
@@ -493,16 +502,27 @@ public class PkbpSearching implements Serializable {
 
       // Serialize the results for later
       if (outputDir != null) {
+        // PkbpSearching
         File outSearch = new File(outputDir, seed.id + ".search.jser.gz");
         Log.info("saving PKB to " + outSearch.getPath());
         ps.dropCommsFromInitialResultsCache();
         FileUtil.serialize(ps, outSearch);
+
+        // KbpQuery
         File outQuery = new File(outputDir, seed.id + ".query.jser.gz");
         Log.info("saving seed/query to " + outQuery.getPath());
         FileUtil.serialize(seed, outQuery);
+        
+        // KbpSearching
+        // NOTE: Only one of these, rather than one per query.
+        // It grows upon every query (stores more comms, feature freqs, etc).
+        File outKs = new File(outputDir, "KbpSearching.jser.gz");
+        Log.info("saving KbpSearching (comm/featFreq/etc cache) to " + outKs.getPath());
+        FileUtil.serialize(ks, outKs);
       }
 
-      ks.clearCommCache();
+      if (clearCachesEveryQuery)
+        ks.clearCaches();
     }
   }
 
@@ -525,12 +545,15 @@ public class PkbpSearching implements Serializable {
   private StringTermVec seedTermVec;
 
   // Searching
-  private KbpSearching search;
+  /**
+   * This holds all the cached accumulo data (possibly across queries).
+   * It should be de/serialized and managed separately from any serialization of this class.
+   */
+  private transient KbpSearching search;
   private TacQueryEntityMentionResolver findEntityMention;
   private Random rand;
   /** Stores the (approximate) frequency of situation features, used for string match weighting in situation coref */
   private StringCountMinSketch sitFeatCms;
-  private ComputeIdf termFreq;
 
   // Controls search
 //  public DoublePair rewardForTemporalLocalityMuSigma = new DoublePair(2, 30); // = (reward, stddev), score += reward * Math.exp(-(diffInDays/stddev)^2)
@@ -541,7 +564,6 @@ public class PkbpSearching implements Serializable {
   // Caching/memoization
   /** key is a KbpResult.id, values should NOT have communications set */
   private HashMap<String, List<SitSearchResult>> initialResultsCache;
-//  private HashMap<String, Communication> commRetCache;    // lives in KpbSearching
 
   /** Instances of (comm,tokenization) which have been processed once, after which should be skipped */
   Set<Pair<String, String>> seenCommToks;
@@ -568,14 +590,14 @@ public class PkbpSearching implements Serializable {
   public boolean verboseLinking = false;
 
 
-  public PkbpSearching(KbpSearching search, StringCountMinSketch sitFeatCms, ComputeIdf termFreqs, KbpQuery seed, double seedWeight, Random rand) {
+  public PkbpSearching(KbpSearching search, StringCountMinSketch sitFeatCms, KbpQuery seed, double seedWeight, Random rand) {
     Log.info("seed=" + seed);
     if (seed.sourceComm == null)
       throw new IllegalArgumentException();
     if (sitFeatCms == null)
       throw new IllegalArgumentException();
-    if (termFreqs == null)
-      throw new IllegalArgumentException();
+//    if (termFreqs == null)
+//      throw new IllegalArgumentException();
     getTacEMFinder();
     this.sitFeatCms = sitFeatCms;
 //    this.commRetCache = search.getCommRetCache();
@@ -586,7 +608,7 @@ public class PkbpSearching implements Serializable {
     this.queue = new ArrayDeque<>();
     this.output = new LinkedHashMap<>();
     this.search = search;
-    this.termFreq = termFreqs;
+//    this.termFreq = termFreqs;
     setSeed(seed, seedWeight);
   }
   
@@ -595,7 +617,8 @@ public class PkbpSearching implements Serializable {
   }
   
   private ComputeIdf getTermFrequencies() {
-    return termFreq;
+//    return termFreq;
+    return search.getTermFrequencies();
   }
   
   private TacQueryEntityMentionResolver getTacEMFinder() {

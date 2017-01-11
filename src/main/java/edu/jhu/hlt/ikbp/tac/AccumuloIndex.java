@@ -825,7 +825,8 @@ public class AccumuloIndex {
       return score;
     }
 
-    public void clearFeatFreqCache() {
+    public void clearCaches() {
+      Log.info("clearing caches");
       if (feat2tokCommFreq != null)
         feat2tokCommFreq.clear();
     }
@@ -1478,9 +1479,10 @@ public class AccumuloIndex {
       return commRetCache;
     }
     
-    public void clearCommCache() {
+    public void clearCaches() {
       Log.info("clearing cache");
       commRetCache.clear();
+      triageSearch.clearCaches();
     }
     
     public Communication getCommCaching(String commId) {
