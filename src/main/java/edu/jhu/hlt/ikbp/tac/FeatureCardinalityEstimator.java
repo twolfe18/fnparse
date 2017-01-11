@@ -82,7 +82,7 @@ public class FeatureCardinalityEstimator implements Serializable {
   public static class New implements Serializable {
     private static final long serialVersionUID = -4269816162008028564L;
     
-    public static class HeavyHitter implements Serializable {
+    public static class HeavyHitter implements Serializable, Comparable<HeavyHitter> {
       private static final long serialVersionUID = -2417638175364354834L;
       byte[] name;  // utf-8
       int tokFreq;
@@ -96,6 +96,11 @@ public class FeatureCardinalityEstimator implements Serializable {
       
       public double frequency() {
         return tokFreq + docFreq + f1(tokFreq, docFreq);
+      }
+
+      @Override
+      public int compareTo(HeavyHitter other) {
+        return BY_PRIORITY_ASC.compare(this, other);
       }
       
       public static final Comparator<HeavyHitter> BY_PRIORITY_ASC = new Comparator<HeavyHitter>() {
@@ -128,16 +133,18 @@ public class FeatureCardinalityEstimator implements Serializable {
     private PriorityQueue<HeavyHitter> heavyHitters;
     private MaxMinSketch lightHittersTokFreq;
     private MaxMinSketch lightHittersDocFreq;
-    private HashFunction hf;
-    
+    private int numHash;
+    private int logBuckets;
+    private transient HashFunction hf;
     private transient Map<String, int[]> hhQueryIndex;
     
     public New(int heavyHitterCapacity, int numHash, int logBuckets) {
+      this.numHash = numHash;
+      this.logBuckets = logBuckets;
       this.heavyHitterCapacity = heavyHitterCapacity;
-      this.heavyHitters = new PriorityQueue<>(heavyHitterCapacity, HeavyHitter.BY_PRIORITY_ASC);
+      this.heavyHitters = new PriorityQueue<>(heavyHitterCapacity);//, HeavyHitter.BY_PRIORITY_ASC);    // causes problems with serialization?
       this.lightHittersTokFreq = new MaxMinSketch(numHash, logBuckets);
       this.lightHittersDocFreq = new MaxMinSketch(numHash, logBuckets);
-      this.hf = Hashing.goodFastHash(numHash * logBuckets);
       this.numUpdates = 0;
     }
     
@@ -146,12 +153,15 @@ public class FeatureCardinalityEstimator implements Serializable {
     }
     
     public long getBytesUsedEstimate() {
+      return getBytesUsedEstimate(heavyHitters == null);
+    }
+    public long getBytesUsedEstimate(boolean assumeNoMoreUpdates) {
       long b = 0;
       double avgStrLen = 12;
       double ptrSize = 8;
       
       // heavyHitters PQ
-      if (heavyHitters != null) {
+      if (assumeNoMoreUpdates) {
         double hhSize = avgStrLen + 4 + 4;
         b += (long) (heavyHitterCapacity * (hhSize + ptrSize));
       }
@@ -204,6 +214,8 @@ public class FeatureCardinalityEstimator implements Serializable {
         lightHitter = hhNew;
       }
       
+      if (hf == null)
+        hf = Hashing.goodFastHash(numHash * logBuckets);
       byte[] keyHash = hf.hashBytes(lightHitter.name).asBytes();
       lightHittersTokFreq.update(keyHash, lightHitter.tokFreq);
       lightHittersDocFreq.update(keyHash, lightHitter.docFreq);
@@ -228,6 +240,8 @@ public class FeatureCardinalityEstimator implements Serializable {
         assert hh.length == 2;
         return new IntPair(hh[0], hh[1]);
       }
+      if (hf == null)
+        hf = Hashing.goodFastHash(numHash * logBuckets);
       byte[] keyHash = hf.hashBytes(feature.getBytes(utf8)).asBytes();
       int tf = lightHittersTokFreq.getUpperBoundOnCount(keyHash);
       int df = lightHittersDocFreq.getUpperBoundOnCount(keyHash);
@@ -599,10 +613,11 @@ public class FeatureCardinalityEstimator implements Serializable {
     
     FeatureCardinalityEstimator.New fcnew = new FeatureCardinalityEstimator.New(
         config.getInt("nMostFrequent", 250_000),
-        config.getInt("numHash", 10),
-        config.getInt("logBuckets", 18));
+        config.getInt("numHash", 8),
+        config.getInt("logBuckets", 16));
     
-    Log.info("feature frequency estimates will take up " + (fcnew.getBytesUsedEstimate()/(1L<<20)) + " MB");
+    boolean assumeCompacted = true;
+    Log.info("feature frequency estimates will take up " + (fcnew.getBytesUsedEstimate(assumeCompacted)/(1L<<20)) + " MB");
     
     LongConsumer continuation = numEntries -> {
       Log.info("numEntriesProcessed=" + numEntries
@@ -613,6 +628,10 @@ public class FeatureCardinalityEstimator implements Serializable {
       FileUtil.serialize(fcnew, serializeTo);
     };
     iterateFeatureTokDocCountsViaAccumulo(fcnew::update, continuation, everyThisManySeconds);
+
+    Log.info("final save");
+    fcnew.noMoreUpdates();
+    continuation.accept(0L);
     
     Log.info("done");
   }
