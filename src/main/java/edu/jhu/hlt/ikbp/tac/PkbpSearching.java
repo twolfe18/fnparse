@@ -441,6 +441,8 @@ public class PkbpSearching implements Serializable {
     
     boolean clearCachesEveryQuery = config.getBoolean("clearCachesEveryQuery", false);
     Log.info("clearCachesEveryQuery=" + clearCachesEveryQuery);
+    
+    boolean oneKsPerQuery = true;
 
     StringCountMinSketch sfCms = null;
     for (KbpQuery seed : queries) {
@@ -456,13 +458,14 @@ public class PkbpSearching implements Serializable {
         Log.info("loading PkbpSearching from " + inSearch.getPath());
         ps = (PkbpSearching) FileUtil.deserialize(inSearch);
         
-        if (ks == null) {
-//          File inKs = new File(inputDir, "KbpSearching.jser.gz");
-          File inKs = new File(inputDir, "KbpSearching." + seed.id + ".jser.gz");
+        if (ks == null || oneKsPerQuery) {
+          File inKs = oneKsPerQuery
+              ? new File(inputDir, "KbpSearching." + seed.id + ".jser.gz")
+              : new File(inputDir, "KbpSearching.jser.gz");
           Log.info("deserializing KbpSearching from " + inKs.getPath());
           ks = (KbpSearching) FileUtil.deserialize(inKs);
-          ps.search = ks;
         }
+        ps.search = ks;
         
 //        // Temporary fix
 //        ps.termFreq = new ComputeIdf(config.getExistingFile("wordDocFreq")); // e.g. data/idf/word-df.small.tsv
@@ -522,8 +525,9 @@ public class PkbpSearching implements Serializable {
         // NOTE: Only one of these, rather than one per query.
         // It grows upon every query (stores more comms, feature freqs, etc).
         TIMER.start("serialize/KbpSearching");
-//        File outKs = new File(outputDir, "KbpSearching.jser.gz");
-        File outKs = new File(outputDir, "KbpSearching." + seed.id + ".jser.gz");
+        File outKs = oneKsPerQuery
+            ? new File(outputDir, "KbpSearching." + seed.id + ".jser.gz")
+            : new File(outputDir, "KbpSearching.jser.gz");
         Log.info("saving KbpSearching (comm/featFreq/etc cache) to " + outKs.getPath());
         FileUtil.serialize(ks, outKs);
         TIMER.stop("serialize/KbpSearching");
@@ -577,10 +581,14 @@ public class PkbpSearching implements Serializable {
   Set<Pair<String, String>> seenCommToks;
 
   // IO
-  /** @deprecated use the simplified scenario of linking to situations */
-  LinkedHashMap<List<String>, PkbpResult> output; // keys are sorted lists of PkbpEntity ids
+//  /** @deprecated use the simplified scenario of linking to situations */
+//  LinkedHashMap<List<String>, PkbpResult> output; // keys are sorted lists of PkbpEntity ids
   Deque<PkbpResult> queue;    // TODO change element type, will want to have actions on here like "merge two situations"
   // Currently every element here is implicitly "search for situations involving these arguments and link ents/sits hanging off the results"
+  
+  // PKB
+  List<PkbpEntity> entities;
+  List<PkbpSituation> situations;
   
   // Inverted indices for objects
 //  /** Keys are features which would get you most of the way (scoring-wise) towards a LINK */
@@ -614,7 +622,11 @@ public class PkbpSearching implements Serializable {
     this.memb_e2s = new HashMap<>();
     this.rand = rand;
     this.queue = new ArrayDeque<>();
-    this.output = new LinkedHashMap<>();
+    
+    this.entities = new ArrayList<>();
+    this.situations = new ArrayList<>();
+    
+//    this.output = new LinkedHashMap<>();
     this.search = search;
 //    this.termFreq = termFreqs;
     setSeed(seed, seedWeight);
@@ -868,6 +880,8 @@ public class PkbpSearching implements Serializable {
         if (exUniq.add(linkStr(el))) {
           if (verbose) System.out.println("ADDING: " + el);
           el.target.addMention(el.source);
+          if (el.newEntity)
+            entities.add(el.target);
           exEL.add(el);
           old = headToken2linkTarget.put(el.source.head, el.target);
           assert old == null : "el.source=" + el.source + " old=" + old;
@@ -877,6 +891,8 @@ public class PkbpSearching implements Serializable {
         if (exUniq.add(linkStr(sl))) {
           if (verbose) System.out.println("ADDING: " + sl);
           sl.target.addMention(sl.source);
+          if (sl.newSituation)
+            situations.add(sl.target);
           exSL.add(sl);
           // relations can have a headword which is an entity headword
           // i.e. it is not gauranteed to be disjoint with all other mentions.
@@ -887,6 +903,8 @@ public class PkbpSearching implements Serializable {
               if (verbose) System.out.println("ADDING: " + el);
               el.target.addMention(el.source);
               memb_e2s.put(el.target, new LL<>(sl.target, memb_e2s.get(el.target)));
+              if (el.newEntity)
+                entities.add(el.target);
               exEL.add(el);
               old = headToken2linkTarget.put(el.source.head, el.target);
               assert old == null : "el.source=" + el.source + " old=" + old;
@@ -977,7 +995,8 @@ public class PkbpSearching implements Serializable {
   }
   
   public void showResultsNew() {
-    Log.info("there are " + memb_e2s.size() + " entries in e2s");
+    Log.info("e.size=" + entities.size() + " e2s.size=" + memb_e2s.size());
+    Log.info("seedEntity: " + seedEntity);
 
     // Iterate over all tuples of core arguments, where the seed is at least one of them.
     // For now I'll just consider pairs.
@@ -989,6 +1008,7 @@ public class PkbpSearching implements Serializable {
     // Group the situations which the seed entity participates in
     // by their core arguments.
     List<PkbpSituation> seedEntSits = LL.toList(memb_e2s.get(seedEntity));
+    Log.info("seedEntSits.size=" + seedEntSits.size());
     Map<List<String>, List<PkbpSituation>> byCoreArgs = new HashMap<>();
     for (PkbpSituation sit : seedEntSits) {
       assert sit.coreArguments != null && sit.coreArguments.size() == 2;
@@ -1020,15 +1040,15 @@ public class PkbpSearching implements Serializable {
     }
   }
 
-  public void showResultsOld() {
-    Log.info("nResult=" + output.size());
-    for (Entry<List<String>, PkbpResult> e : output.entrySet()) {
-      System.out.println("key: " + e.getKey());
-      showResult(e.getValue(), false, true);
-      System.out.println();
-    }
-    System.out.println();
-  }
+//  public void showResultsOld() {
+//    Log.info("nResult=" + output.size());
+//    for (Entry<List<String>, PkbpResult> e : output.entrySet()) {
+//      System.out.println("key: " + e.getKey());
+//      showResult(e.getValue(), false, true);
+//      System.out.println();
+//    }
+//    System.out.println();
+//  }
 
   public void showResult(PkbpResult r, boolean showArgsAndMentions, boolean showSitAndMentions) {
     System.out.println(r.toString());
@@ -1195,7 +1215,7 @@ public class PkbpSearching implements Serializable {
     DependencySyntaxEvents.CoverArgumentsWithPredicates se =
         new DependencySyntaxEvents.CoverArgumentsWithPredicates(c, t, deps, entHeads);
 
-    // Link args
+    // Link args/ents
     if (verbose)
       Log.info("linking " + entHeads.size() + " entMentions/args to PKB");
     // Map from entity head to the one and only link which this mention can go to
@@ -1415,11 +1435,12 @@ public class PkbpSearching implements Serializable {
     if (r.triageFeatures == null)
       throw new IllegalArgumentException();
 
-    if (verboseLinking)
-      Log.info("linking against " + memb_e2s.size() + " entities in PKB");
+    if (verboseLinking) {
+      Log.info("linking against " + entities.size() + " entities in PKB");
+    }
     ArgMax<Pair<PkbpEntity, List<Feat>>> a = new ArgMax<>();
     TriageSearch ts = search.getTriageSearch();
-    for (PkbpEntity e : memb_e2s.keySet()) {
+    for (PkbpEntity e : entities) {
       List<Feat> fs = new ArrayList<>();
       //fs.add(new Feat("intercept", -1));
 
