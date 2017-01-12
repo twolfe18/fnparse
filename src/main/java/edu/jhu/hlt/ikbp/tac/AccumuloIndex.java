@@ -50,6 +50,11 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.thrift.TDeserializer;
+import org.apache.thrift.protocol.TCompactProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TFramedTransport;
+import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.TTransport;
 
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
@@ -61,14 +66,11 @@ import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.UUID;
-import edu.jhu.hlt.concrete.access.FetchRequest;
-import edu.jhu.hlt.concrete.access.FetchResult;
+import edu.jhu.hlt.concrete.access.FetchCommunicationService;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
-import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloFetch;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.features.ConcreteMentionFeatureExtractor;
-import edu.jhu.hlt.ikbp.tac.IndexCommunications.CommunicationRetrieval;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.EntityEventPathExtraction;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.MturkCorefHit;
@@ -89,6 +91,7 @@ import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.DiskBackedFetchWrapper;
 import edu.jhu.util.TokenizationIter;
 
 
@@ -517,75 +520,6 @@ public class AccumuloIndex {
     }
   }
   
-  
-  /**
-   * Gets {@link Communication}s given an id. Similar to {@link CommunicationRetrieval}.
-   */
-  public static class AccumuloCommRetrieval {
-    // Old way: use simpleaccumulo, only supports a single namespace
-    private SimpleAccumuloFetch fetch;
-    // New way: directly use accumulo, multiple namespaces
-    private Connector conn;
-    private TDeserializer deser;
-
-    public AccumuloCommRetrieval(ExperimentProperties config) throws Exception {
-      String zks = SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS;
-      String i = SimpleAccumuloConfig.DEFAULT_INSTANCE;
-      Log.info("connecting to: inst=" + i + " zks=" + zks);
-      Instance inst = new ZooKeeperInstance(i, zks);
-      Log.info("connecting to " + inst);
-      conn = inst.getConnector("reader", new PasswordToken("an accumulo reader"));
-      deser = new TDeserializer(SimpleAccumulo.COMM_SERIALIZATION_PROTOCOL);
-    }
-
-    public Communication get(String commId) {
-//      return getSimpleAccumulo(commId);
-      return getAccumulo(commId);
-    }
-
-    private Communication getAccumulo(String commId) {
-      TIMER.start("commRet/acc/scan");
-      try (Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations())) {
-        s.setRange(Range.exact(commId));
-        Iterator<Entry<Key, Value>> iter = s.iterator();
-        if (!iter.hasNext()) {
-          TIMER.stop("commRet/acc/scan");
-          return null;
-        }
-        Entry<Key, Value> e = iter.next();
-        if (iter.hasNext())
-          Log.info("WARNING: more than one result (returning first) for commId=" + commId);
-        TIMER.stop("commRet/acc/scan");
-        
-        TIMER.start("commRet/acc/deser");
-        Communication c = new Communication();
-        deser.deserialize(c, e.getValue().get());
-        TIMER.stop("commRet/acc/deser");
-
-        return c;
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-    
-    private Communication getSimpleAccumulo(String commId) {
-      TIMER.start("accCommRet");
-      FetchRequest fr = new FetchRequest();
-      fr.addToCommunicationIds(commId);;
-      try {
-        FetchResult r = fetch.fetch(fr);
-        TIMER.stop("accCommRet");
-        if (!r.isSetCommunications() || r.getCommunicationsSize() == 0)
-          return null;
-        return r.getCommunications().get(0);
-      } catch (Exception e) {
-        e.printStackTrace();
-        TIMER.stop("accCommRet");
-        return null;
-      }
-    }
-  }
-
   
   /**
    * Some features appear in a ton of mentions/tokenizations. This really slow down retrieval
@@ -1410,12 +1344,30 @@ public class AccumuloIndex {
    */
   public static class KbpSearching implements Serializable {
     private static final long serialVersionUID = 8767537711510822918L;
+    
+    public DiskBackedFetchWrapper buildFetchWrapper(ExperimentProperties config) {
+//      File cacheDir = config.getOrMakeDir("DiskBackedFetchWrapper.dir");
+      File cacheDir = new File("data/sit-search/fetch-comms-cache");
+
+      // For now I'm going to set this to point directly at test2
+      String host = "test2";
+      int port = 7777;
+      TTransport transport = new TFramedTransport(new TSocket(host, port), Integer.MAX_VALUE);
+      TProtocol protocol = new TCompactProtocol(transport);
+      FetchCommunicationService.Client failOver = new FetchCommunicationService.Client(protocol);
+      
+      boolean saveFetchedComms = true;
+      boolean compressionForSavedComms = false;
+      return new DiskBackedFetchWrapper(failOver, cacheDir, saveFetchedComms, compressionForSavedComms);
+    }
 
     // Finds EntityMentions for query documents which just come with char offsets.
 //    private TacQueryEntityMentionResolver findEntityMention;
     
     // Gets Communications (and contents/annotations) given an id
-    private transient AccumuloCommRetrieval commRet;
+    private transient SimpleAccumuloCommRetrieval commRet;
+//    private transient ForwardedFetchCommunicationRetrieval commRetFetch;
+    private transient DiskBackedFetchWrapper commRetFetch;
     private HashMap<String, Communication> commRetCache;  // contains everything commRet ever gave us
 
     // Load the feature cardinality estimator, which is used during triage to
@@ -1443,7 +1395,7 @@ public class AccumuloIndex {
         int maxResultsPerQuery,
         double maxToksPruningSafetyRatio,
         HashMap<String, Communication> commRetCache) throws Exception {
-      commRet = new AccumuloCommRetrieval(config);
+      commRet = new SimpleAccumuloCommRetrieval();
       this.commRetCache = commRetCache;
 
       this.triageFeatureCardinalityEstimator = fce;
@@ -1634,7 +1586,7 @@ public class AccumuloIndex {
         new TacQueryEntityMentionResolver("tacQuery");
     
     // Gets Communications (and contents/annotations) given an id
-    AccumuloCommRetrieval commRet = new AccumuloCommRetrieval(config);
+    SimpleAccumuloCommRetrieval commRet = new SimpleAccumuloCommRetrieval();
 
     // TODO Include OfflineBatchParseyAnnotator working dir and logic
     // Extract comms to parse @COE, copy to laptop and parse there

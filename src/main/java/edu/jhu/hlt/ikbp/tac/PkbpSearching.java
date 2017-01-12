@@ -566,7 +566,7 @@ public class PkbpSearching implements Serializable {
    * This holds all the cached accumulo data (possibly across queries).
    * It should be de/serialized and managed separately from any serialization of this class.
    */
-  private transient KbpSearching search;
+  private KbpSearching search;
   private TacQueryEntityMentionResolver findEntityMention;
   private Random rand;
   /** Stores the (approximate) frequency of situation features, used for string match weighting in situation coref */
@@ -581,6 +581,7 @@ public class PkbpSearching implements Serializable {
   // Caching/memoization
   /** key is a KbpResult.id, values should NOT have communications set */
   private HashMap<String, List<SitSearchResult>> initialResultsCache;
+  private File initialResultsDiskCacheDir = new File("/tmp/PkbpSearching-initialResults");
 
   /** Instances of (comm,tokenization) which have been processed once, after which should be skipped */
   Set<Pair<String, String>> seenCommToks;
@@ -760,6 +761,10 @@ public class PkbpSearching implements Serializable {
     Log.info("done");
   }
   
+  private File getInitialResultsDiskCache(PkbpResult searchFor) {
+    return new File(initialResultsDiskCacheDir, searchFor.id + ".jser");
+  }
+
   private List<SitSearchResult> initialSearch(PkbpResult searchFor) throws Exception {
     List<SitSearchResult> mentions = null;
     if (initialResultsCache != null && (mentions = initialResultsCache.get(searchFor.id)) != null) {
