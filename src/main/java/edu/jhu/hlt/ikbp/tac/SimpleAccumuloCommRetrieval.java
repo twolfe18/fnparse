@@ -1,5 +1,6 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map.Entry;
 
@@ -141,7 +142,14 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
     int port = config.getInt("port");
 
     SimpleAccumuloCommRetrieval i = new SimpleAccumuloCommRetrieval();
+
     i.debug = config.getBoolean("debug", false);
+
+    String[] ids = config.getStrings("debugCommIds", new String[] {});
+    for (String id : ids) {
+      Communication c = i.get(id);
+      Log.info(id + "\t" + (c != null));
+    }
 
     Processor<FetchCommunicationService.Iface> p = new FetchCommunicationService.Processor<>(i);
     TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
@@ -151,7 +159,7 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
     serverArgs = serverArgs.transportFactory(new TFramedTransport.Factory(Integer.MAX_VALUE));
     serverArgs.maxReadBufferBytes = Long.MAX_VALUE;
     TNonblockingServer server = new TNonblockingServer(serverArgs);
-    System.out.println("Starting the server...");
+    Log.info("Starting the server...");
     server.serve();
   }
 
