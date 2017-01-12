@@ -107,6 +107,7 @@ import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.util.Lambda.FnIntFloatToFloat;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
 import edu.jhu.prim.vector.IntIntHashVector;
+import edu.jhu.util.DiskBackedFetchWrapper;
 import edu.jhu.util.SlowParseyWrapper;
 import edu.jhu.util.TokenizationIter;
 import edu.mit.jwi.IRAMDictionary;
@@ -1396,9 +1397,9 @@ public class IndexCommunications implements AutoCloseable {
       // Go to test1b, start edu.jhu.hlt.ikbp.tac.ScionForwarding on port 34343
       // Locally, run ssh -fNL 8088:test1:34343 test1b
       int scionFwdLocalPort = config.getInt("scionFwdLocalPort", 8088);
-      CommunicationRetrieval commRet;
+      ForwardedFetchCommunicationRetrieval commRet;
       try {
-        commRet = new CommunicationRetrieval(scionFwdLocalPort);
+        commRet = new ForwardedFetchCommunicationRetrieval(scionFwdLocalPort);
         commRet.test("NYT_ENG_20090901.0206");
       } catch (Exception e) {
         throw new RuntimeException("did you start up an ssh tunnel on " + scionFwdLocalPort + "?", e);
@@ -1483,7 +1484,7 @@ public class IndexCommunications implements AutoCloseable {
     private SituationSearch search;
     private ParmaVw dedup;
     private IntDoubleHashMap idf;
-    private CommunicationRetrieval commRet;
+    private ForwardedFetchCommunicationRetrieval commRet;
     private NaturalLanguageRescoring nlsf;
     
     // scion/accumulo needs ids rather than UUIDs
@@ -1499,7 +1500,7 @@ public class IndexCommunications implements AutoCloseable {
      */
     public KbpDirectedEntitySearch(
         SituationSearch search,
-        CommunicationRetrieval commRet,
+        ForwardedFetchCommunicationRetrieval commRet,
         IntDoubleHashMap idfs,
         StringTable commUuid2CommId) throws IOException {
       this.search = search;
@@ -1693,14 +1694,16 @@ public class IndexCommunications implements AutoCloseable {
   
   /**
    * Given a bunch of query results, fetch their {@link Communication}s from scion/accumulo.
+   * 
+   * @see DiskBackedFetchWrapper
    */
-  public static class CommunicationRetrieval {
+  public static class ForwardedFetchCommunicationRetrieval {
     private FetchCommunicationService.Client client;
 
     // If true, prints the Communication ids of any documents it can't find
     public boolean logFailures = true;
     
-    public CommunicationRetrieval(int localPort) {
+    public ForwardedFetchCommunicationRetrieval(int localPort) {
       Log.info("talking to localhost:" + localPort + " which should be"
           + " forwarded to something which implements FetchCommunicationService, e.g. ScionForwarding");
       try {
@@ -2408,7 +2411,7 @@ public class IndexCommunications implements AutoCloseable {
 
     /**
      * @param tokUuid2commUuid has lines like: <tokenizationUuid> <tab> <communicationUuid>
-     * @param commRet may be null (optional). If non-null, resolve {@link CommunicationRetrieval}s
+     * @param commRet may be null (optional). If non-null, resolve {@link ForwardedFetchCommunicationRetrieval}s
      *        during scoring, enables {@link NaturalLanguageSlotFill}.
      */
     public SituationSearch(File tokUuid2commUuid, TfIdfDocumentStore docVecs) throws IOException {
@@ -5283,7 +5286,7 @@ public class IndexCommunications implements AutoCloseable {
       // ssh -fNL 8083:test1:8082 test2b
       // where 8083 is local (use below) and 8082 is remote (see ScionForwarding)
       int localPort = config.getInt("port", 8088);
-      CommunicationRetrieval cr = new CommunicationRetrieval(localPort);
+      ForwardedFetchCommunicationRetrieval cr = new ForwardedFetchCommunicationRetrieval(localPort);
       cr.test("NYT_ENG_20090901.0206");
       break;
     case "develop":
