@@ -105,8 +105,11 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
   public FetchResult fetch(FetchRequest arg0) throws ServicesException, TException {
     // TODO batch scanning
     FetchResult r = new FetchResult();
-    for (String id : arg0.getCommunicationIds())
-      r.addToCommunications(getAccumulo(id));
+    for (String id : arg0.getCommunicationIds()) {
+      Communication c = getAccumulo(id);
+      if (c != null)
+        r.addToCommunications(c);
+    }
     return r;
   }
 
