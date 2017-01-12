@@ -143,7 +143,7 @@ public class FeatureCardinalityEstimator implements Serializable {
     private int numHash;
     private int logBuckets;
     private transient HashFunction hf;
-    private transient Map<String, int[]> hhQueryIndex;
+    private Map<String, int[]> hhQueryIndex;
     
     public New(int heavyHitterCapacity, int numHash, int logBuckets) {
       this.numHash = numHash;
@@ -642,7 +642,8 @@ public class FeatureCardinalityEstimator implements Serializable {
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     
-    if (config.getBoolean("test", false)) {
+    boolean test = config.getBoolean("test", false);
+    if (test) {
       Log.info("running tests then existing");
       test(config);
       return;
@@ -675,11 +676,26 @@ public class FeatureCardinalityEstimator implements Serializable {
       System.out.println(fcnew.showSampleFreqs());
       FileUtil.serialize(fcnew, serializeTo);
     };
-    iterateFeatureTokDocCountsViaAccumulo(fcnew::update, continuation, everyThisManySeconds);
+    if (!test) {
+      iterateFeatureTokDocCountsViaAccumulo(fcnew::update, continuation, everyThisManySeconds);
+    } else {
+      fcnew.update("foo", 1, 1);
+      fcnew.update("bar", 2, 2);
+      fcnew.update("baz", 3, 3);
+    }
 
     Log.info("final save");
     fcnew.noMoreUpdates();
+    assert fcnew.heavyHitters == null;
+    assert fcnew.hhQueryIndex != null;
     continuation.accept(new Pair<>("<final>", 0L));
+    
+    if (test) {
+      FeatureCardinalityEstimator.New n = (FeatureCardinalityEstimator.New) FileUtil.deserialize(serializeTo);
+      assert n.getFrequency("foo").first == 1;
+      assert n.getFrequency("bar").first == 2;
+      assert n.getFrequency("baz").first == 3;
+    }
     
     Log.info("done");
   }
