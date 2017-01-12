@@ -14,11 +14,12 @@ import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.thrift.TDeserializer;
 import org.apache.thrift.TException;
-import org.apache.thrift.server.TServer;
-import org.apache.thrift.server.TServer.Args;
-import org.apache.thrift.server.TSimpleServer;
-import org.apache.thrift.transport.TServerSocket;
-import org.apache.thrift.transport.TServerTransport;
+import org.apache.thrift.TProcessorFactory;
+import org.apache.thrift.protocol.TCompactProtocol;
+import org.apache.thrift.server.TNonblockingServer;
+import org.apache.thrift.transport.TFramedTransport;
+import org.apache.thrift.transport.TNonblockingServerSocket;
+import org.apache.thrift.transport.TNonblockingServerTransport;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.access.FetchCommunicationService;
@@ -136,8 +137,13 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
       @Override
       public void run() {
         try {
-          TServerTransport serverTransport = new TServerSocket(port);
-          TServer server = new TSimpleServer(new Args(serverTransport).processor(p));
+          TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
+          TNonblockingServer.Args serverArgs = new TNonblockingServer.Args(transport);
+          serverArgs = serverArgs.processorFactory(new TProcessorFactory(p));
+          serverArgs = serverArgs.protocolFactory(new TCompactProtocol.Factory());
+          serverArgs = serverArgs.transportFactory(new TFramedTransport.Factory(Integer.MAX_VALUE));
+          serverArgs.maxReadBufferBytes = Long.MAX_VALUE;
+          TNonblockingServer server = new TNonblockingServer(serverArgs);
           System.out.println("Starting the server...");
           server.serve();
         } catch (Exception e) {
@@ -146,4 +152,5 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
       }
     }).start();
   }
+
 }
