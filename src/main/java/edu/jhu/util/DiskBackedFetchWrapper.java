@@ -18,6 +18,7 @@ import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
+import edu.jhu.hlt.tutils.Log;
 
 /**
  * An implementation of fetch which given
@@ -36,12 +37,18 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
   private File cacheDir;
   private boolean saveFetchedComms;
   private boolean compression;
+  
+  public boolean debug = false;
 
   public DiskBackedFetchWrapper(FetchCommunicationService.Iface failOver, File cacheDir, boolean saveFetchedComms, boolean compressionForSavedComms) {
     this.failOver = failOver;
     this.cacheDir = cacheDir;
     this.saveFetchedComms = saveFetchedComms;
     this.compression = compressionForSavedComms;
+  }
+  
+  public FetchCommunicationService.Iface getFailover() {
+    return failOver;
   }
 
   @Override
@@ -58,6 +65,18 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
     String suf = compression ? ".comm.gz" : ".comm";
     return new File(cacheDir, commId + suf);
   }
+  
+  public static FetchRequest fetchRequest(String... commIds) {
+    FetchRequest fr = new FetchRequest();
+    for (String id : commIds)
+      fr.addToCommunicationIds(id);
+    return fr;
+  }
+  
+  public List<Communication> fetch(String... commIds) throws Exception {
+    FetchResult r = fetch(fetchRequest(commIds));
+    return r.getCommunications();
+  }
 
   @Override
   public FetchResult fetch(FetchRequest arg0) throws ServicesException, TException {
@@ -70,9 +89,10 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
     for (String id : arg0.getCommunicationIds()) {
       File f= getCacheFor(id);
       if (f.isFile()) {
+        if (debug)
+          Log.info("deserializing from in " + f.getPath());
         try {
           Communication c = new Communication();
-//          byte[] bytes = Files.toByteArray(f);
           byte[] bytes = Files.readAllBytes(f.toPath());
           DESER.deserialize(c, bytes);
           Object old = values.put(id, c);
@@ -81,6 +101,8 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
           throw new RuntimeException(e);
         }
       } else {
+        if (debug)
+          Log.info("fail over for " + id);
         missing.add(id);
       }
     }
@@ -94,9 +116,14 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
         Object old = values.put(c.getId(), c);
         assert old != null;
         
+        if (debug)
+          Log.info("retrieved " + c.getId());
+        
         // Optionally save the communications back to cache
         if (saveFetchedComms) {
           File f = getCacheFor(c.getId());
+          if (debug)
+            Log.info("saving to " + f.getPath());
           assert !f.isFile();
           byte[] bytes = SER.serialize(c);
           try {
@@ -110,6 +137,13 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
     
     if (values.size() < arg0.getCommunicationIdsSize())
       System.err.println("only found " + values.size() + " of " + arg0.getCommunicationIdsSize() + " comms");
+    
+    if (debug) {
+      for (String e : values.keySet()) {
+        Communication c = values.get(e);
+        Log.info("value[" + e + "]=" + (c == null ? "null" : c.getId()));
+      }
+    }
     
     // Wrap up results
     FetchResult r = new FetchResult();

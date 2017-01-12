@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -1349,13 +1350,13 @@ public class AccumuloIndex {
   public static class KbpSearching implements Serializable {
     private static final long serialVersionUID = 8767537711510822918L;
     
-    public DiskBackedFetchWrapper buildFetchWrapper(ExperimentProperties config) {
+    public static DiskBackedFetchWrapper buildFetchWrapper(ExperimentProperties config) {
 //      File cacheDir = config.getOrMakeDir("DiskBackedFetchWrapper.dir");
       File cacheDir = new File("data/sit-search/fetch-comms-cache");
 
       // For now I'm going to set this to point directly at test2
-      String host = "test2";
-      int port = 7777;
+      String host = "test2.ad.hltcoe.jhu.edu";
+      int port = 9090;
       TTransport transport = new TFramedTransport(new TSocket(host, port), Integer.MAX_VALUE);
       TProtocol protocol = new TCompactProtocol(transport);
       FetchCommunicationService.Client failOver = new FetchCommunicationService.Client(protocol);
@@ -1399,7 +1400,8 @@ public class AccumuloIndex {
         int maxResultsPerQuery,
         double maxToksPruningSafetyRatio,
         HashMap<String, Communication> commRetCache) throws Exception {
-      commRet = new SimpleAccumuloCommRetrieval();
+      this.commRet = new SimpleAccumuloCommRetrieval();
+      this.commRetFetch = buildFetchWrapper(config);
       this.commRetCache = commRetCache;
 
       this.triageFeatureCardinalityEstimator = fce;
@@ -2133,27 +2135,38 @@ public class AccumuloIndex {
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-    String c = config.getString("command");
-    if (c.equalsIgnoreCase("buildIndexMR")) {
-      Log.info("you probably don't want to so this, use regular");
-      BuildIndexMR.main(config);
-    } else if (c.equalsIgnoreCase("buildIndexRegular")) {
-      BuildIndexRegular.main(config);
-    } else if (c.equalsIgnoreCase("computeIdf")) {
-      ComputeIdf.main(config);
-    } else if (c.equalsIgnoreCase("kbpSearch")) {
-      kbpSearching(config);
-    } else if (c.equalsIgnoreCase("featureFrequency")) {
-      ComputeFeatureFrequencies.main(config);
-    } else if (c.equalsIgnoreCase("buildBigFeatureBloomFilters")) {
-      BuildBigFeatureBloomFilters.main(config);
-    } else if (c.equalsIgnoreCase("kbpSearchMemo")) {
-      kbpSearchingMemo(config);
-    } else if (c.equalsIgnoreCase("develop")) {
-      IndexCommunications.develop(config);
-    } else {
-      Log.info("unknown command: " + c);
-    }
+//    String c = config.getString("command");
+//    if (c.equalsIgnoreCase("buildIndexMR")) {
+//      Log.info("you probably don't want to so this, use regular");
+//      BuildIndexMR.main(config);
+//    } else if (c.equalsIgnoreCase("buildIndexRegular")) {
+//      BuildIndexRegular.main(config);
+//    } else if (c.equalsIgnoreCase("computeIdf")) {
+//      ComputeIdf.main(config);
+//    } else if (c.equalsIgnoreCase("kbpSearch")) {
+//      kbpSearching(config);
+//    } else if (c.equalsIgnoreCase("featureFrequency")) {
+//      ComputeFeatureFrequencies.main(config);
+//    } else if (c.equalsIgnoreCase("buildBigFeatureBloomFilters")) {
+//      BuildBigFeatureBloomFilters.main(config);
+//    } else if (c.equalsIgnoreCase("kbpSearchMemo")) {
+//      kbpSearchingMemo(config);
+//    } else if (c.equalsIgnoreCase("develop")) {
+//      IndexCommunications.develop(config);
+//    } else {
+//      Log.info("unknown command: " + c);
+//    }
+    
+    DiskBackedFetchWrapper f = KbpSearching.buildFetchWrapper(config);
+    f.debug = true;
+    String[] ids = new String[] {"NYT_ENG_20090825.0083", "AFP_ENG_20090831.0329", "XIN_ENG_20090824.0098", "Afghan_presidential_election,_2009"};
+    Log.info("searching for " + Arrays.toString(ids));
+//    List<Communication> c = f.fetch(ids);
+    List<Communication> c = f.getFailover().fetch(DiskBackedFetchWrapper.fetchRequest(ids)).getCommunications();
+    Log.info("got back " + c.size() + " comms");
+
+    for (Communication comm : c)
+      System.out.println(comm);
   }
   
   
