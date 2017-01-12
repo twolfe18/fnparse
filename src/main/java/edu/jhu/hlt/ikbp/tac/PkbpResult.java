@@ -30,6 +30,21 @@ public class PkbpResult implements Serializable {
     args = new ArrayList<>();
     situations = new ArrayList<>();
   }
+
+  @Override
+  public int hashCode() {
+    throw new RuntimeException("implement me");
+  }
+  
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof PkbpResult) {
+      PkbpResult r = (PkbpResult) other;
+      int n = args.size();
+      throw new RuntimeException("implement me");
+    }
+    return false;
+  }
   
   public List<String> argHeads() {
     List<String> a = new ArrayList<>();

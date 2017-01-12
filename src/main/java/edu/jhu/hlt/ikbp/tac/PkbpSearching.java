@@ -240,7 +240,7 @@ public class PkbpSearching implements Serializable {
       List<EntLink> entityArgs,
       List<SitLink> outputNewSit,
       List<SitLink> outputLinkSit) {
-    boolean verbose = true;
+    boolean verbose = false;
     boolean vv = false;
     assert outputLinkSit.isEmpty();
     assert outputNewSit.isEmpty();
@@ -347,7 +347,7 @@ public class PkbpSearching implements Serializable {
       }
     }
     if (verbose) {
-      Log.info("done, found " + outputLinkSit.size() + " possible LINK_SITs "
+      Log.info("done, found " + outputLinkSit.size() + " possible LINK_SITs"
           + " and " + outputNewSit.size() + " NEW_SITs "
           + " given nLinkedEntArgs=" + entityArgs.size() + " and mention=" + mention);
     }
@@ -617,11 +617,8 @@ public class PkbpSearching implements Serializable {
       throw new IllegalArgumentException();
     if (sitFeatCms == null)
       throw new IllegalArgumentException();
-//    if (termFreqs == null)
-//      throw new IllegalArgumentException();
     getTacEMFinder();
     this.sitFeatCms = sitFeatCms;
-//    this.commRetCache = search.getCommRetCache();
     this.initialResultsCache = new HashMap<>();
     this.seenCommToks = new HashSet<>();
     this.memb_e2s = new HashMap<>();
@@ -631,9 +628,7 @@ public class PkbpSearching implements Serializable {
     this.entities = new ArrayList<>();
     this.situations = new ArrayList<>();
     
-//    this.output = new LinkedHashMap<>();
     this.search = search;
-//    this.termFreq = termFreqs;
     setSeed(seed, seedWeight);
   }
   
@@ -642,7 +637,6 @@ public class PkbpSearching implements Serializable {
   }
   
   private ComputeIdf getTermFrequencies() {
-//    return termFreq;
     return search.getTermFrequencies();
   }
   
@@ -704,8 +698,6 @@ public class PkbpSearching implements Serializable {
     Set<String> exUniq = new HashSet<>();   // proposeLinks doesn't de-duplicate links
     EntLink best = null;
     for (EntLink el : p.get1()) {
-//      if (!el.newEntity)
-//        continue;
       if (el.source.head != canonical2.head)
         continue;
       if (!exUniq.add(linkStr(el)))
@@ -741,8 +733,6 @@ public class PkbpSearching implements Serializable {
   }
   
   private Communication getComm(String id) {
-//    if (search == null)
-//      return commRetCache.get(id);
     return search.getCommCaching(id);
   }
   
@@ -826,6 +816,13 @@ public class PkbpSearching implements Serializable {
   public void outerLoop(PkbpResult searchFor) throws Exception {
     boolean verbose = true;
     
+    if (verbose) {
+      Log.info("starting, searchFor=" + searchFor);
+      int maxEntities = 10;
+      int maxMentionsPerEnt = 4;
+      showEntities(maxEntities, maxMentionsPerEnt);
+    }
+    
     // Build a view of all the entities in this result
     StringTermVec docContext = new StringTermVec();
     Set<String> triageFeats = new HashSet<>();
@@ -860,7 +857,8 @@ public class PkbpSearching implements Serializable {
     boolean dedup = true;
     List<String> attrCommQ = Feat.demote(attrComm, dedup);
     List<String> attrTokQ = Feat.demote(attrTok, dedup);
-    Log.info("doing attribute feature reranking, attrTokQ=" + attrTokQ);
+    if (verbose)
+      Log.info("doing attribute feature reranking, attrTokQ=" + attrTokQ);
     AccumuloIndex.attrFeatureReranking(attrCommQ, attrTokQ, mentions);
 
     // Scan the results
@@ -884,8 +882,14 @@ public class PkbpSearching implements Serializable {
       List<SitLink> exSL = new ArrayList<>();
       // This needs to come first since it populates memb_e2s
       for (SitLink sl : x.get2()) {
-        if (exUniq.add(linkStr(sl))) {
-          if (verbose) System.out.println("ADDING: " + sl);
+        if (!exUniq.add(linkStr(sl))) {
+          ec.increment("dup/SitLink");
+          ec.increment("dup/SitLink/new=" + sl.newSituation);
+        } else {
+          ec.increment("apply/SitLink");
+          ec.increment("apply/SitLink/new=" + sl.newSituation);
+          if (verbose)
+            Log.info("ADDING: " + sl);
           sl.target.addMention(sl.source);
           if (sl.newSituation)
             situations.add(sl.target);
@@ -895,8 +899,16 @@ public class PkbpSearching implements Serializable {
           //old = headToken2linkTarget.put(sl.source.head, sl.target);
           //assert old == null : "sl.source=" + sl.source + " old=" + old;
           for (EntLink el : sl.contingentUpon) {
-            if (exUniq.add(linkStr(el))) {
-              if (verbose) System.out.println("ADDING: " + el);
+            if (!exUniq.add(linkStr(el))) {
+              ec.increment("dup/EntLink");
+              ec.increment("dup/EntLink/new=" + el.newEntity);
+              ec.increment("dup/EntLink/contingent");
+            } else {
+              ec.increment("apply/EntLink");
+              ec.increment("apply/EntLink/new=" + el.newEntity);
+              ec.increment("apply/EntLink/contingent");
+              if (verbose)
+                Log.info("ADDING: " + el);
               el.target.addMention(el.source);
               memb_e2s.put(el.target, new LL<>(sl.target, memb_e2s.get(el.target)));
               if (el.newEntity)
@@ -909,8 +921,14 @@ public class PkbpSearching implements Serializable {
         }
       }
       for (EntLink el : x.get1()) {
-        if (exUniq.add(linkStr(el))) {
-          if (verbose) System.out.println("ADDING: " + el);
+        if (!exUniq.add(linkStr(el))) {
+          ec.increment("dup/EntLink");
+          ec.increment("dup/EntLink/new=" + el.newEntity);
+        } else {
+          ec.increment("apply/EntLink");
+          ec.increment("apply/EntLink/new=" + el.newEntity);
+          if (verbose)
+            Log.info("ADDING: " + el);
           el.target.addMention(el.source);
           if (el.newEntity)
             entities.add(el.target);
@@ -963,6 +981,11 @@ public class PkbpSearching implements Serializable {
       System.out.println();
 
       System.out.println();
+      System.out.println("COUNTS:");
+      System.out.println(ec);
+      System.out.println();
+
+      System.out.println();
 //      showResultsOld();
       showResultsNew();
       System.out.println();
@@ -999,6 +1022,26 @@ public class PkbpSearching implements Serializable {
       rKey.add(ei.id);
     }
     return rKey;
+  }
+  
+  public void showEntities(int maxEntities, int maxMentionsPerEnt) {
+    Log.info("showing " + entities.size() + " entities:");
+    int ei = 0;
+    for (PkbpEntity e : entities) {
+      System.out.printf("entity(%d): %s\n", ei++, e);
+      int n = e.numMentions();
+      for (int i = 0; i < Math.min(n, maxMentionsPerEnt); i++)
+        System.out.println(e.getMention(i));
+      if (n > maxMentionsPerEnt)
+        System.out.println("... and " + (n-maxMentionsPerEnt) + " more mentions");
+      System.out.println();
+      if (ei == maxEntities) {
+        System.out.println("... and " + (entities.size()-maxEntities) + " more entities");
+        System.out.println();
+        break;
+      }
+    }
+    System.out.println();
   }
   
   public void showResultsNew() {
@@ -1177,7 +1220,7 @@ public class PkbpSearching implements Serializable {
   public Pair<List<EntLink>, List<SitLink>> proposeLinks(PkbpEntity.Mention searchResult) {
     TIMER.start("proposeLinks");
     
-    boolean verbose = true;
+    boolean verbose = false;
 
     // Higher numbers mean less linking
     // TODO Include threshold for PRUNE
@@ -1190,7 +1233,8 @@ public class PkbpSearching implements Serializable {
     
     Communication c = searchResult.getCommunication();
     Tokenization t = searchResult.getTokenization();
-    Log.info("processing " + searchResult);// + "\tc=" + c.getId() + " t=" + t.getUuid().getUuidString().substring(t.getUuid().getUuidString().length()-5));
+    if (verbose)
+      Log.info("processing " + searchResult);// + "\tc=" + c.getId() + " t=" + t.getUuid().getUuidString().substring(t.getUuid().getUuidString().length()-5));
     
     if (!seenCommToks.add(new Pair<>(c.getId(), t.getUuid().getUuidString()))) {
       // We've already processed this sentence
@@ -1543,15 +1587,18 @@ public class PkbpSearching implements Serializable {
     // Best link
     if (best != null) {
       List<Feat> ls = best.get2();
-      System.out.println("best ls.sum=" + Feat.sum(ls) + " ls=" + ls);
+      if (verbose)
+        System.out.println("best ls.sum=" + Feat.sum(ls) + " ls=" + ls);
       el.add(new EntLink(r, best.get1(), ls, false));
       newEntFeat.add(new Feat("competingLinkIsGood", Math.min(0, -Feat.sum(ls))));
     }
     
     // Show links for debugging
-    for (int i = 0; i < el.size(); i++)
-      System.out.println(i + "\t" + el.get(i));
-    System.out.println();
+    if (verbose) {
+      for (int i = 0; i < el.size(); i++)
+        System.out.println(i + "\t" + el.get(i));
+      System.out.println();
+    }
 
     TIMER.stop("linkEntityMention");
     return el;

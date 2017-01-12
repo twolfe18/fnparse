@@ -179,6 +179,10 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       throw new IllegalArgumentException();
     this.mentions.add(mention);
   }
+  
+  public Mention getMention(int i) {
+    return mentions.get(i);
+  }
 
   public double getRelevanceWeight() {
     return Feat.sum(relevantReasons);
