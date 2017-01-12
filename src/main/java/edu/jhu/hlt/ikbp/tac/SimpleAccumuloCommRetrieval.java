@@ -32,6 +32,7 @@ import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloFetch;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ForwardedFetchCommunicationRetrieval;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 
 /**
@@ -47,6 +48,8 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
   // New way: directly use accumulo, multiple namespaces
   private Connector conn;
   private TDeserializer deser;
+  
+  public boolean debug = false;
 
   public SimpleAccumuloCommRetrieval() throws Exception {
     String zks = SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS;
@@ -126,31 +129,27 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
   
   /** Start up a server */
   public static void main(String[] args) throws Exception {
-    if (args.length != 1) {
-      System.err.println("please provide a port to run on");
-      return;
-    }
-    int port = Integer.parseInt(args[0]);
-    FetchCommunicationService.Iface i = new SimpleAccumuloCommRetrieval();
+    ExperimentProperties config = ExperimentProperties.init(args);
+//    if (args.length != 1) {
+//      System.err.println("please provide a port to run on");
+//      return;
+//    }
+//    int port = Integer.parseInt(args[0]);
+    int port = config.getInt("port");
+
+    SimpleAccumuloCommRetrieval i = new SimpleAccumuloCommRetrieval();
+    i.debug = config.getBoolean("debug", false);
+
     Processor<FetchCommunicationService.Iface> p = new FetchCommunicationService.Processor<>(i);
-    new Thread(new Runnable() {
-      @Override
-      public void run() {
-        try {
-          TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
-          TNonblockingServer.Args serverArgs = new TNonblockingServer.Args(transport);
-          serverArgs = serverArgs.processorFactory(new TProcessorFactory(p));
-          serverArgs = serverArgs.protocolFactory(new TCompactProtocol.Factory());
-          serverArgs = serverArgs.transportFactory(new TFramedTransport.Factory(Integer.MAX_VALUE));
-          serverArgs.maxReadBufferBytes = Long.MAX_VALUE;
-          TNonblockingServer server = new TNonblockingServer(serverArgs);
-          System.out.println("Starting the server...");
-          server.serve();
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      }
-    }).start();
+    TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
+    TNonblockingServer.Args serverArgs = new TNonblockingServer.Args(transport);
+    serverArgs = serverArgs.processorFactory(new TProcessorFactory(p));
+    serverArgs = serverArgs.protocolFactory(new TCompactProtocol.Factory());
+    serverArgs = serverArgs.transportFactory(new TFramedTransport.Factory(Integer.MAX_VALUE));
+    serverArgs.maxReadBufferBytes = Long.MAX_VALUE;
+    TNonblockingServer server = new TNonblockingServer(serverArgs);
+    System.out.println("Starting the server...");
+    server.serve();
   }
 
 }
