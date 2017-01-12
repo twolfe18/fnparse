@@ -24,11 +24,11 @@ cp $JAR $JAR_STABLE
 
 for MF in 100000 1000000; do
 for NHASH in 8 12; do
-for LOGB in 16 18; do
+for LOGB in 16 20; do
 qsub -N "fce-$MF-$NHASH-$LOGB" -cwd -l "num_proc=1,mem_free=5G,h_rt=96:00:00" -b y -j y -o $WD \
   java -server -ea -cp $JAR_STABLE edu.jhu.hlt.ikbp.tac.FeatureCardinalityEstimator \
     output $WD/fce-mostFreq${MF}-nhash${NHASH}-logb${LOGB}.jser \
-    interval 60 \
+    interval 240 \
     logBuckets $LOGB \
     numHash $NHASH \
     nMostFrequent $MF

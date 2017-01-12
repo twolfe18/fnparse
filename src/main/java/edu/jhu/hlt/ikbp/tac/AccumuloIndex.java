@@ -1004,8 +1004,12 @@ public class AccumuloIndex {
           
           // Check that the estimate is valid
           IntPair c = getFeatureFrequency(f);
-          assert numToks <= c.first;
-          assert numDocs <= c.second;
+          if (numToks > c.first)
+            Log.info("WARNING: f=" + f + " numToks=" + numToks + " approxFreq=" + c + " [probably means approx counts are still being built]");
+          if (numDocs > c.second)
+            Log.info("WARNING: f=" + f + " numDocs=" + numDocs + " approxFreq=" + c + " [probably means approx counts are still being built]");
+          //assert numToks <= c.first;
+          //assert numDocs <= c.second;
           assert c.first >= c.second;
           
 //          // Store the frequency in the cache
