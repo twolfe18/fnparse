@@ -1354,7 +1354,8 @@ public class AccumuloIndex {
     
     public static DiskBackedFetchWrapper buildFetchWrapper(ExperimentProperties config) {
 //      File cacheDir = config.getOrMakeDir("DiskBackedFetchWrapper.dir");
-      File cacheDir = new File("data/sit-search/fetch-comms-cache");
+      //File cacheDir = new File("data/sit-search/fetch-comms-cache");
+      File cacheDir = config.getFile("diskBackedFetchWrapperDir", new File("data/sit-search/fetch-comms-cache"));
 
       // For now I'm going to set this to point directly at test2
       String host = "localhost";
