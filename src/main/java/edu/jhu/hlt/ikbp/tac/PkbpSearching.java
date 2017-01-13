@@ -993,7 +993,9 @@ public class PkbpSearching implements Serializable {
 
       System.out.println();
 //      showResultsOld();
-      showResultsNew();
+      int maxSit = 5;
+      int maxSitMentions = 5;
+      showResultsNew(maxSit, maxSitMentions);
       System.out.println();
     }
     
@@ -1050,7 +1052,7 @@ public class PkbpSearching implements Serializable {
     System.out.println();
   }
   
-  public void showResultsNew() {
+  public void showResultsNew(int maxSits, int maxSitMentions) {
     Log.info("e.size=" + entities.size()
         + " e2s.size=" + memb_e2s.size()
         + " situations.size=" + situations.size());
@@ -1085,16 +1087,29 @@ public class PkbpSearching implements Serializable {
     // You can think of each of these clusters as being the situations associated with a pair of entities.
     // TODO Sort these pairs by some salience metric.
     // TODO Limit the number of mentions/sit and sit/coreArgSet
+    int ns = 0;
     for (List<String> key : byCoreArgs.keySet()) {
       List<PkbpSituation> sits = byCoreArgs.get(key);
       System.out.println(key);
       int i = 0;
       for (PkbpSituation sit : sits) {
         System.out.printf("sit(%d): %s\n", i++, sit);
-        for (PkbpSituation.Mention sm : sit.mentions)
+        int nsm = 0;
+        for (PkbpSituation.Mention sm : sit.mentions) {
           System.out.println("\t" + sm);
+          nsm++;
+          if (nsm >= maxSitMentions) {
+            System.out.println("\tand " + (sit.mentions.size()-nsm) + " more mentions");
+            break;
+          }
+        }
       }
       System.out.println();
+      ns++;
+      if (ns >= maxSits) {
+        System.out.println("and " + (byCoreArgs.size()-ns) + " more situations");
+        System.out.println();
+      }
     }
   }
 
@@ -1760,16 +1775,16 @@ public class PkbpSearching implements Serializable {
       double p = ts.getFeatureScore(tf);
       c.add(p);
 
-      // Exit early based on estimate of mass remaining
-      int remaining = r.triageFeatures.size()-(i+1);
-      if (p*remaining < tolerance) {
-        Log.info("breaking1 tol=" + tolerance + " p=" + p + " remaining=" + remaining + " i=" + i);
-        break;
-      }
-      if (i >= 8) {
-        Log.info("breaking2 i=" + i);
-        break;
-      }
+//      // Exit early based on estimate of mass remaining
+//      int remaining = r.triageFeatures.size()-(i+1);
+//      if (p*remaining < tolerance) {
+//        Log.info("breaking1 tol=" + tolerance + " p=" + p + " remaining=" + remaining + " i=" + i);
+//        break;
+//      }
+//      if (i >= 8) {
+//        Log.info("breaking2 i=" + i);
+//        break;
+//      }
     }
 
     // Bias towards most specific features
