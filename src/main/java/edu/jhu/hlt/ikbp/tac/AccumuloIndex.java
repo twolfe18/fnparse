@@ -56,6 +56,7 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.TTransportException;
 
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
@@ -87,6 +88,7 @@ import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
@@ -1351,14 +1353,21 @@ public class AccumuloIndex {
       File cacheDir = new File("data/sit-search/fetch-comms-cache");
 
       // For now I'm going to set this to point directly at test2
-      String host = "test2.ad.hltcoe.jhu.edu";
-      int port = 9090;
+      String host = "localhost";
+      int port = 9999;
+//      String host = "test2.ad.hltcoe.jhu.edu";
+//      int port = 9090;
       TTransport transport = new TFramedTransport(new TSocket(host, port), Integer.MAX_VALUE);
+      try {
+        transport.open();
+      } catch (TTransportException e) {
+        throw new RuntimeException(e);
+      }
       TProtocol protocol = new TCompactProtocol(transport);
       FetchCommunicationService.Client failOver = new FetchCommunicationService.Client(protocol);
       
       boolean saveFetchedComms = true;
-      boolean compressionForSavedComms = false;
+      boolean compressionForSavedComms = true;
       return new DiskBackedFetchWrapper(failOver, cacheDir, saveFetchedComms, compressionForSavedComms);
     }
 
@@ -1366,7 +1375,7 @@ public class AccumuloIndex {
 //    private TacQueryEntityMentionResolver findEntityMention;
     
     // Gets Communications (and contents/annotations) given an id
-    private transient SimpleAccumuloCommRetrieval commRet;
+//    private transient SimpleAccumuloCommRetrieval commRet;
 //    private transient ForwardedFetchCommunicationRetrieval commRetFetch;
     private transient DiskBackedFetchWrapper commRetFetch;
     private HashMap<String, Communication> commRetCache;  // contains everything commRet ever gave us
@@ -1396,7 +1405,7 @@ public class AccumuloIndex {
         int maxResultsPerQuery,
         double maxToksPruningSafetyRatio,
         HashMap<String, Communication> commRetCache) throws Exception {
-      this.commRet = new SimpleAccumuloCommRetrieval();
+//      this.commRet = new SimpleAccumuloCommRetrieval();
       this.commRetFetch = buildFetchWrapper(config);
       this.commRetCache = commRetCache;
 
@@ -1446,9 +1455,9 @@ public class AccumuloIndex {
       return triageSearch;
     }
     
-    public HashMap<String, Communication> getCommRetCache() {
-      return commRetCache;
-    }
+//    public HashMap<String, Communication> getCommRetCache() {
+//      return commRetCache;
+//    }
     
     public void clearCaches() {
       Log.info("clearing cache");
@@ -1460,10 +1469,19 @@ public class AccumuloIndex {
       if (commId == null)
         throw new IllegalArgumentException();
       Communication c = commRetCache.get(commId);
-      if (c == null) {
-        c = commRet.get(commId);
+      if (c != null)
+        return c;
+      try {
+        c = commRetFetch.fetch(commId);
         commRetCache.put(commId, c);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
       }
+//      Communication c = commRetCache.get(commId);
+//      if (c == null) {
+//        c = commRet.get(commId);
+//        commRetCache.put(commId, c);
+//      }
       return c;
     }
 
@@ -2157,12 +2175,14 @@ public class AccumuloIndex {
     f.debug = true;
     String[] ids = new String[] {"NYT_ENG_20090825.0083", "AFP_ENG_20090831.0329", "XIN_ENG_20090824.0098", "Afghan_presidential_election,_2009"};
     Log.info("searching for " + Arrays.toString(ids));
-//    List<Communication> c = f.fetch(ids);
-    List<Communication> c = f.getFailover().fetch(DiskBackedFetchWrapper.fetchRequest(ids)).getCommunications();
+    List<Communication> c = f.fetch(ids);
+//    List<Communication> c = f.getFailover().fetch(DiskBackedFetchWrapper.fetchRequest(ids)).getCommunications();
     Log.info("got back " + c.size() + " comms");
 
     for (Communication comm : c)
-      System.out.println(comm);
+      System.out.println(comm.getId() + " " + StringUtils.trim(comm.getText().replaceAll("\n", " "), 100));
+
+    Log.info("done");
   }
   
   
