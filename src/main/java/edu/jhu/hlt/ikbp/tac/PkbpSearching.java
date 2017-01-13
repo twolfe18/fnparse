@@ -424,7 +424,10 @@ public class PkbpSearching implements Serializable {
     String sfName = config.getString("slotFillQueries", "sf13+sf14");
     List<KbpQuery> queries = TacKbp.getKbpSfQueries(sfName);
 
-    int stepsPerQuery = config.getInt("stepsPerQuery", 1);
+    int maxResultsPerSearch = config.getInt("maxResultsPerQuery", 300);
+    double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 2d);
+
+    int stepsPerQuery = config.getInt("stepsPerQuery", 3);
     double seedWeight = config.getDouble("seedWeight", 30);
     Log.info("stepsPerQuery=" + stepsPerQuery + " seedWeight=" + seedWeight);
     
@@ -484,8 +487,6 @@ public class PkbpSearching implements Serializable {
       } else {
         // Run on the grid w/ access to accumulo
         if (ks == null) {
-          int maxResultsPerSearch = config.getInt("maxResultsPerQuery", 100);
-          double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 2d);
           ks = new KbpSearching(config, fce, maxResultsPerSearch, maxToksPruningSafetyRatio, new HashMap<>());
         }
         if (sfCms == null) {

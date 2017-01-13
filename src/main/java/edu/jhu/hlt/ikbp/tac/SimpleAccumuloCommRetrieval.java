@@ -1,6 +1,5 @@
 package edu.jhu.hlt.ikbp.tac;
 
-import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map.Entry;
 

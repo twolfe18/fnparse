@@ -1,11 +1,18 @@
 package edu.jhu.util;
 
 import java.io.File;
-import java.nio.file.Files;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.apache.thrift.TDeserializer;
 import org.apache.thrift.TException;
@@ -72,10 +79,33 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
       fr.addToCommunicationIds(id);
     return fr;
   }
+
+  public Communication fetch(String commId) throws Exception {
+    return fetch(new String[] {commId}).get(0);
+  }
   
   public List<Communication> fetch(String... commIds) throws Exception {
     FetchResult r = fetch(fetchRequest(commIds));
     return r.getCommunications();
+  }
+  
+  public static byte[] readBytes(InputStream is) {
+    int read = 0;
+    int bs = 4096;
+    byte[] buf = new byte[4 * bs];
+    try {
+      while (true) {
+        if (read + bs >= buf.length)
+          buf = Arrays.copyOf(buf, (int) (1.6 * buf.length + 1));
+        int r = is.read(buf, read, bs);
+        if (r <= 0)
+          break;
+        read += r;
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+    return Arrays.copyOfRange(buf, 0, read);
   }
 
   @Override
@@ -91,9 +121,10 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
       if (f.isFile()) {
         if (debug)
           Log.info("deserializing from in " + f.getPath());
-        try {
+        try (InputStream is = compression ? new GZIPInputStream(new FileInputStream(f)) : new FileInputStream(f)) {
           Communication c = new Communication();
-          byte[] bytes = Files.readAllBytes(f.toPath());
+          byte[] bytes = readBytes(is);
+//          byte[] bytes = Files.readAllBytes(f.toPath());
           DESER.deserialize(c, bytes);
           Object old = values.put(id, c);
           assert old == null;
@@ -108,13 +139,13 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
     }
     
     // Fetch those that aren't
-    if (missing.isEmpty()) {
+    if (!missing.isEmpty()) {
       FetchRequest fr = new FetchRequest();
       fr.setCommunicationIds(missing);
       FetchResult r = failOver.fetch(fr);
       for (Communication c : r.getCommunications()) {
         Object old = values.put(c.getId(), c);
-        assert old != null;
+        assert old == null;
         
         if (debug)
           Log.info("retrieved " + c.getId());
@@ -126,11 +157,16 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
             Log.info("saving to " + f.getPath());
           assert !f.isFile();
           byte[] bytes = SER.serialize(c);
-          try {
-            Files.write(f.toPath(), bytes);
+          try (OutputStream os = compression ? new GZIPOutputStream(new FileOutputStream(f)) : new FileOutputStream(f)) {
+            os.write(bytes);
           } catch (Exception e) {
             e.printStackTrace();
           }
+//          try {
+//            Files.write(f.toPath(), bytes);
+//          } catch (Exception e) {
+//            e.printStackTrace();
+//          }
         }
       }
     }
