@@ -64,9 +64,6 @@ import edu.jhu.util.MaxMinSketch;
  * 
  * This is specialized to store Tokenization and Communication frequencies.
  * 
- * TODO Consider doing log-log trick and only storing the order of magnitude
- * within a bucket.
- * 
  * @see CountMinSketch alternative (doesn't have exact top-K, but should be considerable smaller)
  *
  * @author travis

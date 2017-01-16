@@ -13,7 +13,6 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -43,13 +42,13 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.DoublePair;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
-import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
+import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
@@ -606,6 +605,159 @@ public class PkbpSearching implements Serializable {
   // Inverse links like s2e are encoded by the
   // objects themselves (in this case s)
   Map<PkbpEntity, LL<PkbpSituation>> memb_e2s;
+  
+  
+  
+  static class New {
+    // New way of doing things...
+    // The point is that I want a graph data structure where it makes sense to build it
+    // in any way you choose (e.g. maybe I only want to do xdoc entity coref, shouldn't
+    // need to wrap entities in crap to make this happen).
+    static class PkbpNode {
+      public final int id;
+      public final Object obj;   // PkbpEntity, PkbSituation, PkbEntity.Mention, PkbpSituation.Mention
+      private List<Feat> feats;
+      //    Map<String, Integer> relatedObjs;
+      //    List<Feat> properties;
+      public PkbpNode(int id, Object obj) {
+        this.id = id;
+        this.obj = obj;
+      }
+      public void addFeat(Feat f) {
+        if (feats == null)
+          feats = new ArrayList<>();
+        feats.add(f);
+      }
+    }
+    
+    private KbpSearching search;
+    private StringCountMinSketch sitFeatCounts;
+    private Random rand;
+    
+    private PkbpSearching mergeWith;
+
+    private List<PkbpNode> nodes;
+    // Features are how we do triage on nodes for retrieval
+    // I knew this when it came to searching CAG for entities, and now I should apply it to the PKB as well!
+    //  Map<String, LL<PkbpNode>> feat2node;
+    private Map<String, IntArrayList> feat2nodes;    // values are indices into nodes
+    // Features: hold off on defining these, they only need to support the operations you actually implement!
+    // "ent & headwordsInclude("John")"
+    // "sit & participantsInlucde(ent(42))"
+    //  Map<String, LL<IntPair>> feat2edges;    // don't worry about this until you have to
+    
+
+    static class FeatureNames {
+      public static final String SEED = "s";
+      public static final String ENTITY_MENTION = "em";
+      public static final String ENTITY = "e";
+
+      /**
+       * feat2nodes can be used to encode linking edges using this function to
+       * generate keys. So the nodes point to by "e/42" are the PkbpEntities
+       * which are likely links for PkbpEntity.Mention with id 42.
+       */
+      public static String entity(PkbpNode mention) {
+        return "e/" + mention.id;
+      }
+
+    }
+
+    // I want to be able to play with lots of manipulations of the PKB graph.
+    // But to do this I need to ensure I have all the data needed to play locally.
+    // To do this I should run code which does one search off of a SF query entity mention and puts these mentions in a graph.
+    // The graph is serialized and we can ensure certain properties like all of the comms have been retrieved
+
+    public New(KbpSearching search, StringCountMinSketch sitFeatCounts, Random rand) {
+      this.search = search;
+      this.sitFeatCounts = sitFeatCounts;
+      this.rand = rand;
+      this.nodes = new ArrayList<>();
+      this.feat2nodes = new HashMap<>();
+    }
+
+    public void addSeed(PkbpEntity.Mention seed, double weight, boolean createEntity) {
+      int id = nodes.size();
+      PkbpNode node = new PkbpNode(id, seed);
+      node.addFeat(new Feat(FeatureNames.SEED, weight));
+      node.addFeat(new Feat(FeatureNames.ENTITY_MENTION, weight));
+      add(node);
+
+      if (createEntity) {
+        PkbpEntity e = new PkbpEntity("seedEnt/" + node.id, seed, null);
+        PkbpNode en = new PkbpNode(nodes.size(), e);
+        en.addFeat(new Feat(FeatureNames.SEED, weight));
+        en.addFeat(new Feat(FeatureNames.ENTITY, weight));
+        add(en);
+      }
+    }
+
+    public void add(PkbpNode n) {
+      assert n.id == nodes.size();
+      nodes.add(n);
+      for (Feat f : n.feats) {
+        IntArrayList l = feat2nodes.get(f.name);
+        if (l == null) {
+          l = new IntArrayList();
+          feat2nodes.put(f.name, l);
+        }
+        l.add(n.id);
+      }
+    }
+
+    /**
+     * Run triage+attrFeat on the given mention
+     */
+    public List<PkbpNode> addMentionsForEntitySearch(PkbpEntity.Mention mention, Set<String> ignoreCommToks) {
+      List<PkbpNode> added = new ArrayList<>();
+      try {
+        List<SitSearchResult> mentions = search.entityMentionSearch(mention);
+        for (SitSearchResult res : mentions) {
+          PkbpEntity.Mention m = new PkbpEntity.Mention(res);
+          int id = nodes.size();
+          PkbpNode n = new PkbpNode(id, m);
+          n.addFeat(new Feat(FeatureNames.ENTITY_MENTION));
+          add(n);
+          added.add(n);
+        }
+        return added;
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    /**
+     * Go through all the entity mentions and either link, promote, or prune them.
+     */
+    public void batchEntityLinking(List<PkbpNode> mentions) {
+      for (PkbpNode r : mentions) {
+//        double defaultScoreOfCreatingNewEntity = 0;
+//        List<EntLink> links = mergeWith.linkEntityMention(r, defaultScoreOfCreatingNewEntity);
+        
+//        // Choose a link
+//        EntLink best = links.get(0);  // TODO
+//        
+//        PkbpNode target;
+//        if (best.newEntity) {
+//          target = new PkbpNode(nodes.size(), best.target);
+//          target.addFeat(new Feat(FeatureNames.ENTITY, 1));
+//          add(target);
+//        } else {
+//          throw new RuntimeException("need to refactor so that linking returns pointers to PkbpNodes");
+//        }
+        
+        // TODO Just store the top 3 entity links for a given mention
+        List<PkbpNode> bestTargets = null;    // TODO adapt this from PkbpSearching.linkEntityMention
+        IntArrayList bestTargetIds = new IntArrayList();
+        for (PkbpNode n : bestTargets) {
+          // TODO Check if new, create node
+          bestTargetIds.add(n.id);
+        }
+        feat2nodes.put(FeatureNames.entity(r), bestTargetIds);
+      }
+    }
+    
+  }
 
   // Debugging
   Counts<String> ec = new Counts<>();

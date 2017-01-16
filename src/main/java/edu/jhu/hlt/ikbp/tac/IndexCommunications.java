@@ -1307,15 +1307,17 @@ public class IndexCommunications implements AutoCloseable {
    * This is a first-stab at finding the position of the mention which matches the query.
    * Before this, we are extracting features at the Tokenization level, ignoring the actual locations.
    * 
-   * This works by looping over entityMentions
+   * This works by looping over entityMentions.
    * 
    * NOTE: This is slow, but a simple first impl.
+   * 
+   * @param t can be null (no filtering) or else will only consider EntityMentions in that sentence.
    */
   public static EntityMention bestGuessAtQueryMention(Tokenization t, Communication c, List<String> queryEntityFeatures, boolean verbose) {
     List<EntityMention> rel = new ArrayList<>();
     for (EntityMention em : getEntityMentions(c)) {
       String tokUuid = em.getTokens().getTokenizationId().getUuidString();
-      if (tokUuid.equals(t.getUuid().getUuidString()))
+      if (t == null || tokUuid.equals(t.getUuid().getUuidString()))
         rel.add(em);
     }
     
@@ -1356,7 +1358,7 @@ public class IndexCommunications implements AutoCloseable {
     return rel.get(0);
   }
     
-  private static Tokenization findTok(String tokUuid, Communication comm) {
+  public static Tokenization findTok(String tokUuid, Communication comm) {
     if (tokUuid == null)
       throw new IllegalArgumentException();
     if (comm == null)

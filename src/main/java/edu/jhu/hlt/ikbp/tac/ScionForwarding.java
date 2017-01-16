@@ -1,5 +1,7 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.util.List;
+
 import org.apache.thrift.TException;
 import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.protocol.TCompactProtocol;
@@ -13,6 +15,7 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.access.FetchCommunicationService;
 import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
+import edu.jhu.hlt.concrete.services.NotImplementedException;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.scion.concrete.server.FetchCommunicationServiceImpl;
@@ -58,6 +61,16 @@ public class ScionForwarding {
     @Override
     public FetchResult fetch(FetchRequest arg0) throws ServicesException, TException {
       return impl.fetch(arg0);
+    }
+
+    @Override
+    public long getCommunicationCount() throws NotImplementedException, TException {
+      return impl.getCommunicationCount();
+    }
+
+    @Override
+    public List<String> getCommunicationIDs(long arg0, long arg1) throws NotImplementedException, TException {
+      return impl.getCommunicationIDs(arg0, arg1);
     }
   }
   

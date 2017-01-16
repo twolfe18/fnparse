@@ -1,6 +1,7 @@
 package edu.jhu.hlt.ikbp.tac;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map.Entry;
 
 import org.apache.accumulo.core.client.Connector;
@@ -26,6 +27,7 @@ import edu.jhu.hlt.concrete.access.FetchCommunicationService;
 import edu.jhu.hlt.concrete.access.FetchCommunicationService.Processor;
 import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
+import edu.jhu.hlt.concrete.services.NotImplementedException;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
@@ -129,6 +131,16 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
   //        return null;
   //      }
   //    }
+
+  @Override
+  public long getCommunicationCount() throws NotImplementedException, TException {
+    throw new NotImplementedException();
+  }
+
+  @Override
+  public List<String> getCommunicationIDs(long arg0, long arg1) throws NotImplementedException, TException {
+    throw new NotImplementedException();
+  }
   
   /** Start up a server */
   public static void main(String[] args) throws Exception {

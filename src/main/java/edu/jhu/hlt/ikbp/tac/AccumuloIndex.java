@@ -1490,6 +1490,9 @@ public class AccumuloIndex {
       return c;
     }
 
+    /**
+     * Triage retrieval, resolving Communications, and finally attribute feature reranking.
+     */
     public List<SitSearchResult> entityMentionSearch(PkbpEntity.Mention query) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
       Log.info("working on " + query);
       assert query.getCommunicationId() != null;

@@ -23,6 +23,7 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.access.FetchCommunicationService;
 import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
+import edu.jhu.hlt.concrete.services.NotImplementedException;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.tutils.Log;
@@ -187,6 +188,16 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
     for (String id : arg0.getCommunicationIds())
       r.addToCommunications(values.get(id));
     return r;
+  }
+
+  @Override
+  public long getCommunicationCount() throws NotImplementedException, TException {
+    throw new NotImplementedException();
+  }
+
+  @Override
+  public List<String> getCommunicationIDs(long arg0, long arg1) throws NotImplementedException, TException {
+    throw new NotImplementedException();
   }
 
 }

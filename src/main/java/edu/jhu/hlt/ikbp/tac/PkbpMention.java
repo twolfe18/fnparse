@@ -15,6 +15,7 @@ import edu.jhu.hlt.tutils.hash.Hash;
 public class PkbpMention implements Serializable {
   private static final long serialVersionUID = 795646509667723395L;
 
+  /** TODO Do not keep this here! This is a shared resource and should be looked up by a owner of the resource. */
   Communication comm;
   String commId;
 
@@ -33,6 +34,7 @@ public class PkbpMention implements Serializable {
   
   /**
    * term-freq vector for document containing this mention
+   * TODO Do not keep this here! This is a shared resource and should be looked up by a owner of the resource.
    */
   private StringTermVec context;
 
