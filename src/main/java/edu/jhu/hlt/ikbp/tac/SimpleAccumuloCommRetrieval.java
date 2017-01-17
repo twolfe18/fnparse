@@ -1,6 +1,7 @@
 package edu.jhu.hlt.ikbp.tac;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
@@ -29,9 +30,10 @@ import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloFetch;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ForwardedFetchCommunicationRetrieval;
+import edu.jhu.hlt.tutils.ArgMin;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * Gets {@link Communication}s given an id. Similar to {@link ForwardedFetchCommunicationRetrieval}.
@@ -43,6 +45,9 @@ import edu.jhu.hlt.tutils.MultiTimer;
 public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.Iface {
   private Connector conn;
   private TDeserializer deser;
+  
+  // When you see a row with more than one entry, prefer namespaces in this order (lowest index is first chosen)
+  public static final List<String> NAMESPACE_PREFERENCES = Arrays.asList("twolfe-cag1", "twolfe-cawiki1");
   
   public boolean debug = false;
 
@@ -73,16 +78,26 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
           Log.info("no values!");
         return null;
       }
-      Entry<Key, Value> e = iter.next();
-      if (iter.hasNext()) {
-        Log.info("WARNING: more than one result (returning first) for commId=" + commId
-          + " firstKey=" + e.getKey() + " secondKey=" + iter.next().getKey());
+
+      ArgMin<Pair<String, Value>> best = new ArgMin<>();
+      List<String> nss = new ArrayList<>();
+      while (iter.hasNext()) {
+        Entry<Key, Value> e = iter.next();
+        String ns = e.getKey().getColumnFamily().toString();
+        nss.add(ns);
+        int idx = NAMESPACE_PREFERENCES.indexOf(ns);
+        if (idx < 0)
+          idx = NAMESPACE_PREFERENCES.size();
+        best.offer(new Pair<>(ns, e.getValue()), idx);
       }
+      Pair<String, Value> bv = best.get();
+      if (best.numOffers() > 1)
+        Log.info("more than one namespace for row=" + commId + " ns=" + nss + " taken=" + bv.get1());
       AccumuloIndex.TIMER.stop("commRet/acc/scan");
 
       AccumuloIndex.TIMER.start("commRet/acc/deser");
       Communication c = new Communication();
-      deser.deserialize(c, e.getValue().get());
+      deser.deserialize(c, bv.get2().get());
       AccumuloIndex.TIMER.stop("commRet/acc/deser");
 
       return c;
