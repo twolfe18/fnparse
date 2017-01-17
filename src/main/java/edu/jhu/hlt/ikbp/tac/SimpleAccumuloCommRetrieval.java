@@ -31,6 +31,7 @@ import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloFetch;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ForwardedFetchCommunicationRetrieval;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
 
 /**
  * Gets {@link Communication}s given an id. Similar to {@link ForwardedFetchCommunicationRetrieval}.
@@ -132,6 +133,9 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
     int port = config.getInt("port");
 
     SimpleAccumuloCommRetrieval i = new SimpleAccumuloCommRetrieval();
+    
+    MultiTimer.LOG_STARTS_AND_STOPS = config.getBoolean("timer.logStartsAndStops", false);
+    Log.info("MultiTimer.LOG_STARTS_AND_STOPS=" + MultiTimer.LOG_STARTS_AND_STOPS);
 
     i.debug = config.getBoolean("debug", false);
     Log.info("debug=" + i.debug);
@@ -145,16 +149,6 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
     try (FetchServiceWrapper w = new FetchServiceWrapper(i, port)) {
       w.run();
     }
-//    Processor<FetchCommunicationService.Iface> p = new FetchCommunicationService.Processor<>(i);
-//    TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
-//    TNonblockingServer.Args serverArgs = new TNonblockingServer.Args(transport);
-//    serverArgs = serverArgs.processorFactory(new TProcessorFactory(p));
-//    serverArgs = serverArgs.protocolFactory(new TCompactProtocol.Factory());
-//    serverArgs = serverArgs.transportFactory(new TFramedTransport.Factory(Integer.MAX_VALUE));
-//    serverArgs.maxReadBufferBytes = Long.MAX_VALUE;
-//    TNonblockingServer server = new TNonblockingServer(serverArgs);
-//    Log.info("Starting the server...");
-//    server.serve();
   }
 
 }

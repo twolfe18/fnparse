@@ -45,6 +45,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.MultiTimer.TB;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
@@ -62,7 +63,10 @@ import redis.clients.jedis.Jedis;
 public class PkbpSearching implements Serializable {
   private static final long serialVersionUID = 3891008944720961213L;
 
-  public static final MultiTimer TIMER = AccumuloIndex.TIMER;
+//  public static final MultiTimer TIMER = AccumuloIndex.TIMER;
+  public static MultiTimer timer() {
+    return AccumuloIndex.TIMER;
+  }
   
   public List<Feat> scoreSitLink(PkbpSituation sit, PkbpSituation.Mention mention) {
     assert sit.feat2score.size() > 0;
@@ -360,30 +364,30 @@ public class PkbpSearching implements Serializable {
       // Serialize the results for later
       if (outputDir != null) {
         // PkbpSearching
-        TIMER.start("serialize/PkbpSearching");
-        File outSearch = new File(outputDir, seed.id + ".search.jser.gz");
-        Log.info("saving PKB to " + outSearch.getPath());
-        ps.dropCommsFromInitialResultsCache();
-        FileUtil.serialize(ps, outSearch);
-        TIMER.stop("serialize/PkbpSearching");
+        try (TB tb = timer().new TB("serialize/PkbpSearching")) {
+          File outSearch = new File(outputDir, seed.id + ".search.jser.gz");
+          Log.info("saving PKB to " + outSearch.getPath());
+          ps.dropCommsFromInitialResultsCache();
+          FileUtil.serialize(ps, outSearch);
+        }
 
         // KbpQuery
-        TIMER.start("serialize/KbpQuery");
-        File outQuery = new File(outputDir, seed.id + ".query.jser.gz");
-        Log.info("saving seed/query to " + outQuery.getPath());
-        FileUtil.serialize(seed, outQuery);
-        TIMER.stop("serialize/KbpQuery");
+        try (TB tb = timer().new TB("serialize/KbpQuery")) {
+          File outQuery = new File(outputDir, seed.id + ".query.jser.gz");
+          Log.info("saving seed/query to " + outQuery.getPath());
+          FileUtil.serialize(seed, outQuery);
+        }
         
         // KbpSearching
         // NOTE: Only one of these, rather than one per query.
         // It grows upon every query (stores more comms, feature freqs, etc).
-        TIMER.start("serialize/KbpSearching");
-        File outKs = oneKsPerQuery
-            ? new File(outputDir, "KbpSearching." + seed.id + ".jser.gz")
-            : new File(outputDir, "KbpSearching.jser.gz");
-        Log.info("saving KbpSearching (comm/featFreq/etc cache) to " + outKs.getPath());
-        FileUtil.serialize(ks, outKs);
-        TIMER.stop("serialize/KbpSearching");
+        try (TB tb = timer().new TB("serialize/KbpSearching")) {
+          File outKs = oneKsPerQuery
+              ? new File(outputDir, "KbpSearching." + seed.id + ".jser.gz")
+              : new File(outputDir, "KbpSearching.jser.gz");
+          Log.info("saving KbpSearching (comm/featFreq/etc cache) to " + outKs.getPath());
+          FileUtil.serialize(ks, outKs);
+        }
       }
 
       if (clearCachesEveryQuery)
@@ -941,7 +945,7 @@ public class PkbpSearching implements Serializable {
 //      // By nature of linking to PkbpEntities and PkbpSituations, we are already adding SitSearchResults/PkbpMentions to the PkbpResults
 //      // The only question is whether we should create a *NEW* PkbpResult.
 //      // We do this every time we have a pair of entities which we haven't seen before
-//      TIMER.start("linkResults");
+//      timer().start("linkResults");
 //      int ne = exEL.size();
 //      Log.info("trying to link to PkbpResults based on pairs from nEntLink=" + ne);
 //      for (int i = 0; i < ne-1; i++) {
@@ -966,11 +970,11 @@ public class PkbpSearching implements Serializable {
 //          }
 //        }
 //      }
-//      TIMER.stop("linkResults");
+//      timer().stop("linkResults");
 
       System.out.println();
       System.out.println("TIMER:");
-      System.out.println(TIMER);
+      System.out.println(timer());
       System.out.println();
 
       System.out.println();
@@ -987,20 +991,20 @@ public class PkbpSearching implements Serializable {
     }
     
     // For mentions which appear in more than one ent/sit, consider merging them
-    TIMER.start("dedupEnts");
+    timer().start("dedupEnts");
     for (Entry<Mention, LL<PkbpEntity>> e : entDups.entrySet()) {
       List<PkbpEntity> ents = e.getValue().toList();
       if (ents.size() > 1)
         considerMergingEntities(ents);
     }
-    TIMER.stop("dedupEnts");
-    TIMER.start("dedupSits");
+    timer().stop("dedupEnts");
+    timer().start("dedupSits");
     for (Entry<PkbpSituation.Mention, LL<PkbpSituation>> e : sitDups.entrySet()) {
       List<PkbpSituation> sits = e.getValue().toList();
       if (sits.size() > 1)
         considerMergingSituations(sits);
     }
-    TIMER.stop("dedupSits");
+    timer().stop("dedupSits");
 
     Log.info("done");
   }
@@ -1226,7 +1230,7 @@ public class PkbpSearching implements Serializable {
    * @param outputSituationLinks
    */
   public Pair<List<EntLink>, List<SitLink>> proposeLinks(PkbpEntity.Mention searchResult) {
-    TIMER.start("proposeLinks");
+    timer().start("proposeLinks");
     
     boolean verbose = false;
 
@@ -1248,7 +1252,7 @@ public class PkbpSearching implements Serializable {
       // We've already processed this sentence
       if (verbose)
         Log.info("we've processed this comm+tok before, returning early");
-      TIMER.stop("proposeLinks");
+      timer().stop("proposeLinks");
       return links;
     }
     
@@ -1330,7 +1334,7 @@ public class PkbpSearching implements Serializable {
     // Link sits
     if (verbose)
       Log.info("linking " + se.getSituations().size() + " sitMentions to PKB");
-    TIMER.start("linkingSituations");
+    timer().start("linkingSituations");
     for (Entry<Integer, Set<String>> s : se.getSituations().entrySet()) {
       int pred = s.getKey();
       BitSet bsArgs = se.getArguments().get(pred);
@@ -1393,13 +1397,13 @@ public class PkbpSearching implements Serializable {
         }
       }
     }
-    TIMER.stop("linkingSituations");
+    timer().stop("linkingSituations");
     if (verbose) {
       System.out.println();
       Log.info("done, returning " + links.get1().size() + " ent links and " + links.get2().size() + " sit links");
       System.out.println();
     }
-    TIMER.stop("proposeLinks");
+    timer().stop("proposeLinks");
     return links;
   }
   
@@ -1492,7 +1496,7 @@ public class PkbpSearching implements Serializable {
   private List<EntLink> linkEntityMention(PkbpEntity.Mention r, double defaultScoreOfCreatingNewEntity) {
     if (verboseLinking)
       Log.info("working on " + r);
-    TIMER.start("linkEntityMention");
+    timer().start("linkEntityMention");
     if (r.triageFeatures == null)
       throw new IllegalArgumentException();
 
@@ -1608,7 +1612,7 @@ public class PkbpSearching implements Serializable {
       System.out.println();
     }
 
-    TIMER.stop("linkEntityMention");
+    timer().stop("linkEntityMention");
     return el;
   }
 
@@ -1633,7 +1637,7 @@ public class PkbpSearching implements Serializable {
   }
 
 //  private Pair<PkbpEntity, PkbpEntity.Mention> chooseMentionToExpand() {
-//    AccumuloIndex.TIMER.start("chooseMentionToExpand");
+//    AccumuloIndex.timer().start("chooseMentionToExpand");
 //    if (verbose)
 //      Log.info("nPkbEntities=" + entities.size());
 //    ChooseOne<PkbpEntity> ce = new ChooseOne<>(rand);
@@ -1746,7 +1750,7 @@ public class PkbpSearching implements Serializable {
 //  }
 
   public double estimatePrecisionOfTriageFeatures(PkbpEntity.Mention r, double tolerance) {
-    TIMER.start("estimatePrecisionOfTriageFeatures");
+    timer().start("estimatePrecisionOfTriageFeatures");
     if (r.triageFeatures == null)
       throw new IllegalArgumentException();
 
@@ -1787,7 +1791,7 @@ public class PkbpSearching implements Serializable {
     //double p = a.getAverage();
     if (verbose)
       Log.info("p=" + p + " c=" + c + " ent=" + r.getEntitySpanGuess() + " feats=" + r.triageFeatures);
-    TIMER.stop("estimatePrecisionOfTriageFeatures");
+    timer().stop("estimatePrecisionOfTriageFeatures");
     return p;
   }
 
@@ -1800,7 +1804,7 @@ public class PkbpSearching implements Serializable {
    * This method doesn't modify the PKB/state of this instance.
    */
   public List<Pair<PkbpEntity.Mention, List<Feat>>> extractRelatedEntities(PkbpEntity relevantTo, SitSearchResult newMention) {
-    TIMER.start("extractRelatedEntities");
+    timer().start("extractRelatedEntities");
     List<Pair<PkbpEntity.Mention, List<Feat>>> out = new ArrayList<>();
     ec.increment("exRel");
 
@@ -1897,7 +1901,7 @@ public class PkbpSearching implements Serializable {
         out.add(new Pair<>(rel, relevanceReasons));
       }
     }
-    TIMER.stop("extractRelatedEntities");
+    timer().stop("extractRelatedEntities");
     return out;
   }
 
