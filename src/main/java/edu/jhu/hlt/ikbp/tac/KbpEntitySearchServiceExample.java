@@ -58,11 +58,6 @@ public class KbpEntitySearchServiceExample {
         System.out.println(r);
       }
       System.out.println();
-      
-      System.out.println();
-      System.out.println("TIMER:");
-      System.out.println(AccumuloIndex.TIMER);
-      System.out.println();
 
       transport.close();
     }

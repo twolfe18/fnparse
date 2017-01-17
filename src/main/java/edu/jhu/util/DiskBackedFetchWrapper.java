@@ -207,12 +207,12 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface, 
       if (values.size() < arg0.getCommunicationIdsSize())
         System.err.println("only found " + values.size() + " of " + arg0.getCommunicationIdsSize() + " comms");
 
-      if (debug) {
-        for (String e : values.keySet()) {
-          Communication c = values.get(e);
-          Log.info("value[" + e + "]=" + (c == null ? "null" : c.getId()));
-        }
-      }
+//      if (debug) {
+//        for (String e : values.keySet()) {
+//          Communication c = values.get(e);
+//          Log.info("value[" + e + "]=" + (c == null ? "null" : c.getId()));
+//        }
+//      }
 
       // Wrap up results
       FetchResult r = new FetchResult();
