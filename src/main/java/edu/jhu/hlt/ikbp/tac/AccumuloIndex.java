@@ -392,8 +392,10 @@ public class AccumuloIndex {
         double s = tf.getValue() * w;
         t.add(new Pair<>(tf.getKey(), s));
         if (debug)
-          Log.info(String.format("%.16s tf=%d idf=%.2f tfidf=%.2f\n", tf.getKey(), tf.getValue(), w, s));
+          Log.info(String.format("%.16s tf=%d idf=%.2f tfidf=%.2f", tf.getKey(), tf.getValue(), w, s));
       }
+      if (debug)
+        Log.info("numTerms=" + t.size());
       Collections.sort(t, new Comparator<Pair<String, Double>>() {
         @Override
         public int compare(Pair<String, Double> a, Pair<String, Double> b) {
@@ -406,10 +408,16 @@ public class AccumuloIndex {
           return 0;
         }
       });
+      if (debug) {
+        for (Pair<String, Double> x : t)
+          Log.info("after sorting: " + x);
+      }
       if (k > t.size())
         k = t.size();
       double prevScore = 0;
       List<String> p = new ArrayList<>(k);
+      if (debug)
+        Log.info("k=" + k);
       for (int i = 0; i < k; i++) {
         Pair<String, Double> term = t.get(i);
 //        Log.info(term);

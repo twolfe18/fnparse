@@ -19,6 +19,7 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 
+import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
@@ -37,6 +38,7 @@ import edu.jhu.hlt.concrete.search.SearchResult;
 import edu.jhu.hlt.concrete.search.SearchResultItem;
 import edu.jhu.hlt.concrete.search.SearchService;
 import edu.jhu.hlt.concrete.search.SearchType;
+import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
@@ -503,6 +505,7 @@ public class PkbpSearching implements Serializable {
           // Resolve the query's Communication
           assert q.sourceComm == null;
           q.sourceComm = commRet.fetch(q.docid);
+          Log.info("query.comm.text=" + q.sourceComm.getText());
 
           // Add the query as a seed
           double seedWeight = config.getDouble("seedWeight", 10);
@@ -674,7 +677,6 @@ public class PkbpSearching implements Serializable {
      */
     public List<PkbpNode> searchForMentionsOf(PkbpEntity entity, ComputeIdf df, Set<String> ignoreCommToks) {
       List<PkbpNode> added = new ArrayList<>();
-      try {
         SearchQuery query = new SearchQuery();
         query.setType(SearchType.SENTENCES);
         query.setTerms(new ArrayList<>());
@@ -704,6 +706,7 @@ public class PkbpSearching implements Serializable {
         for (String ct : contextTerms)
           query.addToTerms("c:" + ct);
         
+      try {
         // TODO set triageFeats, attrFeats, context in query
         Log.info("searching for " + query);
         SearchResult res = kbpEntitySearchService.search(query);
@@ -712,18 +715,11 @@ public class PkbpSearching implements Serializable {
           // TODO extract (comm, tok, mention) from r
           // TODO add this as a new mention
         }
-
-//        List<SitSearchResult> mentions = search.entityMentionSearch(mention);
-//        for (SitSearchResult res : mentions) {
-//          PkbpEntity.Mention m = new PkbpEntity.Mention(res);
-//          int id = nodes.size();
-//          PkbpNode n = new PkbpNode(id, m);
-//          n.addFeat(new Feat(FeatureNames.ENTITY_MENTION));
-//          add(n);
-//          added.add(n);
-//        }
         return added;
-      } catch (Exception e) {
+      } catch (ServicesException e) {
+        e.printStackTrace();
+        throw new RuntimeException(e);
+      } catch (TException e) {
         throw new RuntimeException(e);
       }
     }

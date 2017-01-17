@@ -35,6 +35,7 @@ import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
@@ -151,7 +152,10 @@ public class KbpEntitySearchService implements SearchService.Iface {
       List<SitSearchResult> mentions = wrapped.entityMentionSearch(triageFeats, attrFeats, context);
       return buildResult(mentions, q);
     } catch (Exception e) {
-      throw new ServicesException("error during search: " + e.getMessage());
+      ServicesException se = new ServicesException("error during search: " + e.getMessage());
+      byte[] bytes = SerializationUtils.t2bytes(e);
+      se.setSerEx(bytes);
+      throw se;
     }
   }
 
