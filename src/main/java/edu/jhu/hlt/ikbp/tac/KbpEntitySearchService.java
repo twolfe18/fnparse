@@ -138,7 +138,7 @@ public class KbpEntitySearchService implements SearchService.Iface {
         break;
 
       default:        // triage feats
-        triageFeats.add(ar[1]);
+        triageFeats.add(t);
         break;
       }
     }

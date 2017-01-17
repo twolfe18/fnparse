@@ -423,6 +423,8 @@ public class AccumuloIndex {
 //        Log.info(term);
         assert i == 0 || term.get2() <= prevScore;
         prevScore = term.get2();
+        if (term.get2() < 1e-4)
+          break;
         p.add(term.get1());
       }
 //      System.out.println();
@@ -1004,15 +1006,17 @@ public class AccumuloIndex {
       for (String s : bestToks)
         rows.add(Range.exact(s));
 
-      int numQueryThreads = 4;
       Map<String, String> t2c = new HashMap<>();
-      try (BatchScanner bs = conn.createBatchScanner(T_t2c.toString(), auths, numQueryThreads)) {
-        bs.setRanges(rows);
-        for (Entry<Key, Value> e : bs) {
-          String tokUuid = e.getKey().getRow().toString();
-          String commId = e.getValue().toString();
-          Object old = t2c.put(tokUuid, commId);
-          assert old == null;
+      if (!rows.isEmpty()) {
+        int numQueryThreads = 4;
+        try (BatchScanner bs = conn.createBatchScanner(T_t2c.toString(), auths, numQueryThreads)) {
+          bs.setRanges(rows);
+          for (Entry<Key, Value> e : bs) {
+            String tokUuid = e.getKey().getRow().toString();
+            String commId = e.getValue().toString();
+            Object old = t2c.put(tokUuid, commId);
+            assert old == null;
+          }
         }
       }
       TIMER.stop("t2c/getCommIdsFor");

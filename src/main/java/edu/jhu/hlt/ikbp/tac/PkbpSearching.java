@@ -60,6 +60,7 @@ import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.MultiTimer.TB;
+import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
@@ -717,7 +718,10 @@ public class PkbpSearching implements Serializable {
         }
         return added;
       } catch (ServicesException e) {
-        e.printStackTrace();
+        Log.info("cause:");
+        Exception cause = (Exception) SerializationUtils.bytes2t(e.getSerEx());
+        cause.printStackTrace();
+        System.out.println();
         throw new RuntimeException(e);
       } catch (TException e) {
         throw new RuntimeException(e);
