@@ -29,6 +29,7 @@ import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.MultiTimer.TB;
 
 /**
  * An implementation of fetch which given
@@ -132,96 +133,97 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface, 
 
   @Override
   public FetchResult fetch(FetchRequest arg0) throws ServicesException, TException {
-    timer().start("fetch/diskbacked");
-    
-    // Holds the communications in this request
-    Map<String, Communication> values = new HashMap<>();
-    
-    // Collect the documents available on disk
-    List<String> missing = new ArrayList<>();
-    for (String id : arg0.getCommunicationIds()) {
-      File f = getCacheFor(id);
-      if (f.isFile() && !disableCache) {
-        if (debug)
-          Log.info("deserializing from in " + f.getPath());
-        timer().start("fetch/diskbacked/deser");
-        try (InputStream is = compression ? new GZIPInputStream(new FileInputStream(f)) : new FileInputStream(f)) {
-          Communication c = new Communication();
-          byte[] bytes = readBytes(is);
-          DESER.deserialize(c, bytes);
-          Object old = values.put(id, c);
-          assert old == null;
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-        timer().stop("fetch/diskbacked/deser");
-      } else {
-        if (debug) {
-          if (disableCache && f.isFile())
-            Log.info("fail over for " + id + " b/c disableCache=true");
-          else
-            Log.info("fail over for " + id);
-        }
-        missing.add(id);
-      }
-    }
-    
-    // Fetch those that aren't
-    if (!missing.isEmpty()) {
-      FetchRequest fr = new FetchRequest();
-      fr.setCommunicationIds(missing);
-      try {
-        timer().start("fetch/diskbacked/failOverFetch");
-        FetchResult r = failOver.fetch(fr);
-        timer().stop("fetch/diskbacked/failOverFetch");
-        for (Communication c : r.getCommunications()) {
-          Object old = values.put(c.getId(), c);
-          assert old == null;
-          
+    try (TB tb1 = timer().new TB("fetch/diskbacked")) {
+
+      // Holds the communications in this request
+      Map<String, Communication> values = new HashMap<>();
+
+      // Collect the documents available on disk
+      List<String> missing = new ArrayList<>();
+      for (String id : arg0.getCommunicationIds()) {
+        File f = getCacheFor(id);
+        if (f.isFile() && !disableCache) {
           if (debug)
-            Log.info("retrieved " + c.getId());
-          
-          // Optionally save the communications back to cache
-          if (saveFetchedComms) {
-            timer().start("fetch/diskbacked/ser");
-            File f = getCacheFor(c.getId());
-            if (debug)
-              Log.info("saving to " + f.getPath());
-            assert !f.isFile();
-            byte[] bytes = SER.serialize(c);
-            try (OutputStream os = compression ? new GZIPOutputStream(new FileOutputStream(f)) : new FileOutputStream(f)) {
-              os.write(bytes);
+            Log.info("deserializing from in " + f.getPath());
+          try (TB tb = timer().new TB("fetch/diskbacked/deser")) {
+            try (InputStream is = compression ? new GZIPInputStream(new FileInputStream(f)) : new FileInputStream(f)) {
+              Communication c = new Communication();
+              byte[] bytes = readBytes(is);
+              DESER.deserialize(c, bytes);
+              Object old = values.put(id, c);
+              assert old == null;
             } catch (Exception e) {
-              e.printStackTrace();
+              throw new RuntimeException(e);
             }
-            timer().stop("fetch/diskbacked/ser");
           }
+        } else {
+          if (debug) {
+            if (disableCache && f.isFile())
+              Log.info("fail over for " + id + " b/c disableCache=true");
+            else
+              Log.info("fail over for " + id);
+          }
+          missing.add(id);
         }
-      } catch (Exception e) {
-        System.out.println("failOver failed! " + e.getMessage());
       }
-    }
-    
-    if (values.size() < arg0.getCommunicationIdsSize())
-      System.err.println("only found " + values.size() + " of " + arg0.getCommunicationIdsSize() + " comms");
-    
-    if (debug) {
-      for (String e : values.keySet()) {
-        Communication c = values.get(e);
-        Log.info("value[" + e + "]=" + (c == null ? "null" : c.getId()));
+
+      // Fetch those that aren't
+      if (!missing.isEmpty()) {
+        FetchRequest fr = new FetchRequest();
+        fr.setCommunicationIds(missing);
+        try {
+          FetchResult r = null;
+          try (TB tb = timer().new TB("fetch/diskbacked/failOverFetch")) {
+            r = failOver.fetch(fr);
+          }
+          for (Communication c : r.getCommunications()) {
+            Object old = values.put(c.getId(), c);
+            assert old == null;
+
+            if (debug)
+              Log.info("retrieved " + c.getId());
+
+            // Optionally save the communications back to cache
+            if (saveFetchedComms && !disableCache) {
+              try (TB tbc = timer().new TB("fetch/diskbacked/ser")) {
+                File f = getCacheFor(c.getId());
+                if (debug)
+                  Log.info("saving to " + f.getPath());
+                assert !f.isFile();
+                byte[] bytes = SER.serialize(c);
+                try (OutputStream os = compression ? new GZIPOutputStream(new FileOutputStream(f)) : new FileOutputStream(f)) {
+                  os.write(bytes);
+                } catch (Exception e) {
+                  e.printStackTrace();
+                }
+              }
+            }
+          }
+        } catch (Exception e) {
+          System.out.println("failOver failed! " + e.getMessage());
+        }
       }
+
+      if (values.size() < arg0.getCommunicationIdsSize())
+        System.err.println("only found " + values.size() + " of " + arg0.getCommunicationIdsSize() + " comms");
+
+      if (debug) {
+        for (String e : values.keySet()) {
+          Communication c = values.get(e);
+          Log.info("value[" + e + "]=" + (c == null ? "null" : c.getId()));
+        }
+      }
+
+      // Wrap up results
+      FetchResult r = new FetchResult();
+      r.setCommunications(new ArrayList<>());
+      for (String id : arg0.getCommunicationIds()) {
+        Communication c = values.get(id);
+        if (c != null)
+          r.addToCommunications(c);
+      }
+      return r;
     }
-    
-    // Wrap up results
-    FetchResult r = new FetchResult();
-    r.setCommunications(new ArrayList<>());
-    for (String id : arg0.getCommunicationIds()) {
-      Communication c = values.get(id);
-      if (c != null)
-        r.addToCommunications(c);
-    }
-    timer().stop("fetch/diskbacked");
-    return r;
   }
 
   @Override
