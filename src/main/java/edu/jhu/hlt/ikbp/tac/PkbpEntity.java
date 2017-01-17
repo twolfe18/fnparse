@@ -2,20 +2,26 @@ package edu.jhu.hlt.ikbp.tac;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
+import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
+import edu.jhu.util.TokenizationIter;
 
 /**
  * To a first approximation: a list of mentions with an id.
@@ -34,7 +40,53 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     List<Feat> triageFeatures;
     private List<Feat> attrCommFeatures;
     private List<Feat> attrTokFeatures;
-    
+
+    public static PkbpEntity.Mention convert(KbpQuery seed, TacQueryEntityMentionResolver emFinder, ComputeIdf df) {
+      if (seed.sourceComm == null)
+        throw new IllegalArgumentException("KbpQuery must have comm");
+      if (seed.entityMention == null) {
+        boolean addEmToCommIfMissing = true;
+        emFinder.resolve(seed, addEmToCommIfMissing);
+      }
+      assert seed.entityMention != null;
+      assert seed.entityMention.isSetText();
+      assert seed.entity_type != null;
+
+      String tokUuid = seed.entityMention.getTokens().getTokenizationId().getUuidString();
+      SitSearchResult canonical = new SitSearchResult(tokUuid, null, Collections.emptyList());
+      canonical.setCommunicationId(seed.docid);
+      canonical.setCommunication(seed.sourceComm);
+      canonical.yhatQueryEntityNerType = seed.entity_type;
+
+      Map<String, Tokenization> tokMap = new HashMap<>();
+      for (Tokenization tok : new TokenizationIter(seed.sourceComm)) {
+        Object old = tokMap.put(tok.getUuid().getUuidString(), tok);
+        assert old == null;
+      }
+
+      // sets head token, needs triage feats and comm
+      String mentionText = seed.entityMention.getText();
+      String[] headwords = mentionText.split("\\s+");
+      String nerType = seed.entity_type;
+      TokenObservationCounts tokObs = null;
+      TokenObservationCounts tokObsLc = null;
+      canonical.triageFeatures = IndexCommunications.getEntityMentionFeatures(
+          mentionText, headwords, nerType, tokObs, tokObsLc);
+      AccumuloIndex.findEntitiesAndSituations(canonical, df, false);
+
+      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
+      canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(canonical.yhatQueryEntityHead, deps);
+
+      PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
+      assert canonical2.getCommunication() != null;
+      canonical2.getContext();
+      canonical2.getAttrCommFeatures();
+      canonical2.getAttrTokFeatures();
+      assert canonical2.triageFeatures != null;
+      canonical2.nerType = seed.entity_type;
+      return canonical2;
+    }
+
     public Mention(SitSearchResult ss) {
       this(ss.yhatQueryEntityHead,
           ss.yhatQueryEntitySpan,

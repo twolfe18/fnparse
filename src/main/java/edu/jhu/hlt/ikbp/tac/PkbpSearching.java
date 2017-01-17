@@ -19,6 +19,13 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 
+import org.apache.thrift.protocol.TCompactProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TFramedTransport;
+import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.TTransportException;
+
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
@@ -456,9 +463,48 @@ public class PkbpSearching implements Serializable {
   
   static class New {
     
-    static void main(ExperimentProperties config) {
-//      Kbp
-//      New n = new New()
+    static void main(ExperimentProperties config) throws Exception {
+      
+      // SearchService for basic accumulo-backed search
+      String host = "localhost";
+      int port = 8989;
+      TTransport trans = new TFramedTransport(new TSocket(host, port));
+      trans.open();
+      TProtocol prot = new TCompactProtocol(trans);
+      SearchService.Client kbpEntSearch = new SearchService.Client(prot);
+      
+      // e.g. /export/projects/twolfe/sit-search/situation-feature-counts/count-min-sketch-v2/cag-cms.jser
+      File sitFeatFreqCms = config.getExistingFile("sitFeatFreqCms");
+      Log.info("loading sitFeatFreqCms=" + sitFeatFreqCms.getPath());
+      StringCountMinSketch sitFeatFreq = (StringCountMinSketch) FileUtil.deserialize(sitFeatFreqCms);
+      
+      ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
+      
+      TacQueryEntityMentionResolver emFinder = new TacQueryEntityMentionResolver("tacQuery");
+
+      for (KbpQuery q : TacKbp.getKbp2013SfQueries()) {
+        New search = new New(kbpEntSearch, sitFeatFreq, config.getRandom());
+        
+        // Add the query as a seed
+        double seedWeight = config.getDouble("seedWeight", 10);
+        PkbpEntity.Mention seed = PkbpEntity.Mention.convert(q, emFinder, df);
+        boolean createEnt = true;
+        search.addSeed(seed, seedWeight, createEnt);
+        
+        // Search for mentions of this seed, create EMs out of them
+        PkbpNode seedEntNode = search.findIntersection(FeatureNames.SEED, FeatureNames.ENTITY).get(0);
+        PkbpEntity seedEnt = (PkbpEntity) seedEntNode.obj;
+        List<PkbpNode> mentions = search.searchForMentionsOf(seedEnt, null);
+        
+        // Link the EMs to create Es
+        search.batchEntityLinking(mentions);
+        
+        // Extract SMs
+        
+        // Link SMs to create Ss
+        
+        // Show Ss by E participants
+      }
     }
     
     // New way of doing things...
@@ -500,6 +546,8 @@ public class PkbpSearching implements Serializable {
     //  Map<String, LL<IntPair>> feat2edges;    // don't worry about this until you have to
     
 
+    // NOTE: This is distinct from the feature names of IndexCommunications.getEntityMentionFeatures
+    // as well as the prefixes used by KbpEntitySearchService
     static class FeatureNames {
       public static final String SEED = "s";
       public static final String ENTITY_MENTION = "em";
@@ -527,6 +575,10 @@ public class PkbpSearching implements Serializable {
       this.rand = rand;
       this.nodes = new ArrayList<>();
       this.feat2nodes = new HashMap<>();
+    }
+    
+    public List<PkbpNode> findIntersection(String... features) {
+      throw new RuntimeException("implement me");
     }
 
     public void addSeed(PkbpEntity.Mention seed, double weight, boolean createEntity) {
@@ -560,8 +612,9 @@ public class PkbpSearching implements Serializable {
 
     /**
      * Run triage+attrFeat on the given mention
+     * @return a list of EM nodes which were added.
      */
-    public List<PkbpNode> addMentionsForEntitySearch(PkbpEntity.Mention mention, Set<String> ignoreCommToks) {
+    public List<PkbpNode> searchForMentionsOf(PkbpEntity entity, Set<String> ignoreCommToks) {
       List<PkbpNode> added = new ArrayList<>();
       try {
         SearchQuery query = new SearchQuery();
@@ -662,6 +715,7 @@ public class PkbpSearching implements Serializable {
   }
   
   public void setSeed(KbpQuery seed, double seedWeight) {
+    // TODO Use PkbpEntity.mention.convert(KbpQuery)
     Log.info("seedWeight=" + seedWeight + " seed=" + seed);
     this.seed = seed;
     this.seedTermVec = new StringTermVec(seed.sourceComm);
