@@ -149,6 +149,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
         Log.info(String.format("attr feats (%d):   %s", attrFeats.size(), Feat.sortAndPrune(attrFeats, 0d)));
         Log.info(String.format("context (%d):      %s", context.getTotalCount(), wrapped.getTermFrequencies().importantTerms(context, 10)));
       }
+      if (q.isSetK())
+        wrapped.setMaxResults(q.getK());
       List<SitSearchResult> mentions = wrapped.entityMentionSearch(triageFeats, attrFeats, context);
       return buildResult(mentions, q);
     } catch (Exception e) {
@@ -178,6 +180,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
         Log.info("searching for comm by id=" + q.getCommunicationId());
       // Otherwise we make an attempt to look it up in our database
       try {
+        if (q.isSetK())
+          wrapped.setMaxResults(q.getK());
         comm = wrapped.getCommCaching(q.getCommunicationId());
       } catch (Exception e) {
         comm = null;

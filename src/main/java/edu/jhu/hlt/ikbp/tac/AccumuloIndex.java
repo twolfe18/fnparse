@@ -1336,6 +1336,11 @@ public class AccumuloIndex {
       this.df = df;
     }
     
+    public void setMaxResults(int mr) {
+      Log.info("setting maxResults=max(10, " + mr + ")");
+      triageSearch.maxResults = Math.max(10, mr);
+    }
+    
     public ComputeIdf getTermFrequencies() {
       return df;
     }

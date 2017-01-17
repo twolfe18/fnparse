@@ -264,9 +264,14 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 
   @Override
   public String toString() {
+    if (relevantReasons == null) {
     return "(PkbpEntity id=" + id
         + " nMentions=" + mentions.size()
-        + " relevanceWeight=" + getRelevanceWeight() + ""
+        + " relevanceWeight=null)";
+    }
+    return "(PkbpEntity id=" + id
+        + " nMentions=" + mentions.size()
+        + " relevanceWeight=" + getRelevanceWeight()
         + " b/c " + Feat.sortAndPrune(relevantReasons, 3) + ")";
   }
   

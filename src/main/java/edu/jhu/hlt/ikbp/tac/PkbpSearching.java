@@ -506,6 +506,10 @@ public class PkbpSearching implements Serializable {
           // Resolve the query's Communication
           assert q.sourceComm == null;
           q.sourceComm = commRet.fetch(q.docid);
+          if (q.sourceComm == null) {
+            Log.info("skipping b/c no comm: " + q);
+            continue;
+          }
           Log.info("query.comm.text=" + q.sourceComm.getText());
 
           // Add the query as a seed
@@ -515,9 +519,10 @@ public class PkbpSearching implements Serializable {
           search.addSeed(seed, seedWeight, createEnt);
 
           // Search for mentions of this seed, create EMs out of them
+          int maxResults = 30;
           PkbpNode seedEntNode = search.findIntersection(FeatureNames.SEED, FeatureNames.ENTITY).get(0);
           PkbpEntity seedEnt = (PkbpEntity) seedEntNode.obj;
-          List<PkbpNode> mentions = search.searchForMentionsOf(seedEnt, df, null);
+          List<PkbpNode> mentions = search.searchForMentionsOf(seedEnt, maxResults, df, null);
 
           // Link the EMs to create Es
           search.batchEntityLinking(mentions);
@@ -676,9 +681,10 @@ public class PkbpSearching implements Serializable {
      * Run triage+attrFeat on the given mention
      * @return a list of EM nodes which were added.
      */
-    public List<PkbpNode> searchForMentionsOf(PkbpEntity entity, ComputeIdf df, Set<String> ignoreCommToks) {
+    public List<PkbpNode> searchForMentionsOf(PkbpEntity entity, int maxResults, ComputeIdf df, Set<String> ignoreCommToks) {
       List<PkbpNode> added = new ArrayList<>();
         SearchQuery query = new SearchQuery();
+        query.setK(maxResults);
         query.setType(SearchType.SENTENCES);
         query.setTerms(new ArrayList<>());
         
@@ -686,7 +692,7 @@ public class PkbpSearching implements Serializable {
         for (Feat tf : entity.getTriageFeatures()) {
           assert tf.name.indexOf(":") > 0 : "no prefix? " + tf;
           int n = (int) tf.weight;
-          assert ((double) n) == tf.weight && n > 0;
+          assert ((double) n) == tf.weight && n > 0 : "tf=" + tf;
           for (int i = 0; i < n; i++)
             query.addToTerms(tf.name);
         }
@@ -695,15 +701,14 @@ public class PkbpSearching implements Serializable {
         for (Feat af : entity.getAttrFeatures()) {
           assert af.name.indexOf(':') < 0;
           int n = (int) af.weight;
-          assert ((double) n) == af.weight && n > 0;
+          assert ((double) n) == af.weight && n > 0 : "af=" + af;
           for (int i = 0; i < n; i++)
             query.addToTerms("a:" + af.name);
         }
 
         // Context
         StringTermVec c = entity.getDocVec();
-        boolean debug = true;
-        List<String> contextTerms = df.importantTerms(c, 100, debug);
+        List<String> contextTerms = df.importantTerms(c, 100);
         for (String ct : contextTerms)
           query.addToTerms("c:" + ct);
         
