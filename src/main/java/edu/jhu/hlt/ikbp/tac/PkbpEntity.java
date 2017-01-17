@@ -38,8 +38,9 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     Span span;  // should contain the head
     String nerType;
     List<Feat> triageFeatures;
-    private List<Feat> attrCommFeatures;
-    private List<Feat> attrTokFeatures;
+//    private List<Feat> attrCommFeatures;
+//    private List<Feat> attrTokFeatures;
+    private List<Feat> attrFeatures;
 
     public static PkbpEntity.Mention convert(KbpQuery seed, TacQueryEntityMentionResolver emFinder, ComputeIdf df) {
       if (seed.sourceComm == null)
@@ -80,8 +81,9 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
       assert canonical2.getCommunication() != null;
       canonical2.getContext();
-      canonical2.getAttrCommFeatures();
-      canonical2.getAttrTokFeatures();
+//      canonical2.getAttrCommFeatures();
+//      canonical2.getAttrTokFeatures();
+      canonical2.getAttrFeatures();
       assert canonical2.triageFeatures != null;
       canonical2.nerType = seed.entity_type;
       return canonical2;
@@ -114,8 +116,9 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       t += "..";
       t += tokUuid.substring(tokUuid.length()-4);
       String nTf = triageFeatures == null ? "null" : "" + triageFeatures.size();
-      String nAf = "(c=" + (attrCommFeatures == null ? "null" : attrCommFeatures.size());
-      nAf += ",t=" + (attrTokFeatures == null ? "null" : attrTokFeatures.size()) + ")";
+//      String nAf = "(c=" + (attrCommFeatures == null ? "null" : attrCommFeatures.size());
+//      nAf += ",t=" + (attrTokFeatures == null ? "null" : attrTokFeatures.size()) + ")";
+      String nAf = attrFeatures == null ? "null" : String.valueOf(attrFeatures.size());
       return "(EM h=" + getEntityHeadGuess() + "@" + head
           + " neType=" + nerType
           + " s=" + Span.safeShortString(span)
@@ -125,20 +128,39 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
           + ")";
     }
     
-    public List<Feat> getAttrCommFeatures() {
-      if (attrCommFeatures == null) {
-        attrCommFeatures = Feat.promote(1,
-            NNPSense.extractAttributeFeatures(null, getCommunication(), getEntitySpanGuess().split("\\s+")));
+    public List<Feat> getTriageFeatures() {
+      if (triageFeatures == null) {
+//        IndexCommunications.getEntityMentionFeatures(mentionText, headwords, nerType, tokObs, tokObsLc)
+        throw new RuntimeException("implement me");
       }
-      return attrCommFeatures;
+      return triageFeatures;
     }
     
-    public List<Feat> getAttrTokFeatures() {
-      if (attrTokFeatures == null) {
-        attrTokFeatures = Feat.promote(1,
-            NNPSense.extractAttributeFeatures(tokUuid, getCommunication(), getEntitySpanGuess().split("\\s+")));
+//    public List<Feat> getAttrCommFeatures() {
+//      if (attrCommFeatures == null) {
+//        attrCommFeatures = Feat.promote(1,
+//            NNPSense.extractAttributeFeatures(null, getCommunication(), getEntitySpanGuess().split("\\s+")));
+//      }
+//      return attrCommFeatures;
+//    }
+//    
+//    public List<Feat> getAttrTokFeatures() {
+//      if (attrTokFeatures == null) {
+//        attrTokFeatures = Feat.promote(1,
+//            NNPSense.extractAttributeFeatures(tokUuid, getCommunication(), getEntitySpanGuess().split("\\s+")));
+//      }
+//      return attrTokFeatures;
+//    }
+
+    public List<Feat> getAttrFeatures() {
+      if (attrFeatures == null) {
+        attrFeatures = new ArrayList<>();
+        for (String af : NNPSense.extractAttributeFeatures(tokUuid, getCommunication(), getEntitySpanGuess().split("\\s+")))
+          attrFeatures.add(new Feat(af, 2));
+        for (String af : NNPSense.extractAttributeFeatures(null, getCommunication(), getEntitySpanGuess().split("\\s+")))
+          attrFeatures.add(new Feat(af, 1));
       }
-      return attrTokFeatures;
+      return attrFeatures;
     }
     
     public String getEntityHeadGuess() {
@@ -246,6 +268,22 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
         + " nMentions=" + mentions.size()
         + " relevanceWeight=" + getRelevanceWeight() + ""
         + " b/c " + Feat.sortAndPrune(relevantReasons, 3) + ")";
+  }
+  
+  public List<Feat> getAttrFeatures() {
+    int n = mentions.size();
+    List<Feat> fs = new ArrayList<>();
+    for (int i = 0; i < n; i++)
+      fs = Feat.vecadd(fs, mentions.get(i).getAttrFeatures());
+    return fs;
+  }
+  
+  public List<Feat> getTriageFeatures() {
+    int n = mentions.size();
+    List<Feat> fs = new ArrayList<>();
+    for (int i = 0; i < n; i++)
+      fs = Feat.vecadd(fs, mentions.get(i).getTriageFeatures());
+    return fs;
   }
 
   public StringTermVec getDocVec() {

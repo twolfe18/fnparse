@@ -383,10 +383,16 @@ public class AccumuloIndex {
     }
 
     public List<String> importantTerms(StringTermVec a, int k) {
+      return importantTerms(a, k, false);
+    }
+    public List<String> importantTerms(StringTermVec a, int k, boolean debug) {
       List<Pair<String, Double>> t = new ArrayList<>();
       for (Entry<String, Integer> tf : a) {
-        double s = tf.getValue() * idf(tf.getKey());
+        double w = idf(tf.getKey());
+        double s = tf.getValue() * w;
         t.add(new Pair<>(tf.getKey(), s));
+        if (debug)
+          Log.info(String.format("%.16s tf=%d idf=%.2f tfidf=%.2f\n", tf.getKey(), tf.getValue(), w, s));
       }
       Collections.sort(t, new Comparator<Pair<String, Double>>() {
         @Override

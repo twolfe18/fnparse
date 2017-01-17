@@ -124,15 +124,15 @@ public class KbpEntitySearchService implements SearchService.Iface {
         continue;
       }
       switch (ar[0].toLowerCase()) {
-      case "c:":      // tf/context
+      case "c":      // tf/context
         context.add(ar[1], 1);
         break;
 
-      case "a:":      // attrFeat
-      case "ac:":     // attrComm
+      case "a":      // attrFeat
+      case "ac":     // attrComm
         attrFeats.add(new Feat(ar[1], 1));
         break;
-      case "at:":     // attrTok
+      case "at":     // attrTok
         attrFeats.add(new Feat(ar[1], 2));
         break;
 

@@ -36,6 +36,7 @@ import edu.jhu.hlt.concrete.search.SearchQuery;
 import edu.jhu.hlt.concrete.search.SearchResult;
 import edu.jhu.hlt.concrete.search.SearchResultItem;
 import edu.jhu.hlt.concrete.search.SearchService;
+import edu.jhu.hlt.concrete.search.SearchType;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
@@ -61,6 +62,7 @@ import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.prim.list.IntArrayList;
+import edu.jhu.prim.set.IntHashSet;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
@@ -278,6 +280,11 @@ public class PkbpSearching implements Serializable {
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     
+    if (config.getBoolean("newMain", true)) {
+      New.main(config);
+      return;
+    }
+    
     Random rand = config.getRandom();
     KbpSearching ks = null;
     PkbpSearching ps;
@@ -464,11 +471,12 @@ public class PkbpSearching implements Serializable {
   static class New {
     
     static void main(ExperimentProperties config) throws Exception {
+      Log.info("starting...");
       
       // SearchService for basic accumulo-backed search
-      String host = "localhost";
-      int port = 8989;
-      TTransport trans = new TFramedTransport(new TSocket(host, port));
+      String searchHost = "localhost";
+      int searchPort = 8989;
+      TTransport trans = new TFramedTransport(new TSocket(searchHost, searchPort));
       trans.open();
       TProtocol prot = new TCompactProtocol(trans);
       SearchService.Client kbpEntSearch = new SearchService.Client(prot);
@@ -482,29 +490,46 @@ public class PkbpSearching implements Serializable {
       
       TacQueryEntityMentionResolver emFinder = new TacQueryEntityMentionResolver("tacQuery");
 
-      for (KbpQuery q : TacKbp.getKbp2013SfQueries()) {
-        New search = new New(kbpEntSearch, sitFeatFreq, config.getRandom());
-        
-        // Add the query as a seed
-        double seedWeight = config.getDouble("seedWeight", 10);
-        PkbpEntity.Mention seed = PkbpEntity.Mention.convert(q, emFinder, df);
-        boolean createEnt = true;
-        search.addSeed(seed, seedWeight, createEnt);
-        
-        // Search for mentions of this seed, create EMs out of them
-        PkbpNode seedEntNode = search.findIntersection(FeatureNames.SEED, FeatureNames.ENTITY).get(0);
-        PkbpEntity seedEnt = (PkbpEntity) seedEntNode.obj;
-        List<PkbpNode> mentions = search.searchForMentionsOf(seedEnt, null);
-        
-        // Link the EMs to create Es
-        search.batchEntityLinking(mentions);
-        
-        // Extract SMs
-        
-        // Link SMs to create Ss
-        
-        // Show Ss by E participants
+      // Fetch service for retrieving communications
+      String fetchHost = "localhost";
+      int fetchPort = 9999;
+      File fetchCacheDir = config.getOrMakeDir("fetchCacheDir", new File("data/sit-search/fetch-comms-cache/"));
+      try (DiskBackedFetchWrapper commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort)) {
+
+        for (KbpQuery q : TacKbp.getKbp2013SfQueries()) {
+          Log.info("working on " + q);
+          New search = new New(kbpEntSearch, sitFeatFreq, config.getRandom());
+          
+          // Resolve the query's Communication
+          assert q.sourceComm == null;
+          q.sourceComm = commRet.fetch(q.docid);
+
+          // Add the query as a seed
+          double seedWeight = config.getDouble("seedWeight", 10);
+          PkbpEntity.Mention seed = PkbpEntity.Mention.convert(q, emFinder, df);
+          boolean createEnt = true;
+          search.addSeed(seed, seedWeight, createEnt);
+
+          // Search for mentions of this seed, create EMs out of them
+          PkbpNode seedEntNode = search.findIntersection(FeatureNames.SEED, FeatureNames.ENTITY).get(0);
+          PkbpEntity seedEnt = (PkbpEntity) seedEntNode.obj;
+          List<PkbpNode> mentions = search.searchForMentionsOf(seedEnt, df, null);
+
+          // Link the EMs to create Es
+          search.batchEntityLinking(mentions);
+
+          // Extract SMs
+
+          // Link SMs to create Ss
+
+          // Show Ss by E participants
+
+
+          System.out.println();
+        }
       }
+      
+      Log.info("done");
     }
     
     // New way of doing things...
@@ -578,7 +603,40 @@ public class PkbpSearching implements Serializable {
     }
     
     public List<PkbpNode> findIntersection(String... features) {
-      throw new RuntimeException("implement me");
+      if (features.length == 0)
+        throw new IllegalArgumentException();
+      IntArrayList l = feat2nodes.get(features[0]);
+      for (int i = 1; i < features.length && l != null; i++) {
+        IntArrayList r = feat2nodes.get(features[i]);
+        l = intersect(l, r);
+      }
+      if (l == null)
+        return Collections.emptyList();
+      List<PkbpNode> r = new ArrayList<>();
+      for (int i = 0; i < l.size(); i++)
+        r.add(nodes.get(l.get(i)));
+      return r;
+    }
+    
+    // null means empty list
+    private static IntArrayList intersect(IntArrayList a, IntArrayList b) {
+      // TODO fast impl for when a,b are sorted
+      if (a == null || b == null)
+        return null;
+      if (a.size() > b.size())
+        return intersect(b, a);
+      Set<Integer> as = new HashSet<>();
+      int na = a.size();
+      for (int i = 0; i < na; i++)
+        as.add(a.get(i));
+      IntArrayList c = new IntArrayList();
+      int nb = b.size();
+      for (int i = 0; i < nb; i++) {
+        int v = b.get(i);
+        if (as.contains(v))
+          c.add(v);
+      }
+      return c;
     }
 
     public void addSeed(PkbpEntity.Mention seed, double weight, boolean createEntity) {
@@ -614,12 +672,42 @@ public class PkbpSearching implements Serializable {
      * Run triage+attrFeat on the given mention
      * @return a list of EM nodes which were added.
      */
-    public List<PkbpNode> searchForMentionsOf(PkbpEntity entity, Set<String> ignoreCommToks) {
+    public List<PkbpNode> searchForMentionsOf(PkbpEntity entity, ComputeIdf df, Set<String> ignoreCommToks) {
       List<PkbpNode> added = new ArrayList<>();
       try {
         SearchQuery query = new SearchQuery();
+        query.setType(SearchType.SENTENCES);
+        query.setTerms(new ArrayList<>());
+        
+        // Triage features
+        for (Feat tf : entity.getTriageFeatures()) {
+          assert tf.name.indexOf(":") > 0 : "no prefix? " + tf;
+          int n = (int) tf.weight;
+          assert ((double) n) == tf.weight && n > 0;
+          for (int i = 0; i < n; i++)
+            query.addToTerms(tf.name);
+        }
+        
+        // Attr features
+        for (Feat af : entity.getAttrFeatures()) {
+          assert af.name.indexOf(':') < 0;
+          int n = (int) af.weight;
+          assert ((double) n) == af.weight && n > 0;
+          for (int i = 0; i < n; i++)
+            query.addToTerms("a:" + af.name);
+        }
+
+        // Context
+        StringTermVec c = entity.getDocVec();
+        boolean debug = true;
+        List<String> contextTerms = df.importantTerms(c, 100, debug);
+        for (String ct : contextTerms)
+          query.addToTerms("c:" + ct);
+        
         // TODO set triageFeats, attrFeats, context in query
+        Log.info("searching for " + query);
         SearchResult res = kbpEntitySearchService.search(query);
+        Log.info("got back " + res.getSearchResultItemsSize() + " results for " + entity);
         for (SearchResultItem r : res.getSearchResultItems()) {
           // TODO extract (comm, tok, mention) from r
           // TODO add this as a new mention
@@ -758,8 +846,9 @@ public class PkbpSearching implements Serializable {
     PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
     assert canonical2.getCommunication() != null;
     canonical2.getContext();
-    canonical2.getAttrCommFeatures();
-    canonical2.getAttrTokFeatures();
+//    canonical2.getAttrCommFeatures();
+//    canonical2.getAttrTokFeatures();
+    canonical2.getAttrFeatures();
     assert canonical2.triageFeatures != null;
     
     Pair<List<EntLink>, List<SitLink>> p = proposeLinks(canonical2);
@@ -833,6 +922,10 @@ public class PkbpSearching implements Serializable {
     return new File(initialResultsDiskCacheDir, searchFor.id + ".jser");
   }
 
+  /**
+   * @deprecated
+   * TODO Need to add attr feats anyway
+   */
   private List<SitSearchResult> initialSearch(PkbpResult searchFor) throws Exception {
     List<SitSearchResult> mentions = null;
     if (initialResultsCache != null && (mentions = initialResultsCache.get(searchFor.id)) != null) {
@@ -843,8 +936,8 @@ public class PkbpSearching implements Serializable {
     TriageSearch ts = search.getTriageSearch();
     StringTermVec docContext = new StringTermVec();
     Set<String> triageFeats = new HashSet<>();
-    List<Feat> attrComm = new ArrayList<>();
-    List<Feat> attrTok = new ArrayList<>();
+//    List<Feat> attrComm = new ArrayList<>();
+//    List<Feat> attrTok = new ArrayList<>();
     int nm = 0;
     for (PkbpEntity e : searchFor.getArguments()) {
       for (PkbpEntity.Mention m : e) {
@@ -852,8 +945,8 @@ public class PkbpSearching implements Serializable {
         docContext.add(m.getContext());
         for (Feat ft : m.triageFeatures)
           triageFeats.add(ft.name);
-        attrComm.addAll(m.getAttrCommFeatures());
-        attrTok.addAll(m.getAttrTokFeatures());
+//        attrComm.addAll(m.getAttrCommFeatures());
+//        attrTok.addAll(m.getAttrTokFeatures());
       }
     }
     assert nm > 0;
@@ -899,16 +992,18 @@ public class PkbpSearching implements Serializable {
     // Build a view of all the entities in this result
     StringTermVec docContext = new StringTermVec();
     Set<String> triageFeats = new HashSet<>();
-    List<Feat> attrComm = new ArrayList<>();
-    List<Feat> attrTok = new ArrayList<>();
+//    List<Feat> attrComm = new ArrayList<>();
+//    List<Feat> attrTok = new ArrayList<>();
+    List<Feat> attr = new ArrayList<>();
     for (PkbpEntity e : searchFor.getArguments()) {
       for (PkbpEntity.Mention m : e) {
         docContext.add(m.getContext());
         for (Feat ft : m.triageFeatures)
           triageFeats.add(ft.name);
-        attrComm.addAll(m.getAttrCommFeatures());
-        attrTok.addAll(m.getAttrTokFeatures());
+//        attrComm.addAll(m.getAttrCommFeatures());
+//        attrTok.addAll(m.getAttrTokFeatures());
       }
+      attr.addAll(e.getAttrFeatures());
     }
     
     // NOTE: This can be memoized!
@@ -927,12 +1022,13 @@ public class PkbpSearching implements Serializable {
     }
 
     // Compute and score attribute features
-    boolean dedup = true;
-    List<String> attrCommQ = Feat.demote(attrComm, dedup);
-    List<String> attrTokQ = Feat.demote(attrTok, dedup);
+//    boolean dedup = true;
+//    List<String> attrCommQ = Feat.demote(attrComm, dedup);
+//    List<String> attrTokQ = Feat.demote(attrTok, dedup);
     if (verbose)
-      Log.info("doing attribute feature reranking, attrTokQ=" + attrTokQ);
-    AccumuloIndex.attrFeatureReranking(attrCommQ, attrTokQ, mentions);
+      Log.info("doing attribute feature reranking, attr=" + attr);
+//    AccumuloIndex.attrFeatureReranking(attrCommQ, attrTokQ, mentions);
+    AccumuloIndex.attrFeatureReranking(attr, mentions);
 
     // Scan the results
     Map<PkbpEntity.Mention, LL<PkbpEntity>> entDups = new HashMap<>();
@@ -1937,7 +2033,8 @@ public class PkbpSearching implements Serializable {
       // Having attribute features like "PERSON-nn-Dr." is good, discriminating features help coref
 //      rel.attrCommFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(null, comm, head.split("\\s+")));
 //      rel.attrTokFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(tokUuid, comm, head.split("\\s+")));
-      int nAttrFeat = rel.getAttrTokFeatures().size();
+//      int nAttrFeat = rel.getAttrTokFeatures().size();
+      int nAttrFeat = rel.getAttrFeatures().size();
       relevanceReasons.add(new Feat("nAttrFeat", (Math.sqrt(nAttrFeat+1d)-1) * rewardForAttrFeats));
 
       // Reward for this comm looking like the seed
