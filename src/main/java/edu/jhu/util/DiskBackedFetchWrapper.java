@@ -26,7 +26,9 @@ import edu.jhu.hlt.concrete.access.FetchResult;
 import edu.jhu.hlt.concrete.services.NotImplementedException;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
 
 /**
  * An implementation of fetch which given
@@ -36,12 +38,13 @@ import edu.jhu.hlt.tutils.Log;
  *
  * @author travis
  */
-public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
+public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface, AutoCloseable {
   
   public static final TDeserializer DESER = new TDeserializer(new TCompactProtocol.Factory());
   public static final TSerializer SER = new TSerializer(new TCompactProtocol.Factory());
   
   private FetchCommunicationService.Iface failOver;
+  private AutoCloseable failOverResources;
   private File cacheDir;
   private boolean saveFetchedComms;
   private boolean compression;
@@ -49,7 +52,12 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
   public boolean disableCache = false;
   public boolean debug = false;
 
-  public DiskBackedFetchWrapper(FetchCommunicationService.Iface failOver, File cacheDir, boolean saveFetchedComms, boolean compressionForSavedComms) {
+  public DiskBackedFetchWrapper(
+      FetchCommunicationService.Iface failOver,
+      AutoCloseable failOverResources,
+      File cacheDir,
+      boolean saveFetchedComms,
+      boolean compressionForSavedComms) {
     this.failOver = failOver;
     this.cacheDir = cacheDir;
     this.saveFetchedComms = saveFetchedComms;
@@ -82,11 +90,16 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
     return fr;
   }
 
-  public Communication fetch(String commId) throws Exception {
-    List<Communication> comms = fetch(new String[] {commId});
-    if (comms.isEmpty())
+  public Communication fetch(String commId) {
+    try {
+      List<Communication> comms = fetch(new String[] {commId});
+      if (comms.isEmpty())
+        return null;
+      return comms.get(0);
+    } catch (Exception e) {
+      e.printStackTrace();
       return null;
-    return comms.get(0);
+    }
   }
   
   public List<Communication> fetch(String... commIds) throws Exception {
@@ -112,9 +125,14 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
     }
     return Arrays.copyOfRange(buf, 0, read);
   }
+  
+  public static MultiTimer timer() {
+    return AccumuloIndex.TIMER;
+  }
 
   @Override
   public FetchResult fetch(FetchRequest arg0) throws ServicesException, TException {
+    timer().start("fetch/diskbacked");
     
     // Holds the communications in this request
     Map<String, Communication> values = new HashMap<>();
@@ -126,6 +144,7 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
       if (f.isFile() && !disableCache) {
         if (debug)
           Log.info("deserializing from in " + f.getPath());
+        timer().start("fetch/diskbacked/deser");
         try (InputStream is = compression ? new GZIPInputStream(new FileInputStream(f)) : new FileInputStream(f)) {
           Communication c = new Communication();
           byte[] bytes = readBytes(is);
@@ -135,6 +154,7 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
         } catch (Exception e) {
           throw new RuntimeException(e);
         }
+        timer().stop("fetch/diskbacked/deser");
       } else {
         if (debug) {
           if (disableCache && f.isFile())
@@ -151,7 +171,9 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
       FetchRequest fr = new FetchRequest();
       fr.setCommunicationIds(missing);
       try {
+        timer().start("fetch/diskbacked/failOverFetch");
         FetchResult r = failOver.fetch(fr);
+        timer().stop("fetch/diskbacked/failOverFetch");
         for (Communication c : r.getCommunications()) {
           Object old = values.put(c.getId(), c);
           assert old == null;
@@ -161,6 +183,7 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
           
           // Optionally save the communications back to cache
           if (saveFetchedComms) {
+            timer().start("fetch/diskbacked/ser");
             File f = getCacheFor(c.getId());
             if (debug)
               Log.info("saving to " + f.getPath());
@@ -171,6 +194,7 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
             } catch (Exception e) {
               e.printStackTrace();
             }
+            timer().stop("fetch/diskbacked/ser");
           }
         }
       } catch (Exception e) {
@@ -196,6 +220,7 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
       if (c != null)
         r.addToCommunications(c);
     }
+    timer().stop("fetch/diskbacked");
     return r;
   }
 
@@ -207,6 +232,12 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface {
   @Override
   public List<String> getCommunicationIDs(long arg0, long arg1) throws NotImplementedException, TException {
     throw new NotImplementedException();
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (failOverResources != null)
+      failOverResources.close();
   }
 
 }

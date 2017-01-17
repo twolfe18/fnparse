@@ -25,6 +25,8 @@ import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
+import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
@@ -52,6 +54,7 @@ import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
+import edu.jhu.util.DiskBackedFetchWrapper;
 import edu.jhu.util.TokenizationIter;
 import redis.clients.jedis.Jedis;
 
@@ -423,17 +426,11 @@ public class PkbpSearching implements Serializable {
     String sfName = config.getString("slotFillQueries", "sf13+sf14");
     List<KbpQuery> queries = TacKbp.getKbpSfQueries(sfName);
 
-    int maxResultsPerSearch = config.getInt("maxResultsPerQuery", 300);
-    double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 2d);
+    int maxResults = config.getInt("maxResults", 100);
 
     int stepsPerQuery = config.getInt("stepsPerQuery", 3);
     double seedWeight = config.getDouble("seedWeight", 30);
     Log.info("stepsPerQuery=" + stepsPerQuery + " seedWeight=" + seedWeight);
-    
-    File fceFile = config.getExistingFile("featureCardinalityEstimator");
-    Log.info("loading FeatureCardinalityEstimator.New from=" + fceFile.getPath());
-    FeatureCardinalityEstimator.New fce =
-        (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceFile);
 
     File outputDir = config.getFile("outputDir", null);
     if (outputDir != null) {
@@ -473,9 +470,6 @@ public class PkbpSearching implements Serializable {
           ks = (KbpSearching) FileUtil.deserialize(inKs);
         }
         ps.search = ks;
-        
-//        // Temporary fix
-//        ps.termFreq = new ComputeIdf(config.getExistingFile("wordDocFreq")); // e.g. data/idf/word-df.small.tsv
 
         ps.restoreCommsInInitialResultsCache();
         ps.clearSeenCommToks();
@@ -486,7 +480,17 @@ public class PkbpSearching implements Serializable {
       } else {
         // Run on the grid w/ access to accumulo
         if (ks == null) {
-          ks = new KbpSearching(config, fce, maxResultsPerSearch, maxToksPruningSafetyRatio, new HashMap<>());
+          File fceFile = config.getExistingFile("triageFeatureFrequencies");
+          Log.info("loading triage feature frequencies (FeatureCardinalityEstimator.New) from=" + fceFile.getPath());
+          FeatureCardinalityEstimator.New triageFeatureFrequencies =
+              (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceFile);
+          ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
+          TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults);
+          File fetchCacheDir = config.getOrMakeDir("fetch.cacheDir");
+          String fetchHost = config.getString("fetch.host");
+          int fetchPort = config.getInt("fetch.port");
+          DiskBackedFetchWrapper commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort);
+          ks = new KbpSearching(ts, df, commRet, new HashMap<>());
         }
         if (sfCms == null) {
           // e.g. /export/projects/twolfe/sit-search/situation-feature-counts/count-min-sketch-v2/cag-cms.jser
@@ -1916,7 +1920,7 @@ public class PkbpSearching implements Serializable {
       throw new IllegalArgumentException();
 
     // Sort by freq
-    search.triageFeatureCardinalityEstimator.sortByFreqUpperBoundAsc(r.triageFeatures, f -> f.name);
+    search.getTriageSearch().getTriageFeatureFrequencies().sortByFreqUpperBoundAsc(r.triageFeatures, Feat::getName);
     if (verbose)
       Log.info("triageFeats=" + r.triageFeatures);
 

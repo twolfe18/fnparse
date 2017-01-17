@@ -1999,7 +1999,6 @@ public class IndexCommunications implements AutoCloseable {
       }
     };
 
-
     public static List<Feat> sortAndPrune(Map<String, Double> in, double eps) {
       List<Feat> l = new ArrayList<>();
       for (Entry<String,  Double> e : in.entrySet()) {
@@ -2086,6 +2085,10 @@ public class IndexCommunications implements AutoCloseable {
     public Feat(String name, double weight) {
       this.name = name;
       this.weight = weight;
+    }
+    
+    public String getName() {
+      return name;
     }
     
     public Feat rescale(String reason, double factor) {

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -24,17 +25,21 @@ import edu.jhu.hlt.concrete.search.SearchType;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.concrete.services.search.SearchServiceWrapper;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.util.DiskBackedFetchWrapper;
 
 /**
- * Promotes KbpSearching capabilities to a SearchService (concrete/thrift service)
+ * Promotes {@link KbpSearching} capabilities to a {@link SearchService} (concrete/thrift service)
  */
 public class KbpEntitySearchService implements SearchService.Iface {
   public static final String TOOL_NAME = "naive-accumulo-entity-search";
@@ -209,12 +214,24 @@ public class KbpEntitySearchService implements SearchService.Iface {
     ExperimentProperties config = ExperimentProperties.init(args);
     int port = config.getInt("port", 9999);
     Log.info("using port=" + port);
-    KbpSearching s = new KbpSearching(config, new HashMap<>());
-    KbpEntitySearchService ss = new KbpEntitySearchService(s);
-    ss.verbose = config.getBoolean("verbose", false);
-    try (SearchServiceWrapper sss = new SearchServiceWrapper(ss, port)) {
-      Log.info("setup done, accepting queries...");
-      sss.run();
+    File fceFile = config.getExistingFile("triageFeatureFrequencies");
+    Log.info("loading triage feature frequencies (FeatureCardinalityEstimator.New) from=" + fceFile.getPath());
+    FeatureCardinalityEstimator.New triageFeatureFrequencies =
+        (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceFile);
+    ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
+    int maxResults = config.getInt("maxResults", 100);
+    TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults);
+    File fetchCacheDir = config.getOrMakeDir("fetch.cacheDir");
+    String fetchHost = config.getString("fetch.host");
+    int fetchPort = config.getInt("fetch.port");
+    DiskBackedFetchWrapper commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort);
+    try (KbpSearching s = new KbpSearching(ts, df, commRet, new HashMap<>())) {
+      KbpEntitySearchService ss = new KbpEntitySearchService(s);
+      ss.verbose = config.getBoolean("verbose", false);
+      try (SearchServiceWrapper sss = new SearchServiceWrapper(ss, port)) {
+        Log.info("setup done, accepting queries...");
+        sss.run();
+      }
     }
   }
 }

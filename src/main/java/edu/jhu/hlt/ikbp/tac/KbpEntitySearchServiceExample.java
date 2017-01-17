@@ -11,7 +11,6 @@ import edu.jhu.hlt.concrete.search.SearchResult;
 import edu.jhu.hlt.concrete.search.SearchResultItem;
 import edu.jhu.hlt.concrete.search.SearchService;
 import edu.jhu.hlt.concrete.search.SearchType;
-import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
@@ -30,7 +29,8 @@ public class KbpEntitySearchServiceExample {
     int port = config.getInt("port");
     Log.info("connecting to SearchService at host=" + host + " port=" + port);
     
-    for (KbpQuery q : TacKbp.getKbp2013SfQueries()) {
+//    for (KbpQuery q : TacKbp.getKbp2013SfQueries()) {
+    for (KbpQuery q : TacKbp.getKbpSfQueries("sf13+sf14")) {
       // Talk to a SearchService
       TTransport transport = new TFramedTransport(new TSocket(host, port));
       transport.open();
@@ -57,6 +57,11 @@ public class KbpEntitySearchServiceExample {
       for (SearchResultItem r : res.getSearchResultItems()) {
         System.out.println(r);
       }
+      System.out.println();
+      
+      System.out.println();
+      System.out.println("TIMER:");
+      System.out.println(AccumuloIndex.TIMER);
       System.out.println();
 
       transport.close();
