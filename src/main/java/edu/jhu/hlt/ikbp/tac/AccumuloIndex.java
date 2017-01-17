@@ -1221,7 +1221,7 @@ public class AccumuloIndex {
       List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadR);
       
       List<Feat> attrR = Feat.vecadd(Feat.promote(2, attrTokR), Feat.promote(1, attrCommR));
-      Pair<Double, List<Feat>> c = Feat.cosineSim(attrR, attrQ);
+      Pair<Double, List<String>> c = Feat.cosineSim(attrR, attrQ);
       
       r.attrFeatQ = attrQ;
       r.attrFeatR = attrR;

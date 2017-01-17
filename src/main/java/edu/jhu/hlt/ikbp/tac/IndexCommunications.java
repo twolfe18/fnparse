@@ -1970,15 +1970,66 @@ public class IndexCommunications implements AutoCloseable {
     /**
      * @returns (cosineSim, commonFeatures)
      */
-    public static Pair<Double, List<Feat>> cosineSim(List<Feat> a, List<Feat> b) {
-      throw new RuntimeException("implement me");
+    public static Pair<Double, List<String>> cosineSim(List<Feat> a, List<Feat> b) {
+
+      double ssa = 0;
+      Map<String, Feat> am = index(a);
+      for (Feat f : am.values())
+        ssa += f.weight * f.weight;
+      assert ssa >= 0;
+
+      double ssb = 0;
+      Map<String, Feat> bm = index(b);
+      for (Feat f : bm.values())
+        ssb += f.weight * f.weight;
+      assert ssb >= 0;
+
+      double dot = 0;
+      List<String> common = new ArrayList<>();
+      for (Feat f : bm.values()) {
+        Feat ff = am.get(f.name);
+        if (ff != null) {
+          dot += f.weight * ff.weight;
+          common.add(f.name);
+        }
+      }
+
+      double cosineSim = dot / (Math.sqrt(ssa) * Math.sqrt(ssb));
+      return new Pair<>(cosineSim, common);
+    }
+    
+    @SafeVarargs
+    public static Map<String, Feat> index(List<Feat>... features) {
+      Map<String, Feat> c = new HashMap<>();
+      for (List<Feat> l : features) {
+        for (Feat f : l) {
+          Feat e = c.get(f.name);
+          if (e == null) {
+            c.put(f.name, f);
+          } else {
+            c.put(f.name, new Feat(f.name, f.weight + e.weight));
+          }
+        }
+      }
+      return c;
     }
     
     /**
      * interprets the two lists as vectors and adds them (combining Feats with the same name by value-addition).
      */
     public static List<Feat> vecadd(List<Feat> a, List<Feat> b) {
-      throw new RuntimeException("implement me");
+      Map<String, Feat> c = new HashMap<>();
+      for (List<Feat> l : Arrays.asList(a, b)) {
+        for (Feat f : l) {
+          Feat e = c.get(f.name);
+          if (e == null) {
+            c.put(f.name, f);
+          } else {
+            c.put(f.name, new Feat(f.name, f.weight + e.weight));
+          }
+        }
+      }
+      return new ArrayList<>(c.values());
     }
     
     public static final Comparator<Feat> BY_NAME = new Comparator<Feat>() {
