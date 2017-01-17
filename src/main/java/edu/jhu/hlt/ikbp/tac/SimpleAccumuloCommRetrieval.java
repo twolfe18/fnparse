@@ -133,9 +133,6 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
     int port = config.getInt("port");
 
     SimpleAccumuloCommRetrieval i = new SimpleAccumuloCommRetrieval();
-    
-    MultiTimer.LOG_STARTS_AND_STOPS = config.getBoolean("timer.logStartsAndStops", false);
-    Log.info("MultiTimer.LOG_STARTS_AND_STOPS=" + MultiTimer.LOG_STARTS_AND_STOPS);
 
     i.debug = config.getBoolean("debug", false);
     Log.info("debug=" + i.debug);

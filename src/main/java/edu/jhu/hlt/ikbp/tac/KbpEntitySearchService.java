@@ -25,6 +25,7 @@ import edu.jhu.hlt.concrete.search.SearchType;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.concrete.services.search.SearchServiceWrapper;
+import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
@@ -47,12 +48,14 @@ public class KbpEntitySearchService implements SearchService.Iface {
   private KbpSearching wrapped;
   private AnnotationMetadata meta;
   public boolean verbose = false;
+  public TimeMarker tm;
   
   public KbpEntitySearchService(KbpSearching wrapped) {
     this.wrapped = wrapped;
     this.meta = new AnnotationMetadata()
         .setTool(TOOL_NAME)
         .setTimestamp(System.currentTimeMillis()/1000);
+    this.tm = new TimeMarker();
   }
 
   @Override
@@ -199,6 +202,16 @@ public class KbpEntitySearchService implements SearchService.Iface {
           x.setTokens(t);
         }
         res.addToSearchResultItems(x);
+      }
+
+      if (verbose) {
+        if (tm.enoughTimePassed(30)) {
+          System.out.println();
+          System.out.println("TIMER:");
+          System.out.println(AccumuloIndex.TIMER);
+          System.out.println();
+        }
+        Log.info("returning " + res.getSearchResultItemsSize() + " results");
       }
       
       return res;
