@@ -714,6 +714,11 @@ public class AccumuloIndex {
           30,
           true);
     }
+
+    /** Use this for cases where you don't need to talk to accumulo, only compute feature frequencies/scores */
+    public TriageSearch(FeatureCardinalityEstimator.New triageFeatureFrequencies) {
+      this.triageFeatureFrequencies = triageFeatureFrequencies;
+    }
     
     public TriageSearch(String instanceName, String zks, String username, AuthenticationToken password,
         FeatureCardinalityEstimator.New triageFeatureFrequencies,
@@ -1305,6 +1310,7 @@ public class AccumuloIndex {
     private static final long serialVersionUID = 8767537711510822918L;
     
     public static DiskBackedFetchWrapper buildFetchWrapper(File cacheDir, String host, int port) throws TTransportException {
+      Log.info("building DiskBackedFetchWrapper cacheDir=" + cacheDir.getPath() + " fetchHost=" + host + " fetchPort=" + port);
       TTransport transport = new TFramedTransport(new TSocket(host, port), Integer.MAX_VALUE);
       transport.open();
       TProtocol protocol = new TCompactProtocol(transport);

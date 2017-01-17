@@ -13,7 +13,9 @@ import java.util.Set;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Token;
+import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.search.SearchResultItem;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
@@ -87,6 +89,19 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       assert canonical2.triageFeatures != null;
       canonical2.nerType = seed.entity_type;
       return canonical2;
+    }
+    
+    public static Mention convert(SearchResultItem r, Communication c) {
+      if (c == null)
+        throw new IllegalArgumentException();
+      String tokUuid = r.getSentenceId().getUuidString();
+      Tokenization toks = IndexCommunications.findTok(tokUuid, c);
+      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
+      int head = r.getTokens().getAnchorTokenIndex();
+      Span span = IndexCommunications.nounPhraseExpand(head, deps);
+      TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
+      String nerType = ner.getTaggedTokenList().get(head).getTag();
+      return new Mention(head, span, nerType, toks, deps, c);
     }
 
     public Mention(SitSearchResult ss) {

@@ -289,6 +289,9 @@ public class KbpEntitySearchService implements SearchService.Iface {
         for (int i = m.yhatQueryEntitySpan.start; i < m.yhatQueryEntitySpan.end; i++)
           t.addToTokenIndexList(i);
         x.setTokens(t);
+        
+        // TODO Add Communications to the results when this passes:
+        // https://gitlab.hltcoe.jhu.edu/concrete/concrete/merge_requests/54
       }
       res.addToSearchResultItems(x);
     }

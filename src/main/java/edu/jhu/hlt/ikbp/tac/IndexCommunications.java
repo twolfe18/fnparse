@@ -767,6 +767,13 @@ public class IndexCommunications implements AutoCloseable {
     
   }
 
+  public static String nerType(int head, Tokenization toks) {
+    TokenTagging ner = getPreferredLemmas(toks);
+    TaggedToken nt = ner.getTaggedTokenList().get(head);
+    assert nt.getTokenIndex() == head;
+    return nt.getTag();
+  }
+
   /**
    * Takes all nn dependencies out of a head to get a span
    */
