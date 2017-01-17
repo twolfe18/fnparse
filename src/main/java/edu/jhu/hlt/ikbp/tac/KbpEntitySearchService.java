@@ -86,11 +86,24 @@ public class KbpEntitySearchService implements SearchService.Iface {
     if (q.isSetCommunication()) {
       // If you provide a communication, we will use it
       comm = q.getCommunication();
+      if (verbose)
+        Log.info("using provided comm id=" + comm.getId() + " uuid=" + comm.getUuid().getUuidString());
     } else if (q.isSetCommunicationId()) {
+      if (verbose)
+        Log.info("searching for comm by id=" + q.getCommunicationId());
       // Otherwise we make an attempt to look it up in our database
-      comm = wrapped.getCommCaching(q.getCommunicationId());
-      if (comm == null)
+      try {
+        comm = wrapped.getCommCaching(q.getCommunicationId());
+      } catch (Exception e) {
+        comm = null;
+        e.printStackTrace();
+      }
+      if (comm == null) {
+        Log.info("throwing b/c no comm");
         throw new ServicesException("can't find comm with id=" + q.getCommunicationId());
+      }
+      if (verbose)
+        Log.info("looking up comm by id=" + comm.getId() + "\tfound uuid=" + comm.getUuid().getUuidString());
     } else {
       throw new ServicesException("you must provide either a Communication or communicationId");
     }
@@ -99,6 +112,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
     TokenRefSequence trs;
     if (q.isSetTokens()) {
       // Preferred method: take the TRS
+      if (verbose)
+        Log.info("using provident TokenRefSequence");
       trs = q.getTokens();
     } else if (q.isSetName()) {
       // If you provide a name, we will look for it
@@ -109,6 +124,9 @@ public class KbpEntitySearchService implements SearchService.Iface {
       TokenObservationCounts tokObsLc = null;
       String nerType = null;
       List<String> feats = IndexCommunications.getEntityMentionFeatures(q.getName(), headwords, nerType, tokObs, tokObsLc);
+      if (verbose)
+        Log.info("searching for EntityMention in comm.uuid=" + comm.getUuid().getUuidString() + " using feats=" + feats);
+      new AddNerTypeToEntityMentions(comm);
       EntityMention em = IndexCommunications.bestGuessAtQueryMention(null, comm, feats, verbose);
       if (em == null)
         throw new ServicesException("could not find EntityMention for " + q.getName());
@@ -164,6 +182,7 @@ public class KbpEntitySearchService implements SearchService.Iface {
             .setSentenceId(new UUID(m.tokUuid));
         if (m.yhatQueryEntityHead >= 0) {
           TokenRefSequence t = new TokenRefSequence()
+              .setTokenizationId(new UUID(m.tokUuid))
               .setAnchorTokenIndex(m.yhatQueryEntityHead);
           if (m.yhatQueryEntitySpan == null) {
             DependencyParse d = IndexCommunications.getPreferredDependencyParse(m.getTokenization());
@@ -194,6 +213,7 @@ public class KbpEntitySearchService implements SearchService.Iface {
     KbpEntitySearchService ss = new KbpEntitySearchService(s);
     ss.verbose = config.getBoolean("verbose", false);
     try (SearchServiceWrapper sss = new SearchServiceWrapper(ss, port)) {
+      Log.info("setup done, accepting queries...");
       sss.run();
     }
   }

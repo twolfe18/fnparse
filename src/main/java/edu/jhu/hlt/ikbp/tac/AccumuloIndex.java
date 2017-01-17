@@ -1373,7 +1373,10 @@ public class AccumuloIndex {
       
       boolean saveFetchedComms = true;
       boolean compressionForSavedComms = true;
-      return new DiskBackedFetchWrapper(failOver, cacheDir, saveFetchedComms, compressionForSavedComms);
+      DiskBackedFetchWrapper db = new DiskBackedFetchWrapper(failOver, cacheDir, saveFetchedComms, compressionForSavedComms);
+      db.debug = true;
+      //db.disableCache = true;
+      return db;
     }
 
     // Finds EntityMentions for query documents which just come with char offsets.
@@ -1482,11 +1485,6 @@ public class AccumuloIndex {
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
-//      Communication c = commRetCache.get(commId);
-//      if (c == null) {
-//        c = commRet.get(commId);
-//        commRetCache.put(commId, c);
-//      }
       return c;
     }
 

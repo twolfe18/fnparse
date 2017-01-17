@@ -1320,6 +1320,9 @@ public class IndexCommunications implements AutoCloseable {
       if (t == null || tokUuid.equals(t.getUuid().getUuidString()))
         rel.add(em);
     }
+
+    if (verbose)
+      Log.info("found " + rel.size() + " relevant EntityMentions");
     
     // Score each mention based on features (just dot prod)
     if (rel.size() > 1) {

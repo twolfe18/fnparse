@@ -1,5 +1,6 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
@@ -69,17 +70,23 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
   }
 
   private Communication getAccumulo(String commId) {
+    if (debug)
+      Log.info("commId=" + commId);
     AccumuloIndex.TIMER.start("commRet/acc/scan");
     try (Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations())) {
       s.setRange(Range.exact(commId));
       Iterator<Entry<Key, Value>> iter = s.iterator();
       if (!iter.hasNext()) {
         AccumuloIndex.TIMER.stop("commRet/acc/scan");
+        if (debug)
+          Log.info("no values!");
         return null;
       }
       Entry<Key, Value> e = iter.next();
-      if (iter.hasNext())
-        Log.info("WARNING: more than one result (returning first) for commId=" + commId);
+      if (iter.hasNext()) {
+        Log.info("WARNING: more than one result (returning first) for commId=" + commId
+          + " firstKey=" + e.getKey() + " secondKey=" + iter.next().getKey());
+      }
       AccumuloIndex.TIMER.stop("commRet/acc/scan");
 
       AccumuloIndex.TIMER.start("commRet/acc/deser");
@@ -89,7 +96,10 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
 
       return c;
     } catch (Exception e) {
-      throw new RuntimeException(e);
+      if (debug)
+        Log.info("Exception while looking up comm: "  + e.getMessage());
+      //throw new RuntimeException(e);
+      return null;
     }
   }
 
@@ -107,6 +117,7 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
   public FetchResult fetch(FetchRequest arg0) throws ServicesException, TException {
     // TODO batch scanning
     FetchResult r = new FetchResult();
+    r.setCommunications(new ArrayList<>());
     for (String id : arg0.getCommunicationIds()) {
       Communication c = getAccumulo(id);
       if (c != null)
@@ -145,16 +156,12 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
   /** Start up a server */
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-//    if (args.length != 1) {
-//      System.err.println("please provide a port to run on");
-//      return;
-//    }
-//    int port = Integer.parseInt(args[0]);
     int port = config.getInt("port");
 
     SimpleAccumuloCommRetrieval i = new SimpleAccumuloCommRetrieval();
 
     i.debug = config.getBoolean("debug", false);
+    Log.info("debug=" + i.debug);
 
     String[] ids = config.getStrings("debugCommIds", new String[] {});
     for (String id : ids) {
@@ -162,6 +169,7 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
       Log.info(id + "\t" + (c != null));
     }
 
+    // TODO switch to FetchServiceWrapper
     Processor<FetchCommunicationService.Iface> p = new FetchCommunicationService.Processor<>(i);
     TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
     TNonblockingServer.Args serverArgs = new TNonblockingServer.Args(transport);

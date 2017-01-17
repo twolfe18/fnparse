@@ -65,12 +65,14 @@ public class ScionForwarding {
 
     @Override
     public long getCommunicationCount() throws NotImplementedException, TException {
-      return impl.getCommunicationCount();
+      //return impl.getCommunicationCount();
+      throw new NotImplementedException();
     }
 
     @Override
     public List<String> getCommunicationIDs(long arg0, long arg1) throws NotImplementedException, TException {
-      return impl.getCommunicationIDs(arg0, arg1);
+      //return impl.getCommunicationIDs(arg0, arg1);
+      throw new NotImplementedException();
     }
   }
   
