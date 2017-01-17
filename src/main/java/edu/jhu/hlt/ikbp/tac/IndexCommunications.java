@@ -12,12 +12,10 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -34,8 +32,6 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
-
-import com.google.common.collect.Multimap;
 
 import edu.jhu.hlt.concrete.AnnotationMetadata;
 import edu.jhu.hlt.concrete.Communication;
@@ -75,13 +71,6 @@ import edu.jhu.hlt.ikbp.tac.AccumuloIndex.WeightedFeature;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.ParmaVw.QResultCluster;
 import edu.jhu.hlt.ikbp.tac.StringIntUuidIndex.StrIntUuidEntry;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
-import edu.jhu.hlt.scion.ScionException;
-import edu.jhu.hlt.scion.concrete.AccumuloCommunicationIterator;
-import edu.jhu.hlt.scion.concrete.SequentialQueryRunner;
-import edu.jhu.hlt.scion.concrete.analytics.Analytics;
-import edu.jhu.hlt.scion.concrete.datasets.ConcreteDataSets;
-import edu.jhu.hlt.scion.core.accumulo.ConnectorFactory;
-import edu.jhu.hlt.scion.core.accumulo.ScionConnector;
 import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.EfficientUuidList;
@@ -4768,12 +4757,13 @@ public class IndexCommunications implements AutoCloseable {
     String method = config.getString("dataProvider");
     if (method.equalsIgnoreCase("scion")) {
       // scion
-      try {
-        Log.info("using scion");
-        return new ScionBasedCommIter(p);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
+//      try {
+//        Log.info("using scion");
+//        return new ScionBasedCommIter(p);
+//      } catch (Exception e) {
+//        throw new RuntimeException(e);
+//      }
+      throw new RuntimeException("scion is no longer supported");
     }
     
     String saPref = "simpleAccumulo:".toLowerCase();
@@ -4878,11 +4868,10 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
 
-  /**
+  /*
    * Note:
    * 1) This must run on the COE (talks to seemingly arbitrary grid machines, difficult to tunnel)
    * 2) -Dscion.accumulo.user=reader -Dscion.accumulo.password='an accumulo reader'
-   */
   public static class ScionBasedCommIter implements AutoCloseableIterator<Communication> {
 
     public static void main(ExperimentProperties config) throws Exception {
@@ -5016,6 +5005,7 @@ public class IndexCommunications implements AutoCloseable {
       i.close();
     }
   }
+   */
 
   
     
@@ -5306,9 +5296,9 @@ public class IndexCommunications implements AutoCloseable {
     case "trainDedup":
       ParmaVw.main(config);
       break;
-    case "scionDev":
-      ScionBasedCommIter.main(config);
-      break;
+//    case "scionDev":
+//      ScionBasedCommIter.main(config);
+//      break;
     default:
       Log.info("unknown command: " + command);
       break;

@@ -25,8 +25,6 @@ import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
-import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
-import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
@@ -65,150 +63,6 @@ public class PkbpSearching implements Serializable {
   private static final long serialVersionUID = 3891008944720961213L;
 
   public static final MultiTimer TIMER = AccumuloIndex.TIMER;
-  
-//  public void playback(ExperimentProperties config) throws Exception {
-//    Log.info("playing back");
-//    
-//    // (for now) For every SitSearchResult coming from arg3 of a SEARCH,
-//    // detect entity heads in that tokenization and run DependencySyntaxEvents
-//    // run parsey first?
-//    List<SitSearchResult> res = new ArrayList<>();
-//    for (Action a : history) {
-//      if (a.type.equals("SEARCH")) {
-//        res.addAll((List<SitSearchResult>) a.arguments.get(2));
-//      }
-//    }
-//    Log.info("collected " + res.size() + " SitSearchResults");
-//    AccumuloIndex.dedupCommunications(res);
-//    
-//    // Add parsey deps if desired/needed
-//    File parseyCacheDir = config.getFile("parseyCacheDir", null);
-//    if (parseyCacheDir != null) {
-//      Log.info("adding parsey parses with parseyCacheDir=" + parseyCacheDir.getPath());
-//      List<Communication> comms = AccumuloIndex.extractCommunications(res);
-//      OfflineBatchParseyAnnotator p = new OfflineBatchParseyAnnotator(
-//          parseyCacheDir, OfflineBatchParseyAnnotator.PARSEY_SCRIPT_LAPTOP);
-//      Map<String, Communication> anno = new HashMap<>();
-//      for (Communication c : comms) {
-//        Communication a = p.annotate(c);
-//        Object old = anno.put(a.getId(), a);
-//        assert old == null;
-//      }
-//      Log.info("collected " + anno.size() + " parsey-annotated comms");
-//      for (SitSearchResult r : res) {
-//        Communication a = anno.get(r.getCommunicationId());
-//        assert a != null;
-//        r.setCommunication(a);
-//      }
-//      Log.info("done with parsey");
-//    }
-//    
-//    // Run event extraction on all of the tokenization/SitSearchResults.
-//    // At the same time do a mock PKB population run, filling in events
-//    int topK = 1_000_000;
-//    try (RedisSitFeatFrequency rsitf = new RedisSitFeatFrequency("localhost", 8567, topK)) {
-//      List<PkbpSituation> events = new ArrayList<>();
-//      for (SitSearchResult r : res) {
-//        extractAndLinkSituations(r, events, rsitf);
-//      }
-//    }
-//  }
-
-//  /**
-//   * TODO Modify this so that instead of accepting a FULL LIST of all situations,
-//   * 1) Do the entity linking against PKB entities
-//   * 2) For every entityMention->entity link, consider situationMention->situation link s.t. entity in situation.args
-//   * 
-//   * @deprecated this goes up to playback, see outerLoop
-//   */
-//  public void extractAndLinkSituations(SitSearchResult r, List<PkbpSituation> knownSituations, RedisSitFeatFrequency rsitf) {
-//    
-//    // 1) Extract situation mentions and their entity arguments in the given Tokenization
-//    System.out.println("considering SitSearchResult: " + r.getWordsInTokenizationWithHighlightedEntAndSit());
-//    DependencyParse deps = IndexCommunications.getPreferredDependencyParse(r.getTokenization());
-//    List<Integer> entities = DependencySyntaxEvents.extractEntityHeads(r.getTokenization());
-//    if (entities.size() < 2) {
-//      System.out.println("skipping b/c to few entities");
-//      return;
-//    }
-//    for (int e : entities) {
-//      Span es = IndexCommunications.nounPhraseExpand(e, deps);
-//      String s = AccumuloIndex.words(es, r.getTokenization());
-//      System.out.println("\tentity at=" + e + "\tent=" + s);
-//    }
-//    System.out.println();
-//
-//    CoNLLX.VERBOSE = false;
-//    DependencySyntaxEvents.CoverArgumentsWithPredicates sitEx =
-//        new DependencySyntaxEvents.CoverArgumentsWithPredicates(
-//            r.getCommunication(), r.getTokenization(), deps, entities);
-//
-//    Map<Integer, Set<String>> sit2feat = sitEx.getSituations();
-//    for (int s : sit2feat.keySet())
-//      System.out.println("\tsituation at=" + s + " sit=" + r.getTokenization().getTokenList().getTokenList().get(s).getText());
-//    System.out.println();
-//
-//
-//    // 2) For each situation, try to link it to a known situation
-//    // for now we are using a list of situations as our PKB over situations
-//    for (Entry<Integer, Set<String>> e : sit2feat.entrySet()) {
-//      // laptop: ssh -fNL 8567:test2:7379 test2b
-//      // laptop: redis-cli -p 8567    # for some reason -h localhost makes it not work
-//      int pred = e.getKey();
-//      Set<String> sf = e.getValue();
-//      System.out.println("considering situation at=" + pred
-//          + " word=" + r.getTokenization().getTokenList().getTokenList().get(pred).getText());
-//      if (knownSituations.isEmpty()) {
-//        // Just add the first event, no questions asked
-//        PkbpSituation.Mention sm = PkbpSituation.Mention.convert(pred, sitEx, rsitf::getScore);
-//        knownSituations.add(new PkbpSituation(sm));
-//        continue;
-//      }
-//
-//      Map<String, Double> sf2f = rsitf.getFrequenciesM(sf);
-//      PkbpSituation.Mention cur = PkbpSituation.Mention.convert(pred, sitEx, rsitf::getScore);
-//
-//      ArgMax<Pair<PkbpSituation, List<Feat>>> bestSit = new ArgMax<>();
-//      for (int i = 0; i < knownSituations.size(); i++) {
-//        List<Feat> sim = knownSituations.get(i).similarity(sf2f);
-//        bestSit.offer(new Pair<>(knownSituations.get(i), sim), Feat.sum(sim));
-//        
-//        System.out.println("entity.mentions {");
-//        for (PkbpSituation.Mention sm : knownSituations.get(i).mentions) {
-//          System.out.println("  =>" + sm.showPredInContext());
-//          System.out.println("      " + sortAndPrune(sm.getFeatures(), 5));
-//        }
-//        System.out.println("}");
-//        System.out.println("cur.mention: " + cur.showPredInContext());
-//        System.out.println("sim: " + sortAndPrune(sim, 5));
-//        System.out.println();
-//      }
-//
-//      System.out.println();
-//      Pair<PkbpSituation, List<Feat>> best = bestSit.get();
-//      System.out.println("best entity.mentions {");
-//      for (PkbpSituation.Mention sm : best.get1().mentions) {
-//        System.out.println("  =>" + sm.showPredInContext());
-//        System.out.println("      " + sortAndPrune(sm.getFeatures(), 5));
-//      }
-//      System.out.println("}");
-//      System.out.println("best cur.mention: " + cur.showPredInContext());
-//      System.out.println("best sim: " + sortAndPrune(best.get2(), 5));
-//      System.out.println("best score: " + Feat.sum(best.get2()));
-//      System.out.println();
-//
-//      if (bestSit.getBestScore() >= 1.5) {
-//        System.out.println("LINK_SITUATION");
-//        best.get1().addMention(cur);
-//      } else {
-//        System.out.println("NEW_SITUATION");
-//        knownSituations.add(new PkbpSituation(cur));
-//      }
-//      System.out.println();
-//      System.out.println();
-//    }
-//    System.out.println();
-//  }
   
   public List<Feat> scoreSitLink(PkbpSituation sit, PkbpSituation.Mention mention) {
     assert sit.feat2score.size() > 0;
@@ -408,16 +262,6 @@ public class PkbpSearching implements Serializable {
 
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-
-//    // Playback a result which was computed and then serialized
-//    File playbackPkbpFile = config.getFile("playbackPkbpFile", null);
-//    if (playbackPkbpFile != null) {
-//      Log.info("deserializing playbackPkbpFile=" + playbackPkbpFile);
-//      PkbpSearching ps = (PkbpSearching) FileUtil.deserialize(playbackPkbpFile);
-//      ps.playback(config);
-//      Log.info("done");
-//      return;
-//    }
     
     Random rand = config.getRandom();
     KbpSearching ks = null;
@@ -546,19 +390,6 @@ public class PkbpSearching implements Serializable {
         ks.clearCaches();
     }
   }
-
-//  /** SEARCH, LINK, PRUNE, or NEW_ENTITY */
-//  static class Action implements Serializable {
-//    private static final long serialVersionUID = 1057136776248973712L;
-//
-//    String type;
-//    List<Object> arguments;
-//
-//    public Action(String type, Object... args) {
-//      this.type = type;
-//      this.arguments = Arrays.asList(args);
-//    }
-//  }
 
   // Input: Seed
   private KbpQuery seed;

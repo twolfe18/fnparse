@@ -7,8 +7,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.esotericsoftware.minlog.Log;
-
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -20,6 +18,7 @@ import edu.jhu.hlt.tutils.Document.TokenItr;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 
 public class NaturalLanguageSlotFill {

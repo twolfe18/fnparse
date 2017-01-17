@@ -1,51 +1,32 @@
 package edu.jhu.hlt.ikbp.tac;
 
-import java.io.BufferedOutputStream;
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.Serializable;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.function.Function;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
-import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import edu.jhu.hlt.acute.archivers.tar.TarArchiver;
 import edu.jhu.hlt.concrete.Cluster;
 import edu.jhu.hlt.concrete.ClusterMember;
 import edu.jhu.hlt.concrete.Clustering;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.EntityMention;
-import edu.jhu.hlt.concrete.EntityMentionSet;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.Tokenization;
-import edu.jhu.hlt.concrete.access.FetchRequest;
-import edu.jhu.hlt.concrete.access.FetchResult;
-import edu.jhu.hlt.concrete.serialization.archiver.ArchivableCommunication;
 import edu.jhu.hlt.ikbp.ConcreteIkbpAnnotations.Topic;
-import edu.jhu.hlt.ikbp.tac.IndexCommunications.Result;
-import edu.jhu.hlt.scion.concrete.server.FetchCommunicationServiceImpl;
-import edu.jhu.hlt.scion.core.accumulo.ConnectorFactory;
-import edu.jhu.hlt.scion.core.accumulo.ScionConnector;
-import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.StringUtils;
-import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.TokenizationIter;
 
 /**
@@ -346,13 +327,12 @@ public class TacKbp {
     }
   }
   
-  /**
+  /*
    * The point of this class is to take an (EntityMention UUID, Communication UUID),
    * retrieve the Communication from scion/accumulo, and then show the results.
    * 
    * @deprecated
    * @see TacQueryEntityMentionResolver
-   */
   public static class MentionFetcher {
     private FetchCommunicationServiceImpl impl;
 
@@ -415,6 +395,7 @@ public class TacKbp {
       return new Pair<>(comm, emRef);
     }
   }
+   */
   
   public static List<KbpQuery> getKbpSfQueries(String name) throws Exception {
     Log.info("retrieving slot fill queries for=" + name);
@@ -507,6 +488,7 @@ public class TacKbp {
     return queries;
   }
   
+  /*
   public static void oldMain(ExperimentProperties config) throws Exception {
     // This will only work on the grid.
     System.setProperty("scion.accumulo.zookeepers", "r8n04.cm.cluster:2181,r8n05.cm.cluster:2181,r8n06.cm.cluster:2181");
@@ -539,7 +521,6 @@ public class TacKbp {
         String nerType = tacNerTypesToStanfordNerType(q.entity_type);
         String[] heads = q.name.split("\\s+");
         List<Result> rr = s.search(q.name, nerType, heads, q.sourceDoc);
-        
         int lim = 1000;
         if (rr.size() > lim)
           rr = rr.subList(0, lim);
@@ -562,7 +543,6 @@ public class TacKbp {
 
           boolean showMention = true;
           Pair<Communication, EntityMention> p =
-//              v.fetch(r.entityMentionUuid, r.communicationId, showMention);
               v.fetch(r.tokenizationUuid, r.communicationId, showMention);
           if (commsWritten.add(r.communicationId)) {
             Log.info("finding+saving " + r.communicationId);
@@ -578,6 +558,7 @@ public class TacKbp {
 
     Log.info(IndexCommunications.TIMER);
   }
+  */
 
   public static void main(String[] args) throws Exception {
 //    ExperimentProperties config = ExperimentProperties.init(args);

@@ -1247,8 +1247,6 @@ public class AccumuloIndex {
   public static class KbpSearching implements Serializable, AutoCloseable {
     private static final long serialVersionUID = 8767537711510822918L;
     
-//    public static DiskBackedFetchWrapper buildFetchWrapper(ExperimentProperties config) {
-//      File cacheDir = config.getFile("diskBackedFetchWrapperDir", new File("data/sit-search/fetch-comms-cache"));
     public static DiskBackedFetchWrapper buildFetchWrapper(File cacheDir, String host, int port) throws TTransportException {
       TTransport transport = new TFramedTransport(new TSocket(host, port), Integer.MAX_VALUE);
       transport.open();

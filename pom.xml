@@ -30,6 +30,11 @@
       <artifactId>concrete-core</artifactId>
       <version>4.12.1-SNAPSHOT</version>
     </dependency>
+    <dependency>
+      <groupId>edu.jhu.hlt</groupId>
+      <artifactId>concrete-services</artifactId>
+      <version>4.12.1-SNAPSHOT</version>
+    </dependency>
 
     <!-- SNAPSHOT is only for CoNLL-X upgrades -->
     <dependency>
@@ -42,22 +47,6 @@
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-csv</artifactId>
       <version>1.3</version>
-    </dependency>
-
-    <dependency>
-      <groupId>edu.jhu.hlt</groupId>
-      <artifactId>scion-concrete</artifactId>
-      <version>${scion-version}</version>
-    </dependency>
-    <dependency>
-      <groupId>edu.jhu.hlt</groupId>
-      <artifactId>scion-core</artifactId>
-      <version>${scion-version}</version>
-    </dependency>
-    <dependency>
-      <groupId>edu.jhu.hlt</groupId>
-      <artifactId>scion-services</artifactId>
-      <version>${scion-version}</version>
     </dependency>
 
     <dependency>

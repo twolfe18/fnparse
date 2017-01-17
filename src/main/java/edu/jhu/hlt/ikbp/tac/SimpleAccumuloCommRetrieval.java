@@ -16,21 +16,15 @@ import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.thrift.TDeserializer;
 import org.apache.thrift.TException;
-import org.apache.thrift.TProcessorFactory;
-import org.apache.thrift.protocol.TCompactProtocol;
-import org.apache.thrift.server.TNonblockingServer;
-import org.apache.thrift.transport.TFramedTransport;
-import org.apache.thrift.transport.TNonblockingServerSocket;
-import org.apache.thrift.transport.TNonblockingServerTransport;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.access.FetchCommunicationService;
-import edu.jhu.hlt.concrete.access.FetchCommunicationService.Processor;
 import edu.jhu.hlt.concrete.access.FetchRequest;
 import edu.jhu.hlt.concrete.access.FetchResult;
 import edu.jhu.hlt.concrete.services.NotImplementedException;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
+import edu.jhu.hlt.concrete.services.fetch.FetchServiceWrapper;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloFetch;
@@ -46,9 +40,6 @@ import edu.jhu.hlt.tutils.Log;
  * retrieve from both simultaneously.
  */
 public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.Iface {
-  //    // Old way: use simpleaccumulo, only supports a single namespace
-  //    private SimpleAccumuloFetch fetch;
-  // New way: directly use accumulo, multiple namespaces
   private Connector conn;
   private TDeserializer deser;
   
@@ -65,7 +56,6 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
   }
 
   public Communication get(String commId) {
-    //      return getSimpleAccumulo(commId);
     return getAccumulo(commId);
   }
 
@@ -126,23 +116,6 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
     return r;
   }
 
-  //    private Communication getSimpleAccumulo(String commId) {
-  //      TIMER.start("accCommRet");
-  //      FetchRequest fr = new FetchRequest();
-  //      fr.addToCommunicationIds(commId);;
-  //      try {
-  //        FetchResult r = fetch.fetch(fr);
-  //        TIMER.stop("accCommRet");
-  //        if (!r.isSetCommunications() || r.getCommunicationsSize() == 0)
-  //          return null;
-  //        return r.getCommunications().get(0);
-  //      } catch (Exception e) {
-  //        e.printStackTrace();
-  //        TIMER.stop("accCommRet");
-  //        return null;
-  //      }
-  //    }
-
   @Override
   public long getCommunicationCount() throws NotImplementedException, TException {
     throw new NotImplementedException();
@@ -168,18 +141,20 @@ public class SimpleAccumuloCommRetrieval implements FetchCommunicationService.If
       Communication c = i.get(id);
       Log.info(id + "\t" + (c != null));
     }
-
-    // TODO switch to FetchServiceWrapper
-    Processor<FetchCommunicationService.Iface> p = new FetchCommunicationService.Processor<>(i);
-    TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
-    TNonblockingServer.Args serverArgs = new TNonblockingServer.Args(transport);
-    serverArgs = serverArgs.processorFactory(new TProcessorFactory(p));
-    serverArgs = serverArgs.protocolFactory(new TCompactProtocol.Factory());
-    serverArgs = serverArgs.transportFactory(new TFramedTransport.Factory(Integer.MAX_VALUE));
-    serverArgs.maxReadBufferBytes = Long.MAX_VALUE;
-    TNonblockingServer server = new TNonblockingServer(serverArgs);
-    Log.info("Starting the server...");
-    server.serve();
+    
+    try (FetchServiceWrapper w = new FetchServiceWrapper(i, port)) {
+      w.run();
+    }
+//    Processor<FetchCommunicationService.Iface> p = new FetchCommunicationService.Processor<>(i);
+//    TNonblockingServerTransport transport = new TNonblockingServerSocket(port);
+//    TNonblockingServer.Args serverArgs = new TNonblockingServer.Args(transport);
+//    serverArgs = serverArgs.processorFactory(new TProcessorFactory(p));
+//    serverArgs = serverArgs.protocolFactory(new TCompactProtocol.Factory());
+//    serverArgs = serverArgs.transportFactory(new TFramedTransport.Factory(Integer.MAX_VALUE));
+//    serverArgs.maxReadBufferBytes = Long.MAX_VALUE;
+//    TNonblockingServer server = new TNonblockingServer(serverArgs);
+//    Log.info("Starting the server...");
+//    server.serve();
   }
 
 }
