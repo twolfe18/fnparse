@@ -1966,6 +1966,20 @@ public class IndexCommunications implements AutoCloseable {
   
   public static class Feat implements Serializable {
     private static final long serialVersionUID = -2723964704627341786L;
+  
+    /**
+     * @returns (cosineSim, commonFeatures)
+     */
+    public static Pair<Double, List<Feat>> cosineSim(List<Feat> a, List<Feat> b) {
+      throw new RuntimeException("implement me");
+    }
+    
+    /**
+     * interprets the two lists as vectors and adds them (combining Feats with the same name by value-addition).
+     */
+    public static List<Feat> vecadd(List<Feat> a, List<Feat> b) {
+      throw new RuntimeException("implement me");
+    }
     
     public static final Comparator<Feat> BY_NAME = new Comparator<Feat>() {
       @Override
@@ -2144,9 +2158,11 @@ public class IndexCommunications implements AutoCloseable {
     
 
     // Attribute features are things like "PERSON-nn-Dr." which are discriminative modifiers of the entity headword
-    public List<String> attributeFeaturesQ; // query
-    public List<String> attributeFeaturesR; // response
-    public List<String> attributeFeaturesMatched; // intersection
+    /** @deprecated */ public List<String> attributeFeaturesQ; // query
+    /** @deprecated */ public List<String> attributeFeaturesR; // response
+    /** @deprecated */ public List<String> attributeFeaturesMatched; // intersection
+    public List<Feat> attrFeatQ;
+    public List<Feat> attrFeatR;
 
     
     /** Head token index of the mention of the query entity/subject in this tokenization */

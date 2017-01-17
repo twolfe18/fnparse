@@ -25,6 +25,10 @@ import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.search.SearchQuery;
+import edu.jhu.hlt.concrete.search.SearchResult;
+import edu.jhu.hlt.concrete.search.SearchResultItem;
+import edu.jhu.hlt.concrete.search.SearchService;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
@@ -338,7 +342,10 @@ public class PkbpSearching implements Serializable {
           String fetchHost = config.getString("fetch.host");
           int fetchPort = config.getInt("fetch.port");
           DiskBackedFetchWrapper commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort);
-          ks = new KbpSearching(ts, df, commRet, new HashMap<>());
+          Double minTriageScore = config.getDouble("minTriageScore", -1);
+          if (minTriageScore <= 0)
+            minTriageScore = null;
+          ks = new KbpSearching(ts, df, minTriageScore, commRet, new HashMap<>());
         }
         if (sfCms == null) {
           // e.g. /export/projects/twolfe/sit-search/situation-feature-counts/count-min-sketch-v2/cag-cms.jser
@@ -448,6 +455,12 @@ public class PkbpSearching implements Serializable {
   
   
   static class New {
+    
+    static void main(ExperimentProperties config) {
+//      Kbp
+//      New n = new New()
+    }
+    
     // New way of doing things...
     // The point is that I want a graph data structure where it makes sense to build it
     // in any way you choose (e.g. maybe I only want to do xdoc entity coref, shouldn't
@@ -469,11 +482,12 @@ public class PkbpSearching implements Serializable {
       }
     }
     
-    private KbpSearching search;
+//    private KbpSearching search;
+    private SearchService.Client kbpEntitySearchService;
     private StringCountMinSketch sitFeatCounts;
     private Random rand;
     
-    private PkbpSearching mergeWith;
+//    private PkbpSearching mergeWith;
 
     private List<PkbpNode> nodes;
     // Features are how we do triage on nodes for retrieval
@@ -507,8 +521,8 @@ public class PkbpSearching implements Serializable {
     // To do this I should run code which does one search off of a SF query entity mention and puts these mentions in a graph.
     // The graph is serialized and we can ensure certain properties like all of the comms have been retrieved
 
-    public New(KbpSearching search, StringCountMinSketch sitFeatCounts, Random rand) {
-      this.search = search;
+    public New(SearchService.Client kbpEntitySearchService, StringCountMinSketch sitFeatCounts, Random rand) {
+      this.kbpEntitySearchService = kbpEntitySearchService;
       this.sitFeatCounts = sitFeatCounts;
       this.rand = rand;
       this.nodes = new ArrayList<>();
@@ -550,15 +564,23 @@ public class PkbpSearching implements Serializable {
     public List<PkbpNode> addMentionsForEntitySearch(PkbpEntity.Mention mention, Set<String> ignoreCommToks) {
       List<PkbpNode> added = new ArrayList<>();
       try {
-        List<SitSearchResult> mentions = search.entityMentionSearch(mention);
-        for (SitSearchResult res : mentions) {
-          PkbpEntity.Mention m = new PkbpEntity.Mention(res);
-          int id = nodes.size();
-          PkbpNode n = new PkbpNode(id, m);
-          n.addFeat(new Feat(FeatureNames.ENTITY_MENTION));
-          add(n);
-          added.add(n);
+        SearchQuery query = new SearchQuery();
+        // TODO set triageFeats, attrFeats, context in query
+        SearchResult res = kbpEntitySearchService.search(query);
+        for (SearchResultItem r : res.getSearchResultItems()) {
+          // TODO extract (comm, tok, mention) from r
+          // TODO add this as a new mention
         }
+
+//        List<SitSearchResult> mentions = search.entityMentionSearch(mention);
+//        for (SitSearchResult res : mentions) {
+//          PkbpEntity.Mention m = new PkbpEntity.Mention(res);
+//          int id = nodes.size();
+//          PkbpNode n = new PkbpNode(id, m);
+//          n.addFeat(new Feat(FeatureNames.ENTITY_MENTION));
+//          add(n);
+//          added.add(n);
+//        }
         return added;
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -783,7 +805,7 @@ public class PkbpSearching implements Serializable {
     assert nm > 0;
 
     // Perform triage search
-    mentions = ts.search(new ArrayList<>(triageFeats), docContext, getTermFrequencies());
+    mentions = ts.search(new ArrayList<>(triageFeats), docContext, getTermFrequencies(), null);
     Log.info("triage search returned " + mentions.size() + " mentions for " + searchFor);
 
     // Resolve the communications

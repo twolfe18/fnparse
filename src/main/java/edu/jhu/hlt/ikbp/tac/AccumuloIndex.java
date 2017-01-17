@@ -652,6 +652,10 @@ public class AccumuloIndex {
     return out.toString();
   }
   
+  /**
+   * @deprecated
+   * @see Feat
+   */
   public static class WeightedFeature implements Serializable {
     private static final long serialVersionUID = 5810788524410495193L;
     public final String feature;
@@ -794,8 +798,8 @@ public class AccumuloIndex {
      * @param docContext
      * @param df
      */
-    public List<SitSearchResult> search(List<String> triageFeats, StringTermVec docContext, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
-      Log.info("starting, triageFeats=" + triageFeats);
+    public List<SitSearchResult> search(List<String> triageFeats, StringTermVec docContext, ComputeIdf df, Double minScore) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      Log.info("starting, minScore=" + minScore + " triageFeats=" + triageFeats);
       if (triageFeats.isEmpty())
         throw new IllegalArgumentException();
       if (batchTimeoutSeconds > 0)
@@ -952,6 +956,11 @@ public class AccumuloIndex {
         if (tfidf < 0.05 && entMatchScore < 0.001) {
           EC.increment("resFilter/prod");
           filterReasons.increment("badNameAndTfIdf");
+          continue;
+        }
+        
+        if (minScore != null && Feat.sum(score) < minScore) {
+          EC.increment("resFilter/minScore");
           continue;
         }
         
@@ -1195,6 +1204,36 @@ public class AccumuloIndex {
     
     TIMER.stop("attrFeatureReranking");
   }
+
+  /**
+   * In this version of the method, you should just combine tok and doc versions
+   * of attrFeats and weight them accordingly.
+   * e.g. attrTokFeats get a weight of 2 and attrDocFeats get a weight of 1.
+   */
+  public static void attrFeatureReranking(List<Feat> attrQ, List<SitSearchResult> res) {
+    TIMER.start("attrFeatureReranking");
+    for (SitSearchResult r : res) {
+      if (r.yhatQueryEntityHead < 0)
+        throw new IllegalArgumentException();
+      String nameHeadR = r.getEntityHeadGuess();
+
+      List<String> attrCommR = NNPSense.extractAttributeFeatures(null, r.getCommunication(), nameHeadR, nameHeadR);
+      List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadR);
+      
+      List<Feat> attrR = Feat.vecadd(Feat.promote(2, attrTokR), Feat.promote(1, attrCommR));
+      Pair<Double, List<Feat>> c = Feat.cosineSim(attrR, attrQ);
+      
+      r.attrFeatQ = attrQ;
+      r.attrFeatR = attrR;
+      
+      double scale = 1;
+      r.addToScore("attrFeat", scale * c.get1());
+    }
+
+    Collections.sort(res, SitSearchResult.BY_SCORE_DESC);
+    
+    TIMER.stop("attrFeatureReranking");
+  }
   
   public static class AttrFeatMatch {
     List<String> attrCommQ;
@@ -1261,18 +1300,21 @@ public class AccumuloIndex {
     }
 
     private transient DiskBackedFetchWrapper commRetFetch;
-    private HashMap<String, Communication> commRetCache;  // contains everything commRet ever gave us
+    private HashMap<String, Communication> commRetCache;  // contains everything commRetFetch ever gave us
     private TriageSearch triageSearch;
     private ComputeIdf df;
+    private Double minTriageScore;
 
     public KbpSearching(
         TriageSearch triageSearch,
         ComputeIdf df,
+        Double minTriageScore,
         DiskBackedFetchWrapper commRetFetch,
         HashMap<String, Communication> commRetCache) throws Exception {
       this.commRetFetch = commRetFetch;
       this.commRetCache = commRetCache;
       this.triageSearch = triageSearch;
+      this.minTriageScore = minTriageScore;
       this.df = df;
     }
     
@@ -1303,6 +1345,53 @@ public class AccumuloIndex {
       }
       return c;
     }
+
+    /**
+     * Triage retrieval, resolving Communications, and finally attribute feature reranking.
+     */
+    public List<SitSearchResult> entityMentionSearch(List<String> triageFeats, List<Feat> attrFeats, StringTermVec context) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      
+      // 3) Search
+      List<SitSearchResult> res = triageSearch.search(triageFeats, context, df, minTriageScore);
+
+      // 4-5) Retrieve communications and prune
+      // TODO Batch retrieval
+      {
+      TIMER.start("getCommsForSitSearchResults");
+      List<SitSearchResult> resKeep = new ArrayList<>();
+      int failed = 0;
+      for (SitSearchResult r : res) {
+        Communication c = getCommCaching(r.getCommunicationId());
+        if (c == null) {
+          Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
+          failed++;
+        } else {
+          r.setCommunication(c);
+          resKeep.add(r);
+        }
+      }
+      Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
+      res = resKeep;
+      TIMER.stop("getCommsForSitSearchResults");
+      }
+
+      // 6) Find entities and situations
+      // (technically situations are not needed, only entities for attribute features)
+      {
+      List<SitSearchResult> withEntAndSit = new ArrayList<>();
+      for (SitSearchResult r : res)
+        if (findEntitiesAndSituations(r, df, false))
+          withEntAndSit.add(r);
+      Log.info("[filter] lost " + (res.size()-withEntAndSit.size()) + " SitSearchMention b/c ent/sit finding");
+      res = withEntAndSit;
+      }
+      
+      // 7) Rescore according to attribute features
+      attrFeatureReranking(attrFeats, res);
+      
+      return res;
+    }
+
 
     /**
      * Triage retrieval, resolving Communications, and finally attribute feature reranking.
@@ -1352,12 +1441,13 @@ public class AccumuloIndex {
       TIMER.stop("kbpQuery/setup");
       
       // 3) Search
-      List<SitSearchResult> res = triageSearch.search(triageFeats, query.getContext(), df);
+      List<SitSearchResult> res = triageSearch.search(triageFeats, query.getContext(), df, minTriageScore);
       // Set all results to be the same NER type as input
       for (SitSearchResult r : res)
         r.yhatQueryEntityNerType = query.nerType;
 
       // 4-5) Retrieve communications and prune
+      // TODO Batch retrieval
       {
       TIMER.start("getCommsForSitSearchResults");
       List<SitSearchResult> resKeep = new ArrayList<>();
@@ -1395,7 +1485,6 @@ public class AccumuloIndex {
 //        query.attrTokFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(query.tokUuid, query.getCommunication(), headwords));
 //      if (query.attrCommFeatures == null)
 //        query.attrCommFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(null, query.getCommunication(), headwords));
-
       String sourceTok = query.getTokenization().getUuid().getUuidString();
       attrFeatureReranking(entityName, sourceTok, query.getCommunication(), res);
       
@@ -1536,7 +1625,7 @@ public class AccumuloIndex {
       TIMER.stop("kbpQuery/setup");
       
       // 3) Search
-      List<SitSearchResult> res = search.search(triageFeats, queryContext, df);
+      List<SitSearchResult> res = search.search(triageFeats, queryContext, df, null);
 
       // 4-5) Retrieve communications and prune
       {
