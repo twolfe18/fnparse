@@ -238,6 +238,10 @@ public class KbpEntitySearchService implements SearchService.Iface {
     String fetchHost = config.getString("fetch.host");
     int fetchPort = config.getInt("fetch.port");
     DiskBackedFetchWrapper commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort);
+
+    commRet.disableCache = !config.getBoolean("fetch.caching", false);
+    Log.info("fetch.caching=" + (!commRet.disableCache));
+
     try (KbpSearching s = new KbpSearching(ts, df, commRet, new HashMap<>())) {
       KbpEntitySearchService ss = new KbpEntitySearchService(s);
       ss.verbose = config.getBoolean("verbose", false);
