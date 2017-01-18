@@ -1,14 +1,17 @@
 package edu.jhu.hlt.ikbp.tac;
 
 import java.io.Serializable;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.TaggedToken;
-import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenTagging;
+import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.hash.Hash;
@@ -137,4 +140,96 @@ public class PkbpMention implements Serializable {
   public void addFeature(Feat f) {
     feats.add(f);
   }
+
+  public String getContextAroundHead() {
+    StringBuilder sb = new StringBuilder();
+    if (head < 0)
+      sb.append("<NO_HEAD/>");
+    List<Token> toks = getTokenization().getTokenList().getTokenList();
+    for (Token t : toks) {
+      sb.append(' ');
+      if (t.getTokenIndex() == head)
+        sb.append("<HEAD>");
+      sb.append(t.getText());
+      if (t.getTokenIndex() == head)
+        sb.append("</HEAD>");
+    }
+    return sb.toString();
+  }
+
+  public String getContextAroundHead(int charsLeft, int charsRight, boolean whitespacePadding) {
+    StringBuilder sb = new StringBuilder();
+
+    if (whitespacePadding)
+      for (int i = 0; i < charsLeft; i++)
+        sb.append(' ');
+    
+    int start = -1, end = -1;
+    
+    List<Token> toks = getTokenization().getTokenList().getTokenList();
+    for (Token t : toks) {
+      sb.append(' ');
+      if (t.getTokenIndex() == head) {
+        start = sb.length();
+        sb.append("<HEAD>");
+      }
+      sb.append(t.getText());
+      if (t.getTokenIndex() == head) {
+        sb.append("</HEAD>");
+        end = sb.length();
+      }
+    }
+
+    if (whitespacePadding) {
+      for (int i = 0; i < charsRight; i++)
+        sb.append(' ');
+    }
+    
+    String all = sb.toString();
+    if (whitespacePadding)
+      return all.substring(start - charsLeft, end + charsRight);
+
+    start = Math.max(0, start - charsLeft);
+    end = Math.min(all.length(), end + charsLeft);
+    return all.substring(start, end);
+  }
+  
+//  public String getContextAroundHead(int charsLeft, int charsRight, boolean whitespacePadding) {
+//    Deque<String> lc = new ArrayDeque<>();    // LIFO
+//    List<String> rc = new ArrayList<>();      // FIFO
+//    List<Token> toks = getTokenization().getTokenList().getTokenList();
+//    String headStr = null;
+//    for (Token t : toks) {
+//      if (t.getTokenIndex() < head) {
+//        if (!lc.isEmpty()) lc.push(" ");
+//        lc.push(t.getText());
+//      } else if (t.getTokenIndex() > head) {
+//        if (!rc.isEmpty()) rc.add(" ");
+//        rc.add(t.getText());
+//      } else {
+//        headStr = t.getText();
+//      }
+//    }
+//    
+//    StringBuilder ls = new StringBuilder();
+//    while (!lc.isEmpty() && ls.length() < charsLeft)
+//      ls.append(lc.pop());
+//    if (whitespacePadding) {
+//      String r = ls.toString();
+//      ls = new StringBuilder();
+//      while (ls.length() + r.length() < charsLeft)
+//        ls.append(' ');
+//      ls.append(r);
+//    }
+//    
+//    StringBuilder rs = new StringBuilder();
+//    for (int i = 0; i < rc.size() && rs.length() < charsRight; i++)
+//      rs.append(rc.get(i));
+////    if (whitespacePadding) {
+////      while (rs.length() < charsRight)
+////        rs.append(' ');
+////    }
+//    
+//    return ls.toString() + " <HEAD>" + headStr + "</HEAD> " + rs.toString();
+//  }
 }

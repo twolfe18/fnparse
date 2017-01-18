@@ -169,11 +169,8 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 
     public List<Feat> getAttrFeatures() {
       if (attrFeatures == null) {
-        attrFeatures = new ArrayList<>();
-        for (String af : NNPSense.extractAttributeFeatures(tokUuid, getCommunication(), getEntitySpanGuess().split("\\s+")))
-          attrFeatures.add(new Feat(af, 2));
-        for (String af : NNPSense.extractAttributeFeatures(null, getCommunication(), getEntitySpanGuess().split("\\s+")))
-          attrFeatures.add(new Feat(af, 1));
+        attrFeatures = NNPSense.extractAttributeFeaturesNewAndImproved(
+            tokUuid, getCommunication(), getEntitySpanGuess().split("\\s+"));
       }
       return attrFeatures;
     }

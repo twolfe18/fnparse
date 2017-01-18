@@ -2001,6 +2001,9 @@ public class IndexCommunications implements AutoCloseable {
         }
       }
 
+      if (dot == 0 || ssa * ssb == 0)
+        return new Pair<>(0d, Collections.emptyList());
+      
       double cosineSim = dot / (Math.sqrt(ssa) * Math.sqrt(ssb));
       return new Pair<>(cosineSim, common);
     }
@@ -2059,6 +2062,28 @@ public class IndexCommunications implements AutoCloseable {
         return 0;
       }
     };
+    
+    public static String showScore(List<Feat> features, int maxChars) {
+      List<Feat> out = new ArrayList<>();
+      for (Feat f : features)
+        out.add(f);
+      Collections.sort(out, Feat.BY_SCORE_DESC);
+      
+      StringBuilder sb = new StringBuilder();
+      sb.append(String.format("%+.2f", Feat.sum(features)));
+      for (int i = 0; i < out.size(); i++) {
+        Feat f = out.get(i);
+        String app = " " + f.toString();
+        String alt = " and " + (out.size()-i) + " more";
+        if (sb.length() + app.length() < maxChars) {
+          sb.append(app);
+        } else {
+          sb.append(alt);
+          break;
+        }
+      }
+      return sb.toString();
+    }
 
     public static List<Feat> sortAndPrune(Map<String, Double> in, double eps) {
       List<Feat> l = new ArrayList<>();

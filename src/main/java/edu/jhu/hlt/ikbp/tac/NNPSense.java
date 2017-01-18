@@ -36,6 +36,7 @@ import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.LL;
@@ -397,6 +398,132 @@ public class NNPSense {
     }
     return attr;
   }
+
+  public static double endpointPosScore(String pos) {
+    if (pos.startsWith("NNP"))
+      return 1;
+    if (pos.equals("CD"))
+      return 1;
+    return 0.5;
+  }
+  
+  public static double attrFeatPathScore(List<String> deps) {
+    double k = 2;
+    return (k + 1) / (k + deps.size());
+  }
+
+  /**
+   * Returns strings like "PERSON-nn-Dr." where PERSON matches the given nameHead
+   */
+  public static List<Feat> extractAttributeFeaturesNewAndImproved(String tokUuid, Communication c, String... nameHeads) {
+    if (EXTRACT_ATTR_FEAT_VERBOSE)
+      Log.info("comm=" + c.getId() + " nameHeads=" + Arrays.toString(nameHeads) + " tok=" + tokUuid);
+    
+    // Might want to expand this set
+    // Currently it will miss "Italian" because it is an JJ
+    // Perhaps I could actually take all high idf terms? This would miss titles like "Dr."
+    Set<String> interestingPos = new HashSet<>();
+    interestingPos.add("NNP");
+    interestingPos.add("NNPS");
+    interestingPos.add("CD");
+    interestingPos.add("JJ");
+    interestingPos.add("JJS");    // TODO might want to restrict these to one-hop paths
+
+    List<Feat> attr = new ArrayList<>();
+    for (Tokenization toks : new TokenizationIter(c)) {
+      boolean sameTok = tokUuid != null && !tokUuid.equals(toks.getUuid().getUuidString());
+      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
+      List<TaggedToken> pos = IndexCommunications.getPreferredPosTags(toks).getTaggedTokenList();
+      List<TaggedToken> ner = IndexCommunications.getPreferredNerTags(toks).getTaggedTokenList();
+      List<Token> t = toks.getTokenList().getTokenList();
+      if (EXTRACT_ATTR_FEAT_VERBOSE)
+        Log.info("scanning: " + join(t));
+      for (Token tok : t) {
+        Set<String> uniq = new HashSet<>(); // uniq per tokenization, otherwise multiple nameHeads means duplicates
+        for (String nameHead : nameHeads) {
+          if (nameHead.equalsIgnoreCase(tok.getText())) {
+            int source = tok.getTokenIndex();
+            String sourcePos = pos.get(source).getTag();
+            if (!sourcePos.toUpperCase().startsWith("NNP"))
+              continue;
+            List<Pair<Integer, LL<Dependency>>> paths = kHop(source, 4, deps);
+            for (Pair<Integer, LL<Dependency>> p : paths) {
+              int dest = p.get1();
+              String destPos = pos.get(dest).getTag();
+              
+              // TODO Check that path only *ends* in an interesting POS, rather that going over them.
+              // e.g. we want a path that leads to "New York" to end with the head, "York", and not include "New"
+              // This matters for backoff (where the path is lost) and avoiding double-counting.
+              int length = 0;
+              BitSet interestingOnPath = new BitSet();
+              for (LL<Dependency> cur = p.get2(); cur != null; cur = cur.next) {
+                length++;
+                Dependency d = cur.item;
+                if (d.isSetGov() && interestingPos.contains(pos.get(d.getGov()).getTag()))
+                  interestingOnPath.set(d.getGov());
+                if (interestingPos.contains(pos.get(d.getDep()).getTag()))
+                  interestingOnPath.set(d.getDep());
+              }
+
+              // Build the path
+              String sourceNer = ner.get(source).getTag();
+              String destWord = t.get(dest).getText();
+              ArrayDeque<String> path = reverseDeps(p.get2());
+
+              List<String> dp = new ArrayList<>();
+              dp.addAll(path);
+
+              path.addFirst(sourceNer);
+              path.addLast(destWord);
+              // e.g. ORGANIZATION-appos-nn-Boston
+              String x = StringUtils.join("-", path);
+              // e.g. ORGANIZATION-backoff-Boston
+              String xBackoff = sourceNer + "-backoff-" + destWord;
+              
+              Feat xf = new Feat(x, endpointPosScore(destPos) + attrFeatPathScore(dp));
+              Feat xbf = new Feat(xBackoff, xf.weight * 0.25);
+              
+              if (sameTok) {
+                xf.rescale("tokSpecific", 2);
+                xbf.rescale("tokSpecific", 2);
+              }
+
+              // See if you want to keep it
+              if (length == 0) {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c length=0: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                continue;
+              }
+              if (interestingOnPath.cardinality() > 2) {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c mult interesting on path: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                continue;
+              }
+              if (destPos.startsWith("JJ") && length > 1) {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c long JJ*: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                continue;
+              }
+              if (interestingPos.contains(destPos)) {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("keeping: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                if (uniq.add(x))
+                  attr.add(xf);
+                if (uniq.add(xBackoff))
+                  attr.add(xbf);
+              } else {
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c not interesting: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+              }
+
+            }
+          }
+        }
+      }
+    }
+    return attr;
+  }
+
 
   /**
    * Perhaps I can take the 1000 most common walks out of an entity head?

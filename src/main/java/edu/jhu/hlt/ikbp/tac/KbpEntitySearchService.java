@@ -118,6 +118,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
     List<Feat> attrFeats = new ArrayList<>();
     StringTermVec context = new StringTermVec();
     
+    int lc;
+    
     for (String t : q.getTerms()) {
       String[] ar = t.split(":", 2);
       if (ar.length != 2) {
@@ -130,11 +132,14 @@ public class KbpEntitySearchService implements SearchService.Iface {
         break;
 
       case "a":      // attrFeat
-      case "ac":     // attrComm
-        attrFeats.add(new Feat(ar[1], 1));
-        break;
-      case "at":     // attrTok
-        attrFeats.add(new Feat(ar[1], 2));
+        lc = ar[1].lastIndexOf(':');
+        if (lc < 0) {
+          attrFeats.add(new Feat(ar[1], 1));
+        } else {
+          String f = ar[1].substring(0, lc);
+          double w = Double.parseDouble(ar[1].substring(lc+1));
+          attrFeats.add(new Feat(f, w));
+        }
         break;
 
       default:        // triage feats

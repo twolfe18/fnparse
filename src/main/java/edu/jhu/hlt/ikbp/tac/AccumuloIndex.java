@@ -458,6 +458,11 @@ public class AccumuloIndex {
         ssb += sb * sb;
       }
       
+      if (dot == 0)
+        return 0;
+      if (ssa * ssb == 0)
+        return 0;
+      
       return dot / (Math.sqrt(ssa) * Math.sqrt(ssb));
     }
     
@@ -1318,8 +1323,8 @@ public class AccumuloIndex {
       boolean saveFetchedComms = true;
       boolean compressionForSavedComms = true;
       DiskBackedFetchWrapper db = new DiskBackedFetchWrapper(failOver, transport, cacheDir, saveFetchedComms, compressionForSavedComms);
-      db.debug = true;
-      //db.disableCache = true;
+//      db.debug = true;
+//      db.disableCache = true;
       return db;
     }
 
