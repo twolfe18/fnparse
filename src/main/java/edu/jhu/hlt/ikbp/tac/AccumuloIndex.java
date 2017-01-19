@@ -1638,8 +1638,8 @@ public class AccumuloIndex {
       
       // 7) Rescore according to attribute features
       for (EMQuery q : qs) {
-        if (q.attrFeats.size() > 0)
-          throw new RuntimeException("implement me");
+//        if (q.attrFeats.size() > 0)
+//          throw new RuntimeException("implement me");
         
         /*
          * There is a real problem here.
