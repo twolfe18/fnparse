@@ -101,6 +101,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
   public SearchResult search(SearchQuery q) throws ServicesException, TException {
     if (verbose)
       Log.info("searching for " + StringUtils.trim(q.toString(), 120));
+    if (q.isSetLabels() && q.getLabels().contains("multi"))
+      return searchGivenRawFeaturesMulti(q);
     if (q.isSetTerms() && q.getTermsSize() > 0)
       return searchGivenRawFeatures(q);
     return searchGivenMentionAndComm(q);

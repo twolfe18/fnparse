@@ -527,7 +527,7 @@ public class PkbpSearching implements Serializable {
         System.out.printf("%-24s %.4f %s\n", s, p, tc);
       }
     }
-    
+
     static void runSearches(ExperimentProperties config,
         SearchService.Client kbpEntSearch,
         DiskBackedFetchWrapper commRet) throws Exception {
@@ -539,8 +539,6 @@ public class PkbpSearching implements Serializable {
 
       ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
 
-      TacQueryEntityMentionResolver emFinder = new TacQueryEntityMentionResolver("tacQuery");
-
       // Triage feature frequencies and scores
       File fceFile = config.getExistingFile("triageFeatureFrequencies");
       Log.info("loading triage feature frequencies (FeatureCardinalityEstimator.New) from=" + fceFile.getPath());
@@ -549,15 +547,10 @@ public class PkbpSearching implements Serializable {
       TriageSearch ts = new TriageSearch(triageFeatureFreq);
       triageFeatDebug(ts);
 
-      boolean debug = true;
-
       for (KbpQuery q : TacKbp.getKbp2013SfQueries()) {
-        Log.info("working on " + q);
-        New search = new New(kbpEntSearch, sitFeatFreq, config.getRandom());
 
         // Resolve the query's Communication
-        if (debug)
-          Log.info("retrieving query comm...");
+        Log.info("retrieving query comm...");
         assert q.sourceComm == null;
         q.sourceComm = commRet.fetch(q.docid);
         if (q.sourceComm == null) {
@@ -565,69 +558,81 @@ public class PkbpSearching implements Serializable {
           continue;
         }
 
-        // Add the query as a seed
-        double seedWeight = config.getDouble("seedWeight", 10);
-        PkbpEntity.Mention seed = PkbpEntity.Mention.convert(q, emFinder, df, ts);
-        boolean createEnt = true;
-        search.addSeed(seed, seedWeight, createEnt);
-        if (debug) {
-          Log.info("seed entity:");
-          List<PkbpNode> ents = search.findIntersection(FeatureNames.ENTITY);
-          showEntities(first(10, ents), 10);
-        }
+        runOneSearch(q, config, kbpEntSearch, commRet, sitFeatFreq, df, ts);
+      }
+    }
 
-        // Search for mentions of this seed, create EMs out of them
-        int maxResults = 40;
-        PkbpNode seedEntNode = search.findIntersection(FeatureNames.SEED, FeatureNames.ENTITY).get(0);
-        PkbpEntity seedEnt = (PkbpEntity) seedEntNode.obj;
-        
-        for (int expandIter = 0; expandIter < 4; expandIter++) {
-          Log.info("on search iter=" + expandIter);
-          PkbpEntity searchFor = expandIter == 0
-              ? seedEnt
-              : search.chooseEntityToSearchFor();
+    static void runOneSearch(KbpQuery q,
+        ExperimentProperties config,
+        SearchService.Client kbpEntSearch,
+        DiskBackedFetchWrapper commRet,
+        StringCountMinSketch sitFeatFreq,
+        ComputeIdf df,
+        TriageSearch ts) throws Exception {
 
-          List<PkbpNode> seedEntMentions = search.searchForMentionsOf(searchFor, maxResults, commRet::fetch, df, ts, null);
-          if (debug) {
-            Log.info("[main] mentions after initial query:");
-            showMentionsN(seedEntMentions);
-          }
+      boolean debug = true;
 
-          // Link the EMs to create Es
-          if (debug)
-            Log.info("[main] initial mentions (hopefully to one entity):");
-          double scoreNoOpInitial = 2;
-          search.batchEntityLinking(seedEntMentions, df, ts, scoreNoOpInitial);
-          if (debug) {
-            List<PkbpNode> ents = search.findIntersection(FeatureNames.ENTITY);
-            showEntities(ents, 10);
-          }
+      Log.info("working on " + q);
+      New search = new New(kbpEntSearch, sitFeatFreq, config.getRandom());
 
-          // Extract SMs and their arguments
-          Log.info("[main] extracting situations related to initial mentions:");
-          List<PA> relatedSits = new ArrayList<>(); 
-          for (PkbpNode emMention : seedEntMentions)
-            search.extractSituationsAndArgument(emMention, relatedSits, ts);
-          if (debug) {
-            Log.info("situations mentions:");
-            showMentionsM(PA.sitMentions(relatedSits));
-            Log.info("arguments of those situations:");
-            showMentionsM(PA.otherArgs(relatedSits));
-          }
+      TacQueryEntityMentionResolver emFinder = new TacQueryEntityMentionResolver("tacQuery");
 
-          // Link the arguments
-          Log.info("[main] linking arguments of related situations...");
-          List<PkbpEntity.Mention> args = PA.otherArgs(relatedSits);
-          assert disjoint(node2mentions(seedEntMentions), args);
-          List<PkbpNode> argNodes = search.addNodes(args, FeatureNames.ENTITY_MENTION);
-          double scoreNoOp = 1;
-          List<PkbpNode> newEntNodes = search.batchEntityLinking(argNodes, df, ts, scoreNoOp, false);
-          addToRelevanceReasons(newEntNodes, "relevantToQueryAtIter=" + expandIter, 2 / (1d+expandIter));
-          if (debug) {
-            Log.info("new entities:");
-            showEntities(newEntNodes, 10);
-          }
-        }
+      // Add the query as a seed
+      double seedWeight = config.getDouble("seedWeight", 10);
+      PkbpEntity.Mention seed = PkbpEntity.Mention.convert(q, emFinder, df, ts);
+      boolean createEnt = true;
+      search.addSeed(seed, seedWeight, createEnt);
+      if (debug) {
+        Log.info("seed entity:");
+        List<PkbpNode> ents = search.findIntersection(FeatureNames.ENTITY);
+        showEntitiesN(first(10, ents), 10);
+      }
+
+      // Search for mentions of this seed, create EMs out of them
+      int maxResults = 40;
+      PkbpNode seedEntNode = search.findIntersection(FeatureNames.SEED, FeatureNames.ENTITY).get(0);
+      PkbpEntity seedEnt = (PkbpEntity) seedEntNode.obj;
+      List<PkbpNode> seedEntMentions = search.searchForMentionsOf(seedEnt, maxResults, commRet::fetch, df, ts, null);
+      if (debug) {
+        Log.info("[main] mentions after initial query:");
+        showMentionsN(seedEntMentions);
+      }
+
+      // Link the EMs to create Es
+      if (debug)
+        Log.info("[main] initial mentions (hopefully to one entity):");
+      double scoreNoOpInitial = 2;
+      search.batchEntityLinking(seedEntMentions, df, ts, scoreNoOpInitial);
+      if (debug) {
+        List<PkbpNode> ents = search.findIntersection(FeatureNames.ENTITY);
+        showEntitiesN(ents, 10);
+      }
+
+      // Extract SMs and their arguments
+      Log.info("[main] extracting situations related to initial mentions:");
+      List<PA> relatedSits = new ArrayList<>(); 
+      for (PkbpNode emMention : seedEntMentions)
+        search.extractSituationsAndArgument(emMention, relatedSits, ts);
+      if (debug) {
+        Log.info("situations mentions:");
+        showMentionsM(PA.sitMentions(relatedSits));
+        Log.info("arguments of those situations:");
+        showMentionsM(PA.otherArgs(relatedSits));
+      }
+
+      // Link the arguments
+      Log.info("[main] linking arguments of related situations...");
+      List<PkbpEntity.Mention> args = PA.otherArgs(relatedSits);
+      assert disjoint(node2mentions(seedEntMentions), args);
+      List<PkbpNode> argNodes = search.addNodes(args, FeatureNames.ENTITY_MENTION);
+      double scoreNoOp = 1;
+      List<PkbpNode> newEntNodes = search.batchEntityLinking(argNodes, df, ts, scoreNoOp, false);
+      addToRelevanceReasons(newEntNodes, "foundWithSeed", 2);
+      if (debug) {
+        Log.info("new entities:");
+        showEntitiesN(newEntNodes, 10);
+      }
+
 
 //        // Link SMs to create Ss
 //        Log.info("[main] linking situations...");
@@ -638,8 +643,24 @@ public class PkbpSearching implements Serializable {
 //          search.showSituations();
 //        }
 
+
+      // Search for SEED+X mentions
+      for (int i = 0; i < 10; i++) {
+        PkbpEntity searchFor = search.chooseEntityToSearchFor();
+        searchFor.relevantReasons.add(new Feat("searched", -5));
+        List<PkbpEntity> entPair = Arrays.asList(seedEnt, searchFor);
+        Log.info("searching for:");
+        showEntitiesE(entPair, 10);
+        List<MultiEntityMention> res = search.searchForSituationsInvolving(entPair, maxResults, commRet::fetch, df, ts, null);
+        showMultiEntityMention(res);
         System.out.println();
       }
+
+      System.out.println();
+    }
+    
+    public static void showMultiEntityMention(List<MultiEntityMention> mems) {
+      
     }
     
     public static void addToRelevanceReasons(List<PkbpNode> entities, String why, double amount) {
@@ -787,7 +808,25 @@ public class PkbpSearching implements Serializable {
       System.out.println();
     }
     
-    public static void showEntities(List<PkbpNode> ents, int maxMentionsPerEnt) {
+    public static void showEntitiesE(List<PkbpEntity> ents, int maxMentionsPerEnt) {
+      for (PkbpEntity e : ents) {
+        System.out.printf("entity(?): %s\n", e);
+        System.out.println("\ttriageFeats: " + e.getTriageFeatures());
+        System.out.println("\tcommonTriageFeats: " + e.getCommonTriageFeatures());
+        System.out.println("\tattrFeats: " + Feat.sortAndPrune(e.getAttrFeatures(), 0d));
+        System.out.println("\tcommonAttrFeats: " + e.getCommonAttrFeats());
+        int n = e.numMentions();
+        for (int i = 0; i < Math.min(n, maxMentionsPerEnt); i++) {
+          PkbpMention m = e.getMention(i);
+          System.out.printf("\t%-32s %s\n", m.getCommTokIdShort(), m.getContextAroundHead(60, 60, true));
+        }
+        if (n > maxMentionsPerEnt)
+          System.out.println("\t... and " + (n-maxMentionsPerEnt) + " more mentions");
+
+        System.out.println();
+      }
+    }
+    public static void showEntitiesN(List<PkbpNode> ents, int maxMentionsPerEnt) {
       for (PkbpNode node : ents) {
         PkbpEntity e = (PkbpEntity) node.obj;
         System.out.printf("entity(%d): %s\n", node.id, e);
@@ -955,8 +994,8 @@ public class PkbpSearching implements Serializable {
       if (ignoreCommToks != null)
         throw new RuntimeException("implement me");
       
-      
       SearchQuery query = new SearchQuery();
+      query.addToLabels("multi");
       query.setK(maxResults);
       query.setType(SearchType.SENTENCES);
       query.setTerms(new ArrayList<>());
