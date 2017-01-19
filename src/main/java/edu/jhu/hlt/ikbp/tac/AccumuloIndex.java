@@ -17,6 +17,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -83,16 +84,17 @@ import edu.jhu.hlt.ikbp.tac.IndexCommunications.ShowResult;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.EfficientUuidList;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
-import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
+import edu.jhu.hlt.tutils.Weighted;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
@@ -116,8 +118,17 @@ import edu.jhu.util.TokenizationIter;
  * NOTE: t2f and f2t contain the SAME DATA but are permutations of the key fields.
  * featType in [entity, deprel, situation] and feat values are things like "h:John" and "X<nsubj<loves>dobj>PER"
  * 
- * TODO create c2f_idf etc tables
  * 
+ * 
+ * TODO Switch from UTF8 UUIDs to raw UUIDs!!!
+ * 
+ * TODO Prune c2w down to only the top-128 or so words by idf.
+ * This is strictly for compute tf-idf, as we later use Fetch to get the whole communication.
+ * 
+ * TODO Remove t2f, which I don't think I ever use.
+ * Concerning values, e.g. tf(feat,tok), I'm never going to use that.
+ * I compress all of those down to approximations with count-min sketch anyway.
+ * Usually I just need to know whether an f-t edge exists, and weights come for free when looking this up.
  *
  * @author travis
  */
@@ -173,6 +184,8 @@ public class AccumuloIndex {
     byte[] cb = comm.getId().getBytes();
 
     // c2w
+    // TODO Only index the top 128 or so terms in the document
+    // This requires building a count-min sketch for document-frequency ahead of time.
     Counts<String> terms = IndexCommunications.terms2(comm);
     for (Entry<String, Integer> t : terms.entrySet()) {
       String w = t.getKey();
@@ -201,6 +214,15 @@ public class AccumuloIndex {
     new AddNerTypeToEntityMentions(comm);
     for (EntityMention em : IndexCommunications.getEntityMentions(comm)) {
 
+      /*
+       * TODO!!!
+       * Don't use the UTF-8 encoding of a UUID!
+       * That is 32+4 chars => 36 bytes
+       * Use the damn byte[] encoding and it goes down to 16 bytes!
+       * That is more than a 2x speedup for free!
+       * But it will break all of my code :)
+       * Price I should pay...
+       */
       byte[] t = em.getTokens().getTokenizationId().getUuidString().getBytes();
 
       boolean takeNnCompounts = true;
@@ -790,6 +812,10 @@ public class AccumuloIndex {
       return getFeatureScore(c.first, c.second);
     }
 
+    public double getFeatureScore(IntPair tcFreq) {
+      return getFeatureScore(tcFreq.first, tcFreq.second);
+    }
+
     public double getFeatureScore(int numToks, int numDocs) {
 
       // Assume we've seen everything at least a few times
@@ -816,6 +842,10 @@ public class AccumuloIndex {
       return p;
     }
     
+    /**
+     * Wraps up all the info on features for an entity.
+     * {@link TriageSearch} only handles triage and attr feats.
+     */
     static class EMQuery {
       String id;
       double weight;
@@ -838,6 +868,7 @@ public class AccumuloIndex {
       }
     }
 
+    // Only called by commented-out section of searchMulti
     public Counts.Pseudo<String> findIntersectionPlus(List<String> triageFeats) throws Exception {
       TIMER.start("f2t/triage");
       Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
@@ -947,6 +978,110 @@ public class AccumuloIndex {
         out.update(x.getKey(), (weight * x.getValue()) / mx);
       return out;
     }
+    
+    class FeatSearch {
+      String feat;
+      EfficientUuidList toks;
+      Set<String> commUuidPrefixes;
+      IntPair tcFreq;
+
+      public FeatSearch(String feat) {
+        this.feat = feat;
+        toks = new EfficientUuidList(16);
+        commUuidPrefixes = new HashSet<>();
+        Log.info("scanning for feat=" + feat);
+        try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
+          f2tScanner.setRange(Range.exact(feat));
+          for (Entry<Key, Value> e : f2tScanner) {
+            String tokUuid = e.getKey().getColumnQualifier().toString();
+            // TODO compare byte[] => String => UUID
+            // to byte[] => ByteBuffer.wrap => UUID
+            toks.add(tokUuid);
+            commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
+          }
+        } catch (TableNotFoundException e) {
+          throw new RuntimeException(e);
+        }
+        tcFreq = new IntPair(toks.size(), commUuidPrefixes.size());
+        Log.info("done, freq=" + tcFreq + " est. mem. usage=" + estimatedMemUseInBytes()/(1<<20) + " MB");
+      }
+      
+      public long estimatedMemUseInBytes() {
+        long t = 16;  // overhead
+        t += 8 + feat.length() * 2L;
+        t += 8 + toks.size() * 16L;
+        t += 8 + (long) (1.5d * commUuidPrefixes.size() * 16 * 2);
+        t += 8 + 3*4;
+        return t;
+      }
+      
+      public double getScore() {
+        return getFeatureScore(tcFreq);
+      }
+    }
+    
+    public Map<java.util.UUID, Double> intersectiveQuery(EMQuery a, EMQuery b, Map<String, FeatSearch> searchCache) {
+      // score(t, fa, fb) = score(t, fa) * score(t, fb)
+      // where score(t,f)=0  =>  score(t, f, *)=0, so you really are intersecting inverted lists for fa and fb
+      boolean debug = true;
+      
+      // Create an agenda of intersective queries sorted by score
+      PriorityQueue<Weighted<Pair<String, String>>> agenda = new PriorityQueue<>(10, Weighted.byScoreAsc());
+      for (String fa : a.triageFeats) {
+        for (String fb : b.triageFeats) {
+          double sa = getFeatureScore(fa);
+          double sb = getFeatureScore(fb);
+          double s = sa * sb;
+          if (debug) {
+            Log.info("pusing onto agenda fa=" + fa + " fb=" + fb
+                + " sa=" + sa + " sb=" + sb + " s=" + s);
+          }
+          Pair<String, String> p = new Pair<>(fa, fb);
+          agenda.add(new Weighted<>(p, s));
+        }
+      }
+
+      // Add up the score across all pairs of features
+      Map<java.util.UUID, Double> tok2score = new HashMap<>();
+      while (!agenda.isEmpty()) {
+        Weighted<Pair<String, String>> p = agenda.poll();
+        Pair<String, String> f = p.item;
+
+        // Memoizing the FeatSearches
+        // 125k UUID * 16 bytes/UUID * 10 feats * 2 queries = 38MB
+
+        FeatSearch f1 = searchCache.get(f.get1());
+        if (f1 == null) {
+          f1 = new FeatSearch(f.get1());
+          searchCache.put(f1.feat, f1);
+        }
+
+        FeatSearch f2 = searchCache.get(f.get2());
+        if (f2 == null) {
+          f2 = new FeatSearch(f.get2());
+          searchCache.put(f2.feat, f2);
+        }
+
+        double score = f1.getScore() * f2.getScore();
+        EfficientUuidList common = EfficientUuidList.hashJoin(f1.toks, f2.toks);
+        int n = common.size();
+        for (int i = 0; i < n; i++) {
+          java.util.UUID t = common.get(i);
+          double prev = tok2score.getOrDefault(t, 0d);
+          tok2score.put(t, prev + score);
+        }
+      }
+      return tok2score;
+    }
+
+    public static Counts.Pseudo<String> convert(Map<java.util.UUID, Double> t2s) {
+      Counts.Pseudo<String> c = new Counts.Pseudo<>();
+      for (Entry<java.util.UUID, Double> x : t2s.entrySet()) {
+        String k = x.getKey().toString();
+        c.update(k, x.getValue());
+      }
+      return c;
+    }
 
     public List<SitSearchResult> searchMulti(List<EMQuery> qs, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
       boolean debug = true;
@@ -963,7 +1098,12 @@ public class AccumuloIndex {
         Log.info("after sorting q[" + q.id + "] feats by freq: " + triageFeatureFrequencies.showFreqUpperBounds(q.triageFeats));
       }
       
-
+      if (qs.size() != 2)
+        throw new RuntimeException("implement me");
+      Map<java.util.UUID, Double> t2s = intersectiveQuery(qs.get(0), qs.get(1), new HashMap<>());
+      Counts.Pseudo<String> tokUuid2score = convert(t2s);
+      
+      /*
       // score(tok, qs) = prod_{q in qs} 1+score(tok,q)
       // where the score(tok,q) is the already implemented bit
       Map<String, Double> tokUuid2ScoreMap = new HashMap<>();
@@ -980,7 +1120,7 @@ public class AccumuloIndex {
           
           // We are going to normalize this mapping so that the maximum value is the entity weight;
           t2s = normalizeToMaxTimesWeight(t2s, q.weight);
-
+          
           K = Math.max(K, t2s.numNonZero());
           Set<String> uniq = new HashSet<>();
           for (Entry<String, Double> tok : t2s.entrySet()) {
@@ -1040,6 +1180,7 @@ public class AccumuloIndex {
         if (debug)
           Log.info("topTok: " + f.name + " " + f.weight);
       }
+      */
 
       // Now we have scores for every tokenization
       // Need to add in the document tf-idf score
