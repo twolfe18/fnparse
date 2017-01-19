@@ -1973,11 +1973,13 @@ public class IndexCommunications implements AutoCloseable {
   
   public static class Feat implements Serializable {
     private static final long serialVersionUID = -2723964704627341786L;
+    
+    public static boolean SHOW_REASON_IN_TOSTRING = true;
   
     /**
      * @returns (cosineSim, commonFeatures)
      */
-    public static Pair<Double, List<String>> cosineSim(List<Feat> a, List<Feat> b) {
+    public static Pair<Double, List<Feat>> cosineSim(List<Feat> a, List<Feat> b) {
 
       double ssa = 0;
       Map<String, Feat> am = index(a);
@@ -1992,12 +1994,12 @@ public class IndexCommunications implements AutoCloseable {
       assert ssb >= 0;
 
       double dot = 0;
-      List<String> common = new ArrayList<>();
+      List<Feat> common = new ArrayList<>();
       for (Feat f : bm.values()) {
         Feat ff = am.get(f.name);
         if (ff != null) {
           dot += f.weight * ff.weight;
-          common.add(f.name);
+          common.add(new Feat(f.name, f.weight * ff.weight));
         }
       }
 
@@ -2006,6 +2008,13 @@ public class IndexCommunications implements AutoCloseable {
       
       double cosineSim = dot / (Math.sqrt(ssa) * Math.sqrt(ssb));
       return new Pair<>(cosineSim, common);
+    }
+    
+    public static List<Feat> deindex(Iterable<Entry<String, Double>> m) {
+      List<Feat> f = new ArrayList<>();
+      for (Entry<String, Double> e : m)
+        f.add(new Feat(e.getKey(), e.getValue()));
+      return f;
     }
     
     @SafeVarargs
@@ -2107,6 +2116,7 @@ public class IndexCommunications implements AutoCloseable {
         if (Math.abs(f.weight) > eps)
           out.add(f);
       //    Collections.sort(out, Feat.BY_NAME);
+      Collections.sort(out, Feat.BY_SCORE_DESC);
       return out;
     }
 
@@ -2171,6 +2181,8 @@ public class IndexCommunications implements AutoCloseable {
     public Feat(String name, double weight) {
       this.name = name;
       this.weight = weight;
+      assert !Double.isNaN(this.weight);
+      assert Double.isFinite(weight);
     }
     
     public String getName() {
@@ -2180,11 +2192,15 @@ public class IndexCommunications implements AutoCloseable {
     public Feat rescale(String reason, double factor) {
       this.weight *= factor;
       addJustification(String.format("rescale[%s]=%.2g", reason, factor));
+      assert !Double.isNaN(this.weight);
+      assert Double.isFinite(weight);
       return this;
     }
     
     public Feat setWeight(double w) {
       this.weight = w;
+      assert !Double.isNaN(this.weight);
+      assert Double.isFinite(weight);
       return this;
     }
     
@@ -2200,7 +2216,7 @@ public class IndexCommunications implements AutoCloseable {
     public String toString() {
 //      String s = String.format("%-20s %.2f", name, weight);
       String s = String.format("%s %.2f", name, weight);
-      if (justifications == null)
+      if (justifications == null || !SHOW_REASON_IN_TOSTRING)
         return s;
       String j = StringUtils.join(", ", justifications);
 //      return String.format("%-26s b/c %s", s, j);

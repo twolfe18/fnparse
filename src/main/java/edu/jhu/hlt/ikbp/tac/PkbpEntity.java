@@ -9,18 +9,22 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
+import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.search.SearchResultItem;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.util.TokenizationIter;
@@ -44,7 +48,7 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 //    private List<Feat> attrTokFeatures;
     private List<Feat> attrFeatures;
 
-    public static PkbpEntity.Mention convert(KbpQuery seed, TacQueryEntityMentionResolver emFinder, ComputeIdf df) {
+    public static PkbpEntity.Mention convert(KbpQuery seed, TacQueryEntityMentionResolver emFinder, ComputeIdf df, TriageSearch ts) {
       if (seed.sourceComm == null)
         throw new IllegalArgumentException("KbpQuery must have comm");
       if (seed.entityMention == null) {
@@ -88,10 +92,13 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       canonical2.getAttrFeatures();
       assert canonical2.triageFeatures != null;
       canonical2.nerType = seed.entity_type;
+      
+      canonical2.scoreTriageFeatures(ts);
+      
       return canonical2;
     }
     
-    public static Mention convert(SearchResultItem r, Communication c) {
+    public static Mention convert(SearchResultItem r, Communication c, TriageSearch ts) {
       if (c == null)
         throw new IllegalArgumentException();
       String tokUuid = r.getSentenceId().getUuidString();
@@ -101,7 +108,9 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       Span span = IndexCommunications.nounPhraseExpand(head, deps);
       TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
       String nerType = ner.getTaggedTokenList().get(head).getTag();
-      return new Mention(head, span, nerType, toks, deps, c);
+      Mention m = new Mention(head, span, nerType, toks, deps, c);
+      m.scoreTriageFeatures(ts);
+      return m;
     }
 
     public Mention(SitSearchResult ss) {
@@ -123,6 +132,11 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       TokenObservationCounts tokObsLc = null;
       triageFeatures = Feat.promote(1, IndexCommunications.getEntityMentionFeatures(
           mentionText, headwords, nerType, tokObs, tokObsLc));
+    }
+    
+    public void scoreTriageFeatures(TriageSearch ts) {
+      for (Feat f : triageFeatures)
+        f.weight = ts.getFeatureScore(f.name);
     }
 
     @Override
@@ -166,11 +180,34 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 //      }
 //      return attrTokFeatures;
 //    }
+    
+    public String getHeadNer() {
+      TokenTagging ner = IndexCommunications.getPreferredNerTags(getTokenization());
+      TaggedToken n = ner.getTaggedTokenList().get(head);
+      assert n.getTokenIndex() == head;
+      return n.getTag();
+    }
+    
+    public List<String> getNNPWordsInSpan() {
+      List<String> l = new ArrayList<>();
+      TokenTagging pos = IndexCommunications.getPreferredPosTags(getTokenization());
+      for (int i = span.start; i < span.end; i++) {
+        String p = pos.getTaggedTokenList().get(i).getTag();
+        if (p.toUpperCase().startsWith("NNP")) {
+          l.add(getTokenization().getTokenList().getTokenList().get(i).getText());
+        }
+      }
+      return l;
+    }
 
     public List<Feat> getAttrFeatures() {
       if (attrFeatures == null) {
         attrFeatures = NNPSense.extractAttributeFeaturesNewAndImproved(
-            tokUuid, getCommunication(), getEntitySpanGuess().split("\\s+"));
+            tokUuid,
+            getCommunication(),
+            getHeadNer(),
+            getNNPWordsInSpan());
+//            getEntitySpanGuess().split("\\s+"));
       }
       return attrFeatures;
     }
@@ -238,6 +275,13 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     //Log.info(this);
   }
   
+  public boolean containsMentionWithNer(String ner) {
+    for (PkbpEntity.Mention m : mentions)
+      if (ner.equalsIgnoreCase(m.getHeadNer()))
+        return true;
+    return false;
+  }
+  
   @Override
   public int hashCode() {
     return id.hashCode();
@@ -294,6 +338,21 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       fs = Feat.vecadd(fs, mentions.get(i).getAttrFeatures());
     return fs;
   }
+
+  public List<Feat> getCommonAttrFeats() {
+    Counts<String> c = new Counts<>();
+    for (PkbpEntity.Mention m : mentions)
+      for (Feat f : m.getAttrFeatures())
+        c.increment(f.name);
+    Map<String, Feat> m = Feat.index(this.getAttrFeatures());
+    List<Feat> r = new ArrayList<>();
+    for (String f : c.countIsAtLeast(2)) {
+      assert m.get(f) != null;
+      r.add(m.get(f));
+    }
+    Collections.sort(r, Feat.BY_SCORE_DESC);
+    return r;
+  }
   
   public List<Feat> getTriageFeatures() {
     int n = mentions.size();
@@ -301,6 +360,21 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     for (int i = 0; i < n; i++)
       fs = Feat.vecadd(fs, mentions.get(i).getTriageFeatures());
     return fs;
+  }
+  
+  public List<Feat> getCommonTriageFeatures() {
+    Counts<String> c = new Counts<>();
+    for (PkbpEntity.Mention m : mentions)
+      for (Feat f : m.getTriageFeatures())
+        c.increment(f.name);
+    Map<String, Feat> m = Feat.index(this.getTriageFeatures());
+    List<Feat> r = new ArrayList<>();
+    for (String f : c.countIsAtLeast(2)) {
+      assert m.get(f) != null;
+      r.add(m.get(f));
+    }
+    Collections.sort(r, Feat.BY_SCORE_DESC);
+    return r;
   }
 
   public StringTermVec getDocVec() {

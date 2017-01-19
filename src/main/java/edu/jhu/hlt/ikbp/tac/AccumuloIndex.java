@@ -73,6 +73,7 @@ import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.features.ConcreteMentionFeatureExtractor;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch.EMQuery;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.EntityEventPathExtraction;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.MturkCorefHit;
@@ -766,19 +767,14 @@ public class AccumuloIndex {
     public Double scoreTriageFeatureIntersectionSimilarity(List<String> triageFeatsSource, List<String> triageFeatsTarget, boolean verbose) {//, boolean computeFeatFreqScoresAsNeeded, boolean verbose) {
       if (verbose)
         Log.info("source=" + triageFeatsSource + " target=" + triageFeatsTarget);// + " computeFeatFreqScoresAsNeeded=" + computeFeatFreqScoresAsNeeded);
-      // TODO Consider using some jaccard-like denominator for source/target features
-      if (triageFeatsSource == null)
-        throw new IllegalArgumentException();
-      if (triageFeatsTarget == null)
+      if (triageFeatsSource == null || triageFeatsTarget == null)
         throw new IllegalArgumentException();
       Set<String> common = new HashSet<>();
       common.addAll(triageFeatsSource);
       double score = 0;
-      for (String f : triageFeatsTarget) {
-        if (!common.contains(f))
-          continue;
-        score += getFeatureScore(f);
-      }
+      for (String f : triageFeatsTarget)
+        if (common.contains(f))
+          score += getFeatureScore(f);
       if (verbose)
         Log.info("done");
       return score;
@@ -818,6 +814,225 @@ public class AccumuloIndex {
       }
       return p;
     }
+    
+    static class EMQuery {
+      String id;
+      double weight;
+      List<String> triageFeats;
+      List<Feat> attrFeats;
+      StringTermVec context;
+      
+      public EMQuery(String id, double weight) {
+        this.id = id;
+        this.weight = weight;
+        this.triageFeats = new ArrayList<>();
+        this.attrFeats = new ArrayList<>();
+        this.context = new StringTermVec();
+      }
+    }
+
+    public Counts.Pseudo<String> findIntersectionPlus(List<String> triageFeats) throws Exception {
+      TIMER.start("f2t/triage");
+      Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
+
+      // Features which have a score below this value cannot introduce new
+      // tokenizations to the result set, only add to the score of tokenizations
+      // retrieved using more selective features.
+      double minScoreForNewTok = 1e-6;
+      int tokFeatTooSmall = 0;
+
+      // TODO Consider computing a bound based on the K-th best result so far:
+      // given the gap between that score and the K+1-th, may not need to continue
+      // of remaining features have little mass to contribute.
+      Map<String, List<WeightedFeature>> tokUuid2MatchedFeatures = new HashMap<>();
+      for (int fi = 0; fi < triageFeats.size(); fi++) {
+        String f = triageFeats.get(fi);
+
+        // Collect all of the tokenizations which this feature co-occurs with
+        List<String> toks = new ArrayList<>();
+        Set<String> commUuidPrefixes = new HashSet<>();
+        try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
+          f2tScanner.setRange(Range.exact(f));
+          for (Entry<Key, Value> e : f2tScanner) {
+            String tokUuid = e.getKey().getColumnQualifier().toString();
+            toks.add(tokUuid);
+            commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
+          }
+        }
+
+        // Compute a score based on how selective this feature is
+        int numToks = toks.size();
+        int numDocs = commUuidPrefixes.size();
+        double p = getFeatureScore(numToks, numDocs);
+
+        // Check that the estimate is valid
+        IntPair c = getFeatureFrequency(f);
+        if (numToks > c.first)
+          Log.info("WARNING: f=" + f + " numToks=" + numToks + " approxFreq=" + c + " [probably means approx counts are still being built]");
+        if (numDocs > c.second)
+          Log.info("WARNING: f=" + f + " numDocs=" + numDocs + " approxFreq=" + c + " [probably means approx counts are still being built]");
+        assert c.first >= c.second;
+
+        // Update the running score for all tokenizations
+        boolean first = true;
+        for (String t : toks) {
+          boolean canAdd = p > minScoreForNewTok || tokUuid2score.getCount(t) > 0;
+          if (!canAdd) {
+            tokFeatTooSmall++;
+            continue;
+          }
+          tokUuid2score.update(t, p);
+
+          int nt = tokUuid2score.numNonZero();
+          if (first && nt % 20000 == 0) {
+            System.out.println("numToks=" + nt
+                + " during featIdx=" + (fi+1)
+                + " of=" + triageFeats.size()
+                + " featStr=" + f
+                + " p=" + p
+                + " minScoreForNewTok=" + minScoreForNewTok
+                + " tokFeatTooSmall=" + tokFeatTooSmall);
+          }
+          first = false;
+
+          List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
+          if (wfs == null) {
+            wfs = new ArrayList<>();
+            tokUuid2MatchedFeatures.put(t, wfs);
+          }
+          wfs.add(new WeightedFeature(f, p));
+        }
+
+
+        // Find the score of the maxToksPreDocRetrieval^th Tokenization so far
+        // Measure the ratio between this number and an upper bound on the amount of mass to be given out
+        // You can get an upper bound by taking this feat's score (p) and assuming that all the remaining features get the same score
+        int remainingFeats = triageFeats.size() - (fi+1);
+        if (tokUuid2score.numNonZero() > 50 && remainingFeats > 0) {
+          double upperBoundOnRemainingMass = p * remainingFeats;
+          double lastTokScore = rank(tokUuid2score, maxResults);
+          double goodTokScore = rank(tokUuid2score, 50);
+          double safetyFactor = 5;
+          if ((lastTokScore+goodTokScore)/2 > safetyFactor * upperBoundOnRemainingMass) {
+            Log.info("probably don't need any other feats,"
+                + " fi=" + fi
+                + " remainingFeats=" + remainingFeats
+                + " boundOnRemainingMass=" + upperBoundOnRemainingMass
+                + " lastTokScore=" + lastTokScore
+                + " goodTokScore=" + goodTokScore
+                + " maxToksPreDocRetrieval=" + maxResults);
+            break;
+          }
+        }
+        // NOTE: If you do a good job of sorting features you can break out of this loop
+        // after a certain amount of score has already been dolled out.
+      }
+      TIMER.stop("f2t/triage");
+      return tokUuid2score;
+    }
+
+    public List<SitSearchResult> searchMulti(List<EMQuery> qs, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      Log.info("starting, qs=" + qs);
+      if (qs.isEmpty())
+        throw new IllegalArgumentException();
+      if (batchTimeoutSeconds > 0)
+        Log.info("[filter] using a timeout of " + batchTimeoutSeconds + " seconds for f2t query");
+      
+      // Sort features by an upper bound on their cardinality (number of toks which contain this feature)
+      for (EMQuery q : qs) {
+        triageFeatureFrequencies.sortByFreqUpperBoundAsc(q.triageFeats);
+        Log.info("after sorting q[" + q.id + "] feats by freq: " + triageFeatureFrequencies.showFreqUpperBounds(q.triageFeats));
+      }
+      
+
+      // score(tok, qs) = prod_{q in qs} 1+score(tok,q)
+      // where the score(tok,q) is the already implemented bit
+      Map<String, Double> tokUuid2ScoreMap = new HashMap<>();
+      int K = 0;
+      for (EMQuery q : qs) {
+        try {
+          Counts.Pseudo<String> t2s = findIntersectionPlus(q.triageFeats);
+          K = Math.max(K, t2s.numNonZero());
+          for (Entry<String, Double> tok : t2s.entrySet()) {
+            assert tok.getValue() > 0;
+            double prev = tokUuid2ScoreMap.getOrDefault(tok, 1d);
+            double cur = prev * (1 + tok.getValue());
+            tokUuid2ScoreMap.put(tok.getKey(), cur);
+          }
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+      }
+      K += 10;
+      
+      // Trim to only take at most K
+      // where K = 10 + max_{q : qs} sizeof(triageSearch(q))
+      // This will mimic the performance characteristics (mainly memory) of the existing single-mention implementation
+      List<Feat> toks = Feat.deindex(tokUuid2ScoreMap.entrySet());
+      Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
+      for (Feat f : Feat.sortAndPrune(toks, K))
+        tokUuid2score.update(f.name, f.weight);
+
+      // Now we have scores for every tokenization
+      // Need to add in the document tf-idf score
+      
+      // 1) Make a batch scanner to retrieve all the commUuids from t2c
+      Map<String, String> tokUuid2commId = getCommIdsFor(tokUuid2score);
+      
+      // 2) Make a batch scanner to retrieve the words from the most promising comms, look in c2w
+      Collection<String> toRet = tokUuid2commId.values();
+      Map<String, StringTermVec> commId2terms = getWordsForComms(toRet);
+      
+      // 3) Go through each tok and re-score
+      Counts<String> filterReasons = new Counts<>();
+      List<SitSearchResult> res = new ArrayList<>();
+      for (Entry<String, String> tc : tokUuid2commId.entrySet()) {
+        String tokUuid = tc.getKey();
+        String commId = tc.getValue();
+        List<Feat> score = new ArrayList<>();
+        SitSearchResult ss = new SitSearchResult(tokUuid, null, score);
+        ss.setCommunicationId(commId);
+        
+        // Instead of tf-idf being ONE number, it is now N numbers
+        // I'll take the sum rather than the product
+        StringTermVec commVec = commId2terms.get(commId);
+        double ts = 0;
+        for (EMQuery q : qs)
+          ts += df.tfIdfCosineSim(commVec, q.context);
+        score.add(new Feat("tfidf", ts));
+        
+        // Triage features have already been reduced to a single number
+        double triageFeatScore = tokUuid2score.getCount(tokUuid);
+        score.add(new Feat("entMatch").setWeight(triageFeatScore));
+
+        double prod = triageFeatScore * (0.1 + ts);
+        score.add(new Feat("prod").setWeight(prod).rescale("goodfeat", 10.0));
+
+        // Filtering
+        if (triageFeatScore < 0.0001) {
+          EC.increment("resFilter/name");
+          filterReasons.increment("badNameMatch");
+          continue;
+        }
+        if (ts < 0.05 && triageFeatScore < 0.001) {
+          EC.increment("resFilter/prod");
+          filterReasons.increment("badNameAndTfIdf");
+          continue;
+        }
+        
+        res.add(ss);
+      }
+      Log.info("[filter] reasons for filtering: " + filterReasons);
+
+      // 4) Sort results by final score
+      Collections.sort(res, SitSearchResult.BY_SCORE_DESC);
+      
+      Log.info("returning " + res.size() + " sorted SitSearchResults");
+      return res;
+    }
+    
+    
+    
 
     /**
      * @param triageFeats are generated from {@link IndexCommunications#getEntityMentionFeatures(String, String[], String, TokenObservationCounts, TokenObservationCounts)}
@@ -851,83 +1066,81 @@ public class AccumuloIndex {
       Map<String, List<WeightedFeature>> tokUuid2MatchedFeatures = new HashMap<>();
       for (int fi = 0; fi < triageFeats.size(); fi++) {
         String f = triageFeats.get(fi);
+
+        // Collect all of the tokenizations which this feature co-occurs with
+        List<String> toks = new ArrayList<>();
+        Set<String> commUuidPrefixes = new HashSet<>();
         try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
           f2tScanner.setRange(Range.exact(f));
-
-          // Collect all of the tokenizations which this feature co-occurs with
-          List<String> toks = new ArrayList<>();
-          Set<String> commUuidPrefixes = new HashSet<>();
           for (Entry<Key, Value> e : f2tScanner) {
             String tokUuid = e.getKey().getColumnQualifier().toString();
             toks.add(tokUuid);
             commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
           }
+        }
 
-          // Compute a score based on how selective this feature is
-          int numToks = toks.size();
-          int numDocs = commUuidPrefixes.size();
-          double p = getFeatureScore(numToks, numDocs);
-          
-          // Check that the estimate is valid
-          IntPair c = getFeatureFrequency(f);
-          if (numToks > c.first)
-            Log.info("WARNING: f=" + f + " numToks=" + numToks + " approxFreq=" + c + " [probably means approx counts are still being built]");
-          if (numDocs > c.second)
-            Log.info("WARNING: f=" + f + " numDocs=" + numDocs + " approxFreq=" + c + " [probably means approx counts are still being built]");
-          //assert numToks <= c.first;
-          //assert numDocs <= c.second;
-          assert c.first >= c.second;
-          
-          // Update the running score for all tokenizations
-          boolean first = true;
-          for (String t : toks) {
-            boolean canAdd = p > minScoreForNewTok || tokUuid2score.getCount(t) > 0;
-            if (!canAdd) {
-              tokFeatTooSmall++;
-              continue;
-            }
-            tokUuid2score.update(t, p);
-            
-            int nt = tokUuid2score.numNonZero();
-            if (first && nt % 20000 == 0) {
-              System.out.println("numToks=" + nt
-                  + " during featIdx=" + (fi+1)
-                  + " of=" + triageFeats.size()
-                  + " featStr=" + f
-                  + " p=" + p
-                  + " minScoreForNewTok=" + minScoreForNewTok
-                  + " tokFeatTooSmall=" + tokFeatTooSmall);
-            }
-            first = false;
+        // Compute a score based on how selective this feature is
+        int numToks = toks.size();
+        int numDocs = commUuidPrefixes.size();
+        double p = getFeatureScore(numToks, numDocs);
 
-            List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
-            if (wfs == null) {
-              wfs = new ArrayList<>();
-              tokUuid2MatchedFeatures.put(t, wfs);
-            }
-            wfs.add(new WeightedFeature(f, p));
+        // Check that the estimate is valid
+        IntPair c = getFeatureFrequency(f);
+        if (numToks > c.first)
+          Log.info("WARNING: f=" + f + " numToks=" + numToks + " approxFreq=" + c + " [probably means approx counts are still being built]");
+        if (numDocs > c.second)
+          Log.info("WARNING: f=" + f + " numDocs=" + numDocs + " approxFreq=" + c + " [probably means approx counts are still being built]");
+        assert c.first >= c.second;
+
+        // Update the running score for all tokenizations
+        boolean first = true;
+        for (String t : toks) {
+          boolean canAdd = p > minScoreForNewTok || tokUuid2score.getCount(t) > 0;
+          if (!canAdd) {
+            tokFeatTooSmall++;
+            continue;
           }
-          
-          
-          // Find the score of the maxToksPreDocRetrieval^th Tokenization so far
-          // Measure the ratio between this number and an upper bound on the amount of mass to be given out
-          // You can get an upper bound by taking this feat's score (p) and assuming that all the remaining features get the same score
-          int remainingFeats = triageFeats.size() - (fi+1);
-          if (tokUuid2score.numNonZero() > 50 && remainingFeats > 0) {
-            double upperBoundOnRemainingMass = p * remainingFeats;
-            double lastTokScore = rank(tokUuid2score, maxResults);
-            double goodTokScore = rank(tokUuid2score, 50);
-            double safetyFactor = 5;
-            if ((lastTokScore+goodTokScore)/2 > safetyFactor * upperBoundOnRemainingMass) {
-              Log.info("probably don't need any other feats,"
-                  + " fi=" + fi
-                  + " remainingFeats=" + remainingFeats
-                  + " boundOnRemainingMass=" + upperBoundOnRemainingMass
-                  + " lastTokScore=" + lastTokScore
-                  + " goodTokScore=" + goodTokScore
-                  + " maxToksPreDocRetrieval=" + maxResults);
-              break;
-            }
+          tokUuid2score.update(t, p);
+
+          int nt = tokUuid2score.numNonZero();
+          if (first && nt % 20000 == 0) {
+            System.out.println("numToks=" + nt
+                + " during featIdx=" + (fi+1)
+                + " of=" + triageFeats.size()
+                + " featStr=" + f
+                + " p=" + p
+                + " minScoreForNewTok=" + minScoreForNewTok
+                + " tokFeatTooSmall=" + tokFeatTooSmall);
+          }
+          first = false;
+
+          List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
+          if (wfs == null) {
+            wfs = new ArrayList<>();
+            tokUuid2MatchedFeatures.put(t, wfs);
+          }
+          wfs.add(new WeightedFeature(f, p));
+        }
+
+
+        // Find the score of the maxToksPreDocRetrieval^th Tokenization so far
+        // Measure the ratio between this number and an upper bound on the amount of mass to be given out
+        // You can get an upper bound by taking this feat's score (p) and assuming that all the remaining features get the same score
+        int remainingFeats = triageFeats.size() - (fi+1);
+        if (tokUuid2score.numNonZero() > 50 && remainingFeats > 0) {
+          double upperBoundOnRemainingMass = p * remainingFeats;
+          double lastTokScore = rank(tokUuid2score, maxResults);
+          double goodTokScore = rank(tokUuid2score, 50);
+          double safetyFactor = 5;
+          if ((lastTokScore+goodTokScore)/2 > safetyFactor * upperBoundOnRemainingMass) {
+            Log.info("probably don't need any other feats,"
+                + " fi=" + fi
+                + " remainingFeats=" + remainingFeats
+                + " boundOnRemainingMass=" + upperBoundOnRemainingMass
+                + " lastTokScore=" + lastTokScore
+                + " goodTokScore=" + goodTokScore
+                + " maxToksPreDocRetrieval=" + maxResults);
+            break;
           }
         }
         // NOTE: If you do a good job of sorting features you can break out of this loop
@@ -1249,7 +1462,7 @@ public class AccumuloIndex {
       List<String> attrTokR = NNPSense.extractAttributeFeatures(r.tokUuid, r.getCommunication(), nameHeadR, nameHeadR);
       
       List<Feat> attrR = Feat.vecadd(Feat.promote(2, attrTokR), Feat.promote(1, attrCommR));
-      Pair<Double, List<String>> c = Feat.cosineSim(attrR, attrQ);
+      Pair<Double, List<Feat>> c = Feat.cosineSim(attrR, attrQ);
       
       r.attrFeatQ = attrQ;
       r.attrFeatR = attrR;
@@ -1378,6 +1591,43 @@ public class AccumuloIndex {
         throw new RuntimeException(e);
       }
       return c;
+    }
+
+    public List<SitSearchResult> multiEntityMentionSearch(List<EMQuery> qs) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      
+      // 3) Search
+      List<SitSearchResult> res = triageSearch.searchMulti(qs, df);
+
+      // 4-5) Retrieve communications and prune
+      // TODO Batch retrieval
+      {
+      TIMER.start("getCommsForSitSearchResults");
+      List<SitSearchResult> resKeep = new ArrayList<>();
+      int failed = 0;
+      for (SitSearchResult r : res) {
+        Communication c = getCommCaching(r.getCommunicationId());
+        if (c == null) {
+          Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
+          failed++;
+        } else {
+          r.setCommunication(c);
+          resKeep.add(r);
+        }
+      }
+      Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
+      res = resKeep;
+      TIMER.stop("getCommsForSitSearchResults");
+      }
+      
+      // 6) Find entities and situations
+      // TODO or not? SitSearchResult is not what I want for this, I want MultiEntityMention
+      
+      // 7) Rescore according to attribute features
+      for (EMQuery q : qs)
+        if (q.attrFeats.size() > 0)
+          throw new RuntimeException("implement me");
+      
+      return res;
     }
 
     /**

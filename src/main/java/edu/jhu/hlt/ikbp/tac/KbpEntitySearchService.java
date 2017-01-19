@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.thrift.TException;
 
@@ -30,6 +31,7 @@ import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch.EMQuery;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -102,6 +104,74 @@ public class KbpEntitySearchService implements SearchService.Iface {
     if (q.isSetTerms() && q.getTermsSize() > 0)
       return searchGivenRawFeatures(q);
     return searchGivenMentionAndComm(q);
+  }
+  
+  /**
+   * Parses features like "q0:c:context" and "queryJohn:a:PERSON-nn-Dr." and "0:hi:John"
+   * where the components are <queryId> <colon> <featureType> <colon> <featureValue>
+   */
+  private static void addFeat(String t, Map<String, EMQuery> qs) {
+    String[] ar = t.split(":", 3);
+    if (ar.length != 3) {
+      Log.info("WARNING: bad query term, IGNORING, must have feature type prefix: " + t);
+      return;
+    }
+
+    String qid = ar[0];
+    EMQuery q = qs.get(qid);
+    if (q == null) {
+      q = new EMQuery(qid, 1);
+      qs.put(qid, q);
+    }
+    
+    switch (ar[1].toLowerCase()) {
+    case "c":      // tf/context
+      q.context.add(ar[2], 1);
+      break;
+
+    case "a":      // attrFeat
+      int lc = ar[2].lastIndexOf(':');
+      if (lc < 0) {
+        q.attrFeats.add(new Feat(ar[2], 1));
+      } else {
+        String f = ar[2].substring(0, lc);
+        double w = Double.parseDouble(ar[2].substring(lc+1));
+        q.attrFeats.add(new Feat(f, w));
+      }
+      break;
+
+    default:        // triage feats
+      q.triageFeats.add(t);
+      break;
+    }
+  }
+
+  /**
+   * Expects all features (triage, attr, context) to be prefixed by a number between 0 and N-1.
+   * Performs a multi-entity search for the N entities described by the various features.
+   */
+  public SearchResult searchGivenRawFeaturesMulti(SearchQuery q) throws ServicesException, TException {
+    
+    Map<String, EMQuery> qs = new HashMap<>();
+    for (String t : q.getTerms()) {
+      try {
+        addFeat(t, qs);
+      } catch (Exception e) {
+        Log.info("dropping feat=" + t + " because of " + e.getMessage());
+      }
+    }
+    if (qs.isEmpty())
+      throw new ServicesException("no features recgnoized in: " + q.toString());
+    
+    try {
+      wrapped.multiEntityMentionSearch(new ArrayList<>(qs.values()));
+      throw new RuntimeException("implement me");
+    } catch (Exception e) {
+      ServicesException se = new ServicesException("error during search: " + e.getMessage());
+      byte[] bytes = SerializationUtils.t2bytes(e);
+      se.setSerEx(bytes);
+      throw se;
+    }
   }
 
   /**

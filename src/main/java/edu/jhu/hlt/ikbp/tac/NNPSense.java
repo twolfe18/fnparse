@@ -407,7 +407,9 @@ public class NNPSense {
     return 0.5;
   }
   
-  public static double attrFeatPathScore(List<String> deps) {
+  public static double attrFeatPathScore(List<String> deps, boolean backoff) {
+    if (!backoff)
+      return 1;
     double k = 2;
     return (k + 1) / (k + deps.size());
   }
@@ -415,9 +417,12 @@ public class NNPSense {
   /**
    * Returns strings like "PERSON-nn-Dr." where PERSON matches the given nameHead
    */
-  public static List<Feat> extractAttributeFeaturesNewAndImproved(String tokUuid, Communication c, String... nameHeads) {
+  public static List<Feat> extractAttributeFeaturesNewAndImproved(String tokUuid, Communication c, String nerType, String... nameHeads) {
+    return extractAttributeFeaturesNewAndImproved(tokUuid, c, nerType, Arrays.asList(nameHeads));
+  }
+  public static List<Feat> extractAttributeFeaturesNewAndImproved(String tokUuid, Communication c, String nerType, List<String> nameHeads) {
     if (EXTRACT_ATTR_FEAT_VERBOSE)
-      Log.info("comm=" + c.getId() + " nameHeads=" + Arrays.toString(nameHeads) + " tok=" + tokUuid);
+      Log.info("comm=" + c.getId() + " nameHeads=" + nameHeads + " tok=" + tokUuid);
     
     // Might want to expand this set
     // Currently it will miss "Italian" because it is an JJ
@@ -428,6 +433,11 @@ public class NNPSense {
     interestingPos.add("CD");
     interestingPos.add("JJ");
     interestingPos.add("JJS");    // TODO might want to restrict these to one-hop paths
+    
+    /*
+     * TODO I need to be more strict than word match. I'm getting cases like "London"
+     * which is "London Fashion Week":ORGANIZATION as well as "London":LOCATION
+     */
 
     List<Feat> attr = new ArrayList<>();
     for (Tokenization toks : new TokenizationIter(c)) {
@@ -446,6 +456,11 @@ public class NNPSense {
             String sourcePos = pos.get(source).getTag();
             if (!sourcePos.toUpperCase().startsWith("NNP"))
               continue;
+
+            String sourceNer = ner.get(source).getTag();
+            if (!sourceNer.equalsIgnoreCase(nerType))
+              continue;
+
             List<Pair<Integer, LL<Dependency>>> paths = kHop(source, 4, deps);
             for (Pair<Integer, LL<Dependency>> p : paths) {
               int dest = p.get1();
@@ -466,7 +481,6 @@ public class NNPSense {
               }
 
               // Build the path
-              String sourceNer = ner.get(source).getTag();
               String destWord = t.get(dest).getText();
               ArrayDeque<String> path = reverseDeps(p.get2());
 
@@ -480,8 +494,8 @@ public class NNPSense {
               // e.g. ORGANIZATION-backoff-Boston
               String xBackoff = sourceNer + "-backoff-" + destWord;
               
-              Feat xf = new Feat(x, endpointPosScore(destPos) + attrFeatPathScore(dp));
-              Feat xbf = new Feat(xBackoff, xf.weight * 0.25);
+              Feat xf = new Feat(x, endpointPosScore(destPos) * attrFeatPathScore(dp, false));
+              Feat xbf = new Feat(xBackoff, 0.2 * endpointPosScore(destPos) * attrFeatPathScore(dp, true));
               
               if (sameTok) {
                 xf.rescale("tokSpecific", 2);

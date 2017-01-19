@@ -108,21 +108,17 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface, 
     return r.getCommunications();
   }
   
-  public static byte[] readBytes(InputStream is) {
+  public static byte[] readBytes(InputStream is) throws IOException {
     int read = 0;
     int bs = 4096;
     byte[] buf = new byte[4 * bs];
-    try {
-      while (true) {
-        if (read + bs >= buf.length)
-          buf = Arrays.copyOf(buf, (int) (1.6 * buf.length + 1));
-        int r = is.read(buf, read, bs);
-        if (r <= 0)
-          break;
-        read += r;
-      }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+    while (true) {
+      if (read + bs >= buf.length)
+        buf = Arrays.copyOf(buf, (int) (1.6 * buf.length + 1));
+      int r = is.read(buf, read, bs);
+      if (r <= 0)
+        break;
+      read += r;
     }
     return Arrays.copyOfRange(buf, 0, read);
   }
@@ -153,18 +149,20 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface, 
               Object old = values.put(id, c);
               assert old == null;
             } catch (Exception e) {
-              throw new RuntimeException(e);
+              Log.info("WARNING: error while reading " + f.getPath());
+              e.printStackTrace();
+//              throw new RuntimeException("error while reading " + f.getPath(), e);
             }
           }
-        } else {
-          if (debug) {
-            if (disableCache && f.isFile())
-              Log.info("fail over for " + id + " b/c disableCache=true");
-            else
-              Log.info("fail over for " + id);
-          }
-          missing.add(id);
+          continue;
         }
+        if (debug) {
+          if (disableCache && f.isFile())
+            Log.info("fail over for " + id + " b/c disableCache=true");
+          else
+            Log.info("fail over for " + id);
+        }
+        missing.add(id);
       }
 
       // Fetch those that aren't
