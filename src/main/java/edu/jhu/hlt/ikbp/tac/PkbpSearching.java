@@ -1025,17 +1025,20 @@ public class PkbpSearching implements Serializable {
 
       for (int i = 0; i < entities.size(); i++) {
         PkbpEntity e = entities.get(i);
+//        String qid = String.valueOf(i);
+        String qid = e.id;
+
         // Triage features
         for (Feat tf : e.getTriageFeatures())
-          query.addToTerms(i + ":" + tf.name);
+          query.addToTerms(qid + ":" + tf.name);
 
         // Attr features
         for (Feat af : e.getAttrFeatures())
-          query.addToTerms(String.format("%d:a:%s:%.3f", i, af.name, af.weight));
+          query.addToTerms(String.format("%s:a:%s:%.3f", qid, af.name, af.weight));
 
         // Context
         for (String ct : df.importantTerms(e.getDocVec(), 100))
-          query.addToTerms(i + ":c:" + ct);
+          query.addToTerms(qid + ":c:" + ct);
       }
       
       Log.info("issuing query: " + query);

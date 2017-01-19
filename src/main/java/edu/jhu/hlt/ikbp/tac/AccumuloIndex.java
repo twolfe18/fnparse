@@ -954,23 +954,29 @@ public class AccumuloIndex {
       Map<String, LL<Feat>> tok2sources = new HashMap<>();
       int K = 0;
       for (EMQuery q : qs) {
+        if (debug)
+          Log.info("processing toks from EMQuery.id=" + q.id);
         try {
           Counts.Pseudo<String> t2s = findIntersectionPlus(q.triageFeats);
           K = Math.max(K, t2s.numNonZero());
+          Set<String> uniq = new HashSet<>();
           for (Entry<String, Double> tok : t2s.entrySet()) {
             assert tok.getValue() > 0;
             double prev = tokUuid2ScoreMap.getOrDefault(tok, 1d);
             double cur = prev * (1 + tok.getValue());
-            if (debug && prev > 1) {
+            if (debug) {
               Log.info("overlap: tok=" + tok.getKey()
                   + " prev=" + prev
                   + " cur=1+" + tok.getValue()
-                  + " tf=" + q.triageFeats);
+                  + " q.id=" + q.id
+                  + " q.tf=" + q.triageFeats);
             }
             tokUuid2ScoreMap.put(tok.getKey(), cur);
             
+            String k = tok.getKey();
             Feat f = new Feat(q.id, tok.getValue());
-            tok2sources.put(tok.getKey(), new LL<>(f, tok2sources.get(tok.getKey())));
+            tok2sources.put(k, new LL<>(f, tok2sources.get(k)));
+            assert uniq.add(k);
           }
         } catch (Exception e) {
           e.printStackTrace();
