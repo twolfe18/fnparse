@@ -980,13 +980,15 @@ public class AccumuloIndex {
     
     class FeatSearch {
       String feat;
-      EfficientUuidList toks;
+//      EfficientUuidList toks;
+      List<String> toks2;
       Set<String> commUuidPrefixes;
       IntPair tcFreq;
 
       public FeatSearch(String feat) {
         this.feat = feat;
-        toks = new EfficientUuidList(16);
+//        toks = new EfficientUuidList(16);
+        toks2 = new ArrayList<>();
         commUuidPrefixes = new HashSet<>();
         Log.info("scanning for feat=" + feat);
         try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
@@ -995,20 +997,25 @@ public class AccumuloIndex {
             String tokUuid = e.getKey().getColumnQualifier().toString();
             // TODO compare byte[] => String => UUID
             // to byte[] => ByteBuffer.wrap => UUID
-            toks.add(tokUuid);
+
+//            toks.add(tokUuid);
+            toks2.add(tokUuid);
+
             commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
           }
         } catch (TableNotFoundException e) {
           throw new RuntimeException(e);
         }
-        tcFreq = new IntPair(toks.size(), commUuidPrefixes.size());
+//        tcFreq = new IntPair(toks.size(), commUuidPrefixes.size());
+        tcFreq = new IntPair(toks2.size(), commUuidPrefixes.size());
         Log.info("done, freq=" + tcFreq + " est. mem. usage=" + estimatedMemUseInBytes()/(1<<20) + " MB");
       }
       
       public long estimatedMemUseInBytes() {
         long t = 16;  // overhead
         t += 8 + feat.length() * 2L;
-        t += 8 + toks.size() * 16L;
+//        t += 8 + toks.size() * 16L;
+        t += 8 + toks2.size() * (32+4)*2L;
         t += 8 + (long) (1.5d * commUuidPrefixes.size() * 16 * 2);
         t += 8 + 3*4;
         return t;
@@ -1081,7 +1088,8 @@ public class AccumuloIndex {
       }
     }
     
-    public Map<java.util.UUID, Double> intersectiveQuery(EMQuery a, EMQuery b, Map<String, FeatSearch> searchCache) {
+//    public Map<java.util.UUID, Double> intersectiveQuery(EMQuery a, EMQuery b, Map<String, FeatSearch> searchCache) {
+    public Counts.Pseudo<String> intersectiveQuery(EMQuery a, EMQuery b, Map<String, FeatSearch> searchCache) {
       // score(t, fa, fb) = score(t, fa) * score(t, fb)
       // where score(t,f)=0  =>  score(t, f, *)=0, so you really are intersecting inverted lists for fa and fb
       boolean debug = true;
@@ -1105,8 +1113,9 @@ public class AccumuloIndex {
       // Add up the score across all pairs of features
       Set<String> docsA = new HashSet<>();
       Set<String> docsB = new HashSet<>();
-      int maxDocs = 100_000;
-      Map<java.util.UUID, Double> tok2score = new HashMap<>();
+      int maxDocs = 50_000;
+//      Map<java.util.UUID, Double> tok2score = new HashMap<>();
+      Counts.Pseudo<String> tok2score = new Counts.Pseudo<>();
       while (!agenda.isEmpty()) {
         Weighted<Pair<String, String>> p = agenda.poll();
         Pair<String, String> f = p.item;
@@ -1139,17 +1148,30 @@ public class AccumuloIndex {
         }
 
         double score = f1.getScore() * f2.getScore();
-        EfficientUuidList common = EfficientUuidList.hashJoin(f1.toks, f2.toks);
+//        EfficientUuidList common = EfficientUuidList.hashJoin(f1.toks, f2.toks);
+        List<String> common = hashJoin(f1.toks2, f2.toks2);
         int n = common.size();
         for (int i = 0; i < n; i++) {
-          java.util.UUID t = common.get(i);
-          double prev = tok2score.getOrDefault(t, 0d);
-          tok2score.put(t, prev + score);
+//          java.util.UUID t = common.get(i);
+//          double prev = tok2score.getOrDefault(t, 0d);
+//          tok2score.put(t, prev + score);
+          String t = common.get(i);
+          tok2score.update(t, score);
         }
       }
       return tok2score;
     }
-
+    
+    public List<String> hashJoin(List<String> a, List<String> b) {
+      Set<String> seen = new HashSet<>();
+      seen.addAll(a);
+      List<String> out = new ArrayList<>();
+      for (String s : b)
+        if (seen.remove(s))
+          out.add(s);
+      return out;
+    }
+    
     public static Counts.Pseudo<String> convert(Map<java.util.UUID, Double> t2s) {
       Counts.Pseudo<String> c = new Counts.Pseudo<>();
       for (Entry<java.util.UUID, Double> x : t2s.entrySet()) {
@@ -1176,8 +1198,9 @@ public class AccumuloIndex {
       
       if (qs.size() != 2)
         throw new RuntimeException("implement me");
-      Map<java.util.UUID, Double> t2s = intersectiveQuery(qs.get(0), qs.get(1), new HashMap<>());
-      Counts.Pseudo<String> tokUuid2score = convert(t2s);
+//      Map<java.util.UUID, Double> t2s = intersectiveQuery(qs.get(0), qs.get(1), new HashMap<>());
+//      Counts.Pseudo<String> tokUuid2score = convert(t2s);
+      Counts.Pseudo<String> tokUuid2score = intersectiveQuery(qs.get(0), qs.get(1), new HashMap<>());
       
       /*
       // score(tok, qs) = prod_{q in qs} 1+score(tok,q)
@@ -2680,9 +2703,11 @@ public class AccumuloIndex {
     List<String> fs = new ArrayList<>();
     fs.add("pb:BBBB_karzai");
     fs.add("h:Karzai");
+    fs.add("h:Ghazni");
     fs.add("pb:ramazan_bashardost");
     fs.add("pi:mr");
     fs.add("pi:ghazni");
+    fs.add("pb:ghazni_AAAA");
 
     int maxResults = 100;
     File f = config.getExistingFile("triageFeatureFrequencies", new File("/export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin/fce-mostFreq1000000-nhash12-logb20.jser"));
