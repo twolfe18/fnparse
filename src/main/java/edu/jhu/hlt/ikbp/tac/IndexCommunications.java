@@ -2184,6 +2184,10 @@ public class IndexCommunications implements AutoCloseable {
       assert !Double.isNaN(this.weight);
       assert Double.isFinite(weight);
     }
+
+    public Feat(Entry<String, Double> e) {
+      this(e.getKey(), e.getValue());
+    }
     
     public String getName() {
       return name;

@@ -86,6 +86,7 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
+import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
@@ -950,6 +951,7 @@ public class AccumuloIndex {
       // score(tok, qs) = prod_{q in qs} 1+score(tok,q)
       // where the score(tok,q) is the already implemented bit
       Map<String, Double> tokUuid2ScoreMap = new HashMap<>();
+      Map<String, LL<Feat>> tok2sources = new HashMap<>();
       int K = 0;
       for (EMQuery q : qs) {
         try {
@@ -966,14 +968,38 @@ public class AccumuloIndex {
                   + " tf=" + q.triageFeats);
             }
             tokUuid2ScoreMap.put(tok.getKey(), cur);
+            
+            Feat f = new Feat(q.id, tok.getValue());
+            tok2sources.put(tok.getKey(), new LL<>(f, tok2sources.get(tok.getKey())));
           }
         } catch (Exception e) {
           e.printStackTrace();
         }
       }
       K += 10;
-      if (debug)
+
+      if (debug) {
         Log.info("K=" + K);
+        List<String> keys = new ArrayList<>(tok2sources.keySet());
+        Collections.sort(keys, new Comparator<String>() {
+          @Override
+          public int compare(String o1, String o2) {
+            List<Feat> a = LL.toList(tok2sources.get(o1));
+            List<Feat> b = LL.toList(tok2sources.get(o2));
+            if (a.size() > b.size())
+              return -1;
+            if (a.size() < b.size())
+              return +1;
+            return 0;
+          }
+        });
+        for (String k : keys) {
+          List<Feat> sources = LL.toList(tok2sources.get(k));
+          if (sources.size() > 1) {
+            Log.info("sources: " + k + "\t" + sources);
+          }
+        }
+      }
       
       // Trim to only take at most K
       // where K = 10 + max_{q : qs} sizeof(triageSearch(q))
