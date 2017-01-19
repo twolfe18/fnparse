@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -90,8 +89,8 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.MultiTimer.TB;
 import edu.jhu.hlt.tutils.Span;
-import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.Weighted;
@@ -1020,13 +1019,75 @@ public class AccumuloIndex {
       }
     }
     
+    public static boolean same(EfficientUuidList toks, List<String> toks2) {
+      int n = toks.size();
+      if (n != toks2.size())
+        return false;
+      for (int i = 0; i < n; i++) {
+        String a = toks.getString(i);
+        String b = toks2.get(i);
+        if (!a.equals(b))
+          return false;
+      }
+      return true;
+    }
+
+    public void benchmark(String feat, EfficientUuidList toks, List<String> toks2, Set<String> commUuidPrefixes) {
+      Log.info("scanning for feat=" + feat);
+      try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
+        f2tScanner.setRange(Range.exact(feat));
+        for (Entry<Key, Value> e : f2tScanner) {
+          String tokUuid = e.getKey().getColumnQualifier().toString();
+          // TODO compare byte[] => String => UUID
+          // to byte[] => ByteBuffer.wrap => UUID
+          if (toks != null)
+            toks.add(tokUuid);
+          if (toks2 != null)
+            toks2.add(tokUuid);
+          if (commUuidPrefixes != null)
+            commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
+        }
+      } catch (TableNotFoundException e) {
+        throw new RuntimeException(e);
+      }
+      Log.info("done");
+    }
+
+    public void benchmarkAll(List<String> feats) {
+      getTriageFeatureFrequencies().sortByFreqUpperBoundAsc(feats);
+      EfficientUuidList r1;
+      List<String> r2;
+      MultiTimer t = new MultiTimer();
+      for (String f : feats) {
+        r1 = new EfficientUuidList(16);
+        r2 = new ArrayList<>();
+        try (TB tb = t.new TB("effTok")) {
+          benchmark(f, r1, null, null);
+        }
+        try (TB tb = t.new TB("strTok")) {
+          benchmark(f, null, r2, null);
+        }
+
+        r1 = new EfficientUuidList(16);
+        r2 = new ArrayList<>();
+        try (TB tb = t.new TB("effTokComm")) {
+          benchmark(f, r1, null, new HashSet<>());
+        }
+        try (TB tb = t.new TB("strTokComm")) {
+          benchmark(f, null, r2, new HashSet<>());
+        }
+        System.out.println(t);
+        assert same(r1, r2);
+      }
+    }
+    
     public Map<java.util.UUID, Double> intersectiveQuery(EMQuery a, EMQuery b, Map<String, FeatSearch> searchCache) {
       // score(t, fa, fb) = score(t, fa) * score(t, fb)
       // where score(t,f)=0  =>  score(t, f, *)=0, so you really are intersecting inverted lists for fa and fb
       boolean debug = true;
       
       // Create an agenda of intersective queries sorted by score
-      PriorityQueue<Weighted<Pair<String, String>>> agenda = new PriorityQueue<>(10, Weighted.byScoreAsc());
+      PriorityQueue<Weighted<Pair<String, String>>> agenda = new PriorityQueue<>(10, Weighted.byScoreDesc());
       for (String fa : a.triageFeats) {
         for (String fb : b.triageFeats) {
           double sa = getFeatureScore(fa);
@@ -1042,6 +1103,9 @@ public class AccumuloIndex {
       }
 
       // Add up the score across all pairs of features
+      Set<String> docsA = new HashSet<>();
+      Set<String> docsB = new HashSet<>();
+      int maxDocs = 100_000;
       Map<java.util.UUID, Double> tok2score = new HashMap<>();
       while (!agenda.isEmpty()) {
         Weighted<Pair<String, String>> p = agenda.poll();
@@ -1052,14 +1116,26 @@ public class AccumuloIndex {
 
         FeatSearch f1 = searchCache.get(f.get1());
         if (f1 == null) {
+          if (docsA.size() > maxDocs) {
+            Log.info("skipping fa=" + f.get1() + " docsA=" + docsA.size() + " maxDocs=" + maxDocs);
+            continue;
+          }
           f1 = new FeatSearch(f.get1());
           searchCache.put(f1.feat, f1);
+//          docsA += f1.commUuidPrefixes.size();
+          docsA.addAll(f1.commUuidPrefixes);
         }
 
         FeatSearch f2 = searchCache.get(f.get2());
         if (f2 == null) {
+          if (docsB.size() > maxDocs) {
+            Log.info("skipping fb=" + f.get2() + " docsB=" + docsB.size() + " maxDocs=" + maxDocs);
+            continue;
+          }
           f2 = new FeatSearch(f.get2());
           searchCache.put(f2.feat, f2);
+//          docsB += f2.commUuidPrefixes.size();
+          docsB.addAll(f2.commUuidPrefixes);
         }
 
         double score = f1.getScore() * f2.getScore();
@@ -2584,6 +2660,7 @@ public class AccumuloIndex {
 //      Log.info("unknown command: " + c);
     //    }
 
+    /*
     File cacheDir = config.getOrMakeDir("cacheDir", new File("data/sit-search/fetch-comms-cache"));
     String host = config.getString("host", "localhost");
     int port = config.getInt("port", 9999);
@@ -2597,8 +2674,22 @@ public class AccumuloIndex {
 
       for (Communication comm : c)
         System.out.println(comm.getId() + " " + StringUtils.trim(comm.getText().replaceAll("\n", " "), 100));
-
     }
+    */
+    
+    List<String> fs = new ArrayList<>();
+    fs.add("pb:BBBB_karzai");
+    fs.add("h:Karzai");
+    fs.add("pb:ramazan_bashardost");
+    fs.add("pi:mr");
+    fs.add("pi:ghazni");
+
+    int maxResults = 100;
+    File f = config.getExistingFile("triageFeatureFrequencies", new File("/export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin/fce-mostFreq1000000-nhash12-logb20.jser"));
+    Log.info("loading from " + f.getPath());
+    FeatureCardinalityEstimator.New fce = (FeatureCardinalityEstimator.New) FileUtil.deserialize(f);
+    TriageSearch ts = new TriageSearch(fce, maxResults);
+    ts.benchmarkAll(fs);
     
     Log.info("done");
   }
