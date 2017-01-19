@@ -824,11 +824,17 @@ public class AccumuloIndex {
       StringTermVec context;
       
       public EMQuery(String id, double weight) {
+        assert weight > 0;
         this.id = id;
         this.weight = weight;
         this.triageFeats = new ArrayList<>();
         this.attrFeats = new ArrayList<>();
         this.context = new StringTermVec();
+      }
+      
+      @Override
+      public String toString() {
+        return String.format("(EMQuery id=%s w=%.2f)", id, weight);
       }
     }
 
@@ -931,6 +937,16 @@ public class AccumuloIndex {
       TIMER.stop("f2t/triage");
       return tokUuid2score;
     }
+    
+    public static <T> Counts.Pseudo<T> normalizeToMaxTimesWeight(Counts.Pseudo<T> m, double weight) {
+      double mx = 1e-8;
+      for (Entry<T, Double> x : m.entrySet())
+        mx = Math.max(mx, x.getValue());
+      Counts.Pseudo<T> out = new Counts.Pseudo<>();
+      for (Entry<T, Double> x : m.entrySet())
+        out.update(x.getKey(), (weight * x.getValue()) / mx);
+      return out;
+    }
 
     public List<SitSearchResult> searchMulti(List<EMQuery> qs, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
       boolean debug = true;
@@ -955,9 +971,16 @@ public class AccumuloIndex {
       int K = 0;
       for (EMQuery q : qs) {
         if (debug)
-          Log.info("processing toks from EMQuery.id=" + q.id);
+          Log.info("processing toks from " + q);
         try {
+          
+          // This map contains keys which are tok UUIDs and the values are total
+          // scores for this sentence mentioning this query entity.
           Counts.Pseudo<String> t2s = findIntersectionPlus(q.triageFeats);
+          
+          // We are going to normalize this mapping so that the maximum value is the entity weight;
+          t2s = normalizeToMaxTimesWeight(t2s, q.weight);
+
           K = Math.max(K, t2s.numNonZero());
           Set<String> uniq = new HashSet<>();
           for (Entry<String, Double> tok : t2s.entrySet()) {
@@ -968,7 +991,7 @@ public class AccumuloIndex {
               Log.info("overlap: tok=" + tok.getKey()
                   + " prev=" + prev
                   + " cur=1+" + tok.getValue()
-                  + " q.id=" + q.id
+                  + " q=" + q
                   + " q.tf=" + q.triageFeats);
             }
             tokUuid2ScoreMap.put(tok.getKey(), cur);
@@ -1002,7 +1025,7 @@ public class AccumuloIndex {
         for (String k : keys) {
           List<Feat> sources = LL.toList(tok2sources.get(k));
           if (sources.size() > 1) {
-            Log.info("sources: " + k + "\t" + sources);
+            Log.info("sources: " + k + "\t" + sources + "\t" + tokUuid2ScoreMap.get(k));
           }
         }
       }
