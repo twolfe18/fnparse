@@ -649,8 +649,8 @@ public class PkbpSearching implements Serializable {
         PkbpEntity searchFor = search.chooseEntityToSearchFor();
         searchFor.relevantReasons.add(new Feat("searched", -5));
         List<PkbpEntity> entPair = Arrays.asList(seedEnt, searchFor);
-        Log.info("searching for:");
-        showEntitiesE(entPair, 10);
+        Log.info("[main] at iter=" + i + " searching for:");
+        showEntitiesE(entPair, 5);
         List<MultiEntityMention> res = search.searchForSituationsInvolving(entPair, maxResults, commRet::fetch, df, ts, null);
         showMultiEntityMention(res);
         System.out.println();
@@ -660,7 +660,20 @@ public class PkbpSearching implements Serializable {
     }
     
     public static void showMultiEntityMention(List<MultiEntityMention> mems) {
-      
+      for (MultiEntityMention mem : mems) {
+        showMultiEntityMention(mem);
+        System.out.println();
+      }
+    }
+    public static void showMultiEntityMention(MultiEntityMention mem) {
+      System.out.println("MultiEntityMention in " + mem.pred.getCommTokIdShort());
+      System.out.printf("pred:   %s\n", mem.pred.getContextAroundHead(60, 60, true));
+      for (int i = 0; i < mem.alignedMentions.length; i++) {
+        if (mem.alignedMentions[i] == null)
+          System.out.printf("arg(%d): %s\n", i, "null");
+        else
+          System.out.printf("arg(%d): %s\n", i, mem.alignedMentions[i].getContextAroundHead(60, 60, true));
+      }
     }
     
     public static void addToRelevanceReasons(List<PkbpNode> entities, String why, double amount) {
@@ -670,9 +683,17 @@ public class PkbpSearching implements Serializable {
     
     public PkbpEntity chooseEntityToSearchFor() {
       ChooseOne<PkbpEntity> c = new ChooseOne<>(rand);
-      for (PkbpNode n : findIntersection(FeatureNames.ENTITY)) {
+      List<PkbpNode> ents = findIntersection(FeatureNames.ENTITY);
+      double minScore = 0;
+      for (PkbpNode n : ents) {
         PkbpEntity e = (PkbpEntity) n.obj;
         double score = Feat.sum(e.relevantReasons);
+        minScore = Math.min(minScore, score);
+      }
+      for (PkbpNode n : ents) {
+        PkbpEntity e = (PkbpEntity) n.obj;
+        double score = Feat.sum(e.relevantReasons);
+        score -= minScore;
         c.offer(e, score);
       }
       return c.choose();
@@ -991,6 +1012,8 @@ public class PkbpSearching implements Serializable {
         TriageSearch ts,
         Set<String> ignoreCommToks) {
       
+      boolean debug = true;
+      
       if (ignoreCommToks != null)
         throw new RuntimeException("implement me");
       
@@ -1045,13 +1068,23 @@ public class PkbpSearching implements Serializable {
           PkbpSituation.Mention sit = new PkbpSituation.Mention(pred, ars, deps, toks, comm);
           MultiEntityMention mem = new MultiEntityMention(entities, sit);
           
+          if (debug) {
+            Log.info("aligning arguments for: " + sit.getContextAroundHead(40, 40, true));
+          }
+          
           // Build each mention
           PkbpEntity.Mention[] argMentions = new PkbpEntity.Mention[ars.length];
           for (int i = 0; i < ars.length; i++) {
             Span span = IndexCommunications.nounPhraseExpand(ars[i], deps);
             String nerType = IndexCommunications.nerType(ars[i], toks);
             argMentions[i] = new PkbpEntity.Mention(ars[i], span, nerType, toks, deps, comm);
+            if (debug) {
+              Log.info("arg(" + i + "): " + argMentions[i].getContextAroundHead(40, 40, true));
+            }
           }
+          
+          if (debug)
+            System.out.println();
           
           // Match mentions and entities, argmax_{mention} \forall entities
           for (int i = 0; i < mem.query.length; i++) {
@@ -1060,10 +1093,20 @@ public class PkbpSearching implements Serializable {
             for (int j = 0; j < argMentions.length; j++) {
               EntLink el = scoreEntLink(e, argMentions[j], df, ts);
               a.offer(argMentions[j], Feat.sum(el.score));
+              
+              if (debug) {
+                Log.info("ent:     " + e);
+                Log.info("mention: " + argMentions[j].getContextAroundHead(40, 40, true));
+                Log.info("score:   " + Feat.showScore(el.score, 120));
+                System.out.println();
+              }
             }
             mem.alignedMentions[i] = a.get();
           }
           mems.add(mem);
+
+          if (debug)
+            System.out.println();
         }
       }
 

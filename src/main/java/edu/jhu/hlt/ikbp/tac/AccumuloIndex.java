@@ -932,6 +932,8 @@ public class AccumuloIndex {
     }
 
     public List<SitSearchResult> searchMulti(List<EMQuery> qs, ComputeIdf df) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+      boolean debug = true;
+
       Log.info("starting, qs=" + qs);
       if (qs.isEmpty())
         throw new IllegalArgumentException();
@@ -957,6 +959,12 @@ public class AccumuloIndex {
             assert tok.getValue() > 0;
             double prev = tokUuid2ScoreMap.getOrDefault(tok, 1d);
             double cur = prev * (1 + tok.getValue());
+            if (debug && prev > 1) {
+              Log.info("overlap: tok=" + tok.getKey()
+                  + " prev=" + prev
+                  + " cur=1+" + tok.getValue()
+                  + " tf=" + q.triageFeats);
+            }
             tokUuid2ScoreMap.put(tok.getKey(), cur);
           }
         } catch (Exception e) {
@@ -964,14 +972,19 @@ public class AccumuloIndex {
         }
       }
       K += 10;
+      if (debug)
+        Log.info("K=" + K);
       
       // Trim to only take at most K
       // where K = 10 + max_{q : qs} sizeof(triageSearch(q))
       // This will mimic the performance characteristics (mainly memory) of the existing single-mention implementation
       List<Feat> toks = Feat.deindex(tokUuid2ScoreMap.entrySet());
       Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
-      for (Feat f : Feat.sortAndPrune(toks, K))
+      for (Feat f : Feat.sortAndPrune(toks, K)) {
         tokUuid2score.update(f.name, f.weight);
+        if (debug)
+          Log.info("topTok: " + f.name + " " + f.weight);
+      }
 
       // Now we have scores for every tokenization
       // Need to add in the document tf-idf score
@@ -1621,11 +1634,19 @@ public class AccumuloIndex {
       
       // 6) Find entities and situations
       // TODO or not? SitSearchResult is not what I want for this, I want MultiEntityMention
+      // Currently this is implemented in PbkpSearching
       
       // 7) Rescore according to attribute features
-      for (EMQuery q : qs)
+      for (EMQuery q : qs) {
         if (q.attrFeats.size() > 0)
           throw new RuntimeException("implement me");
+        
+        /*
+         * There is a real problem here.
+         * If you want to extract attribute features, you have to already have decided where the
+         * entity mentions are, which is currently done client-side not server-side.
+         */
+      }
       
       return res;
     }
