@@ -143,7 +143,7 @@ public class KbpEntitySearchService implements SearchService.Iface {
       break;
 
     default:        // triage feats
-      q.triageFeats.add(t);
+      q.triageFeats.add(ar[1] + ":" + ar[2]);
       break;
     }
   }
@@ -166,8 +166,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
       throw new ServicesException("no features recgnoized in: " + q.toString());
     
     try {
-      wrapped.multiEntityMentionSearch(new ArrayList<>(qs.values()));
-      throw new RuntimeException("implement me");
+      List<SitSearchResult> res = wrapped.multiEntityMentionSearch(new ArrayList<>(qs.values()));
+      return buildResult(res, q);
     } catch (Exception e) {
       ServicesException se = new ServicesException("error during search: " + e.getMessage());
       byte[] bytes = SerializationUtils.t2bytes(e);
