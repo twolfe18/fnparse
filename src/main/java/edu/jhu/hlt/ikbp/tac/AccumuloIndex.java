@@ -1113,7 +1113,7 @@ public class AccumuloIndex {
       // Add up the score across all pairs of features
       Set<String> docsA = new HashSet<>();
       Set<String> docsB = new HashSet<>();
-      int maxDocs = 50_000;
+      int maxDocs = 250_000;
 //      Map<java.util.UUID, Double> tok2score = new HashMap<>();
       Counts.Pseudo<String> tok2score = new Counts.Pseudo<>();
       while (!agenda.isEmpty()) {

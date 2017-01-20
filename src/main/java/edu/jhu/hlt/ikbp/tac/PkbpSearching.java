@@ -686,11 +686,15 @@ public class PkbpSearching implements Serializable {
       List<PkbpNode> ents = findIntersection(FeatureNames.ENTITY);
       double minScore = 0;
       for (PkbpNode n : ents) {
+        if (n.feats.contains(FeatureNames.SEED))
+          continue;
         PkbpEntity e = (PkbpEntity) n.obj;
         double score = Feat.sum(e.relevantReasons);
         minScore = Math.min(minScore, score);
       }
       for (PkbpNode n : ents) {
+        if (n.feats.contains(FeatureNames.SEED))
+          continue;
         PkbpEntity e = (PkbpEntity) n.obj;
         double score = Feat.sum(e.relevantReasons);
         score -= minScore;
