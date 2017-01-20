@@ -1,9 +1,7 @@
 package edu.jhu.hlt.ikbp.tac;
 
 import java.io.Serializable;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
 import java.util.List;
 
 import edu.jhu.hlt.concrete.Communication;
@@ -65,6 +63,11 @@ public class PkbpMention implements Serializable {
     TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
     return ner.getTaggedTokenList().get(head).getTag();
   }
+
+  public String getHeadPos() {
+    TokenTagging pos = IndexCommunications.getPreferredPosTags(toks);
+    return pos.getTaggedTokenList().get(head).getTag();
+  }
   
   public StringTermVec getContext() {
     if (context == null) {
@@ -76,12 +79,21 @@ public class PkbpMention implements Serializable {
   @Override
   public String toString() {
     String[] cn = getClass().getName().split("\\.");
-    return "(" + cn[cn.length-1] + " h=" + getHeadString() + "@" + head + " in " + getCommTokIdShort() + ")";
+    return "(" + cn[cn.length-1] + " h=" + getHeadWord() + "@" + head + " in " + getCommTokIdShort() + ")";
   }
-    
+  
+  /** returns strings like "said.V@12", human readable and uniq within a {@link Tokenization} */
+  public String getHeadWordAndPosition() {
+    return getHeadWord() + "." + getHeadPos().charAt(0) + "@" + head;
+  }
+
   /** returns "commId/tokUuidSuf" */
   public String getCommTokIdShort() {
     return getCommunicationId() + "/" + tokUuid.substring(tokUuid.length()-4, tokUuid.length());
+  }
+  
+  public String getCommTokHeadWordAndLoc() {
+    return getCommTokIdShort() + "/" + getHeadWordAndPosition();
   }
   
   @Override
@@ -105,7 +117,7 @@ public class PkbpMention implements Serializable {
     return tt.getTag();
   }
 
-  public String getHeadString() {
+  public String getHeadWord() {
     return getTokenization().getTokenList().getTokenList().get(head).getText();
   }
   

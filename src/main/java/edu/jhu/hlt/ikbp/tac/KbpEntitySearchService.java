@@ -399,7 +399,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
         (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceFile);
     ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
     int maxResults = config.getInt("maxResults", 100);
-    TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults);
+    int maxDocsForMultiEntSearch = config.getInt("maxDocsForMultiEntSearch", 100_000);
+    TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch);
     File fetchCacheDir = config.getOrMakeDir("fetch.cacheDir");
     String fetchHost = config.getString("fetch.host");
     int fetchPort = config.getInt("fetch.port");

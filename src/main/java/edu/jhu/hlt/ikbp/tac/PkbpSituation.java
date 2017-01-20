@@ -79,6 +79,8 @@ public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Menti
     }
   }
 
+  public final String id;
+
   /**
    * For now: a union/sum of the features at the mention level.
    * See DependencySyntaxEvents.CoverArgumentsWithPredicates for feature extraction.
@@ -94,7 +96,8 @@ public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Menti
    */
   List<PkbpEntity> coreArguments;
   
-  public PkbpSituation(Mention canonical) {
+  public PkbpSituation(String id, Mention canonical) {
+    this.id = id;
     this.mentions = new ArrayList<>();
     this.mentions.add(canonical);
     this.feat2score = new HashMap<>();
@@ -125,14 +128,14 @@ public class PkbpSituation implements Serializable, Iterable<PkbpSituation.Menti
   public List<String> getHeads() {
     List<String> h = new ArrayList<>();
     for (PkbpSituation.Mention sm : mentions)
-      h.add(sm.getHeadString());
+      h.add(sm.getHeadWord());
     return h;
   }
   
   public String getCanonicalHeadString() {
     if (mentions.isEmpty())
       return "NA";
-    return mentions.get(0).getHeadString();
+    return mentions.get(0).getHeadWord();
   }
   
   public List<Feat> similarity(Map<String, Double> feat2score) {

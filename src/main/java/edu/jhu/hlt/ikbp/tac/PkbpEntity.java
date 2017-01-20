@@ -299,7 +299,7 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
   public String getCanonicalHeadString() {
     if (mentions.isEmpty())
       return "NA";
-    return mentions.get(0).getHeadString();
+    return mentions.get(0).getHeadWord();
   }
   
   public void addMention(Mention mention) {

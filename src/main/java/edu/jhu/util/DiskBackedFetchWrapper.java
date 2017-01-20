@@ -59,6 +59,8 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface, 
       File cacheDir,
       boolean saveFetchedComms,
       boolean compressionForSavedComms) {
+    if (!cacheDir.isDirectory())
+      throw new IllegalArgumentException();
     this.failOver = failOver;
     this.cacheDir = cacheDir;
     this.saveFetchedComms = saveFetchedComms;

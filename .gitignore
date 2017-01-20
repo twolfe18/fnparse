@@ -45,3 +45,8 @@ scripts/debug/
 scripts/fact-files/
 sf*-queries.xml
 speculative/
+conll2012-dataset-counts-check.txt
+/*.txt
+jar-to-grid.sh
+mvn-deploy-deps.sh
+semdiff-search-logs/

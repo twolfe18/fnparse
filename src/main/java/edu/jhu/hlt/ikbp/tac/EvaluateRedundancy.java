@@ -7,7 +7,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Random;
 
 import edu.jhu.hlt.concrete.TokenTagging;
@@ -100,7 +99,7 @@ public class EvaluateRedundancy implements Serializable {
   
   
 
-  // Generates one HTML file
+  /** Generates one HTML file */
   class Instance implements Serializable {
     private static final long serialVersionUID = -8298704626490189056L;
     double weight;

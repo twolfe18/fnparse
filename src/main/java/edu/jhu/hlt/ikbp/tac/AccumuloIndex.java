@@ -738,7 +738,8 @@ public class AccumuloIndex {
 
     public TriageSearch(
         FeatureCardinalityEstimator.New triageFeatureFrequencies,
-        int maxResults) throws Exception {
+        int maxResults,
+        int maxDocsForMultiEntSearch) throws Exception {
       this(SimpleAccumuloConfig.DEFAULT_INSTANCE,
           SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS,
           "reader",
@@ -746,6 +747,7 @@ public class AccumuloIndex {
           triageFeatureFrequencies,
           4,
           maxResults,
+          maxDocsForMultiEntSearch,
           30,
           true);
     }
@@ -759,9 +761,11 @@ public class AccumuloIndex {
         FeatureCardinalityEstimator.New triageFeatureFrequencies,
         int nThreads,
         int maxResults,
+        int maxDocsForMultiEntSearch,
         double triageFeatNBPrior,
         boolean batchC2W) throws Exception {
       Log.info("maxResults=" + maxResults
+          + " maxDocsForMultiEntSearch=" + maxDocsForMultiEntSearch
           + " triageFeatureFrequencies=" + triageFeatureFrequencies
           + " batchC2W=" + batchC2W
           + " triageFeatNBPrior=" + triageFeatNBPrior
@@ -770,6 +774,7 @@ public class AccumuloIndex {
           + " nThreads=" + nThreads
           + " zks=" + zks);
       this.maxResults = maxResults;
+      this.maxDocsForMultiEntSearch = maxDocsForMultiEntSearch;
       this.triageFeatNBPrior = triageFeatNBPrior;
       this.triageFeatureFrequencies = triageFeatureFrequencies;
       this.auths = new Authorizations();
@@ -1138,7 +1143,6 @@ public class AccumuloIndex {
           }
           f1 = new FeatSearch(f.get1());
           searchCache.put(f1.feat, f1);
-//          docsA += f1.commUuidPrefixes.size();
           docsA.addAll(f1.commUuidPrefixes);
         }
 
@@ -1151,7 +1155,6 @@ public class AccumuloIndex {
           }
           f2 = new FeatSearch(f.get2());
           searchCache.put(f2.feat, f2);
-//          docsB += f2.commUuidPrefixes.size();
           docsB.addAll(f2.commUuidPrefixes);
         }
 
@@ -2154,8 +2157,11 @@ public class AccumuloIndex {
     // and in coordination with maxToksPreDocRetrieval
     int maxResultsPerQuery = config.getInt("maxResultsPerQuery", 30);
     // This affects pruning early in the pipeline
-    double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 5);
+    double maxToksPruningSafetyRatio = config.getDouble("maxToksPruningSafetyRatio", 2);
     int maxToksPreDocRetrieval = (int) Math.max(50, maxToksPruningSafetyRatio * maxResultsPerQuery);
+    
+    int maxDocsForMultiEntSearch = config.getInt("maxDocsForMultiEntSearch", 250_000);
+    
     Log.info("[filter] maxResultsPerQuery=" + maxResultsPerQuery
         + " maxToksPruningSafetyRatio=" + maxToksPruningSafetyRatio
         + " maxToksPreDocRetrieval=" + maxToksPreDocRetrieval);
@@ -2168,6 +2174,7 @@ public class AccumuloIndex {
       fce,
       config.getInt("nThreadsSearch", 4),
       maxToksPreDocRetrieval,
+      maxDocsForMultiEntSearch,
       config.getDouble("triageFeatNBPrior", 10),
       config.getBoolean("batchC2W", true));
 //      config.getBoolean("cacheFeatureFrequencies", true));
@@ -2717,10 +2724,11 @@ public class AccumuloIndex {
     fs.add("pb:ghazni_AAAA");
 
     int maxResults = 100;
+    int maxDocsMulti = 100_000;
     File f = config.getExistingFile("triageFeatureFrequencies", new File("/export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin/fce-mostFreq1000000-nhash12-logb20.jser"));
     Log.info("loading from " + f.getPath());
     FeatureCardinalityEstimator.New fce = (FeatureCardinalityEstimator.New) FileUtil.deserialize(f);
-    TriageSearch ts = new TriageSearch(fce, maxResults);
+    TriageSearch ts = new TriageSearch(fce, maxResults, maxDocsMulti);
     ts.benchmarkAll(fs);
     
     Log.info("done");
