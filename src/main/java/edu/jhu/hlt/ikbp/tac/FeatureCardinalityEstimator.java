@@ -35,7 +35,6 @@ import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnel;
 import com.google.common.hash.Funnels;
 import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
@@ -47,6 +46,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.hash.GuavaHashUtil;
 import edu.jhu.prim.map.IntIntHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch;
@@ -80,6 +80,10 @@ public class FeatureCardinalityEstimator implements Serializable {
    */
   public static class New implements Serializable {
     private static final long serialVersionUID = -4269816162008028564L;
+
+    // This is the seed for all the hash functions used by MaxMinSketch/CountMinSketch
+    // Don't change this or else you will jumble all serialized data.
+    public static final int SEED = 9001;
     
     public static class HeavyHitter implements Serializable, Comparable<HeavyHitter> {
       private static final long serialVersionUID = -2417638175364354834L;
@@ -218,8 +222,10 @@ public class FeatureCardinalityEstimator implements Serializable {
         lightHitter = hhNew;
       }
       
-      if (hf == null)
-        hf = Hashing.goodFastHash(numHash * logBuckets);
+      if (hf == null) {
+//        hf = Hashing.goodFastHash(numHash * logBuckets);
+        hf = GuavaHashUtil.goodFastHash(numHash * logBuckets, SEED);
+      }
       byte[] keyHash = hf.hashBytes(lightHitter.name).asBytes();
       lightHittersTokFreq.update(keyHash, lightHitter.tokFreq);
       lightHittersDocFreq.update(keyHash, lightHitter.docFreq);
@@ -244,8 +250,10 @@ public class FeatureCardinalityEstimator implements Serializable {
         assert hh.length == 2;
         return new IntPair(hh[0], hh[1]);
       }
-      if (hf == null)
-        hf = Hashing.goodFastHash(numHash * logBuckets);
+      if (hf == null) {
+//        hf = Hashing.goodFastHash(numHash * logBuckets);
+        hf = GuavaHashUtil.goodFastHash(numHash * logBuckets, SEED);
+      }
       byte[] keyHash = hf.hashBytes(feature.getBytes(utf8)).asBytes();
       int tf = lightHittersTokFreq.getUpperBoundOnCount(keyHash);
       int df = lightHittersDocFreq.getUpperBoundOnCount(keyHash);

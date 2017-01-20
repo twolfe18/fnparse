@@ -7,11 +7,11 @@ import java.nio.charset.Charset;
 import java.util.Map.Entry;
 
 import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.hash.GuavaHashUtil;
 import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
@@ -37,6 +37,10 @@ import edu.jhu.hlt.tutils.hash.Hash;
  */
 public class CountMinSketch implements Serializable {
   private static final long serialVersionUID = -4304140822737269498L;
+
+  // This is the seed for all the hash functions used by MaxMinSketch/CountMinSketch
+  // Don't change this or else you will jumble all serialized data.
+  public static final int SEED = 9001;
 
   protected int nhash;
   protected int logb;
@@ -119,14 +123,17 @@ public class CountMinSketch implements Serializable {
 
     public StringCountMinSketch(int nHash, int logCountersPerHash, boolean conservativeUpdates) {
       super(nHash, logCountersPerHash, conservativeUpdates);
-      hf = Hashing.goodFastHash(nhash * logb);
+//      hf = Hashing.goodFastHash(nhash * logb);
+      hf = GuavaHashUtil.goodFastHash(nhash * logb, SEED);
     }
 
     public int apply(String item, boolean increment) {
       if (cs == null)
         cs = Charset.forName("UTF-8");
-      if (hf == null)
-        hf = Hashing.goodFastHash(nhash * logb);
+      if (hf == null) {
+//        hf = Hashing.goodFastHash(nhash * logb);
+        hf = GuavaHashUtil.goodFastHash(nhash * logb, SEED);
+      }
       byte[] h = hf.hashString(item, cs).asBytes();
       return apply(h, increment);
     }

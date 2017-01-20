@@ -39,3 +39,9 @@ logs-remote
 models
 log4j.properties
 scripts/tge_example.py
+copy-data-up-to-coe-grid.sh
+evaluation
+scripts/debug/
+scripts/fact-files/
+sf*-queries.xml
+speculative/

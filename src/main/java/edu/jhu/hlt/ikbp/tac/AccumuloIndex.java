@@ -729,6 +729,13 @@ public class AccumuloIndex {
     // If true, use a batch scanner to do the words query given a communication
     boolean batchC2W;
 
+    // Stop searching through inverted indices of features belonging to any
+    // EMQuery once this many documents have been searched through.
+    // TODO This is a bad fix for the problem of hitting really slow features
+    // in the product space like {fa=*, fb="hi:mr"}. Perhaps filtering based
+    // on product feature score is a better idea.
+    private int maxDocsForMultiEntSearch = 500_000;
+
     public TriageSearch(
         FeatureCardinalityEstimator.New triageFeatureFrequencies,
         int maxResults) throws Exception {
@@ -1113,7 +1120,6 @@ public class AccumuloIndex {
       // Add up the score across all pairs of features
       Set<String> docsA = new HashSet<>();
       Set<String> docsB = new HashSet<>();
-      int maxDocs = 250_000;
 //      Map<java.util.UUID, Double> tok2score = new HashMap<>();
       Counts.Pseudo<String> tok2score = new Counts.Pseudo<>();
       while (!agenda.isEmpty()) {
@@ -1125,8 +1131,9 @@ public class AccumuloIndex {
 
         FeatSearch f1 = searchCache.get(f.get1());
         if (f1 == null) {
-          if (docsA.size() > maxDocs) {
-            Log.info("skipping fa=" + f.get1() + " docsA=" + docsA.size() + " maxDocs=" + maxDocs);
+          if (docsA.size() > maxDocsForMultiEntSearch) {
+            if (debug)
+              Log.info("skipping fa=" + f.get1() + " docsA=" + docsA.size() + " maxDocsForMultiEntSearch=" + maxDocsForMultiEntSearch);
             continue;
           }
           f1 = new FeatSearch(f.get1());
@@ -1137,8 +1144,9 @@ public class AccumuloIndex {
 
         FeatSearch f2 = searchCache.get(f.get2());
         if (f2 == null) {
-          if (docsB.size() > maxDocs) {
-            Log.info("skipping fb=" + f.get2() + " docsB=" + docsB.size() + " maxDocs=" + maxDocs);
+          if (docsB.size() > maxDocsForMultiEntSearch) {
+            if (debug)
+              Log.info("skipping fb=" + f.get2() + " docsB=" + docsB.size() + " maxDocsForMultiEntSearch=" + maxDocsForMultiEntSearch);
             continue;
           }
           f2 = new FeatSearch(f.get2());
@@ -1932,16 +1940,15 @@ public class AccumuloIndex {
       // Currently this is implemented in PbkpSearching
       
       // 7) Rescore according to attribute features
-      for (EMQuery q : qs) {
+//      for (EMQuery q : qs) {
 //        if (q.attrFeats.size() > 0)
 //          throw new RuntimeException("implement me");
-        
-        /*
-         * There is a real problem here.
-         * If you want to extract attribute features, you have to already have decided where the
-         * entity mentions are, which is currently done client-side not server-side.
-         */
-      }
+//        /*
+//         * There is a real problem here.
+//         * If you want to extract attribute features, you have to already have decided where the
+//         * entity mentions are, which is currently done client-side not server-side.
+//         */
+//      }
       
       return res;
     }

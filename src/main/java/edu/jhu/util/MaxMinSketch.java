@@ -7,11 +7,11 @@ import java.nio.charset.Charset;
 import java.util.Map.Entry;
 
 import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.hash.GuavaHashUtil;
 
 /**
  * Given a whole bunch of (key, count) pairs, build a data structure
@@ -36,6 +36,10 @@ import edu.jhu.hlt.tutils.Log;
  */
 public class MaxMinSketch implements Serializable {
   private static final long serialVersionUID = -4920425819626600641L;
+
+  // This is the seed for all the hash functions used by MaxMinSketch/CountMinSketch
+  // Don't change this or else you will jumble all serialized data.
+  public static final int SEED = 9001;
 
   private final int[][] z;
   protected final int logb;   // log2(numberOfBucketsPerSketch)
@@ -94,7 +98,8 @@ public class MaxMinSketch implements Serializable {
 
     public StringMaxMinSketch(int nHash, int logCountersPerHash) {
       super(nHash, logCountersPerHash);
-      hf = Hashing.goodFastHash(nHash * logb);
+//      hf = Hashing.goodFastHash(nHash * logb);
+      hf = GuavaHashUtil.goodFastHash(nHash * logb, SEED);
     }
     
     public byte[] getHashes(String key) {
@@ -102,7 +107,8 @@ public class MaxMinSketch implements Serializable {
         cs = Charset.forName("UTF-8");
       if (hf == null) {
         int nhash = getNumberOfSketches();
-        hf = Hashing.goodFastHash(nhash * logb);
+//        hf = Hashing.goodFastHash(nhash * logb);
+        hf = GuavaHashUtil.goodFastHash(nhash * logb, SEED);
       }
       return hf.hashString(key, cs).asBytes();
     }
