@@ -154,17 +154,20 @@ public class PkbpMention implements Serializable {
   }
 
   public String getContextAroundHead() {
+    return getContextAroundHead(false);
+  }
+  public String getContextAroundHead(boolean forHtml) {
     StringBuilder sb = new StringBuilder();
     if (head < 0)
-      sb.append("<NO_HEAD/>");
+      sb.append(forHtml ? "[NO_HEAD/]" : "<NO_HEAD/>");
     List<Token> toks = getTokenization().getTokenList().getTokenList();
     for (Token t : toks) {
       sb.append(' ');
       if (t.getTokenIndex() == head)
-        sb.append("<HEAD>");
+        sb.append(forHtml ? "[HEAD]" : "<HEAD>");
       sb.append(t.getText());
       if (t.getTokenIndex() == head)
-        sb.append("</HEAD>");
+        sb.append(forHtml ? "[/HEAD]" : "</HEAD>");
     }
     return sb.toString();
   }

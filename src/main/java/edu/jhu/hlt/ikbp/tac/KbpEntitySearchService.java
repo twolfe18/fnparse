@@ -401,6 +401,9 @@ public class KbpEntitySearchService implements SearchService.Iface {
     int maxResults = config.getInt("maxResults", 100);
     int maxDocsForMultiEntSearch = config.getInt("maxDocsForMultiEntSearch", 100_000);
     TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch);
+    
+    PkbpSearching.New.triageFeatDebug(ts);
+
     File fetchCacheDir = config.getOrMakeDir("fetch.cacheDir");
     String fetchHost = config.getString("fetch.host");
     int fetchPort = config.getInt("fetch.port");

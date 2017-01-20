@@ -1208,7 +1208,8 @@ public class AccumuloIndex {
       }
       
       if (qs.size() != 2)
-        throw new RuntimeException("implement me");
+        throw new RuntimeException("implement me, qs.size=" + qs.size());
+
 //      Map<java.util.UUID, Double> t2s = intersectiveQuery(qs.get(0), qs.get(1), new HashMap<>());
 //      Counts.Pseudo<String> tokUuid2score = convert(t2s);
       Counts.Pseudo<String> tokUuid2score = intersectiveQuery(qs.get(0), qs.get(1), new HashMap<>());
@@ -1567,8 +1568,6 @@ public class AccumuloIndex {
 
     /** keys of returned map are comm ids */
     private Map<String, StringTermVec> getWordsForCommsBatch(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
-      TIMER.start("c2w/getWordsForCommsBatch");
-
       // Collect the ids of all the comm keys which need to be retrieved in c2w
       List<Range> rows = new ArrayList<>();
       Set<String> uniq = new HashSet<>();
@@ -1577,8 +1576,11 @@ public class AccumuloIndex {
           rows.add(Range.exact(commId));
       }
       
-      int nr = 0;
       Map<String, StringTermVec> c2tv = new HashMap<>();
+      if (rows.isEmpty())
+        return c2tv;
+      
+      int nr = 0;
       try (BatchScanner bs = conn.createBatchScanner(T_c2w.toString(), auths, numQueryThreads)) {
         if (batchTimeoutSeconds > 0) {
           Log.info("[filter] using a timeout of " + batchTimeoutSeconds + " seconds for c2w query");
@@ -1600,24 +1602,22 @@ public class AccumuloIndex {
         }
       }
       Log.info("[filter] retrieved " + c2tv.size() + " of " + uniq.size() + " comms, numWords=" + nr);
-      TIMER.stop("c2w/getWordsForCommsBatch");
       return c2tv;
     }
 
     private Map<String, StringTermVec> getWordsForComms(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
-      if (batchC2W)
-        return getWordsForCommsBatch(commIdsNonUniq);
-      return getWordsForCommsSerial(commIdsNonUniq);
+      if (batchC2W) {
+        try (TB tb = TIMER.new TB("c2w/getWordsForCommsBatch")) {
+          return getWordsForCommsBatch(commIdsNonUniq);
+        }
+      }
+      try (TB tb = TIMER.new TB("c2w/getWordsForCommsSerial")) {
+        return getWordsForCommsSerial(commIdsNonUniq);
+      }
     }
     
     /** keys of returned map are comm ids */
     private Map<String, StringTermVec> getWordsForCommsSerial(Iterable<String> commIdsNonUniq) throws TableNotFoundException {
-      TIMER.start("c2w/getWordsForCommsSerial");
-      
-      // NOTE: This can be made batch to go faster
-      // The only thing is that we don't get the results back in a specific order,
-      // but since we're loading this all into memory anyway, it doesn't much matter.
-      
       // Collect the ids of all the comm keys which need to be retrieved in c2w
       int nt = 0;
       List<Range> rows = new ArrayList<>();
@@ -1628,9 +1628,12 @@ public class AccumuloIndex {
           rows.add(Range.exact(commId));
       }
       Log.info("found " + rows.size() + " commUuids containing all " + nt + " tokUuids");
+      
+      Map<String, StringTermVec> c2tv = new HashMap<>();
+      if (rows.isEmpty())
+        return c2tv;
 
       int nr = 0;
-      Map<String, StringTermVec> c2tv = new HashMap<>();
       for (String commId : uniq) {
         StringTermVec tv = new StringTermVec();
         try (Scanner s = conn.createScanner(T_c2w.toString(), auths)) {
@@ -1646,7 +1649,6 @@ public class AccumuloIndex {
         assert old == null;
       }
       Log.info("[filter] retrieved " + c2tv.size() + " of " + uniq.size() + " comms, numWords=" + nr);
-      TIMER.stop("c2w/getWordsForCommsSerial");
       return c2tv;
     }
   }

@@ -30,6 +30,8 @@ import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 
+import com.google.common.collect.BiMap;
+
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
@@ -68,13 +70,16 @@ import edu.jhu.hlt.tutils.MultiTimer.TB;
 import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
+import edu.jhu.prim.bimap.ObjectObjectBimap;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.ChooseOne;
 import edu.jhu.util.CountMinSketch;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
+import edu.stanford.nlp.io.EncodingPrintWriter.out;
 import edu.jhu.util.DiskBackedFetchWrapper;
 import edu.jhu.util.DiskBackedSearchWrapper;
 import edu.jhu.util.TokenizationIter;
@@ -516,6 +521,7 @@ public class PkbpSearching implements Serializable {
     }
     
     static void triageFeatDebug(TriageSearch ts) {
+      Log.info("checking the validity of entity triage feature frequencies and scores:");
       List<String> check = new ArrayList<>();
       check.add("pb:abdullah_abdullah");
       check.add("hi:ghani");
@@ -579,7 +585,7 @@ public class PkbpSearching implements Serializable {
 
       boolean debug = true;
       
-      File evalOutputDir = config.getExistingFile("evalOutputDir", null);
+      File evalOutputDir = config.getFile("evalOutputDir", null);
       if (evalOutputDir != null) {
         Log.info("using evalOutputDir=" + evalOutputDir.getPath());
         evalOutputDir.mkdirs();
@@ -673,31 +679,37 @@ public class PkbpSearching implements Serializable {
       // Search for SEED+X mentions
       List<MultiEntityMention> mems = new ArrayList<>();
       int nMemIter = maxResults / 4;
+      
+      // DEBUG
+      nMemIter = Math.min(5, nMemIter);
+      
       for (int i = 0; i < nMemIter; i++) {
-        PkbpEntity searchFor = search.chooseEntityToSearchFor();
+        PkbpEntity searchFor = search.chooseEntityToSearchFor(seedEnt.id);
         searchFor.relevantReasons.add(new Feat("searched", -5));
         List<PkbpEntity> entPair = Arrays.asList(seedEnt, searchFor);
         Log.info("[main] at i=" + i + " of nMemIter=" + nMemIter + " searching for:");
         showEntitiesE(entPair, 5);
         List<MultiEntityMention> res = search.searchForSituationsInvolving(entPair, maxResults, commRet::fetch, df, ts, null);
         mems.addAll(res);
-        showMultiEntityMention(res);
+        showMultiEntityMention(res, "(" + seedEnt.id + ", " + searchFor.id + ")");
         System.out.println();
       }
       
-      // Link MEMs SitMentions and create new Situations
-      Log.info("[main] linking MultiEntityMention situation mentions...");
-      List<PA> entPairSitMentions = MultiEntityMention.getPAs(mems, seedEnt);
-      showMentionsM(PA.sitMentions(entPairSitMentions));
-      // TODO This isn't even needed, I'm going to use parma to dedup WITHIN a SEED+X/corePartipants
-      search.batchSituationLinking(entPairSitMentions);
-      if (debug) {
-        search.showSituations();
-      }
+//      // Link MEMs SitMentions and create new Situations
+//      Log.info("[main] linking MultiEntityMention situation mentions...");
+//      List<PA> entPairSitMentions = MultiEntityMention.getPAs(mems, seedEnt);
+//      showMentionsM(PA.sitMentions(entPairSitMentions));
+//      // TODO This isn't even needed, I'm going to use parma to dedup WITHIN a SEED+X/corePartipants
+//      search.batchSituationLinking(entPairSitMentions);
+//      if (debug) {
+//        search.showSituations();
+//      }
       
       // Output all sits and sitMentions for evaluation
       if (evalOutputDir != null) {
         File f = new File(evalOutputDir, q.id);
+        if (!f.isDirectory())
+          f.mkdirs();
         Log.info("[main] writing out evaluation/HIT data to " + f.getPath());
         EvalRedundancy ev = new EvalRedundancy(q, mems, f, search.rand);
         int numPos = 30;
@@ -713,11 +725,27 @@ public class PkbpSearching implements Serializable {
       System.out.println();
     }
     
-    public static void showMultiEntityMention(List<MultiEntityMention> mems) {
+    public static void showMultiEntityMention(List<MultiEntityMention> mems, String desc) {
+
+      // Track some stats
+      Set<String> preds = new HashSet<>();
+      Set<String> args = new HashSet<>();
+      Set<String> comms = new HashSet<>();
+      Set<String> toks = new HashSet<>();
+
       for (MultiEntityMention mem : mems) {
         showMultiEntityMention(mem);
         System.out.println();
+        
+        preds.add(mem.pred.getCommTokHeadWordAndLoc());
+        for (int i = 0; i < mem.alignedMentions.length; i++) {
+          if (mem.alignedMentions[i] != null)
+            args.add(mem.alignedMentions[i].getCommTokHeadWordAndLoc());
+        }
+        comms.add(mem.pred.getCommunicationId());
+        toks.add(mem.pred.getCommTokIdShort());
       }
+      Log.info(desc + " preds=" + preds.size() + " args=" + args.size() + " comms=" + comms.size() + " toks=" + toks.size());
     }
     public static void showMultiEntityMention(MultiEntityMention mem) {
       System.out.println("MultiEntityMention in " + mem.pred.getCommTokIdShort());
@@ -735,21 +763,22 @@ public class PkbpSearching implements Serializable {
         ((PkbpEntity) n.obj).relevantReasons.add(new Feat(why, amount));
     }
     
-    public PkbpEntity chooseEntityToSearchFor() {
+    public PkbpEntity chooseEntityToSearchFor(String... ignoreEntityIds) {
       ChooseOne<PkbpEntity> c = new ChooseOne<>(rand);
       List<PkbpNode> ents = findIntersection(FeatureNames.ENTITY);
+      List<PkbpEntity> entsOk = new ArrayList<>();
       double minScore = 0;
       for (PkbpNode n : ents) {
         if (n.feats.contains(FeatureNames.SEED))
           continue;
         PkbpEntity e = (PkbpEntity) n.obj;
+        if (Arrays.asList(ignoreEntityIds).contains(e.id))
+          continue;
         double score = Feat.sum(e.relevantReasons);
         minScore = Math.min(minScore, score);
+        entsOk.add(e);
       }
-      for (PkbpNode n : ents) {
-        if (n.feats.contains(FeatureNames.SEED))
-          continue;
-        PkbpEntity e = (PkbpEntity) n.obj;
+      for (PkbpEntity e : entsOk) {
         double score = Feat.sum(e.relevantReasons);
         score -= minScore;
         c.offer(e, score);
@@ -1089,6 +1118,11 @@ public class PkbpSearching implements Serializable {
         TriageSearch ts,
         Set<String> ignoreCommToks) {
       
+      Set<String> eids = new HashSet<>();
+      for (PkbpEntity e : entities)
+        if (!eids.add(e.id))
+          throw new IllegalArgumentException("duplicate entitie id=" + e.id);
+      
       boolean debug = true;
       
       if (ignoreCommToks != null)
@@ -1123,18 +1157,38 @@ public class PkbpSearching implements Serializable {
       SearchResult res = null;
       try {
         res = kbpEntitySearchService.search(query);
-      } catch (Exception e) {
-        e.printStackTrace();
+      } catch (ServicesException e) {
+//        e.printStackTrace();
+        Exception ee = (Exception) SerializationUtils.bytes2t(e.getSerEx());
+        Log.info("cause:");
+        ee.printStackTrace();
+        Log.info("returning empty list");
+        return Collections.emptyList();
+      } catch (TException e1) {
+        e1.printStackTrace();
+        Log.info("returning empty list");
         return Collections.emptyList();
       }
-      if (debug)
-        Log.info("got back " + res.getSearchResultItemsSize() + " results");
-      
+
+      if (debug) {
+        Log.info("SearchService retured " + res.getSearchResultItemsSize() + " results");
+        Log.info("about to fetch comms and extract MultiEntityMentions from the results");
+      }
+
       List<MultiEntityMention> mems = new ArrayList<>();
+      TimeMarker tm = new TimeMarker();
+      int nres = 0;
+      Set<String> comms = new HashSet<>();
       for (SearchResultItem r : res.getSearchResultItems()) {
         Communication comm = commRet.apply(r.getCommunicationId());
         Tokenization toks = IndexCommunications.findTok(r.getSentenceId().getUuidString(), comm);
         DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
+        
+        nres++;
+        comms.add(comm.getId());
+        if (tm.enoughTimePassed(2)) {
+          Log.info("found " + mems.size() + " MEMs in " + nres + " results and " + comms.size() + " comms so far");
+        }
         
         // Search for entities and situations
         List<Integer> args = DependencySyntaxEvents.extractEntityHeads(toks);
@@ -1294,7 +1348,7 @@ public class PkbpSearching implements Serializable {
       try {
         Log.info("issuing query: " + query);
         SearchResult res = kbpEntitySearchService.search(query);
-        Log.info("got back " + res.getSearchResultItemsSize() + " results for " + entity);
+        Log.info("got back " + res.getSearchResultItemsSize() + " results for " + entity + ", retrieving comms...");
         for (SearchResultItem r : res.getSearchResultItems()) {
           // TODO Get comm from results instead
           // https://gitlab.hltcoe.jhu.edu/concrete/concrete/merge_requests/54
@@ -1694,6 +1748,8 @@ public class PkbpSearching implements Serializable {
       private int numPos, numNeg;
 
       public EvalRedundancy(KbpQuery query, List<MultiEntityMention> sitMentions, File outputDir, Random rand) {
+        if (!outputDir.isDirectory())
+          throw new IllegalArgumentException("not a dir: " + outputDir.getPath());
         this.query = query;
         this.sitMentions = sitMentions;
         this.outputDir = outputDir;
@@ -1738,17 +1794,43 @@ public class PkbpSearching implements Serializable {
         if (examples == null)
           throw new IllegalStateException();
         
+        // 1) Write out one HTML file per pair (for turker evaluation)
+        File byInstanceDir = new File(outputDir, "byInstance");
+        if (!byInstanceDir.isDirectory())
+          byInstanceDir.mkdirs();
         Map<IntPair, LL<String>> ex2yhat = new HashMap<>();
         for (String yhat : examples.keySet())
           for (IntPair ex : examples.get(yhat))
             ex2yhat.put(ex, new LL<>(yhat, ex2yhat.get(ex)));
-        
         for (IntPair ij : ex2yhat.keySet()) {
           List<String> yhats = LL.toList(ex2yhat.get(ij));
           MultiEntityMention a = sitMentions.get(ij.first);
           MultiEntityMention b = sitMentions.get(ij.second);
-          File f = new File(outputDir, getId(a, b) + ".html");
+          File f = new File(byInstanceDir, getId(a, b).replaceAll("/", "_") + ".html");
           writeoutOne(a, b, f, yhats);
+        }
+        
+        // 2) Write out many examples per group
+        File byLabelDir = new File(outputDir, "byLabel");
+        if (!byLabelDir.isDirectory())
+          byLabelDir.mkdirs();
+        for (Entry<String, ReservoirSample<IntPair>> e : examples.entrySet()) {
+          List<String> yhats = Arrays.asList(e.getKey());
+          File f = new File(byLabelDir, e.getKey().replaceAll("/", "_") + ".html");
+          try (BufferedWriter w = FileUtil.getWriter(f)) {
+            for (IntPair ij : e.getValue()) {
+              MultiEntityMention a = sitMentions.get(ij.first);
+              MultiEntityMention b = sitMentions.get(ij.second);
+              w.write("<h2>" + a.pred.getCommTokHeadWordAndLoc() + "</h2>");
+              w.write("<h2>" + b.pred.getCommTokHeadWordAndLoc() + "</h2>");
+              for (String line : writeoutOneHelper(a, b, yhats)) {
+                w.write(line);
+                w.newLine();
+              }
+              w.write("<br/><br/>");
+              w.newLine();
+            }
+          }
         }
       }
       
@@ -1763,6 +1845,8 @@ public class PkbpSearching implements Serializable {
       
       private static List<String> writeoutOneHelper(MultiEntityMention a, MultiEntityMention b, List<String> yhats) {
         List<String> l = new ArrayList<>();
+        
+        l.add("<h2>" + StringUtils.join(", ", yhats) + "</h2>");
 
         l.add("<center>");
         l.add("<table border=\"1\" cellpadding=\"10\" width=\"80%\">");
@@ -1772,12 +1856,12 @@ public class PkbpSearching implements Serializable {
 
         l.add("<td valign=top>");
 //        l.add(left.getWordsInTokenizationWithHighlightedEntAndSit(false));
-        l.add(a.pred.getContextAroundHead());
+        l.add(a.pred.getContextAroundHead(true));
         l.add("</td>");
 
         l.add("<td valign=top>");
 //        l.add(right.getWordsInTokenizationWithHighlightedEntAndSit(false));
-        l.add(b.pred.getContextAroundHead());
+        l.add(b.pred.getContextAroundHead(true));
         l.add("</td>");
 
         l.add("</tr>");
@@ -1794,20 +1878,30 @@ public class PkbpSearching implements Serializable {
         this.numPos = numPos;
         this.numNeg = numNeg;
         this.examples = new HashMap<>();
+        
+        // Check that there is a bijection between indices and MEM ids
+        ObjectObjectBimap<IntPair, String> b = new ObjectObjectBimap<>();
+
         int n = sitMentions.size();
+        int c = 0;
         for (int i = 0; i < n-1; i++) {
           for (int j = i+1; j < n; j++) {
             add(i, j, "participants");
             add(i, j, "lemma");
             add(i, j, "participants", "lemma");
             add(i, j, "participants", "parma");   // this is fast due to short-circuiting
+            
+            String id = getId(sitMentions.get(i), sitMentions.get(j));
+            b.put(new IntPair(i,j), id);
+            c++;
           }
         }
+        assert c == b.size();
       }
       
       private void add(int i, int j, String... methods) {
-        if (j >= i)
-          throw new IllegalArgumentException();
+        if (i >= j)
+          throw new IllegalArgumentException("i=" + i + " j=" + j);
         MultiEntityMention a = sitMentions.get(i);
         MultiEntityMention b = sitMentions.get(j);
         boolean yhat = true;
@@ -1850,16 +1944,13 @@ public class PkbpSearching implements Serializable {
       }
       
       public boolean parmaMatch(MultiEntityMention sitA, MultiEntityMention sitB) {
-        throw new RuntimeException("implement me");
+//        throw new RuntimeException("implement me");
+        Log.info("WARNING: Flipping a coin but should be calling PARMA!");
+        return rand.nextBoolean();
       }
       
       public String getId(MultiEntityMention sitA, MultiEntityMention sitB) {
         return sitA.pred.getCommTokHeadWordAndLoc() + "_" + sitB.pred.getCommTokHeadWordAndLoc();
-      }
-      
-      public File whereToWriteHit(MultiEntityMention sitA, MultiEntityMention sitB) {
-        String id = getId(sitA, sitB);
-        return new File(outputDir, id);
       }
     }
     
