@@ -1863,7 +1863,7 @@ public class AccumuloIndex {
     }
 
     private transient DiskBackedFetchWrapper commRetFetch;
-    private HashMap<String, Communication> commRetCache;  // contains everything commRetFetch ever gave us
+    private Map<String, Communication> commRetCache;  // contains everything commRetFetch ever gave us
     private TriageSearch triageSearch;
     private ComputeIdf df;
     private Double minTriageScore;
@@ -1873,7 +1873,7 @@ public class AccumuloIndex {
         ComputeIdf df,
         Double minTriageScore,
         DiskBackedFetchWrapper commRetFetch,
-        HashMap<String, Communication> commRetCache) throws Exception {
+        Map<String, Communication> commRetCache) throws Exception {
       this.commRetFetch = commRetFetch;
       this.commRetCache = commRetCache;
       this.triageSearch = triageSearch;
@@ -1896,18 +1896,23 @@ public class AccumuloIndex {
     
     public void clearCaches() {
       Log.info("clearing cache");
-      commRetCache.clear();
+      if (commRetCache != null)
+        commRetCache.clear();
     }
     
     public Communication getCommCaching(String commId) {
       if (commId == null)
         throw new IllegalArgumentException();
-      Communication c = commRetCache.get(commId);
-      if (c != null)
-        return c;
+      Communication c = null;
+      if (commRetCache != null) {
+        c = commRetCache.get(commId);
+        if (c != null)
+          return c;
+      }
       try {
         c = commRetFetch.fetch(commId);
-        commRetCache.put(commId, c);
+        if (commRetCache != null)
+          commRetCache.put(commId, c);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
