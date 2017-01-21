@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.PriorityQueue;
 import java.util.Set;
 
 import edu.jhu.hlt.concrete.Communication;
@@ -25,10 +26,13 @@ import edu.jhu.hlt.concrete.TokenList;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LL;
+import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
@@ -140,6 +144,51 @@ public class DependencySyntaxEvents {
       return _relStrCache;
     }
   }
+  
+  public static <T> boolean uniq(Iterable<T> items) {
+    Set<T> s = new HashSet<>();
+    int n = 0;
+    for (T t : items) {
+      s.add(t);
+      n++;
+    }
+    return n == s.size();
+  }
+  
+  public static BitSet a2bs(int[] a) {
+    BitSet bs = new BitSet();
+    for (int i : a)
+      bs.set(i);
+    return bs;
+  }
+  
+  public static int[] bs2a(BitSet bs) {
+    int[] a = new int[bs.cardinality()];
+    int j = 0;
+    for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i+1))
+      a[j++] = i;
+    assert j == a.length;
+    return a;
+  }
+  
+  public static int[] concat(int[] a, int[] b) {
+    int[] c = new int[a.length + b.length];
+    System.arraycopy(a, 0, c, 0, a.length);
+    System.arraycopy(b, 0, c, a.length, b.length);
+    return c;
+  }
+  
+  public static int[] setunion(int[] a, int[] b) {
+    BitSet bs = new BitSet();
+    for (int i : a) bs.set(i);
+    for (int i : b) bs.set(i);
+    int[] u = new int[bs.cardinality()];
+    int j = 0;
+    for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i+1))
+      u[j++] = i;
+    assert j == u.length;
+    return u;
+  }
 
   static class CoverArgumentsWithPredicates {
     // Input
@@ -161,41 +210,321 @@ public class DependencySyntaxEvents {
     Map<Integer, BitSet> situation2args;
     Map<Integer, List<Feat>> situation2frames;
 
+    static ComputeIdf df;
+    
     public CoverArgumentsWithPredicates(Communication c, Tokenization t, DependencyParse deps, List<Integer> args) {
-      int n = t.getTokenList().getTokenListSize();
+      if (!uniq(args))
+        throw new IllegalArgumentException("not uniq: " + args);
       this.t = t;
       this.deps = deps;
       this.situation2features = new HashMap<>();
       this.situation2args = new HashMap<>();
       this.args = args;
-
-      heads = new Dependency[n];
-      for (Dependency d : deps.getDependencyList()) {
-        if (heads[d.getDep()] != null)
-          throw new IllegalArgumentException("not a tree: " + deps.getMetadata());
-        heads[d.getDep()] = d;
+      
+      boolean debug = false;
+      
+      if (debug) {
+        Log.info("args=" + args);
+        for (Dependency d : deps.getDependencyList())
+          System.out.println(d);
+        for (Token tt : t.getTokenList().getTokenList())
+          System.out.println(tt.getTokenIndex() + "\t" + tt.getText());
       }
+      LabeledDirectedGraph g = LabeledDirectedGraph.fromConcrete(deps, t.getTokenList().getTokenListSize(), null);
+      int n = t.getTokenList().getTokenListSize();
 
-      seen = new Path[n];
-      queue = new ArrayDeque<>();
-      for (int i : args)
-        queue.push(seen[i] = new Path(i));
-      while (!queue.isEmpty()) {
-        Path p = queue.pop();
-        Dependency h = heads[p.head];
-        if (h == null)
-          continue;
-        Path pp = new Path(h, p);
-        if (pp.head < 0) {
-          // root
-          // no-op?
-        } else if (seen[pp.head] != null) {
-          unify(pp, seen[pp.head]);
-        } else {
-          seen[pp.head] = pp;
-          queue.push(pp);
+      /* NEW NEW *************************************************************/
+      // Like Prim's algorithm on a path-compressed version of the dependency graph.
+      // Edges in this new graph are dep-shortest-paths between two arguments.
+      Comparator<int[]> BY_LENGTH_ASC = new Comparator<int[]>() {
+        @Override public int compare(int[] o1, int[] o2) {
+          if (o1.length < o2.length)
+            return -1;
+          if (o1.length > o2.length)
+            return +1;
+          return 0;
+        }
+      };
+      PriorityQueue<int[]> agenda = new PriorityQueue<>(BY_LENGTH_ASC);
+      int na = args.size();
+      for (int i = 0; i < na-1; i++) {
+        for (int j = i+1; j < na; j++) {
+          int s = args.get(i);
+          int e = args.get(j);
+          int[] path = g.shortestPath(s, e, true, true);
+          if (path != null)
+            agenda.add(path);
         }
       }
+      // Every node in the dependency parse has a color which corresponds to what predicate it belongs to.
+      int[] nodeColors = new int[n];
+      int nextColor = 1;
+      BitSet[] color2args = new BitSet[n];
+      BitSet coveredArgs = new BitSet();
+      while (!agenda.isEmpty() && coveredArgs.cardinality() < args.size()) {
+        int[] path = agenda.poll();
+        boolean coveredAlready = coveredArgs.get(path[0]) && coveredArgs.get(path[path.length-1]);
+        
+        if (debug) {
+          System.out.println("[DSE] popped path=" + Arrays.toString(path) + " coveredAlready=" + coveredAlready);
+        }
+
+        if (coveredAlready)
+          continue;
+        // Determine if any of the nodes on this path have been colored already,
+        // meaning this is an argument to a known predicate.
+        int prevColor = 0;
+        for (int i = 1; i < path.length-1; i++) {
+          if (nodeColors[path[i]] > 0) {
+            assert prevColor == 0 || prevColor == nodeColors[path[i]];
+            prevColor = nodeColors[path[i]];
+          }
+        }
+        // New predicate
+        if (prevColor == 0) {
+          prevColor = nextColor++;
+          color2args[prevColor] = new BitSet();
+          if (debug) System.out.println("[DSE] new color: " + prevColor);
+        } else {
+          if (debug) System.out.println("[DSE] pre-existing color: " + prevColor);
+        }
+        // Update arguments and colors
+        for (int i = 0; i < path.length; i++) {
+          if (i == 0 || i == path.length-1) {
+            // Node/endpoint
+            color2args[prevColor].set(path[i]);
+            coveredArgs.set(path[i]);
+          } else {
+            // predicate/path word
+            nodeColors[path[i]] = prevColor;
+          }
+        }
+      }
+      // Extract situations
+      TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
+      for (int color = 1; color < nextColor; color++) {
+        BitSet ar = color2args[color];
+
+        // List the possible predicate words
+        ArgMax<Integer> pred = new ArgMax<>();
+        List<Integer> predPossible = new ArrayList<>();
+        for (int i = 0; i < n; i++)
+          if (nodeColors[i] == color)
+            predPossible.add(i);
+        // If these words are directly connected (there are no intermediate nodes in the path),
+        // then take the shallowest argument word
+        if (predPossible.isEmpty()) {
+          if (debug) System.out.println("no intermediate words, using args as possible pred words!");
+          for (int a : bs2a(ar))
+            predPossible.add(a);
+        }
+        
+        if (debug) System.out.println("args=" + ar + " predPossible=" + predPossible);
+
+        // Choose the best possible predicate word
+        assert !predPossible.isEmpty();
+        if (df == null) {
+          try {
+            df = new ComputeIdf(new File("data/idf/word-df.small.tsv"));
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+        }
+        for (int i : predPossible) {
+          String ps = pos.getTaggedTokenList().get(i).getTag();
+          double interesting = 1;
+          interesting *= 1d + df.idf(t.getTokenList().getTokenList().get(i).getText());
+          interesting /= 1d + g.getNode(i).computeDepthAssumingTree();
+          if (ps.startsWith("V"))
+            interesting *= 2;
+          assert interesting > 0;
+          pred.offer(i, interesting);
+        }
+
+        assert pred.numOffers() > 0;
+        int p = pred.get();
+        if (debug) {
+          String ps = t.getTokenList().getTokenList().get(p).getText();
+          List<String> as = new ArrayList<>();
+          for (int i : bs2a(ar))
+            as.add(t.getTokenList().getTokenList().get(i).getText());
+          System.out.println("p=" + p + "=" + ps + " args=" + ar + "=" + as);
+        }
+        Object old = situation2args.put(p, ar);
+        if (old != null)
+          throw new RuntimeException("p=" + p + " ar=" + ar + " old=" + old);
+      }
+      
+
+
+//      /* NEW *****************************************************************/
+//      // keys are sets of argument heads and values are sets of tokens which participate in the dependency syntax of the predication
+//      List<Pair<int[], BitSet>> events = new ArrayList<>();
+//      // 1) Create events as all pairs of arguments which are connected in the dependency path
+//      int na = args.size();
+//      for (int i = 0; i < na-1; i++) {
+//        for (int j = i+1; j < na; j++) {
+//          int s = args.get(i);
+//          int e = args.get(j);
+//          int[] k = new int[] {s, e};
+//          
+//          if (s == 0 && e == 3 && args.equals(Arrays.asList(0, 3, 24, 40))) {
+//            Log.info("checkme");
+//          }
+//          
+//          int[] path = g.shortestPath(s, e, true, false);
+//          if (path != null) {
+//            
+//            BitSet bs = a2bs(path);
+//            if (debug) {
+//              System.out.println("[DSE] create s=" + s + "=" + t.getTokenList().getTokenList().get(s).getText()
+//                  + " e=" + e + "=" + t.getTokenList().getTokenList().get(e).getText()
+//                  + " k=" + Arrays.toString(k)
+//                  + " path=" + bs);
+//            }
+//            events.add(new Pair<>(k, bs));
+//          }
+//        }
+//      }
+//      
+//      // 2) Merge events if they share any nodes in their dependency path
+//      // TODO Algorithmic improvement if too slow (is union-find relevant?)
+//      outer:
+//      while (true) {
+//        int ne = events.size();
+//        for (int i = 0; i < ne-1; i++) {
+//          for (int j = i+1; j < ne; j++) {
+//            Pair<int[], BitSet> a = events.get(i);
+//            Pair<int[], BitSet> b = events.get(j);
+//            
+//            // If the paths intersect and don't contain any argument words, then they are the same event
+//            BitSet pathIntersect = new BitSet();
+//            pathIntersect.or(a.get2());
+//            pathIntersect.and(b.get2());
+//            if (pathIntersect.cardinality() == 0)
+//              continue;
+//            BitSet pathUnion = new BitSet();
+//            pathUnion.or(a.get2());
+//            pathUnion.or(b.get2());
+//            int[] bothArgs = concat(a.get1(), b.get1());
+//            boolean good = true;
+//            for (int k = 0; k < bothArgs.length && good; k++)
+//              good &= !pathUnion.get(bothArgs[k]);
+//            if (!good)
+//              continue;
+//
+//            // Merge
+//            int[] argUnion = setunion(a.get1(), b.get1());
+//            assert argUnion.length >= 2;
+//            events.set(i, new Pair<>(argUnion, pathUnion));
+//            events.remove(j);
+//
+//            if (debug) {
+//              List<String> as = new ArrayList<>();
+//              for (int aa : a.get1())
+//                as.add(t.getTokenList().getTokenList().get(aa).getText());
+//              List<String> bs = new ArrayList<>();
+//              for (int bb : b.get1())
+//                bs.add(t.getTokenList().getTokenList().get(bb).getText());
+//              System.out.println("[DSE] merged"
+//                  + " argsL=" + Arrays.toString(a.get1())
+//                  + " argsR=" + Arrays.toString(b.get1())
+//                  + " argsL=" + as
+//                  + " argsR=" + bs
+//                  + " pathL=" + a.get2()
+//                  + " pathR=" + b.get2()
+//                  + " pathInt=" + pathIntersect
+//                  + " pathUnion=" + pathUnion
+//                  + " bothArgs=" + Arrays.toString(bothArgs));
+//            }
+//
+//            continue outer;
+//          }
+//        }
+//        break;
+//      }
+//      
+//      // 3) Choose the predicate word to be the shallowest node in the dependency path
+//      for (Pair<int[], BitSet> x : events) {
+//        int[] sitArgs = x.get1();
+//        assert sitArgs.length >= 2;
+//        BitSet path = x.get2();
+//        ArgMin<Integer> shallow = new ArgMin<>();
+//        for (int a : sitArgs) {
+//          int d = g.getNode(a).computeDepthAssumingTree();
+//          shallow.offer(a, d);
+//        }
+//        for (int r = path.nextSetBit(0); r >= 0; r = path.nextSetBit(r+1)) {
+//          int d = g.getNode(r).computeDepthAssumingTree();
+//          shallow.offer(r, d);
+//        }
+//        int pred = shallow.get();
+//        
+//        if (debug) {
+//          String ps = t.getTokenList().getTokenList().get(pred).getText();
+//          List<String> as = new ArrayList<>();
+//          for (int a : sitArgs)
+//            as.add(t.getTokenList().getTokenList().get(a).getText());
+//          Log.info("ps=" + ps + " pred=" + pred + " as=" + as + " ai=" + Arrays.toString(sitArgs) + " path=" + path);
+//        }
+//        
+//        // TODO Come up with a tie-breaking strategy for relations,
+//        // which can have argument/entity/NNP heads, which might not
+//        // be unique. I sort of doubt this will happen, can't immediately
+//        // come up with an example... I believe the NNP root argument
+//        // selection heuristic rules out all the examples I can think of.
+//        Object old = situation2args.put(pred, a2bs(sitArgs));
+//        if (old != null)
+//          throw new RuntimeException("pred=" + pred + " appears in more than one situation");
+//      }
+      
+      // 4) Extract features
+//      TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
+      for (int pred : situation2args.keySet()) {
+        BitSet predArgsBs = situation2args.get(pred);
+        int[] predArgs = bs2a(predArgsBs);
+        List<String> fs = new ArrayList<>();
+        predicateFeatures(pred, predArgs, deps, t, fs);
+//        String predPos = pos.getTaggedTokenList().get(pred).getTag();
+//        if (predPos.toUpperCase().startsWith("NNP")) {
+//          // Relative clauses screw this up, e.g. "X, who verbed Y for Z", X will be the shallowest and NNP
+//          assert predArgs.length == 2;
+//          relationFeatures(predArgs[0], predArgs[1], deps, t, fs);
+//        } else {
+//          predicateFeatures(pred, predArgs, deps, t, fs);
+//        }
+        situation2features.put(pred, new HashSet<>(fs));
+      }
+      
+
+//      /* OLD *****************************************************************/
+//      heads = new Dependency[n];
+//      for (Dependency d : deps.getDependencyList()) {
+//        if (heads[d.getDep()] != null)
+//          throw new IllegalArgumentException("not a tree: " + deps.getMetadata());
+//        heads[d.getDep()] = d;
+//      }
+//
+//      seen = new Path[n];
+//      queue = new ArrayDeque<>();
+//      for (int i : args)
+//        queue.push(seen[i] = new Path(i));
+//      while (!queue.isEmpty()) {
+//        Path p = queue.pop();
+//        Dependency h = heads[p.head];
+//        if (h == null)
+//          continue;
+//        Path pp = new Path(h, p);
+//        if (pp.head < 0) {
+//          // root
+//          // no-op?
+//        } else if (seen[pp.head] != null) {
+//          unify(pp, seen[pp.head]);
+//        } else {
+//          seen[pp.head] = pp;
+//          queue.push(pp);
+//        }
+//      }
     }
     
     static class Labeling {
@@ -364,7 +693,7 @@ public class DependencySyntaxEvents {
     public Map<Integer, Set<String>> getSituations() {
       return situation2features;
     }
-
+    
     private void unify(Path left, Path right) {
       assert left.head == right.head;
 
@@ -476,6 +805,58 @@ public class DependencySyntaxEvents {
         fs.add("argD/" + lw + "/" + left.relationStr() + "/" + predLemma);
         fs.add("argD/" + rw + "/" + right.relationStr() + "/" + predLemma);
       }
+    }
+
+    public static void relationFeatures(int arg0, int arg1, DependencyParse deps, Tokenization toks, List<String> fs) {
+      fs.add("type=relation");
+      Span ll = IndexCommunications.nounPhraseExpand(arg0, deps);
+      Span rr = IndexCommunications.nounPhraseExpand(arg1, deps);
+      String a1 = AccumuloIndex.words(ll, toks);
+      String a2 = AccumuloIndex.words(rr, toks);
+      fs.add("arg1=" + a1);
+      fs.add("arg2=" + a2);
+      
+      // TODO Finish this, that is if you end up using it, and not parma instead
+    }
+    
+    public static void predicateFeatures(int pred, int[] args, DependencyParse deps, Tokenization toks, List<String> fs) {
+      TokenTagging pos = IndexCommunications.getPreferredPosTags(toks);
+      TokenTagging lemma = IndexCommunications.getPreferredLemmas(toks);
+      String predPos = pos.getTaggedTokenList().get(pred).getTag();
+      String predLemma = lemma.getTaggedTokenList().get(pred).getTag()
+          + "." + predPos.charAt(0);
+//      String lw = AccumuloIndex.words(ll, t);
+//      String rw = AccumuloIndex.words(rr, t);
+      fs.add("type=predicate." + predPos.charAt(0));
+      fs.add("lemma=" + predLemma);
+      fs.add("word=" + toks.getTokenList().getTokenList().get(pred).getText());
+      fs.add("pos=" + predPos);
+      if (!predPos.startsWith("V"))
+        fs.add("pos=" + predPos);
+
+      for (Dependency d : deps.getDependencyList()) {
+        if (d.isSetGov() && d.getGov() == pred && !IGNORE_DEPREL.contains(d.getEdgeType())) {
+          fs.add("dsyn/" + d.getEdgeType() + "=" + toks.getTokenList().getTokenList().get(d.getDep()).getText());
+        }
+      }
+
+      /*
+       * I have sort of deviated from what I have with attribute features.
+       * Attribute features split entities which were put into the same bucket using something like a headword (or feature-match in general)
+       * With situations, entity-valued arguments are really the only positive-evidence that two situations are the same
+       * And realistically, we should have things like lemma, synset, or frame splitting them
+       */
+      
+      // TODO Finish this, that is if you end up using it, and not parma instead
+
+//      fs.add("argA/" + lw);
+//      fs.add("argA/" + rw);
+//      fs.add("argB/" + lw + "/" + predLemma);
+//      fs.add("argB/" + rw + "/" + predLemma);
+//      fs.add("argC/" + lw + "/" + left.relationStr());
+//      fs.add("argC/" + rw + "/" + right.relationStr());
+//      fs.add("argD/" + lw + "/" + left.relationStr() + "/" + predLemma);
+//      fs.add("argD/" + rw + "/" + right.relationStr() + "/" + predLemma);
     }
 
     public static final Set<String> IGNORE_DEPREL = new HashSet<>(Arrays.asList("punct"));
