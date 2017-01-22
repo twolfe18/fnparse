@@ -735,6 +735,15 @@ public class AccumuloIndex {
     // in the product space like {fa=*, fb="hi:mr"}. Perhaps filtering based
     // on product feature score is a better idea.
     private int maxDocsForMultiEntSearch = 500_000;
+    
+    // TODO This is ANOTHER bad fix for the problem of hitting really slow features
+    // This is needed because the maxDocsForMultiEntSearch will only work when there are a few good/decent features.
+    // If there are NO good/decent features, then search will eventually hit huge features which this threshold is meant to prune.
+    // pi:and has freq=   (28_991_124,  9_150_235)
+    // pi:rrb has freq=   (16_361_846,  8_928_884)
+    // pi:centre has freq=   (183_436,    138_225)
+    // pi:jacques has freq=  (147_706,    123_829)
+    private int ignoreFeatsWithEstTokListLongerThan = 8_000_000;
 
     public TriageSearch(
         FeatureCardinalityEstimator.New triageFeatureFrequencies,
@@ -1110,6 +1119,18 @@ public class AccumuloIndex {
       PriorityQueue<Weighted<Pair<String, String>>> agenda = new PriorityQueue<>(10, Weighted.byScoreDesc());
       for (String fa : a.triageFeats) {
         for (String fb : b.triageFeats) {
+          
+          IntPair ca = getFeatureFrequency(fa);
+          if (ca.first > ignoreFeatsWithEstTokListLongerThan) {
+            Log.info("skipping fa=" + fa + " freq=" + ca + " ignoreFeatsWithEstTokListLongerThan=" + ignoreFeatsWithEstTokListLongerThan);
+            continue;
+          }
+          IntPair cb = getFeatureFrequency(fb);
+          if (cb.first > ignoreFeatsWithEstTokListLongerThan) {
+            Log.info("skipping fb=" + fb + " freq=" + cb + " ignoreFeatsWithEstTokListLongerThan=" + ignoreFeatsWithEstTokListLongerThan);
+            continue;
+          }
+          
           double sa = getFeatureScore(fa);
           double sb = getFeatureScore(fb);
           double s = sa * sb;
@@ -1386,6 +1407,12 @@ public class AccumuloIndex {
       Map<String, List<WeightedFeature>> tokUuid2MatchedFeatures = new HashMap<>();
       for (int fi = 0; fi < triageFeats.size(); fi++) {
         String f = triageFeats.get(fi);
+        
+        IntPair c = getFeatureFrequency(f);
+        if (c.first > ignoreFeatsWithEstTokListLongerThan) {
+          Log.info("skipping fi=" + fi + " f=" + f + " freq=" + c + " ignoreFeatsWithEstTokListLongerThan=" + ignoreFeatsWithEstTokListLongerThan);
+          continue;
+        }
 
         // Collect all of the tokenizations which this feature co-occurs with
         List<String> toks = new ArrayList<>();
@@ -1405,7 +1432,6 @@ public class AccumuloIndex {
         double p = getFeatureScore(numToks, numDocs);
 
         // Check that the estimate is valid
-        IntPair c = getFeatureFrequency(f);
         if (numToks > c.first)
           Log.info("WARNING: f=" + f + " numToks=" + numToks + " approxFreq=" + c + " [probably means approx counts are still being built]");
         if (numDocs > c.second)
