@@ -232,6 +232,13 @@ public class DependencySyntaxEvents {
       }
       LabeledDirectedGraph g = LabeledDirectedGraph.fromConcrete(deps, t.getTokenList().getTokenListSize(), null);
       int n = t.getTokenList().getTokenListSize();
+      for (int i = 0; i < n; i++) {
+        LabeledDirectedGraph.Node node = g.getNode(i);
+        assert node.numChildren() >= 0;
+        assert node.numChildren() < 300;
+        assert node.numParents() >= 0;
+        assert node.numParents() < 300;
+      }
 
       /* NEW NEW *************************************************************/
       // Like Prim's algorithm on a path-compressed version of the dependency graph.

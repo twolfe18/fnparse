@@ -684,6 +684,10 @@ public class PkbpSearching implements Serializable {
       Counts<String> reasonsForMemFilter = new Counts<>();
       for (int i = 0; i < nMemIter; i++) {
         PkbpEntity searchFor = search.chooseEntityToSearchFor(seedEnt.id);
+        if (searchFor == null) {
+          Log.info("nothing to search for");
+          break;
+        }
         searchFor.relevantReasons.add(new Feat("searched", -5));
         List<PkbpEntity> entPair = Arrays.asList(seedEnt, searchFor);
         Log.info("[main] at i=" + i + " of nMemIter=" + nMemIter + " searching for:\t" + Describe.memoryUsage());
@@ -792,6 +796,8 @@ public class PkbpSearching implements Serializable {
         score -= minScore;
         c.offer(e, score);
       }
+      if (c.numOffers() == 0)
+        return null;
       return c.choose();
     }
     
@@ -1205,20 +1211,28 @@ public class PkbpSearching implements Serializable {
           Log.info("found " + mems.size() + " MEMs in " + nres + " results and " + comms.size() + " comms so far");
         }
         
+        if (toks.getTokenList().getTokenListSize() > 200) {
+          // There are some really long sentences breaking stuff
+          // I mean ones with >4000 words.
+          continue;
+        }
+        
         // Search for entities and situations
-        List<Integer> args = DependencySyntaxEvents.extractEntityHeads(toks);
-        DependencySyntaxEvents.CoverArgumentsWithPredicates dse =
-            new DependencySyntaxEvents.CoverArgumentsWithPredicates(comm, toks, deps, args);
-        
-        if (dse.situation2args.size() == 0)
-          reasonsForFiltering.increment("noDepSynPreds");
-        
-        // Line up the extracted args with the searched for entities
-        for (int pred : dse.situation2args.keySet()) {
-          MultiEntityMention mem = resolveArguments(
-              pred, dse, deps, toks, comm, entities, df, ts, sitFeatCounts, reasonsForFiltering);
-          if (mem != null)
-            mems.add(mem);
+        try (TB tb = timer().new TB("extractAndLinkMEMs")) {
+          List<Integer> args = DependencySyntaxEvents.extractEntityHeads(toks);
+          DependencySyntaxEvents.CoverArgumentsWithPredicates dse =
+              new DependencySyntaxEvents.CoverArgumentsWithPredicates(comm, toks, deps, args);
+
+          if (dse.situation2args.size() == 0)
+            reasonsForFiltering.increment("noDepSynPreds");
+
+          // Line up the extracted args with the searched for entities
+          for (int pred : dse.situation2args.keySet()) {
+            MultiEntityMention mem = resolveArguments(
+                pred, dse, deps, toks, comm, entities, df, ts, sitFeatCounts, reasonsForFiltering);
+            if (mem != null)
+              mems.add(mem);
+          }
         }
       }
       Log.info("[filter] given " + res.getSearchResultItemsSize() + " results, extracted " + mems.size() + " MultiEntityMentions");
@@ -1239,7 +1253,7 @@ public class PkbpSearching implements Serializable {
         Counts<String> reasonsForFiltering) {
 
       double alignmentThreshold = 1;
-      boolean debug = false;
+      boolean debug = true;
       
       // (for debug) How many chars to show on either side of pred/arg heads
       int w = 50;

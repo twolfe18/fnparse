@@ -27,6 +27,7 @@ import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.concrete.services.search.SearchServiceWrapper;
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
@@ -101,6 +102,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
   public SearchResult search(SearchQuery q) throws ServicesException, TException {
     if (verbose)
       Log.info("searching for " + StringUtils.trim(q.toString(), 120));
+    if (tm.enoughTimePassed(20))
+      Log.info(Describe.memoryUsage());
     if (q.isSetLabels() && q.getLabels().contains("multi"))
       return searchGivenRawFeaturesMulti(q);
     if (q.isSetTerms() && q.getTermsSize() > 0)
