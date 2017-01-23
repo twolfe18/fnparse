@@ -4784,6 +4784,8 @@ public class IndexCommunications implements AutoCloseable {
               String w = tok.getText()
                   .replaceAll("\\d", "0");
               t.add(w);
+//              if (!w.equals(tok.getText()))
+//                t.add(tok.getText());
             }
           }
         }

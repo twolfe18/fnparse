@@ -28,13 +28,19 @@ import org.apache.accumulo.core.data.Key;
 import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.hadoop.io.Text;
+import org.apache.thrift.TDeserializer;
+import org.apache.thrift.TException;
 
+import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.MultiTimer.TB;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
@@ -89,6 +95,7 @@ public class ComputeIdf implements Serializable {
 
   /** Approximate counting constructor */
   public ComputeIdf(int nhash, int logb) {
+    Log.info("nhash=" + nhash + " logb=" + logb);
     boolean conservativeUpdates = true;
     this.termFreqApprox = new StringCountMinSketch(nhash, logb, conservativeUpdates);
     this.numDocs = 0;
@@ -207,6 +214,15 @@ public class ComputeIdf implements Serializable {
     }
     Log.info("done");
   }
+  
+  private void increment(String word) {
+    if (termFreqApprox != null) {
+      termFreqApprox.apply(word, true);
+    } else {
+      long c = termFreq.getOrDefault(word, 0l);
+      termFreq.put(word, c+1);
+    }
+  }
 
   /**
    * Assumes key.row are "documents" for computing numDocs.
@@ -218,6 +234,7 @@ public class ComputeIdf implements Serializable {
       String username, AuthenticationToken password,
       String instanceName, String zookeepers,
       Consumer<Long> callEveryOnceInAWhile) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+
     TimeMarker tm = new TimeMarker();
     TimeMarker tmSlow = new TimeMarker();
 
@@ -229,12 +246,7 @@ public class ComputeIdf implements Serializable {
     for (Entry<Key, Value> e : s) {
       String t = whatToCount.apply(e);
 
-      if (termFreqApprox != null) {
-        termFreqApprox.apply(t, true);
-      } else {
-        long c = termFreq.getOrDefault(t, 0l);
-        termFreq.put(t, c+1);
-      }
+      increment(t);
 
       if (!e.getKey().getRow().equals(prevRow)) {
         numDocs++;
@@ -255,6 +267,53 @@ public class ComputeIdf implements Serializable {
         + " numKeys=" + (termFreq == null ? "???" : termFreq.size())
         + " numDocs=" + numDocs
         + "\t" + Describe.memoryUsage());
+  }
+
+  public void countWordsSimpleAccumulo(
+      String namespace,
+      Consumer<Long> callEveryOnceInAWhile) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
+
+    TDeserializer deser = new TDeserializer(SimpleAccumulo.COMM_SERIALIZATION_PROTOCOL);
+    TimeMarker tm = new TimeMarker();
+    TimeMarker tmSlow = new TimeMarker();
+    MultiTimer t = new MultiTimer();
+    
+    Instance inst = new ZooKeeperInstance(SimpleAccumuloConfig.DEFAULT_INSTANCE, SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
+    Connector conn = inst.getConnector("username", new PasswordToken("an accumulo reader"));
+    Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations());
+    s.fetchColumn(new Text(namespace), new Text("comm_bytes"));
+    byte[] value;
+    Communication comm;
+    for (Entry<Key, Value> e : s) {
+
+      try (TB tb = t.new TB("getBytes")) {
+        value = e.getValue().get();
+      }
+      try (TB tb = t.new TB("deserialize")) {
+        comm = new Communication();
+        deser.deserialize(comm, value);
+      } catch (TException te) {
+        te.printStackTrace();
+        continue;
+      }
+      
+      try (TB tb = t.new TB("count")) {
+        for (String word : IndexCommunications.terms(comm))
+          increment(word);
+        numDocs++;
+      }
+      
+      if (tm.enoughTimePassed(5)) {
+        Log.info(" numKeys=" + (termFreq == null ? "???" : termFreq.size())
+            + " numDocs=" + numDocs
+            + "\t" + Describe.memoryUsage());
+        if (tmSlow.enoughTimePassed(4 * 60)) {
+          Log.info("timer:\n" + t);
+          callEveryOnceInAWhile.accept(numDocs);
+        }
+      }
+    }
+
   }
 
   public void saveToDisk(File f) throws IOException {
@@ -278,13 +337,16 @@ public class ComputeIdf implements Serializable {
     ComputeIdf idf = new ComputeIdf(
         config.getInt("nhash"),
         config.getInt("logb"));
-    Function<Entry<Key, Value>, String> k_c2w = e -> e.getKey().getColumnQualifier().toString();
+    String namespace = config.getString("namespace");
+    Log.info("namespace=" + namespace);
     File f = config.getFile("output");
-    Log.info("going through accumulo to compute idf");
-    String username = config.getString("accumulo.username", "reader");
-    AuthenticationToken password = new PasswordToken(config.getString("accumulo.password", "an accumulo reader"));
-    String instanceName = config.getString("accumulo.instance", SimpleAccumuloConfig.DEFAULT_INSTANCE);
-    String zookeepers = config.getString("accumulo.zookeepers", SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
+
+//    Function<Entry<Key, Value>, String> k_c2w = e -> e.getKey().getColumnQualifier().toString();
+//    String username = config.getString("accumulo.username", "reader");
+//    AuthenticationToken password = new PasswordToken(config.getString("accumulo.password", "an accumulo reader"));
+//    String instanceName = config.getString("accumulo.instance", SimpleAccumuloConfig.DEFAULT_INSTANCE);
+//    String zookeepers = config.getString("accumulo.zookeepers", SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
+
     Consumer<Long> everyOnceInAWhile = numEntries -> {
       try {
         idf.saveToDisk(f);
@@ -292,7 +354,12 @@ public class ComputeIdf implements Serializable {
         throw new RuntimeException(e);
       }
     };
-    idf.count(AccumuloIndex.T_c2w.toString(), k_c2w, username, password, instanceName, zookeepers, everyOnceInAWhile);
+
+//    idf.count(AccumuloIndex.T_c2w.toString(), k_c2w, username, password, instanceName, zookeepers, everyOnceInAWhile);
+
+    // Use simpleaccumulo because this should happen BEFORE building c2w,
+    // which ideally will be heavily pruned, perhaps 128 words/comm.
+    idf.countWordsSimpleAccumulo(namespace, everyOnceInAWhile);
     idf.saveToDisk(f);
     Log.info("done");
   }
