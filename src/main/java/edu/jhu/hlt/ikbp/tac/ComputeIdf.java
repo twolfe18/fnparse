@@ -29,6 +29,7 @@ import org.apache.accumulo.core.data.Value;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.hadoop.io.Text;
 
+import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -274,14 +275,16 @@ public class ComputeIdf implements Serializable {
   /** reads c2w and writes to a file */
   public static void main(ExperimentProperties config) throws Exception {
     Log.info("starting");
-    ComputeIdf idf = new ComputeIdf();
+    ComputeIdf idf = new ComputeIdf(
+        config.getInt("nhash"),
+        config.getInt("logb"));
     Function<Entry<Key, Value>, String> k_c2w = e -> e.getKey().getColumnQualifier().toString();
     File f = config.getFile("output");
     Log.info("going through accumulo to compute idf");
-    String username = config.getString("accumulo.username");
-    AuthenticationToken password = new PasswordToken(config.getString("accumulo.password"));
-    String instanceName = config.getString("accumulo.instance");
-    String zookeepers = config.getString("accumulo.zookeepers");
+    String username = config.getString("accumulo.username", "reader");
+    AuthenticationToken password = new PasswordToken(config.getString("accumulo.password", "an accumulo reader"));
+    String instanceName = config.getString("accumulo.instance", SimpleAccumuloConfig.DEFAULT_INSTANCE);
+    String zookeepers = config.getString("accumulo.zookeepers", SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
     Consumer<Long> everyOnceInAWhile = numEntries -> {
       try {
         idf.saveToDisk(f);
