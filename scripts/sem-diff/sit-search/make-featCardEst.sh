@@ -10,7 +10,8 @@ JAR=$1
 #WD=/export/projects/twolfe/sit-search/feature-cardinality-estimate
 #WD=/export/projects/twolfe/sit-search/feature-cardinality-estimate_mostFreq
 #WD=/export/projects/twolfe/sit-search/feature-cardinality-estimate_mostFreq_2M
-WD=/export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin
+#WD=/export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin
+WD=/export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin_stable
 mkdir -p $WD
 
 JAR_STABLE=$WD/fnparse.jar

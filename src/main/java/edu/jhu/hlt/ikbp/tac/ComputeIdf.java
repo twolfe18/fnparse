@@ -106,7 +106,7 @@ public class ComputeIdf implements Serializable {
     if (termFreq != null)
       c = termFreq.getOrDefault(t, 1L);
     else
-      c = termFreqApprox.apply(t, false);
+      c = Math.max(1L, termFreqApprox.apply(t, false));
     return Math.log(numDocs / c);
   }
 
@@ -279,7 +279,7 @@ public class ComputeIdf implements Serializable {
     MultiTimer t = new MultiTimer();
     
     Instance inst = new ZooKeeperInstance(SimpleAccumuloConfig.DEFAULT_INSTANCE, SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
-    Connector conn = inst.getConnector("username", new PasswordToken("an accumulo reader"));
+    Connector conn = inst.getConnector("reader", new PasswordToken("an accumulo reader"));
     Scanner s = conn.createScanner(SimpleAccumuloConfig.DEFAULT_TABLE, new Authorizations());
     s.fetchColumn(new Text(namespace), new Text("comm_bytes"));
     byte[] value;
