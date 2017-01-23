@@ -186,11 +186,11 @@ public class PkbpMention implements Serializable {
       sb.append(' ');
       if (t.getTokenIndex() == head) {
         start = sb.length();
-        sb.append("<HEAD>");
+        sb.append("[HEAD]");
       }
       sb.append(t.getText());
       if (t.getTokenIndex() == head) {
-        sb.append("</HEAD>");
+        sb.append("[/HEAD]");
         end = sb.length();
       }
     }

@@ -99,6 +99,7 @@ import edu.jhu.prim.map.IntDoubleHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.DiskBackedFetchWrapper;
 import edu.jhu.util.TokenizationIter;
+import edu.jhu.util.CountMinSketch.StringCountMinSketch;
 
 
 /**
@@ -383,25 +384,67 @@ public class AccumuloIndex {
 
   
   
+  /**
+   * Offers the document frequency of words and related functionality like IDF(word).
+   *
+   * TODO Add support for a {@link StringCountMinSketch} based version
+   */
   public static class ComputeIdf implements Serializable {
     private static final long serialVersionUID = -8768250745761524407L;
 
     // null keys not allowed!
     private HashMap<String, Long> termFreq;
+    private StringCountMinSketch termFreqApprox;    // only one of the [exact, approx] versions should be non-null
     private long numDocs;
     
-    public ComputeIdf(File termTabCount) throws IOException {
-      this();
-      addFromDisk(termTabCount);
+    public ComputeIdf(File f) throws IOException {
+      boolean approx = false;
+      boolean exact = false;
+
+      approx |= f.getName().endsWith(".jser");
+      approx |= f.getName().endsWith(".jser.gz");
+      
+      exact |= f.getName().endsWith(".tsv");
+      exact |= f.getName().endsWith(".txt");
+      
+      if (!(exact || approx))
+        throw new IllegalArgumentException("can't determine type of: " + f.getPath());
+
+      if (exact) {
+        termFreq = new HashMap<>();
+        numDocs = 0;
+        addFromDisk(f);
+      } else {
+        Log.info("loading count-min sketch from " + f.getPath());
+//        termFreqApprox = (StringCountMinSketch) FileUtil.deserialize(f);
+//        numDocs = -1; // TODO
+        ComputeIdf c = (ComputeIdf) FileUtil.deserialize(f);
+        termFreqApprox = c.termFreqApprox;
+        numDocs = c.numDocs;
+        assert termFreqApprox != null;
+        assert numDocs > 0;
+      }
     }
     
+    /** Exact counting constructor */
     public ComputeIdf() {
       this.termFreq = new HashMap<>();
       this.numDocs = 0;
     }
     
+    /** Approximate counting constructor */
+    public ComputeIdf(int nhash, int logb) {
+      boolean conservativeUpdates = true;
+      this.termFreqApprox = new StringCountMinSketch(nhash, logb, conservativeUpdates);
+      this.numDocs = 0;
+    }
+    
     public double idf(String t) {
-      long c = termFreq.getOrDefault(t, 1L);
+      long c;
+      if (termFreq != null)
+        c = termFreq.getOrDefault(t, 1L);
+      else
+        c = termFreqApprox.apply(t, false);
       return Math.log(numDocs / c);
     }
 
@@ -494,6 +537,8 @@ public class AccumuloIndex {
      * Only works for string counts.
      */
     public void addFromDisk(File termTabCount) throws IOException {
+      if (termFreqApprox != null)
+        throw new RuntimeException("implement me");
       Log.info("reading from " + termTabCount.getPath());
       try (BufferedReader r = FileUtil.getReader(termTabCount)) {
         String line0 = r.readLine();
@@ -518,6 +563,9 @@ public class AccumuloIndex {
         String username, AuthenticationToken password,
         String instanceName, String zookeepers) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
 
+      if (termFreqApprox != null)
+        throw new RuntimeException("implement me");
+
       TimeMarker tm = new TimeMarker();
       Instance inst = new ZooKeeperInstance(instanceName, zookeepers);
       Connector conn = inst.getConnector(username, password);
@@ -541,6 +589,10 @@ public class AccumuloIndex {
     
     public void saveToDisk(File f) throws IOException {
       Log.info("f=" + f.getPath());
+
+      if (termFreqApprox != null)
+        throw new RuntimeException("implement me");
+
       try (BufferedWriter w = FileUtil.getWriter(f)) {
         w.write(numDocs + "\n");
         for (Entry<String, Long> x : termFreq.entrySet()) {

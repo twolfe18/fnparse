@@ -232,13 +232,13 @@ public class DependencySyntaxEvents {
       }
       LabeledDirectedGraph g = LabeledDirectedGraph.fromConcrete(deps, t.getTokenList().getTokenListSize(), null);
       int n = t.getTokenList().getTokenListSize();
-      for (int i = 0; i < n; i++) {
-        LabeledDirectedGraph.Node node = g.getNode(i);
-        assert node.numChildren() >= 0;
-        assert node.numChildren() < 300;
-        assert node.numParents() >= 0;
-        assert node.numParents() < 300;
-      }
+//      for (int i = 0; i < n; i++) {
+//        LabeledDirectedGraph.Node node = g.getNode(i);
+//        assert node.numChildren() >= 0;
+//        assert node.numChildren() < 300;
+//        assert node.numParents() >= 0;
+//        assert node.numParents() < 300;
+//      }
 
       /* NEW NEW *************************************************************/
       // Like Prim's algorithm on a path-compressed version of the dependency graph.
@@ -259,8 +259,14 @@ public class DependencySyntaxEvents {
           int s = args.get(i);
           int e = args.get(j);
           int[] path = g.shortestPath(s, e, true, true);
-          if (path != null)
+          if (path != null) {
             agenda.add(path);
+          }
+          if (debug) {
+            System.out.println("[DSE] from=" + s + "=" + t.getTokenList().getTokenList().get(s).getText()
+                + " to=" + e + "=" + t.getTokenList().getTokenList().get(e).getText()
+                + " path=" + Arrays.toString(path));
+          }
         }
       }
       // Every node in the dependency parse has a color which corresponds to what predicate it belongs to.
@@ -268,6 +274,7 @@ public class DependencySyntaxEvents {
       int nextColor = 1;
       BitSet[] color2args = new BitSet[n];
       BitSet coveredArgs = new BitSet();
+      agendaLoop:
       while (!agenda.isEmpty() && coveredArgs.cardinality() < args.size()) {
         int[] path = agenda.poll();
         boolean coveredAlready = coveredArgs.get(path[0]) && coveredArgs.get(path[path.length-1]);
@@ -283,6 +290,10 @@ public class DependencySyntaxEvents {
         int prevColor = 0;
         for (int i = 1; i < path.length-1; i++) {
           if (nodeColors[path[i]] > 0) {
+            if (prevColor != 0 && prevColor != nodeColors[path[i]]) {
+              Log.info("strange: this path includes 2+ predicates, possible parsing error");
+              continue agendaLoop;
+            }
             assert prevColor == 0 || prevColor == nodeColors[path[i]];
             prevColor = nodeColors[path[i]];
           }

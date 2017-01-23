@@ -38,6 +38,8 @@ import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.MultiTimer.TB;
 import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
@@ -169,7 +171,10 @@ public class KbpEntitySearchService implements SearchService.Iface {
       throw new ServicesException("no features recgnoized in: " + q.toString());
     
     try {
-      List<SitSearchResult> res = wrapped.multiEntityMentionSearch(new ArrayList<>(qs.values()));
+      List<SitSearchResult> res = null;
+      try (TB tb = timer().new TB("wrapped.multiEntityMentionSearch")) {
+        res = wrapped.multiEntityMentionSearch(new ArrayList<>(qs.values()));
+      }
       return buildResult(res, q);
     } catch (Exception e) {
       ServicesException se = new ServicesException("error during search: " + e.getMessage());
@@ -380,13 +385,17 @@ public class KbpEntitySearchService implements SearchService.Iface {
       if (tm.enoughTimePassed(30)) {
         System.out.println();
         System.out.println("TIMER:");
-        System.out.println(AccumuloIndex.TIMER);
+        System.out.println(timer());
         System.out.println();
       }
       Log.info("returning " + res.getSearchResultItemsSize() + " results");
     }
 
     return res;
+  }
+  
+  public static MultiTimer timer() {
+    return AccumuloIndex.TIMER;
   }
   
   /**

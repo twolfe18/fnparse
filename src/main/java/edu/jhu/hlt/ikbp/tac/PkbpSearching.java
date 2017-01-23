@@ -560,15 +560,23 @@ public class PkbpSearching implements Serializable {
       TriageSearch ts = new TriageSearch(triageFeatureFreq);
       triageFeatDebug(ts);
 
-      for (KbpQuery q : TacKbp.getKbp2013SfQueries()) {
+      
+      List<KbpQuery> queries = new ArrayList<>();
+//      queries.add(DarmstadtExample.getQuery());
+      queries.addAll(TacKbp.getKbp2013SfQueries());
+//      queries.addAll(TacKbp.getKbp2014SfQueries());
+      Collections.shuffle(queries, new Random(9001));
+
+      for (KbpQuery q : queries) {
 
         // Resolve the query's Communication
-        Log.info("retrieving query comm...");
-        assert q.sourceComm == null;
-        q.sourceComm = commRet.fetch(q.docid);
         if (q.sourceComm == null) {
-          Log.info("skipping b/c no comm: " + q);
-          continue;
+          Log.info("retrieving query comm...");
+          q.sourceComm = commRet.fetch(q.docid);
+          if (q.sourceComm == null) {
+            Log.info("skipping b/c no comm: " + q);
+            continue;
+          }
         }
 
         runOneSearch(q, config, kbpEntSearch, commRet, sitFeatFreq, df, ts);
@@ -679,9 +687,8 @@ public class PkbpSearching implements Serializable {
       // Search for SEED+X mentions
       List<MultiEntityMention> mems = new ArrayList<>();
       int nMemIter = maxResults / 4;
-//      // DEBUG
-//      nMemIter = Math.min(5, nMemIter);
       Counts<String> reasonsForMemFilter = new Counts<>();
+      Set<String> memPredsSeen = new HashSet<>();
       for (int i = 0; i < nMemIter; i++) {
         PkbpEntity searchFor = search.chooseEntityToSearchFor(seedEnt.id);
         if (searchFor == null) {
@@ -694,7 +701,16 @@ public class PkbpSearching implements Serializable {
         showEntitiesE(entPair, 5);
         List<MultiEntityMention> res = search.searchForSituationsInvolving(
             entPair, maxResults, commRet::fetch, df, ts, reasonsForMemFilter, null);
-        mems.addAll(res);
+
+        for (MultiEntityMention mem : res) {
+          if (memPredsSeen.add(mem.pred.getCommTokHeadWordAndLoc())) {
+            mems.add(mem);
+          } else {
+            Log.info("found MEM more than once: ");
+            showMultiEntityMention(mem);
+          }
+        }
+
         showMultiEntityMention(res, "(" + seedEnt.id + ", " + searchFor.id + ")");
         System.out.println();
         System.out.println("sum(MEM filtering causes): " + reasonsForMemFilter);
@@ -736,39 +752,6 @@ public class PkbpSearching implements Serializable {
       System.out.println();
       
       search.clear();
-    }
-    
-    public static void showMultiEntityMention(List<MultiEntityMention> mems, String desc) {
-
-      // Track some stats
-      Set<String> preds = new HashSet<>();
-      Set<String> args = new HashSet<>();
-      Set<String> comms = new HashSet<>();
-      Set<String> toks = new HashSet<>();
-
-      for (MultiEntityMention mem : mems) {
-        showMultiEntityMention(mem);
-        System.out.println();
-        
-        preds.add(mem.pred.getCommTokHeadWordAndLoc());
-        for (int i = 0; i < mem.alignedMentions.length; i++) {
-          if (mem.alignedMentions[i] != null)
-            args.add(mem.alignedMentions[i].getCommTokHeadWordAndLoc());
-        }
-        comms.add(mem.pred.getCommunicationId());
-        toks.add(mem.pred.getCommTokIdShort());
-      }
-      Log.info(desc + " preds=" + preds.size() + " args=" + args.size() + " comms=" + comms.size() + " toks=" + toks.size());
-    }
-    public static void showMultiEntityMention(MultiEntityMention mem) {
-      System.out.println("MultiEntityMention in " + mem.pred.getCommTokIdShort());
-      System.out.printf("pred:   %s\n", mem.pred.getContextAroundHead(60, 60, true));
-      for (int i = 0; i < mem.alignedMentions.length; i++) {
-        if (mem.alignedMentions[i] == null)
-          System.out.printf("arg(%d): %s\n", i, "null");
-        else
-          System.out.printf("arg(%d): %s\n", i, mem.alignedMentions[i].getContextAroundHead(60, 60, true));
-      }
     }
     
     public static void addToRelevanceReasons(List<PkbpNode> entities, String why, double amount) {
@@ -988,6 +971,53 @@ public class PkbpSearching implements Serializable {
         System.out.printf("id=%d\t%-32s %s\n", n.id, m.getCommTokIdShort(), m.getContextAroundHead(60, 60, true));
       }
       System.out.println();
+    }
+    
+    public static void showMultiEntityMention(List<MultiEntityMention> mems, String desc) {
+
+      // Track some stats
+      Set<String> preds = new HashSet<>();
+      Set<String> args = new HashSet<>();
+      Set<String> comms = new HashSet<>();
+      Set<String> toks = new HashSet<>();
+
+      for (MultiEntityMention mem : mems) {
+        showMultiEntityMention(mem);
+        System.out.println();
+        
+        preds.add(mem.pred.getCommTokHeadWordAndLoc());
+        for (int i = 0; i < mem.alignedMentions.length; i++) {
+          if (mem.alignedMentions[i] != null)
+            args.add(mem.alignedMentions[i].getCommTokHeadWordAndLoc());
+        }
+        comms.add(mem.pred.getCommunicationId());
+        toks.add(mem.pred.getCommTokIdShort());
+      }
+      Log.info(desc + " preds=" + preds.size() + " args=" + args.size() + " comms=" + comms.size() + " toks=" + toks.size());
+    }
+    public static void showMultiEntityMention(MultiEntityMention mem) {
+//      System.out.println("MultiEntityMention in " + mem.pred.getCommTokIdShort());
+//      System.out.printf("pred:   %s\n", mem.pred.getContextAroundHead(60, 60, true));
+//      for (int i = 0; i < mem.alignedMentions.length; i++) {
+//        if (mem.alignedMentions[i] == null)
+//          System.out.printf("arg(%d): %s\n", i, "null");
+//        else
+//          System.out.printf("arg(%d): %s\n", i, mem.alignedMentions[i].getContextAroundHead(60, 60, true));
+//      }
+      for (String s : showMultiEntityMention2(mem))
+        System.out.println(s);
+    }
+    public static List<String> showMultiEntityMention2(MultiEntityMention mem) {
+      List<String> l = new ArrayList<>();
+      int w = 60;
+      l.add("MultiEntityMention in " + mem.pred.getCommTokIdShort());
+      l.add(String.format("pred:  %-18s      %s", "", mem.pred.getContextAroundHead(w, w, true)));
+      for (int i = 0; i < mem.alignedMentions.length; i++) {
+        String m = mem.alignedMentions[i] == null ? "null" : mem.alignedMentions[i].getContextAroundHead(w, w, true);
+        String e = StringUtils.trim(mem.query[i].id, 18);
+        l.add(String.format("arg(%d): e:%-18s  m:%s", i, e, m));
+      }
+      return l;
     }
 
     public List<Pair<PkbpNode, Double>> findUnion(String... features) {
@@ -1211,9 +1241,11 @@ public class PkbpSearching implements Serializable {
           Log.info("found " + mems.size() + " MEMs in " + nres + " results and " + comms.size() + " comms so far");
         }
         
-        if (toks.getTokenList().getTokenListSize() > 200) {
+        int maxToks = 200;
+        if (toks.getTokenList().getTokenListSize() > maxToks) {
           // There are some really long sentences breaking stuff
           // I mean ones with >4000 words.
+          reasonsForFiltering.increment("sentenceLongerThan" + maxToks + "Tokens");
           continue;
         }
         
@@ -1253,7 +1285,7 @@ public class PkbpSearching implements Serializable {
         Counts<String> reasonsForFiltering) {
 
       double alignmentThreshold = 1;
-      boolean debug = true;
+      boolean debug = false;
       
       // (for debug) How many chars to show on either side of pred/arg heads
       int w = 50;
@@ -1810,6 +1842,12 @@ public class PkbpSearching implements Serializable {
         this.rand = rand;
         this.numPos = -1;
         this.numNeg = -1;
+        
+        // Check for duplicate MEMs (currently by predicate location)
+        Set<String> seen = new HashSet<>();
+        for (MultiEntityMention mem : sitMentions)
+          if (!seen.add(mem.pred.getCommTokHeadWordAndLoc()))
+            throw new IllegalArgumentException("duplicate predicate: " + mem.pred.getCommTokHeadWordAndLoc());
       }
       
       /*
@@ -1875,8 +1913,29 @@ public class PkbpSearching implements Serializable {
             for (IntPair ij : e.getValue()) {
               MultiEntityMention a = sitMentions.get(ij.first);
               MultiEntityMention b = sitMentions.get(ij.second);
+
               w.write("<h2>" + a.pred.getCommTokHeadWordAndLoc() + "</h2>");
+              w.newLine();
+              w.write("<pre>");
+              w.newLine();
+              for (String s : showMultiEntityMention2(a)) {
+                w.write(s);
+                w.newLine();
+              }
+              w.write("</pre><br/>");
+              w.newLine();
+
               w.write("<h2>" + b.pred.getCommTokHeadWordAndLoc() + "</h2>");
+              w.newLine();
+              w.write("<pre>");
+              w.newLine();
+              for (String s : showMultiEntityMention2(b)) {
+                w.write(s);
+                w.newLine();
+              }
+              w.write("</pre><br/>");
+              w.newLine();
+
               for (String line : writeoutOneHelper(a, b, yhats)) {
                 w.write(line);
                 w.newLine();
@@ -1949,6 +2008,7 @@ public class PkbpSearching implements Serializable {
               b.put(new IntPair(i,j), id);
             } catch (Exception e) {
               Log.info("WARNING: i=" + i + " j=" + j + " id=" + id);
+              throw new RuntimeException("there appear to be duplicate MEMs");
             }
           }
         }
@@ -1988,6 +2048,11 @@ public class PkbpSearching implements Serializable {
       public boolean participantsMatch(MultiEntityMention sitA, MultiEntityMention sitB) {
         if (sitA.query.length == 0 || sitB.query.length == 0)
           throw new IllegalArgumentException();
+        
+        // TODO?
+        // Not only must they agree on arguments, but also on what predicate they're talking about
+        // ...this is not well defined, since these could be arbitrary predicates in diff sentences, are we adding lemma match?
+
         boolean same = sitA.query.length == sitB.query.length;
         for (int i = 0; i < sitA.query.length && same; i++)
           same &= sitA.query[i].id.equals(sitB.query[i].id);
