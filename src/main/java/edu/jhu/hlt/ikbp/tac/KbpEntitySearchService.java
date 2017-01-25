@@ -230,7 +230,7 @@ public class KbpEntitySearchService implements SearchService.Iface {
       if (verbose) {
         Log.info(String.format("triage feats (%s): %s", triageFeats.size(), triageFeats));
         Log.info(String.format("attr feats (%d):   %s", attrFeats.size(), Feat.sortAndPrune(attrFeats, 0d)));
-        Log.info(String.format("context (%d):      %s", context.getTotalCount(), wrapped.getTermFrequencies().importantTerms(context, 10)));
+        Log.info(String.format("context (%.1f):      %s", context.getTotalCount(), wrapped.getTermFrequencies().importantTerms(context, 10)));
       }
       if (q.isSetK())
         wrapped.setMaxResults(q.getK());
@@ -412,7 +412,7 @@ public class KbpEntitySearchService implements SearchService.Iface {
     int maxDocsForMultiEntSearch = config.getInt("maxDocsForMultiEntSearch", 100_000);
     TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch);
     
-    PkbpSearching.New.triageFeatDebug(ts);
+    PkbpSearching.triageFeatDebug(ts);
 
     File fetchCacheDir = config.getOrMakeDir("fetch.cacheDir");
     String fetchHost = config.getString("fetch.host");

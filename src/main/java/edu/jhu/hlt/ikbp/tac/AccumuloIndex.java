@@ -182,7 +182,8 @@ public class AccumuloIndex {
     // c2w
     // TODO Only index the top 128 or so terms in the document
     // This requires building a count-min sketch for document-frequency ahead of time.
-    Counts<String> terms = IndexCommunications.terms2(comm);
+    boolean normalizeNumbers = false;
+    Counts<String> terms = IndexCommunications.terms2(comm, normalizeNumbers);
     for (Entry<String, Integer> t : terms.entrySet()) {
       String w = t.getKey();
       int cn = t.getValue();
@@ -2029,7 +2030,8 @@ public class AccumuloIndex {
       findEntityMention.resolve(q, addEmToCommIfMissing);
 
       // 1c) Build the context vector
-      StringTermVec queryContext = new StringTermVec(q.sourceComm);
+      boolean normalizeNumbers = false;
+      StringTermVec queryContext = new StringTermVec(q.sourceComm, normalizeNumbers);
       q.docCtxImportantTerms = df.importantTerms(queryContext, 20);
       
       // 2) Extract entity mention features
@@ -2364,7 +2366,8 @@ public class AccumuloIndex {
       List<SitSearchResult> res = p.get2();
 
       // Compute important terms in the query doc (I think this was FUBAR the first time)
-      StringTermVec queryContext = new StringTermVec(q.sourceComm);
+      boolean normalizeNumbers = false;
+      StringTermVec queryContext = new StringTermVec(q.sourceComm, normalizeNumbers);
       q.docCtxImportantTerms = df.importantTerms(queryContext, 20);
       
       // Dedup communications (introduced during serialization process)

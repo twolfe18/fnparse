@@ -1276,6 +1276,7 @@ public class IndexCommunications implements AutoCloseable {
               nomPenalty *= (1d / (1 + numNom));  // and penalize unsure nominalizations
             }
             double score = Math.pow(idf, 1.5) * pathLenPenalth * nomPenalty;
+            assert !Double.isNaN(score) && Double.isFinite(score);
             String pathStr = path.getPath(NodeType.WORD, EdgeType.DEP, true);
             bestPath.offer(new Pair<>(pathStr, t), score);
             if (verbose) {
@@ -4161,7 +4162,8 @@ public class IndexCommunications implements AutoCloseable {
     
     public static TermVec packComm(int numTerms, Communication c, IntDoubleHashMap idfs) {
       // Extract words
-      List<String> terms = terms(c);
+      boolean normalizeNumbers = false;
+      List<String> terms = terms(c, normalizeNumbers);
       
       // Count
       IntFloatUnsortedVector tf = new IntFloatUnsortedVector(terms.size());
@@ -4736,7 +4738,8 @@ public class IndexCommunications implements AutoCloseable {
     }
     
     // Terms
-    List<String> terms = terms(c);
+    boolean normalizeNumbers = false;
+    List<String> terms = terms(c, normalizeNumbers);
     if (outputTfIdfTerms) {
 
       // need to read-in IDF table
@@ -4774,15 +4777,16 @@ public class IndexCommunications implements AutoCloseable {
    * Any time you need a bag-of-words representation for a {@link Communication},
    * use this method.
    */
-  static List<String> terms(Communication c) {
+  static List<String> terms(Communication c, boolean normalizeNumbers) {
     List<String> t = new ArrayList<>(256);
     if (c.isSetSectionList()) {
       for (Section section : c.getSectionList()) {
         if (section.isSetSentenceList()) {
           for (Sentence sentence : section.getSentenceList()) {
             for (Token tok : sentence.getTokenization().getTokenList().getTokenList()) {
-              String w = tok.getText()
-                  .replaceAll("\\d", "0");
+              String w = tok.getText();
+              if (normalizeNumbers)
+                w = w.replaceAll("\\d", "0");
               t.add(w);
 //              if (!w.equals(tok.getText()))
 //                t.add(tok.getText());
@@ -4794,8 +4798,8 @@ public class IndexCommunications implements AutoCloseable {
     return t;
   }
   
-  static Counts<String> terms2(Communication c) {
-    List<String> cc = terms(c);
+  static Counts<String> terms2(Communication c, boolean normalizeNumbers) {
+    List<String> cc = terms(c, normalizeNumbers);
     Counts<String> cn = new Counts<>();
     for (String w : cc)
       cn.increment(w);

@@ -99,13 +99,24 @@ public class ComputeIdf implements Serializable {
     this.termFreqApprox = new StringCountMinSketch(nhash, logb, conservativeUpdates);
     this.numDocs = 0;
   }
+  
+  public int freq(String t) {
+    long a;
+    if (termFreq != null) {
+      a = termFreq.getOrDefault(t, 1L);
+    } else {
+      a = Math.max(1L, termFreqApprox.apply(t, false));
+      a = Math.min(a, numDocs);
+    }
+    assert a <= Integer.MAX_VALUE;
+    return (int) a;
+  }
 
   public double idf(String t) {
-    long c;
-    if (termFreq != null)
-      c = termFreq.getOrDefault(t, 1L);
-    else
-      c = Math.max(1L, termFreqApprox.apply(t, false));
+    assert numDocs > 0;
+    long c = freq(t);
+    assert c > 0;
+    assert c <= numDocs;
     return Math.log(numDocs / c);
   }
 
@@ -297,7 +308,8 @@ public class ComputeIdf implements Serializable {
       }
       
       try (TB tb = t.new TB("count")) {
-        for (String word : IndexCommunications.terms(comm))
+        boolean normalizeNumbers = false;
+        for (String word : IndexCommunications.terms(comm, normalizeNumbers))
           increment(word);
         numDocs++;
       }

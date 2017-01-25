@@ -2184,7 +2184,8 @@ public class PkbpSearching implements Serializable {
     // TODO Use PkbpEntity.mention.convert(KbpQuery)
     Log.info("seedWeight=" + seedWeight + " seed=" + seed);
     this.seed = seed;
-    this.seedTermVec = new StringTermVec(seed.sourceComm);
+    boolean normalizeNumbers = false;
+    this.seedTermVec = new StringTermVec(seed.sourceComm, normalizeNumbers);
     if (seed.entityMention == null) {
       boolean addEmToCommIfMissing = true;
       getTacEMFinder().resolve(seed, addEmToCommIfMissing);
@@ -3179,7 +3180,7 @@ public class PkbpSearching implements Serializable {
       if (verboseLinking)
         Log.info("cosine sim for " + e.id);
       StringTermVec eDocVec = e.getContextDoc();
-      StringTermVec rDocVec = new StringTermVec(r.getCommunication());
+      StringTermVec rDocVec = r.getContextDoc();
       double tfidfCosine = getTermFrequencies().tfIdfCosineSim(eDocVec, rDocVec);
       if (tfidfCosine > 0.95) {
         if (verboseLinking)
@@ -3475,7 +3476,8 @@ public class PkbpSearching implements Serializable {
 
     // Compute tf-idf similarity between this comm and the seed
     Communication comm = newMention.getCommunication();
-    StringTermVec commVec = new StringTermVec(comm);
+    boolean normalizeNumbers = false;
+    StringTermVec commVec = new StringTermVec(comm, normalizeNumbers);
     double tfidfWithSeed = getTermFrequencies().tfIdfCosineSim(seedTermVec, commVec);
 
     // Index tokenizations by their id

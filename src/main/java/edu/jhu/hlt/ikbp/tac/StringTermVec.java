@@ -22,11 +22,11 @@ public class StringTermVec implements Iterable<Entry<String, Double>>, Serializa
     z = 0;
   }
   
-  public StringTermVec(Communication c) {
+  public StringTermVec(Communication c, boolean normalizeNumbers) {
     this();
     if (c == null)
       throw new IllegalArgumentException();
-    for (String s : IndexCommunications.terms(c))
+    for (String s : IndexCommunications.terms(c, normalizeNumbers))
       add(s, 1);
   }
   

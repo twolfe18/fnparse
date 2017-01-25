@@ -75,7 +75,8 @@ public class PkbpMention implements Serializable {
   
   public StringTermVec getContextDoc() {
     if (contextDoc == null) {
-      contextDoc = new StringTermVec(getCommunication());
+      boolean normalizeNumbers = false;
+      contextDoc = new StringTermVec(getCommunication(), normalizeNumbers);
     }
     return contextDoc;
   }
