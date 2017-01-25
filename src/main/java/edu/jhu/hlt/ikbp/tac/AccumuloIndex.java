@@ -11,7 +11,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -1492,45 +1491,6 @@ public class AccumuloIndex {
   }
   
   
-  /**
-   * Holds tf not idf.
-   */
-  public static class StringTermVec implements Iterable<Entry<String, Integer>>, Serializable {
-    private static final long serialVersionUID = 6842781351153635019L;
-
-    private Counts<String> tf;
-    
-    public StringTermVec() {
-      tf = new Counts<>();
-    }
-    
-    public StringTermVec(Communication c) {
-      this();
-      if (c == null)
-        throw new IllegalArgumentException();
-      for (String s : IndexCommunications.terms(c))
-        add(s, 1);
-    }
-    
-    public int getTotalCount() {
-      return tf.getTotalCount();
-    }
-
-    public void add(StringTermVec other) {
-      for (Entry<String, Integer> e : other.tf.entrySet())
-        add(e.getKey(), e.getValue());
-    }
-    
-    public void add(String word, int count) {
-      tf.update(word, count);
-    }
-
-    @Override
-    public Iterator<Entry<String, Integer>> iterator() {
-      return tf.entrySet().iterator();
-    }
-  }
-  
   // TODO Want to be able to match "PERSON-nn-nn-Wen" with "PERSON-nn-Wen", though this is technically a parsing error
   private static Pair<Double, List<String>> match(List<String> attrFeatQ, List<String> attrFeatR) {
     List<String> matched = new ArrayList<>();
@@ -1876,7 +1836,7 @@ public class AccumuloIndex {
       // 1c) Build the context vector
 //      if (query.context == null)
 //        query.context = new StringTermVec(query.getCommunication());
-      query.getContext();
+      query.getContextDoc();
 //      if (query.importantTerms == null)
 //        query.importantTerms = df.importantTerms(queryContext, 20);
       
@@ -1896,7 +1856,7 @@ public class AccumuloIndex {
       TIMER.stop("kbpQuery/setup");
       
       // 3) Search
-      List<SitSearchResult> res = triageSearch.search(triageFeats, query.getContext(), df, minTriageScore);
+      List<SitSearchResult> res = triageSearch.search(triageFeats, query.getContextDoc(), df, minTriageScore);
       // Set all results to be the same NER type as input
       for (SitSearchResult r : res)
         r.yhatQueryEntityNerType = query.nerType;

@@ -29,7 +29,6 @@ import edu.jhu.hlt.concrete.services.search.SearchServiceWrapper;
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
-import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch.EMQuery;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;

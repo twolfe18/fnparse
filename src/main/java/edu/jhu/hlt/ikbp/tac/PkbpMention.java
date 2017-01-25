@@ -2,7 +2,9 @@ package edu.jhu.hlt.ikbp.tac;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
@@ -10,9 +12,9 @@ import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
-import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.util.TokenizationIter;
 
 public class PkbpMention implements Serializable {
   private static final long serialVersionUID = 795646509667723395L;
@@ -36,9 +38,11 @@ public class PkbpMention implements Serializable {
   
   /**
    * term-freq vector for document containing this mention
-   * TODO Do not keep this here! This is a shared resource and should be looked up by a owner of the resource.
    */
-  private StringTermVec context;
+  private StringTermVec contextDoc;
+  
+  /** term-freq vector for words near this mention */
+  private StringTermVec contextLocal;
 
   
   public PkbpMention(int head, Tokenization toks, DependencyParse deps, Communication comm) {
@@ -69,11 +73,40 @@ public class PkbpMention implements Serializable {
     return pos.getTaggedTokenList().get(head).getTag();
   }
   
-  public StringTermVec getContext() {
-    if (context == null) {
-      context = new StringTermVec(getCommunication());
+  public StringTermVec getContextDoc() {
+    if (contextDoc == null) {
+      contextDoc = new StringTermVec(getCommunication());
     }
-    return context;
+    return contextDoc;
+  }
+  
+  public StringTermVec getContextLocal() {
+    if (contextLocal == null) {
+      Map<String, Integer> t2i = new HashMap<>();
+      List<Tokenization> toks = new ArrayList<>();
+      int idx = 0;
+      int idxThisTok = -1;
+      for (Tokenization t : new TokenizationIter(getCommunication())) {
+        String id = t.getUuid().getUuidString();
+        toks.add(t);
+        t2i.put(id, idx);
+        if (id.equals(tokUuid)) {
+          assert idxThisTok < 0;
+          idxThisTok = idx;
+        }
+        idx++;
+      }
+      if (idxThisTok < 0)
+        throw new RuntimeException();
+      contextLocal = new StringTermVec();
+      for (int i = 0; i < idx; i++) {
+        int dist = Math.abs(idxThisTok - i);
+        double w = 2 / (1 + dist);
+        for (Token t : toks.get(i).getTokenList().getTokenList())
+          contextLocal.add(t.getText(), w);
+      }
+    }
+    return contextLocal;
   }
   
   @Override

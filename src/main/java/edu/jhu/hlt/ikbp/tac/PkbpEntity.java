@@ -17,7 +17,6 @@ import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.search.SearchResultItem;
-import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
@@ -86,7 +85,7 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 
       PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
       assert canonical2.getCommunication() != null;
-      canonical2.getContext();
+      canonical2.getContextDoc();
 //      canonical2.getAttrCommFeatures();
 //      canonical2.getAttrTokFeatures();
       canonical2.getAttrFeatures();
@@ -261,7 +260,8 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 //  /** Reasons why this entity is central to the PKB/seed */
 //  List<Feat> relevantReasons;
   
-  private transient StringTermVec memoDocVec;
+  private transient StringTermVec memoContextDoc;
+  private transient StringTermVec memoContextLocal;
   private transient List<Feat> memoAttrFeat;
   private transient List<Feat> memoTriageFeat;
 
@@ -310,7 +310,8 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       throw new IllegalArgumentException();
     if (mention.source.span == null)
       throw new IllegalArgumentException();
-    this.memoDocVec = null;
+    this.memoContextDoc = null;
+    this.memoContextLocal = null;
     this.memoAttrFeat = null;
     this.memoTriageFeat = null;
     this.mentions.add(mention);
@@ -411,18 +412,26 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     return r;
   }
 
-  public StringTermVec getDocVec() {
-    if (this.memoDocVec == null) {
-      this.memoDocVec = new StringTermVec();
-      Set<String> seenComms = new HashSet<>();
-      for (Mention s : this) {
-        if (seenComms.add(s.getCommunicationId())) {
-          StringTermVec tv = new StringTermVec(s.getCommunication());
-          this.memoDocVec.add(tv);
-        }
-      }
+  public StringTermVec getContextDoc() {
+    if (this.memoContextDoc == null) {
+      this.memoContextDoc = new StringTermVec();
+      Set<String> seen = new HashSet<>();
+      for (Mention s : this)
+        if (seen.add(s.getCommunicationId()))
+          this.memoContextDoc.add(s.getContextDoc());
     }
-    return this.memoDocVec;
+    return this.memoContextDoc;
+  }
+  
+  public StringTermVec getContextLocal() {
+    if (this.memoContextLocal == null) {
+      this.memoContextLocal = new StringTermVec();
+      Set<String> seen = new HashSet<>();
+      for (Mention s : this)
+        if (seen.add(s.getCommTokIdShort()))
+          this.memoContextLocal.add(s.getContextLocal());
+    }
+    return this.memoContextLocal;
   }
   
   public int numMentions() {

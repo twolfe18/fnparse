@@ -208,10 +208,8 @@ public class DependencySyntaxEvents {
     Map<Integer, Set<String>> situation2features;    // key is predicate word index, values are features for that situation
     Map<Integer, BitSet> situation2args;
     Map<Integer, List<Feat>> situation2frames;
-
-    static ComputeIdf df;
     
-    public CoverArgumentsWithPredicates(Communication c, Tokenization t, DependencyParse deps, List<Integer> args) {
+    public CoverArgumentsWithPredicates(Communication c, Tokenization t, DependencyParse deps, List<Integer> args, ComputeIdf df) {
       if (!uniq(args))
         throw new IllegalArgumentException("not uniq: " + args);
       this.t = t;
@@ -340,13 +338,6 @@ public class DependencySyntaxEvents {
 
         // Choose the best possible predicate word
         assert !predPossible.isEmpty();
-        if (df == null) {
-          try {
-            df = new ComputeIdf(new File("data/idf/word-df.small.tsv"));
-          } catch (Exception e) {
-            throw new RuntimeException(e);
-          }
-        }
         for (int i : predPossible) {
           String ps = pos.getTaggedTokenList().get(i).getTag();
           double interesting = 1;
@@ -969,6 +960,7 @@ public class DependencySyntaxEvents {
     TimeMarker outputTm = new TimeMarker();
     double outputEvery = config.getDouble("outputEvery", 120);
 //    IRAMDictionary wn = TargetPruningData.getInstance().getWordnetDict();
+    ComputeIdf df = null;   // TODO
     List<String> fs = null;
     try (AutoCloseableIterator<Communication> iter = IndexCommunications.getCommunicationsForIngest(config)) {
       iterator:
@@ -988,7 +980,7 @@ public class DependencySyntaxEvents {
 
           CoverArgumentsWithPredicates idfk = null;
           try {
-            idfk = new CoverArgumentsWithPredicates(c, t, d, entHeads);
+            idfk = new CoverArgumentsWithPredicates(c, t, d, entHeads, df);
 //            idfk.useSynsetSetFeatures(wn);
             idfk.annotateSituations(z);
           } catch (IllegalArgumentException e) {

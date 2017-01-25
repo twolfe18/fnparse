@@ -35,7 +35,6 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -115,7 +114,7 @@ public class ComputeIdf implements Serializable {
   }
   public List<String> importantTerms(StringTermVec a, int k, boolean debug) {
     List<Pair<String, Double>> t = new ArrayList<>();
-    for (Entry<String, Integer> tf : a) {
+    for (Entry<String, Double> tf : a) {
       double w = idf(tf.getKey());
       double s = tf.getValue() * w;
       t.add(new Pair<>(tf.getKey(), s));
@@ -164,7 +163,7 @@ public class ComputeIdf implements Serializable {
     double ssa = 0;
     double na = a.getTotalCount();
     Map<String, Double> tfa_idf = new HashMap<>();
-    for (Entry<String, Integer> word : a) {
+    for (Entry<String, Double> word : a) {
       double idf = Math.sqrt(idf(word.getKey()));
       double tfa = word.getValue() / na;
       double sa = tfa * idf;
@@ -177,7 +176,7 @@ public class ComputeIdf implements Serializable {
     double ssb = 0;
     double nb = b.getTotalCount();
     double dot = 0;
-    for (Entry<String, Integer> word : b) {
+    for (Entry<String, Double> word : b) {
       double sa = tfa_idf.getOrDefault(word.getKey(), 0d);
       double idf = Math.sqrt(idf(word.getKey()));
       double tfb = word.getValue() / nb;

@@ -46,7 +46,6 @@ import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
-import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
@@ -314,6 +313,8 @@ public class PkbpSearching implements Serializable {
     KbpSearching ks = null;
     PkbpSearching ps;
 
+    ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
+
     String sfName = config.getString("slotFillQueries", "sf13+sf14");
     List<KbpQuery> queries = TacKbp.getKbpSfQueries(sfName);
 
@@ -368,7 +369,7 @@ public class PkbpSearching implements Serializable {
 
         File inQuery = new File(inputDir, seed.id + ".query.jser.gz");
         seed = (KbpQuery) FileUtil.deserialize(inQuery);
-        ps.setSeed(seed, seedWeight);
+        ps.setSeed(seed, seedWeight, df);
       } else {
         // Run on the grid w/ access to accumulo
         if (ks == null) {
@@ -376,7 +377,6 @@ public class PkbpSearching implements Serializable {
           Log.info("loading triage feature frequencies (FeatureCardinalityEstimator.New) from=" + fceFile.getPath());
           FeatureCardinalityEstimator.New triageFeatureFrequencies =
               (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceFile);
-          ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
           TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch);
           File fetchCacheDir = config.getOrMakeDir("fetch.cacheDir");
           String fetchHost = config.getString("fetch.host");
@@ -493,7 +493,29 @@ public class PkbpSearching implements Serializable {
   Map<PkbpEntity, LL<PkbpSituation>> memb_e2s;
   
   
-  
+
+  static void triageFeatDebug(TriageSearch ts) {
+    Log.info("checking the validity of entity triage feature frequencies and scores:");
+    List<String> check = new ArrayList<>();
+    check.add("pb:abdullah_abdullah");
+    check.add("hi:ghani");
+    check.add("pb:runner_karzai");
+    check.add("h:front-runner");
+
+    check.add("Bush");
+    check.add("h:Bush");
+    check.add("hi:bush");
+
+    ts.getTriageFeatureFrequencies().sortByFreqUpperBoundAsc(check);
+
+    for (String s : check) {
+      IntPair tc = ts.getTriageFeatureFrequencies().getFrequency(s);
+      double p = ts.getFeatureScore(s);
+      System.out.printf("%-24s %.4f %s\n", s, p, tc);
+    }
+  }
+
+
   static class New {
     
     static void main(ExperimentProperties config) throws Exception {
@@ -515,27 +537,6 @@ public class PkbpSearching implements Serializable {
         }
       }
       Log.info("done");
-    }
-    
-    static void triageFeatDebug(TriageSearch ts) {
-      Log.info("checking the validity of entity triage feature frequencies and scores:");
-      List<String> check = new ArrayList<>();
-      check.add("pb:abdullah_abdullah");
-      check.add("hi:ghani");
-      check.add("pb:runner_karzai");
-      check.add("h:front-runner");
-
-      check.add("Bush");
-      check.add("h:Bush");
-      check.add("hi:bush");
-      
-      ts.getTriageFeatureFrequencies().sortByFreqUpperBoundAsc(check);
-      
-      for (String s : check) {
-        IntPair tc = ts.getTriageFeatureFrequencies().getFrequency(s);
-        double p = ts.getFeatureScore(s);
-        System.out.printf("%-24s %.4f %s\n", s, p, tc);
-      }
     }
 
     static void runSearches(ExperimentProperties config,
@@ -661,7 +662,7 @@ public class PkbpSearching implements Serializable {
       Log.info("[main] extracting situations related to initial mentions:");
       List<PA> relatedSits = new ArrayList<>(); 
       for (PkbpNode emMention : seedEntMentions)
-        search.extractSituationsAndArgument(emMention, relatedSits, ts);
+        search.extractSituationsAndArgument(emMention, relatedSits, df, ts);
       if (debug) {
         Log.info("situations mentions:");
         showMentionsM(PA.sitMentions(relatedSits));
@@ -1253,7 +1254,7 @@ public class PkbpSearching implements Serializable {
           query.addToTerms(String.format("%s:a:%s:%.3f", qid, af.name, af.weight));
 
         // Context
-        for (String ct : df.importantTerms(e.getDocVec(), 100))
+        for (String ct : df.importantTerms(e.getContextDoc(), 100))
           query.addToTerms(qid + ":c:" + ct);
       }
       
@@ -1306,7 +1307,7 @@ public class PkbpSearching implements Serializable {
         DependencySyntaxEvents.CoverArgumentsWithPredicates dse;
         try (TB tb = timer().new TB("extractMEMs")) {
           List<Integer> args = DependencySyntaxEvents.extractEntityHeads(toks);
-          dse = new DependencySyntaxEvents.CoverArgumentsWithPredicates(comm, toks, deps, args);
+          dse = new DependencySyntaxEvents.CoverArgumentsWithPredicates(comm, toks, deps, args, df);
           if (dse.situation2args.size() == 0)
             reasonsForFiltering.increment("noDepSynPreds");
         }
@@ -1475,7 +1476,7 @@ public class PkbpSearching implements Serializable {
         query.addToTerms(String.format("a:%s:%.3f", af.name, af.weight));
 
       // Context
-      StringTermVec c = entity.getDocVec();
+      StringTermVec c = entity.getContextDoc();
       List<String> contextTerms = df.importantTerms(c, 100);
       for (String ct : contextTerms)
         query.addToTerms("c:" + ct);
@@ -1509,7 +1510,7 @@ public class PkbpSearching implements Serializable {
     public StringTermVec getSeedTermVec() {
       PkbpNode seedNode = findIntersection(FeatureNames.SEED, FeatureNames.ENTITY).get(0);
       PkbpEntity seedEnt = (PkbpEntity) seedNode.obj;
-      StringTermVec seedTermVec = seedEnt.getDocVec();
+      StringTermVec seedTermVec = seedEnt.getContextDoc();
       return seedTermVec;
     }
 
@@ -1701,7 +1702,7 @@ public class PkbpSearching implements Serializable {
     /**
      * @param outputSitAndArgs contains values of (sitMention, entMentionsWithArgArgsOfThisSitMention)
      */
-    public void extractSituationsAndArgument(PkbpNode emNode, List<PA> output, TriageSearch ts) {
+    public void extractSituationsAndArgument(PkbpNode emNode, List<PA> output, ComputeIdf df, TriageSearch ts) {
       timer().start("extractSituationsAndArgument");
       PkbpEntity.Mention em = (PkbpEntity.Mention) emNode.obj;
       Communication c = em.getCommunication();
@@ -1713,7 +1714,7 @@ public class PkbpSearching implements Serializable {
 
       DependencySyntaxEvents.CoverArgumentsWithPredicates se = null;
       try {
-        se = new DependencySyntaxEvents.CoverArgumentsWithPredicates(c, t, deps, entHeads);
+        se = new DependencySyntaxEvents.CoverArgumentsWithPredicates(c, t, deps, entHeads, df);
       } catch (Exception e) {
         e.printStackTrace();
         return;
@@ -2161,7 +2162,8 @@ public class PkbpSearching implements Serializable {
     this.situations = new ArrayList<>();
     
     this.search = search;
-    setSeed(seed, seedWeight);
+    ComputeIdf df = null;   // TODO
+    setSeed(seed, seedWeight, df);
   }
   
   public void clearSeenCommToks() {
@@ -2178,7 +2180,7 @@ public class PkbpSearching implements Serializable {
     return findEntityMention;
   }
   
-  public void setSeed(KbpQuery seed, double seedWeight) {
+  public void setSeed(KbpQuery seed, double seedWeight, ComputeIdf df) {
     // TODO Use PkbpEntity.mention.convert(KbpQuery)
     Log.info("seedWeight=" + seedWeight + " seed=" + seed);
     this.seed = seed;
@@ -2221,13 +2223,13 @@ public class PkbpSearching implements Serializable {
 
     PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
     assert canonical2.getCommunication() != null;
-    canonical2.getContext();
+    canonical2.getContextDoc();
 //    canonical2.getAttrCommFeatures();
 //    canonical2.getAttrTokFeatures();
     canonical2.getAttrFeatures();
     assert canonical2.triageFeatures != null;
     
-    Pair<List<EntLink>, List<SitLink>> p = proposeLinks(canonical2);
+    Pair<List<EntLink>, List<SitLink>> p = proposeLinks(canonical2, df);
     // New entity for the searched-for mention
     Set<String> exUniq = new HashSet<>();   // proposeLinks doesn't de-duplicate links
     EntLink best = null;
@@ -2314,7 +2316,7 @@ public class PkbpSearching implements Serializable {
     for (PkbpEntity e : searchFor.getArguments()) {
       for (PkbpEntity.Mention m : e) {
         nm++;
-        docContext.add(m.getContext());
+        docContext.add(m.getContextDoc());
         for (Feat ft : m.triageFeatures)
           triageFeats.add(ft.name);
 //        attrComm.addAll(m.getAttrCommFeatures());
@@ -2361,6 +2363,8 @@ public class PkbpSearching implements Serializable {
       showEntities(maxEntities, maxMentionsPerEnt);
     }
     
+    ComputeIdf df = null;   // TODO
+    
     // Build a view of all the entities in this result
     StringTermVec docContext = new StringTermVec();
     Set<String> triageFeats = new HashSet<>();
@@ -2369,7 +2373,7 @@ public class PkbpSearching implements Serializable {
     List<Feat> attr = new ArrayList<>();
     for (PkbpEntity e : searchFor.getArguments()) {
       for (PkbpEntity.Mention m : e) {
-        docContext.add(m.getContext());
+        docContext.add(m.getContextDoc());
         for (Feat ft : m.triageFeatures)
           triageFeats.add(ft.name);
 //        attrComm.addAll(m.getAttrCommFeatures());
@@ -2409,7 +2413,7 @@ public class PkbpSearching implements Serializable {
       PkbpEntity.Mention em = new PkbpEntity.Mention(s);
       TokenTagging ner = IndexCommunications.getPreferredNerTags(em.getTokenization());
       em.nerType = ner.getTaggedTokenList().get(em.head).getTag();
-      Pair<List<EntLink>, List<SitLink>> x = proposeLinks(em);
+      Pair<List<EntLink>, List<SitLink>> x = proposeLinks(em, df);
       
       // Execute the linking operations.
       // TODO I believe this is OK since proposeLinks returns only one EntLink per entMention,
@@ -2779,7 +2783,7 @@ public class PkbpSearching implements Serializable {
    * @param outputEntityLinks
    * @param outputSituationLinks
    */
-  public Pair<List<EntLink>, List<SitLink>> proposeLinks(PkbpEntity.Mention searchResult) {
+  public Pair<List<EntLink>, List<SitLink>> proposeLinks(PkbpEntity.Mention searchResult, ComputeIdf df) {
     timer().start("proposeLinks");
     
     boolean verbose = false;
@@ -2828,7 +2832,7 @@ public class PkbpSearching implements Serializable {
     //Log.info("found " + entHeads.size() + " heads");
     // Extract situations
     DependencySyntaxEvents.CoverArgumentsWithPredicates se =
-        new DependencySyntaxEvents.CoverArgumentsWithPredicates(c, t, deps, entHeads);
+        new DependencySyntaxEvents.CoverArgumentsWithPredicates(c, t, deps, entHeads, df);
 
     // Link args/ents
     if (verbose)
@@ -3056,18 +3060,25 @@ public class PkbpSearching implements Serializable {
       fs.add(new Feat("nerMismatch/" + r.getHeadNer(), -2.5));
     }
 
-    // Cosine similarity
+    // Cosine similarity at document level
     if (verboseLinking)
       Log.info("cosine sim for " + e.id);
-    StringTermVec eDocVec = e.getDocVec();
-    StringTermVec rDocVec = r.getContext();
-    double tfidfCosine = df.tfIdfCosineSim(eDocVec, rDocVec);
-    if (tfidfCosine > 0.95) {
+    StringTermVec eCtxDoc = e.getContextDoc();
+    StringTermVec rCtxDoc = r.getContextDoc();
+    double tfidfCosineDoc = df.tfIdfCosineSim(eCtxDoc, rCtxDoc);
+    if (tfidfCosineDoc > 0.95) {
       if (verboseLinking)
-        Log.info("tfidf cosine same doc, adjusting down " + tfidfCosine + " => 0.75");
-      tfidfCosine = 0.75;   // same doc
+        Log.info("tfidf cosine doc, adjusting down " + tfidfCosineDoc + " => 0.75");
+      tfidfCosineDoc = 0.75;   // same doc
     }
-    fs.add(new Feat("tfidfCosine", 0.25 * (tfidfCosine - 0.5)));
+    fs.add(new Feat("tfidfCosineDoc", 0.25 * (tfidfCosineDoc - 0.5)));
+    
+    
+    StringTermVec eCtxLocal = e.getContextLocal();
+    StringTermVec rCtxLocal = r.getContextLocal();
+    double tfidfCosineLocal = df.tfIdfCosineSim(eCtxLocal, rCtxLocal);
+    fs.add(new Feat("tfidfCosineLocal", 0.5 * (tfidfCosineLocal - 0.5)));
+
 
     // Average triage feature similarity
     if (verboseLinking)
@@ -3091,44 +3102,34 @@ public class PkbpSearching implements Serializable {
       if (s > triageMax)
         triageMax = s;
     }
-//    fs.add(new Feat("triageFeatsAvg", 6 * triage.getAverage()));
-//    fs.add(new Feat("triageFeatsMax", 3 * triageMax));
-    fs.add(new Feat("triageFeatsAvgTfIdf", 40 * (0.1 + tfidfCosine) * triage.getAverage()));
-    fs.add(new Feat("triageFeatsMaxTfIdf", 20 * (0.1 + tfidfCosine) * triageMax));
+    fs.add(new Feat("triageAvgTfidfDoc", 20 * (0.1 + tfidfCosineDoc) * triage.getAverage()));
+    fs.add(new Feat("triageMaxTfidfDoc", 10 * (0.1 + tfidfCosineDoc) * triageMax));
+    fs.add(new Feat("triageAvgTfidfLocal", 20 * (0.1 + tfidfCosineLocal) * triage.getAverage()));
+    fs.add(new Feat("triageMaxTfidfLocal", 10 * (0.1 + tfidfCosineLocal) * triageMax));
 
     // Attribute Features
     if (verboseLinking)
       Log.info("attr feats for " + e.id);
     double attrFeatScore = 0;
+    ArgMax<PkbpEntity.Mention> attrFeatMax = new ArgMax<>();
     for (PkbpEntity.Mention ss : e) {
-//      String nameHeadQ = ss.getEntityHeadGuess();
-//      List<String> attrCommQ = NNPSense.extractAttributeFeatures(null, ss.getCommunication(), nameHeadQ, nameHeadQ);
-//      List<String> attrTokQ = NNPSense.extractAttributeFeatures(ss.tokUuid, ss.getCommunication(), nameHeadQ, nameHeadQ);
-//      AttrFeatMatch afm = new AttrFeatMatch(attrCommQ, attrTokQ, r.getEntityHeadGuess(), r.getTokenization(), r.getCommunication());
-//      attrFeatScore += Feat.avg(afm.getFeatures());
-      
       List<Feat> x = ss.getAttrFeatures();
       List<Feat> y = r.getAttrFeatures();
       Pair<Double, List<Feat>> m = Feat.cosineSim(x, y);
       attrFeatScore += m.get1();
+      attrFeatMax.offer(ss, m.get1());
       assert !Double.isNaN(attrFeatScore);
       assert Double.isFinite(attrFeatScore);
     }
     assert e.numMentions() > 0;
     double attrFeatAvg = attrFeatScore / e.numMentions();
     double attrFeatSqrt = Math.sqrt(attrFeatScore+1)-1;
-    fs.add(new Feat("attrFeatSqrtTriageAvg", 4 * (0.1 + triage.getAverage()) * attrFeatSqrt));
-    fs.add(new Feat("attrFeatAvgTriageAvg", 40 * (0.1 + triage.getAverage()) * attrFeatAvg));
-    fs.add(new Feat("attrFeatSqrtTriageMax", 2 * (0.1 + triageMax) * attrFeatSqrt));
-    fs.add(new Feat("attrFeatAvgTriageMax", 20 * (0.1 + triageMax) * attrFeatAvg));
-//    for (PkbpEntity.Mention m : e) {
-//      if (m.getHeadString().equalsIgnoreCase(r.getHeadString())) {
-//        double idfHead = df.idf(r.getHeadString());
-//        fs.add(new Feat("attrFeatSqrtHeadMatchIdf", 1 * (1+idfHead) * attrFeatSqrt));
-//        fs.add(new Feat("attrFeatAvgHeadMatchIdf", 10 * (1+idfHead) * attrFeatAvg));
-//        break;
-//      }
-//    }
+    fs.add(new Feat("attrSqrtTriageAvg", 4 * (0.1 + triage.getAverage()) * attrFeatSqrt));
+    fs.add(new Feat("attrMaxTriageAvg",  4 * (0.1 + triage.getAverage()) * attrFeatMax.getBestScore()));
+    fs.add(new Feat("attrAvgTriageAvg", 40 * (0.1 + triage.getAverage()) * attrFeatAvg));
+    fs.add(new Feat("attrSqrtTriageMax", 2 * (0.1 + triageMax) * attrFeatSqrt));
+    fs.add(new Feat("attrMaxTriageMax",  2 * (0.1 + triageMax) * attrFeatMax.getBestScore()));
+    fs.add(new Feat("attrAvgTriageMax", 20 * (0.1 + triageMax) * attrFeatAvg));
 
     if (prior != 1) {
       for (Feat f : fs)
@@ -3177,7 +3178,7 @@ public class PkbpSearching implements Serializable {
       // Cosine similarity
       if (verboseLinking)
         Log.info("cosine sim for " + e.id);
-      StringTermVec eDocVec = e.getDocVec();
+      StringTermVec eDocVec = e.getContextDoc();
       StringTermVec rDocVec = new StringTermVec(r.getCommunication());
       double tfidfCosine = getTermFrequencies().tfIdfCosineSim(eDocVec, rDocVec);
       if (tfidfCosine > 0.95) {
@@ -3293,7 +3294,7 @@ public class PkbpSearching implements Serializable {
     double p = (k + 1) / (k + freq);
     fs.add(new Feat("wordFreq", p));
 
-    double tfidf = df.tfIdfCosineSim(seedTermVec, m.getContext());
+    double tfidf = df.tfIdfCosineSim(seedTermVec, m.getContextDoc());
     fs.add(new Feat("tfidfWithSeed", tfidf));
 
     return fs;
