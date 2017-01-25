@@ -1887,7 +1887,7 @@ public class AccumuloIndex {
       }
       // TODO Remove headwords, switch to purely a key-word based retrieval model.
       // NOTE that headwords must match the headwords extracted during the indexing phrase.
-      String entityName = query.getEntitySpanGuess();
+      String entityName = query.getSpanString();
       String[] headwords = entityName.split("\\s+");    // TODO Filter to NNP words?
       String entityType = query.nerType;
       TokenObservationCounts tokObs = null;

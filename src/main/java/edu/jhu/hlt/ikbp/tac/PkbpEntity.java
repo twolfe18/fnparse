@@ -9,7 +9,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
@@ -22,7 +21,9 @@ import edu.jhu.hlt.ikbp.tac.AccumuloIndex.StringTermVec;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
+import edu.jhu.hlt.ikbp.tac.PkbpSearching.EntLink;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
+import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
@@ -125,7 +126,7 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       super(head, toks, deps, comm);
       this.span = span;
       this.nerType = nerType;
-      String mentionText = getEntitySpanGuess();
+      String mentionText = getSpanString();
       String[] headwords = mentionText.split("\\s+");
       TokenObservationCounts tokObs = null;
       TokenObservationCounts tokObsLc = null;
@@ -147,7 +148,7 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 //      String nAf = "(c=" + (attrCommFeatures == null ? "null" : attrCommFeatures.size());
 //      nAf += ",t=" + (attrTokFeatures == null ? "null" : attrTokFeatures.size()) + ")";
       String nAf = attrFeatures == null ? "null" : String.valueOf(attrFeatures.size());
-      return "(EM h=" + getEntityHeadGuess() + "@" + head
+      return "(EM h=" + getHeadWord() + "@" + head
           + " neType=" + nerType
           + " s=" + Span.safeShortString(span)
           + " nTf=" + nTf
@@ -211,11 +212,7 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       return attrFeatures;
     }
     
-    public String getEntityHeadGuess() {
-      return toks.getTokenList().getTokenList().get(head).getText();
-    }
-
-    public String getEntitySpanGuess() {
+    public String getSpanString() {
       StringBuilder sb = new StringBuilder();
       for (int i = span.start; i < span.end; i++) {
         if (sb.length() > 0)
@@ -257,10 +254,16 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 
   public final String id;
 
-  private List<Mention> mentions;
+//  private List<Mention> mentions;
+  // The first link is from source->this link, and its link features are effectively the "relevance features"
+  private List<EntLink> mentions;
 
-  /** Reasons why this entity is central to the PKB/seed */
-  List<Feat> relevantReasons;
+//  /** Reasons why this entity is central to the PKB/seed */
+//  List<Feat> relevantReasons;
+  
+  private transient StringTermVec memoDocVec;
+  private transient List<Feat> memoAttrFeat;
+  private transient List<Feat> memoTriageFeat;
 
   public PkbpEntity(String id, Mention canonical, List<Feat> relevanceReasons) {
     if (id == null)
@@ -268,15 +271,15 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     if (canonical == null)
       throw new IllegalArgumentException();
     this.id = id;
-    this.relevantReasons = relevanceReasons;
+//    this.relevantReasons = relevanceReasons;
     this.mentions = new ArrayList<>();
-    addMention(canonical);
+    addMention(new EntLink(canonical, this, relevanceReasons, true));
     //Log.info(this);
   }
   
   public boolean containsMentionWithNer(String ner) {
-    for (PkbpEntity.Mention m : mentions)
-      if (ner.equalsIgnoreCase(m.getHeadNer()))
+    for (EntLink l : mentions)
+      if (ner.equalsIgnoreCase(l.source.getHeadNer()))
         return true;
     return false;
   }
@@ -298,49 +301,78 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
   public String getCanonicalHeadString() {
     if (mentions.isEmpty())
       return "NA";
-    return mentions.get(0).getHeadWord();
+    return mentions.get(0).source.getHeadWord();
   }
   
-  public void addMention(Mention mention) {
-    if (mention.head < 0)
+//  public void addMention(Mention mention) {
+  public void addMention(EntLink mention) {
+    if (mention.source.head < 0)
       throw new IllegalArgumentException();
-    if (mention.span == null)
+    if (mention.source.span == null)
       throw new IllegalArgumentException();
+    this.memoDocVec = null;
+    this.memoAttrFeat = null;
+    this.memoTriageFeat = null;
     this.mentions.add(mention);
+  }
+
+  public Mention guessCanonicalMention(ComputeIdf df) {
+    // TODO Try out a few ways of doing this
+    // For now: longest mention + tfidf with centroid
+//    StringTermVec center = getDocVec();
+    ArgMax<Mention> a = new ArgMax<>();
+//    for (Mention m : this) {
+//      double s = df.tfIdfCosineSim(center, m.getContext());
+//      a.offer(m, m.span.width() + s/10d);
+    for (EntLink l : mentions) {
+      double w = 2 + Math.sqrt(1d+l.source.span.width());
+      w *= Feat.sum(l.score);
+      if (w > 0)
+        a.offer(l.source, w);
+    }
+    if (a.numOffers() == 0)
+      return mentions.get(0).source;
+    return a.get();
   }
   
   public Mention getMention(int i) {
+    return mentions.get(i).source;
+  }
+  
+  public EntLink getLink(int i) {
     return mentions.get(i);
+  }
+  
+  public List<Feat> getRelevanceReasons() {
+    return mentions.get(0).score;
   }
 
   public double getRelevanceWeight() {
-    return Feat.sum(relevantReasons);
+//    return Feat.sum(relevantReasons);
+    return Feat.sum(mentions.get(0).score);
   }
 
   @Override
   public String toString() {
-    if (relevantReasons == null) {
     return "(PkbpEntity id=" + id
         + " nMentions=" + mentions.size()
-        + " relevanceWeight=null)";
-    }
-    return "(PkbpEntity id=" + id
-        + " nMentions=" + mentions.size()
-        + " relevanceWeight=" + getRelevanceWeight()
-        + " b/c " + Feat.sortAndPrune(relevantReasons, 3) + ")";
+        + ")";
   }
   
   public List<Feat> getAttrFeatures() {
-    int n = mentions.size();
-    List<Feat> fs = new ArrayList<>();
-    for (int i = 0; i < n; i++)
-      fs = Feat.vecadd(fs, mentions.get(i).getAttrFeatures());
-    return fs;
+    if (this.memoAttrFeat == null) {
+      int n = mentions.size();
+      List<Feat> fs = new ArrayList<>();
+      for (int i = 0; i < n; i++)
+        fs = Feat.vecadd(fs, mentions.get(i).source.getAttrFeatures());
+      this.memoAttrFeat = fs;
+    }
+    return this.memoAttrFeat;
   }
 
   public List<Feat> getCommonAttrFeats() {
     Counts<String> c = new Counts<>();
-    for (PkbpEntity.Mention m : mentions)
+    for (PkbpEntity.Mention m : this)
       for (Feat f : m.getAttrFeatures())
         c.increment(f.name);
     Map<String, Feat> m = Feat.index(this.getAttrFeatures());
@@ -354,16 +386,19 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
   }
   
   public List<Feat> getTriageFeatures() {
-    int n = mentions.size();
-    List<Feat> fs = new ArrayList<>();
-    for (int i = 0; i < n; i++)
-      fs = Feat.vecadd(fs, mentions.get(i).getTriageFeatures());
-    return fs;
+    if (this.memoTriageFeat == null) {
+      int n = mentions.size();
+      List<Feat> fs = new ArrayList<>();
+      for (int i = 0; i < n; i++)
+        fs = Feat.vecadd(fs, mentions.get(i).source.getTriageFeatures());
+      this.memoTriageFeat = fs;
+    }
+    return this.memoTriageFeat;
   }
   
   public List<Feat> getCommonTriageFeatures() {
     Counts<String> c = new Counts<>();
-    for (PkbpEntity.Mention m : mentions)
+    for (PkbpEntity.Mention m : this)
       for (Feat f : m.getTriageFeatures())
         c.increment(f.name);
     Map<String, Feat> m = Feat.index(this.getTriageFeatures());
@@ -377,15 +412,17 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
   }
 
   public StringTermVec getDocVec() {
-    StringTermVec tvAll = new StringTermVec();
-    Set<String> seenComms = new HashSet<>();
-    for (PkbpMention s : mentions) {
-      if (seenComms.add(s.getCommunicationId())) {
-        StringTermVec tv = new StringTermVec(s.getCommunication());
-        tvAll.add(tv);
+    if (this.memoDocVec == null) {
+      this.memoDocVec = new StringTermVec();
+      Set<String> seenComms = new HashSet<>();
+      for (Mention s : this) {
+        if (seenComms.add(s.getCommunicationId())) {
+          StringTermVec tv = new StringTermVec(s.getCommunication());
+          this.memoDocVec.add(tv);
+        }
       }
     }
-    return tvAll;
+    return this.memoDocVec;
   }
   
   public int numMentions() {
@@ -394,6 +431,10 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 
   @Override
   public Iterator<Mention> iterator() {
-    return mentions.iterator();
+//    return mentions.iterator();
+    List<Mention> m = new ArrayList<>();
+    for (EntLink l : mentions)
+      m.add(l.source);
+    return m.iterator();
   }
 }
