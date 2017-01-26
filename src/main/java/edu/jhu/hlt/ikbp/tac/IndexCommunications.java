@@ -2071,6 +2071,22 @@ public class IndexCommunications implements AutoCloseable {
         return 0;
       }
     };
+    public static final Comparator<Feat> BY_SCORE_MAG_DESC = new Comparator<Feat>() {
+      @Override
+      public int compare(Feat o1, Feat o2) {
+        assert !Double.isNaN(o1.weight);
+        assert Double.isFinite(o1.weight);
+        assert !Double.isNaN(o2.weight);
+        assert Double.isFinite(o2.weight);
+        double s1 = Math.abs(o1.weight);
+        double s2 = Math.abs(o2.weight);
+        if (s1 > s2)
+          return -1;
+        if (s1 < s2)
+          return +1;
+        return 0;
+      }
+    };
     
     public static String showScore(List<Feat> features, int maxChars) {
       List<Feat> out = new ArrayList<>();
@@ -2092,6 +2108,27 @@ public class IndexCommunications implements AutoCloseable {
         }
       }
       return sb.toString();
+    }
+
+    public static List<Feat> sortAndPruneByRatio(List<Feat> in, double ratioKeep) {
+      List<Feat> l = new ArrayList<>();
+      double z = 0;
+      for (Feat f : in) {
+        if (f.weight < 0)
+          throw new IllegalArgumentException();
+        l.add(f);
+        z += f.weight;
+      }
+      Collections.sort(l, Feat.BY_SCORE_DESC);
+      int nkeep = 0;
+      double kept = 0;
+      while (nkeep < l.size() && kept/z < ratioKeep) {
+        kept += l.get(nkeep).weight;
+        nkeep++;
+      }
+      while (l.size() > nkeep)
+        l.remove(l.size()-1);
+      return l;
     }
 
     public static List<Feat> sortAndPrune(Map<String, Double> in, double eps) {
@@ -2130,6 +2167,18 @@ public class IndexCommunications implements AutoCloseable {
       //    Collections.sort(out, Feat.BY_NAME);
       return out;
     }
+
+    public static List<Feat> sortByMag(Iterable<Feat> in, int topk) {
+      List<Feat> out = new ArrayList<>();
+      for (Feat f : in)
+        out.add(f);
+      Collections.sort(out, Feat.BY_SCORE_MAG_DESC);
+      if (topk <= 0)
+        return out;
+      while (out.size() > topk)
+        out.remove(out.size()-1);
+      return out;
+    }
     
     public static List<String> demote(Iterable<Feat> feats, boolean dedup) {
       Set<String> uniq = new HashSet<>();
@@ -2152,17 +2201,31 @@ public class IndexCommunications implements AutoCloseable {
           out.add(new Feat(f, value));
       return out;
     }
-    
+
+    public static double max(Iterable<Feat> features) {
+      double m = 0;
+      for (Feat f : features) {
+        assert Double.isFinite(f.weight);
+        assert !Double.isNaN(f.weight);
+        m = Math.max(m, f.weight);
+      }
+      return m;
+    }
     public static double sum(Iterable<Feat> features) {
       double s = 0;
-      for (Feat f : features)
+      for (Feat f : features) {
+        assert Double.isFinite(f.weight);
+        assert !Double.isNaN(f.weight);
         s += f.weight;
+      }
       return s;
     }
     public static double avg(Iterable<Feat> features) {
       double s = 0;
       int n = 0;
       for (Feat f : features) {
+        assert Double.isFinite(f.weight);
+        assert !Double.isNaN(f.weight);
         s += f.weight;
         n++;
       }

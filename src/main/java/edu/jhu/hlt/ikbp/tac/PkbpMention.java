@@ -13,6 +13,7 @@ import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.util.TokenizationIter;
 
@@ -20,13 +21,14 @@ public class PkbpMention implements Serializable {
   private static final long serialVersionUID = 795646509667723395L;
 
   /** TODO Do not keep this here! This is a shared resource and should be looked up by a owner of the resource. */
-  Communication comm;
-  String commId;
+  private Communication comm;
+  private String commId;
 
-  Tokenization toks;
-  String tokUuid;
+  final Tokenization toks;
+  final String tokUuid;
 
-  DependencyParse deps;
+  private DependencyParse deps;
+  private transient LabeledDirectedGraph deps2;
 
   public final int head;
 
@@ -61,6 +63,28 @@ public class PkbpMention implements Serializable {
     this.tokUuid = tokUuid;
     this.head = head;
     this.feats = new ArrayList<>();
+  }
+  
+  public DependencyParse getDeps() {
+    if (deps == null)
+      deps = IndexCommunications.getPreferredDependencyParse(getTokenization());
+    return deps;
+  }
+
+  public LabeledDirectedGraph getDeps2() {
+    if (deps2 == null) {
+      deps2 = LabeledDirectedGraph.fromConcrete(
+          getDeps(), getTokenization().getTokenList().getTokenListSize(), null);
+    }
+    return deps2;
+  }
+  
+  public int[] shortestPath(int dest, boolean includeEndpoints) {
+    return shortestPath(head, dest, includeEndpoints);
+  }
+  public int[] shortestPath(int source, int dest, boolean includeEndpoints) {
+    LabeledDirectedGraph g = getDeps2();
+    return g.shortestPath(source, dest, true, includeEndpoints);
   }
 
   public String getHeadNer() {

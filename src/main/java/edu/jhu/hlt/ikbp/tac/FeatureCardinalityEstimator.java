@@ -9,11 +9,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -36,6 +38,12 @@ import com.google.common.hash.Funnel;
 import com.google.common.hash.Funnels;
 import com.google.common.hash.HashFunction;
 
+import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.DependencyParse;
+import edu.jhu.hlt.concrete.TokenTagging;
+import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.simpleaccumulo.AutoCloseableIterator;
+import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -46,11 +54,15 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.hlt.tutils.hash.GuavaHashUtil;
 import edu.jhu.prim.map.IntIntHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch;
+import edu.jhu.util.CountMinSketch.StringCountMinSketch;
 import edu.jhu.util.MaxMinSketch;
+import edu.jhu.util.TokenizationIter;
 
 /**
  * Provides an upper bound on the number of entries corresponding
@@ -71,6 +83,92 @@ import edu.jhu.util.MaxMinSketch;
 public class FeatureCardinalityEstimator implements Serializable {
   private static final long serialVersionUID = 2268949277518188236L;
   public static final Charset utf8 = Charset.forName("UTF-8");
+  
+  /**
+   * Breaks down the counts per NER type.
+   */
+  public static class ByNerType implements Serializable {
+    private static final long serialVersionUID = -6031319379306518928L;
+
+    private StringCountMinSketch allNNP;
+    private Map<String, StringCountMinSketch> ner2triageFeats;
+    
+    public ByNerType(int nhash, int logb) {
+      boolean conservativeUpdates = true;
+      allNNP = new StringCountMinSketch(nhash, logb, conservativeUpdates);
+      ner2triageFeats = new HashMap<>();
+    }
+    
+    public void add(Communication c, boolean oncePerDoc) {
+      TokenObservationCounts tokObs = null;
+      TokenObservationCounts tokObsLc = null;
+      Set<String> uniq = new HashSet<>();
+      for (Tokenization t : new TokenizationIter(c)) {
+        DependencyParse deps = IndexCommunications.getPreferredDependencyParse(t);
+        TokenTagging ner = IndexCommunications.getPreferredNerTags(t);
+        List<Integer> args = DependencySyntaxEvents.extractEntityHeads(t);
+        for (int arg : args) {
+          Span s = IndexCommunications.nounPhraseExpand(arg, deps);
+          String nerType = ner.getTaggedTokenList().get(arg).getTag();
+          PkbpEntity.Mention m = new PkbpEntity.Mention(arg, s, nerType, t, deps, c);
+          String mentionText = m.getSpanString();
+          String[] headwords = mentionText.split("\\s+");
+          List<String> tf = IndexCommunications.getEntityMentionFeatures(mentionText, headwords, nerType, tokObs, tokObsLc);
+          
+          if (oncePerDoc) {
+            List<String> u = new ArrayList<>();
+            for (String f : tf)
+              if (uniq.add(f))
+                u.add(f);
+            tf = u;
+          }
+          
+          StringCountMinSketch cms = getCountsForNer(nerType);
+          for (String f : tf)
+            cms.apply(f, true);
+          for (String f : tf)
+            allNNP.apply(f, true);
+        }
+      }
+    }
+    
+    public StringCountMinSketch getCountsForNer(String type) {
+      StringCountMinSketch cms = ner2triageFeats.get(type);
+      if (cms == null) {
+        boolean conservativeUpdates = true;
+        cms = new StringCountMinSketch(allNNP.numHashFunctions(), allNNP.logNumBuckets(), conservativeUpdates);
+        ner2triageFeats.put(type, cms);
+      }
+      return cms;
+    }
+    
+    public int getCountsNerFeat(String ner, String feat) {
+      return getCountsForNer(ner).apply(feat, false);
+    }
+    public double getIdfNerFeat(String ner, String feat) {
+      StringCountMinSketch cms = getCountsForNer(ner);
+      int df = cms.apply(feat, false);
+      int N = cms.numIncrementsInt();
+      return Math.log(N / (df+1d));
+    }
+    
+    public int getCountsBackoffFeat(String feat) {
+      return allNNP.apply(feat, false);
+    }
+    public double getIdfBackoffFeat(String feat) {
+      int df = allNNP.apply(feat, false);
+      int N = allNNP.numIncrementsInt();
+      return Math.log(N / (df+1d));
+    }
+    
+    public double idf(String ner, String feat, double backoff) {
+      if (backoff < 0 || backoff > 1)
+        throw new IllegalArgumentException();
+      double a = getIdfNerFeat(ner, feat);
+      double b = getIdfBackoffFeat(feat);
+      return (1d-backoff) * a + backoff * b;
+    }
+  }
   
   /**
    * Stores both tokenization and document frequencies. Uses a small set of
@@ -139,7 +237,7 @@ public class FeatureCardinalityEstimator implements Serializable {
     private long numUpdates;    // number of updates is equal the number of features
     private int heavyHitterCapacity;
     private PriorityQueue<HeavyHitter> heavyHitters;
-    private MaxMinSketch lightHittersTokFreq;
+    private MaxMinSketch lightHittersTokFreq;   // not cms since we've already built the index
     private MaxMinSketch lightHittersDocFreq;
     private int numHash;
     private int logBuckets;
@@ -376,7 +474,7 @@ public class FeatureCardinalityEstimator implements Serializable {
     }
     Log.info("read=" + read + " updated=" + updated);
   }
-
+  
   /**
    * @param update should accept (feature, (tokFreq, docFreq))
    * @param continuation should accept (currentFeature, totalRowsProcessed) and show progress
@@ -643,8 +741,57 @@ public class FeatureCardinalityEstimator implements Serializable {
     System.out.println(n.getFrequency("baz"));
     System.out.println(n.getFrequency("quux"));
   }
-  
+
   public static void main(String[] args) throws Exception {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    
+    File saveTo = config.getOrMakeDir("outputDir");
+    File saveToNnp = new File(saveTo, "nnp-counts.jser");
+    File saveToDoc = new File(saveTo, "doc-counts.jser");
+    FileUtil.VERBOSE = true;
+
+    // 10 hashes * 1M * 10 NER types = 100M
+    int nhash = config.getInt("numHash", 10);
+    int logb = config.getInt("logBuckets", 20);
+    FeatureCardinalityEstimator.ByNerType fcNnp = new FeatureCardinalityEstimator.ByNerType(nhash, logb);
+    FeatureCardinalityEstimator.ByNerType fcDoc = new FeatureCardinalityEstimator.ByNerType(nhash, logb);
+    
+    double saveEveryNSeconds = config.getDouble("saveEveryNSeconds", 8 * 60);
+
+    String namespace = config.getString("namespace");
+    SimpleAccumuloConfig saConf = new SimpleAccumuloConfig(
+        namespace,
+        SimpleAccumuloConfig.DEFAULT_TABLE,
+        SimpleAccumuloConfig.DEFAULT_INSTANCE,
+        SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS);
+    SimpleAccumulo sa = new SimpleAccumulo(saConf);
+    sa.connect("reader", new PasswordToken("an accumulo reader"));
+    TimeMarker tm = new TimeMarker();
+    TimeMarker tmLong = new TimeMarker();
+    int nc = 0;
+    try (AutoCloseableIterator<Communication> iter = sa.scan()) {
+      while (iter.hasNext()) {
+        Communication c = iter.next();
+        fcNnp.add(c, false);
+        fcDoc.add(c, true);
+        nc++;
+        
+        if (tm.enoughTimePassed(5))
+          Log.info("comms=" + nc + " ents=" + fcNnp.allNNP.numIncrements() + " nerTypes=" + fcNnp.ner2triageFeats.size());
+        if (tmLong.enoughTimePassed(saveEveryNSeconds)) {
+          FileUtil.serialize(fcNnp, saveToNnp);
+          FileUtil.serialize(fcDoc, saveToDoc);
+        }
+      }
+    }
+    Log.info("done scanning");
+    Log.info("comms=" + nc + " ents=" + fcNnp.allNNP.numIncrements() + " nerTypes=" + fcNnp.ner2triageFeats.size());
+    FileUtil.serialize(fcNnp, saveToNnp);
+    FileUtil.serialize(fcDoc, saveToDoc);
+    Log.info("done");
+  }
+  
+  public static void mainOld(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     
     boolean test = config.getBoolean("test", false);

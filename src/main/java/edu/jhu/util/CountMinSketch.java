@@ -115,6 +115,14 @@ public class CountMinSketch implements Serializable {
     return (int) ninc;
   }
   
+  public int numHashFunctions() {
+    return nhash;
+  }
+  
+  public int logNumBuckets() {
+    return logb;
+  }
+  
   public static class StringCountMinSketch extends CountMinSketch {
     private static final long serialVersionUID = 3346679142656988448L;
 

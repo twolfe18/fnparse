@@ -48,6 +48,7 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.thrift.TDeserializer;
+import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
@@ -66,6 +67,12 @@ import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.access.FetchCommunicationService;
+import edu.jhu.hlt.concrete.access.FetchRequest;
+import edu.jhu.hlt.concrete.access.FetchResult;
+import edu.jhu.hlt.concrete.search.SearchResultItem;
+import edu.jhu.hlt.concrete.services.NotImplementedException;
+import edu.jhu.hlt.concrete.services.ServiceInfo;
+import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -519,6 +526,68 @@ public class AccumuloIndex {
     public WeightedFeature(String f, double w) {
       this.feature = f;
       this.weight = w;
+    }
+  }
+  
+  /**
+   * Tokenization UUID => Communication, backed by T_t2c.
+   *
+   * Implements fetch where it interprets the UUIDs as Tokenization UUIDs
+   * instead of Communication ids, as is described in the documentation.
+   */
+  public static class TokFetchSerivce implements FetchCommunicationService.Iface {
+    
+    private ServiceInfo info;
+    private Connector conn;
+    private int numQueryThreads;
+
+    public TokFetchSerivce() {
+      info = new ServiceInfo()
+          .setName("tokfetch")
+          .setDescription("foo")
+          .setVersion("0.01");
+    }
+
+    @Override
+    public FetchResult fetch(FetchRequest arg0) throws ServicesException, TException {
+      
+      List<Range> ranges = new ArrayList<>();
+      Set<String> seen = new HashSet<>();
+      for (String tokUuid : arg0.getCommunicationIds())
+        if (seen.add(getCommUuidPrefixFromTokUuid(tokUuid)))
+          ranges.add(Range.exact(tokUuid));
+      
+      try (BatchScanner bs = conn.createBatchScanner(T_t2c.toString(), new Authorizations(), numQueryThreads)) {
+        bs.setRanges(ranges);
+        for (Entry<Key, Value> e : bs) {
+          
+          String commUuid = e.getValue().toString();
+        }
+      } catch (Exception e) {
+        throw new ServicesException(e.getMessage());
+      }
+      
+      return null;
+    }
+
+    @Override
+    public ServiceInfo about() throws TException {
+      return info;
+    }
+
+    @Override
+    public boolean alive() throws TException {
+      return true;
+    }
+
+    @Override
+    public long getCommunicationCount() throws NotImplementedException, TException {
+      throw new NotImplementedException();
+    }
+
+    @Override
+    public List<String> getCommunicationIDs(long arg0, long arg1) throws NotImplementedException, TException {
+      throw new NotImplementedException();
     }
   }
 
@@ -1183,9 +1252,53 @@ public class AccumuloIndex {
       Log.info("returning " + res.size() + " sorted SitSearchResults");
       return res;
     }
-    
-    
-    
+
+    /**
+     * This only needs to hit the f2t table, which leaves off t2c and c2w, which should be faster...
+     * 
+     * the c2w table has been effectively replaced by Fetch,
+     * but can I also service-ize or cache the t2c aspect?
+     * 
+     * 
+     * 1) get a list of toks sorted by dot(triage)
+     * 2) going through this list, fetch comms as needed, then compute full score after dereferencing t->c
+     * 3) stopping early:
+     *    a) you want K results, stop after collecting safetyFactor * K results
+     *    b) after observing T results, rank(K) full score is X which is greater than dot(triage) / reasonableLowerboundOnSSB(T)
+     *       where reasonableLowerboundOnSSB(T) is something like the 10th percentile of sqrt(||triage||) for the first T results
+     *
+     * 3 is optional.
+     * 2 needs more details.
+     * If I have a tokUuid, how do I get the commId or comm?
+     * option 1: build a uuidPrefix <=> commId table
+     *           this is great, will be sparse to cache locally, but what is the fallback?
+     *           I can build a FetchService for this...
+     */
+    public List<SearchResultItem> fastTriage(String ner, List<String> triageFeatures, FeatureCardinalityEstimator.ByNerType triageNNP, FeatureCardinalityEstimator.ByNerType triageDoc) {
+      double backoff = 0.1;
+      List<Feat> triage = new ArrayList<>();
+      for (String t : triageFeatures) {
+        Feat f = new Feat(t, 0);
+        f.weight += triageNNP.idf(ner, t, backoff);
+        f.weight += triageDoc.idf(ner, t, backoff);
+      }
+      double cover = 0.75;
+      List<Feat> searchFor = Feat.sortAndPruneByRatio(triage, cover);
+      Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
+      for (Feat f : searchFor) {
+        FeatSearch fs = new FeatSearch(f.name);
+        for (String tokUuid : fs.toks2)
+          tokUuid2score.update(tokUuid, f.weight);
+      }
+      List<SearchResultItem> l = new ArrayList<>();
+      for (String tokUuid : tokUuid2score.getKeysSortedByCount(true)) {
+        SearchResultItem i = new SearchResultItem();
+        i.setSentenceId(new UUID(tokUuid));
+        i.setScore(tokUuid2score.getCount(tokUuid));
+        l.add(i);
+      }
+      return l;
+    }
 
     /**
      * @param triageFeats are generated from {@link IndexCommunications#getEntityMentionFeatures(String, String[], String, TokenObservationCounts, TokenObservationCounts)}
@@ -1226,21 +1339,12 @@ public class AccumuloIndex {
           continue;
         }
 
-        // Collect all of the tokenizations which this feature co-occurs with
-        List<String> toks = new ArrayList<>();
-        Set<String> commUuidPrefixes = new HashSet<>();
-        try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
-          f2tScanner.setRange(Range.exact(f));
-          for (Entry<Key, Value> e : f2tScanner) {
-            String tokUuid = e.getKey().getColumnQualifier().toString();
-            toks.add(tokUuid);
-            commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
-          }
-        }
+        // Perform the search
+        FeatSearch fs = new FeatSearch(f);
 
         // Compute a score based on how selective this feature is
-        int numToks = toks.size();
-        int numDocs = commUuidPrefixes.size();
+        int numToks = fs.toks2.size();
+        int numDocs = fs.commUuidPrefixes.size();
         double p = getFeatureScore(numToks, numDocs);
 
         // Check that the estimate is valid
@@ -1252,7 +1356,7 @@ public class AccumuloIndex {
 
         // Update the running score for all tokenizations
         boolean first = true;
-        for (String t : toks) {
+        for (String t : fs.toks2) {
           boolean canAdd = p > minScoreForNewTok || tokUuid2score.getCount(t) > 0;
           if (!canAdd) {
             tokFeatTooSmall++;
@@ -1807,7 +1911,6 @@ public class AccumuloIndex {
       
       return res;
     }
-
 
     /**
      * Triage retrieval, resolving Communications, and finally attribute feature reranking.
