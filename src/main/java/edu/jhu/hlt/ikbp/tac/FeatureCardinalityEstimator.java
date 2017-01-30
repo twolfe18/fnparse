@@ -776,8 +776,12 @@ public class FeatureCardinalityEstimator implements Serializable {
         fcDoc.add(c, true);
         nc++;
         
-        if (tm.enoughTimePassed(5))
-          Log.info("comms=" + nc + " ents=" + fcNnp.allNNP.numIncrements() + " nerTypes=" + fcNnp.ner2triageFeats.size());
+        if (tm.enoughTimePassed(10)) {
+          Log.info("comms=" + nc
+              + " ents=" + fcNnp.allNNP.numIncrements()
+              + " nerTypes=" + fcNnp.ner2triageFeats.size()
+              + "\t" + Describe.memoryUsage());
+        }
         if (tmLong.enoughTimePassed(saveEveryNSeconds)) {
           FileUtil.serialize(fcNnp, saveToNnp);
           FileUtil.serialize(fcDoc, saveToDoc);
