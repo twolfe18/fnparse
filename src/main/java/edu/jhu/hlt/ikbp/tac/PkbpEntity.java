@@ -24,7 +24,6 @@ import edu.jhu.hlt.ikbp.tac.PkbpSearching.EntLink;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Counts;
-import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.util.TokenizationIter;
@@ -132,6 +131,14 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       TokenObservationCounts tokObsLc = null;
       triageFeatures = Feat.promote(1, IndexCommunications.getEntityMentionFeatures(
           mentionText, headwords, nerType, tokObs, tokObsLc));
+    }
+
+    public static Mention build(int head, Tokenization toks, Communication comm) {
+      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
+      Span span = IndexCommunications.nounPhraseExpand(head, deps);
+      TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
+      String nerType = ner.getTaggedTokenList().get(head).getTag();
+      return new Mention(head, span, nerType, toks, deps, comm);
     }
     
     public void scoreTriageFeatures(TriageSearch ts) {

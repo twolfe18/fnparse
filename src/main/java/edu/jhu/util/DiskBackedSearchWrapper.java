@@ -19,6 +19,7 @@ import edu.jhu.hlt.concrete.search.SearchResult;
 import edu.jhu.hlt.concrete.search.SearchService;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.hash.GuavaHashUtil;
 
@@ -100,7 +101,7 @@ public class DiskBackedSearchWrapper implements SearchService.Iface, AutoCloseab
       try (InputStream is = compression ? new GZIPInputStream(new FileInputStream(f)) : new FileInputStream(f)) {
         if (debug)
           Log.info("returning from cache: " + f.getPath());
-        byte[] bytes = DiskBackedFetchWrapper.readBytes(is);
+        byte[] bytes = FileUtil.readBytes(is);
         DiskBackedFetchWrapper.DESER.deserialize(r, bytes);
         return r;
       } catch (Exception e) {

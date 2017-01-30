@@ -3,11 +3,9 @@ package edu.jhu.util;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +25,7 @@ import edu.jhu.hlt.concrete.services.NotImplementedException;
 import edu.jhu.hlt.concrete.services.ServiceInfo;
 import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.MultiTimer.TB;
@@ -110,21 +109,6 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface, 
     return r.getCommunications();
   }
   
-  public static byte[] readBytes(InputStream is) throws IOException {
-    int read = 0;
-    int bs = 4096;
-    byte[] buf = new byte[4 * bs];
-    while (true) {
-      if (read + bs >= buf.length)
-        buf = Arrays.copyOf(buf, (int) (1.6 * buf.length + 1));
-      int r = is.read(buf, read, bs);
-      if (r <= 0)
-        break;
-      read += r;
-    }
-    return Arrays.copyOfRange(buf, 0, read);
-  }
-  
   public static MultiTimer timer() {
     return AccumuloIndex.TIMER;
   }
@@ -146,7 +130,7 @@ public class DiskBackedFetchWrapper implements FetchCommunicationService.Iface, 
           try (TB tb = timer().new TB("fetch/diskbacked/deser")) {
             try (InputStream is = compression ? new GZIPInputStream(new FileInputStream(f)) : new FileInputStream(f)) {
               Communication c = new Communication();
-              byte[] bytes = readBytes(is);
+              byte[] bytes = FileUtil.readBytes(is);
               DESER.deserialize(c, bytes);
               Object old = values.put(id, c);
               assert old == null;
