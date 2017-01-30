@@ -40,7 +40,8 @@
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>concrete-ingesters-conll</artifactId>
-      <version>4.11.3-SNAPSHOT</version>
+      <!--<version>4.11.3-SNAPSHOT</version>-->
+      <version>4.12.1-SNAPSHOT</version>
     </dependency>
 
     <dependency>
@@ -127,13 +128,6 @@
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>concrete-safe</artifactId>
-      <version>${concrete-util-version}</version>
-    </dependency>
-
-    <!-- For ingesting propbank data -->
-    <dependency>
-      <groupId>edu.jhu.hlt</groupId>
-      <artifactId>concrete-ingesters-conll</artifactId>
       <version>${concrete-util-version}</version>
     </dependency>
 

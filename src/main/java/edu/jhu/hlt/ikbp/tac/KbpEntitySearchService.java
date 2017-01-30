@@ -248,6 +248,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
    * Accepts queries of the form (EntityMention, Communication) where an
    * EntityMention can be a TokenRefSequence or a string which is searched for
    * in the Communication.
+   * 
+   * TODO Make this method a SearchQuery re-writer to convert and use searchGivenRawFeatures
    */
   public SearchResult searchGivenMentionAndComm(SearchQuery q) throws ServicesException, TException {
     /* SETUP FOR QUERY *******************************************************/

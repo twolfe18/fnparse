@@ -49,6 +49,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
+import edu.jhu.hlt.ikbp.tac.FindCommonPredicate.PFeat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
 import edu.jhu.hlt.ikbp.tac.PkbpEntity.Mention;
@@ -63,7 +64,6 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.LL;
-import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.MultiTimer.TB;
@@ -562,6 +562,13 @@ public class PkbpSearching implements Serializable {
       triageFeatDebug(ts);
 
       
+      // Produces an explanation for the predicate words/features of the MEMs on a spoke
+      File fcpF = config.getFile("findCommonPredicate", new File("/tmp/FindCommonPredicate.jser"));
+      Log.info("loading FindCommonPredicate from " + fcpF.getPath());
+      FindCommonPredicate fcp = (FindCommonPredicate) FileUtil.deserialize(fcpF);
+      
+      
+      Log.info("loading queries...");
       List<KbpQuery> queries = new ArrayList<>();
 //      queries.add(DarmstadtExample.getQuery());
       queries.addAll(TacKbp.getKbp2013SfQueries());
@@ -585,7 +592,7 @@ public class PkbpSearching implements Serializable {
           }
         }
 
-        runOneSearch(q, config, kbpEntSearch, commRet, sitFeatFreq, df, ts);
+        runOneSearch(q, config, kbpEntSearch, commRet, sitFeatFreq, df, ts, fcp);
       }
     }
 
@@ -595,7 +602,8 @@ public class PkbpSearching implements Serializable {
         DiskBackedFetchWrapper commRet,
         StringCountMinSketch sitFeatFreq,
         ComputeIdf df,
-        TriageSearch ts) throws Exception {
+        TriageSearch ts,
+        FindCommonPredicate fcp) throws Exception {
 
       boolean debug = true;
       
@@ -650,6 +658,68 @@ public class PkbpSearching implements Serializable {
         Log.info("[main] mentions after initial query:");
         showMentionsN(seedEntMentions);
       }
+      
+
+      // DEBUG: The scores the initial search mentions get is determined by KbpEntitySearchService,
+      // which does not use the current EntLink scoring
+      // 1) I know that the returned results are too agressive, not all link to seed entity, need to at least adjust threshold
+      // 2) There are a variety of improvements which I've made in scoreEntLink which are not reflected in KbpEntitySearch
+      // => I would say update KbpEntitySearch but... 
+      
+      
+      /*
+       * Lets say that we are given a query entity q and we want to fill a slot s
+       * We are doing optimization to find a good (q,s,f) extraction
+       * There are a few things which go into this:
+       * 1) we are really finding an entity mention m which in context can be construed as linking to q
+       * 2) whatever f is, it must meet some basic requirements of the filler type
+       */
+      
+      /*
+       * "Interestingness":
+       * interestingness(pred) ~= 1/(index of first sentence containing pred in a wikipedia page)
+       * this is how you collect training data, and then you can train models to predict this interestingness
+       * these predictive models can condition on additional information, like the NER type of the wiki page subject
+       * perhaps pred should be characterized as something like nsubj(X,bought)
+       *
+       * y = (k+1)/(k+firstPredSentIdx)
+       * x = [nsubj(X,bought), nsubj(X,bought)&ner(X,PERSON), ...] i.e. all observables in the future which don't require a wikipedia page
+       * 
+       * I might be slightly off on how to define this, e.g. maybe you want:
+       * y ~ p(this predicate feature fires on some sentence in the first paragraph of wiki article)
+       *   / p(this predicate feature fires in some vanilla large corpus)
+       *
+       * index = what predicate we're talking about, i.e. corpus/docId/sentenceId/tokenIdx
+       * y_i = this is in the first paragraph of a wiki page
+       * x_i = some feature of the instance like "the predicate is the word 'loves'"
+       */
+      
+      /*
+       * Interestingness and the "relevance weight" between edges in the PKB
+       * I want the "relevance weight" to be monotonically increasing and unbounded
+       * See a new mention pred(a,b): r(a,b) += 1/(num observed mentions between a and b) * interestingnessOrRarity(pred(a,bZ))
+       */
+      
+      /*
+       * Detecting multi-word predicates
+       * e.g. "made a decision" is more of a predicate that "made"
+       * This seems to be an instance of the basic problem of segmentation, i.e. what goes with what.
+       * PMI analysis: p(ROOT -> made a decision) >> p(ROOT -> made) * p(VBD -> a decision)
+       */
+      
+      /*
+       * R(a,b) is a vector of log probs of facts/relations that hold between entities a and b
+       * M(a,b) are predicate/situation mentions where lexical arguments were linked to a and b
+       * 
+       * R(a,b) ~= Beta_1 M(a,b) + Beta_0
+       * where Beta are parameters which are learned independently of a,b
+       * 
+       * Possibly:
+       * R(a,b) ~= Logit(Normal(mu, sigma))
+       * where mu = Beta_1 M(a,b) + Beta_0
+       * and   sigma = sparse with off-diag elements learned across the corpus, so you can learn things like implication
+       */
+      
 
       // Link the EMs to create Es
       if (debug)
@@ -714,7 +784,6 @@ public class PkbpSearching implements Serializable {
           Log.info("nothing to search for");
           break;
         }
-//        searchFor.getRelevanceReasons().add(new Feat("searched", -10));
         searchedForEntityIds.add(searchFor.id);
         List<PkbpEntity> entPair = Arrays.asList(seedEnt, searchFor);
         Log.info("[main] at i=" + i + " of nMemIter=" + nMemIter + " searching for:\t" + Describe.memoryUsage());
@@ -736,6 +805,21 @@ public class PkbpSearching implements Serializable {
         System.out.println("sum(MEM filtering causes): " + reasonsForMemFilter);
         System.out.println();
         
+        
+        // Compute an explanation of the MEM predicates
+        FindCommonPredicate.Explanation relationExplanation = fcp.findBestExplanation(res);
+        for (Feat predWord : relationExplanation.getBestExplanations(5)) {
+          System.out.println("possible explanation: " + predWord);
+          List<PFeat> bc = relationExplanation.getReasonsFor(predWord.name);
+          for (PFeat bci : bc)
+            System.out.println("\tbecause: " + bci);
+          System.out.println();
+        }
+        
+        
+        
+        
+        
 
         // Add MEM links to PKB
         // Update our notion of relevant entities in light of these links
@@ -743,8 +827,10 @@ public class PkbpSearching implements Serializable {
         // Show results
         showRelevantEntities(search.relevantEntities(), df);
         showMEMsForRelevantEntities(search.relevantEntities(), mems, seedEnt.getMention(0), df);
-      }
+
+      } // END loop over SEED+X queries
       
+
 //      // Link MEMs SitMentions and create new Situations
 //      Log.info("[main] linking MultiEntityMention situation mentions...");
 //      List<PA> entPairSitMentions = MultiEntityMention.getPAs(mems, seedEnt);
@@ -1369,20 +1455,81 @@ public class PkbpSearching implements Serializable {
       }
     }
     
+    /**
+     * Represents a matching between some entities searched for and
+     * a textual situation which contains a predicate.
+     */
     public static class MultiEntityMention {
       // Input
       PkbpEntity[] query;
       // Output (after search)
-//      PkbpEntity.Mention[] alignedMentions;   // co-indexed with query
       EntLink[] alignedMentions;   // co-indexed with query
       PkbpSituation.Mention pred;   // pred which unifies all alignedMentions
       
+      /**
+       * Use this if you don't want to do entity linking, just need a MEM with
+       * fake entities. Input is what {@link DependencySyntaxEvents} produces.
+       */
+      public static List<MultiEntityMention> makeDummyMems(List<Integer> entities,
+          DependencySyntaxEvents.CoverArgumentsWithPredicates dse,
+          Tokenization toks,
+          Communication comm,
+          int maxSentenceLength) {
+        
+        int n = toks.getTokenList().getTokenListSize();
+        if (maxSentenceLength > 0 && n > maxSentenceLength) {
+          Log.info("WARNING: really long sentence, skipping, n=" + n);
+          return Collections.emptyList();
+        }
+
+        DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
+        List<MultiEntityMention> mems = new ArrayList<>();
+        
+        for (Entry<Integer, BitSet> x : dse.situation2args.entrySet()) {
+          int pred = x.getKey();
+          int[] args = DependencySyntaxEvents.bs2a(x.getValue());
+          
+          PkbpSituation.Mention sit = new PkbpSituation.Mention(pred, args, deps, toks, comm);
+          
+          List<PkbpEntity.Mention> mentions = new ArrayList<>(args.length);
+          List<PkbpEntity> ents = new ArrayList<>(args.length);
+          
+          for (int i = 0; i < args.length; i++) {
+            PkbpEntity.Mention m = PkbpEntity.Mention.build(args[i], toks, comm);
+            mentions.add(m);
+            ents.add(new PkbpEntity("arg" + i, m, new ArrayList<>()));
+          }
+          
+          MultiEntityMention mem = new MultiEntityMention(ents, sit);
+          for (int i = 0; i < args.length; i++) {
+            List<Feat> score = new ArrayList<>();
+            score.add(new Feat("dummyLink", 1));
+            mem.alignedMentions[i] = new EntLink(mentions.get(i), ents.get(i), score, true);
+          }
+          mems.add(mem);
+        }
+        
+        return mems;
+      }
+      
+      public static List<MultiEntityMention> makeDummyMems(Communication comm, ComputeIdf df, int maxSentenceLength) {
+        List<MultiEntityMention> res = new ArrayList<>();
+        for (Tokenization tok : new TokenizationIter(comm)) {
+          DependencyParse deps = IndexCommunications.getPreferredDependencyParse(tok);
+          List<Integer> args = DependencySyntaxEvents.extractEntityHeads(tok);
+          DependencySyntaxEvents.CoverArgumentsWithPredicates dse =
+              new DependencySyntaxEvents.CoverArgumentsWithPredicates(comm, tok, deps, args, df);
+          List<MultiEntityMention> mems = MultiEntityMention.makeDummyMems(args, dse, tok, comm, maxSentenceLength);
+          res.addAll(mems);
+        }
+        return res;
+      }
+
       public MultiEntityMention(List<PkbpEntity> query, PkbpSituation.Mention pred) {
         int n = query.size();
         this.query = new PkbpEntity[n];
         for (int i = 0; i < n; i++)
           this.query[i] = query.get(i);
-//        this.alignedMentions = new PkbpEntity.Mention[n];
         this.alignedMentions = new EntLink[n];
         this.pred = pred;
       }

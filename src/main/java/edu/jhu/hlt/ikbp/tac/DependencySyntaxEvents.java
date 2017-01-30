@@ -342,7 +342,13 @@ public class DependencySyntaxEvents {
           String ps = pos.getTaggedTokenList().get(i).getTag();
           double interesting = 1;
           interesting *= 1d + df.idf(t.getTokenList().getTokenList().get(i).getText());
-          interesting /= 1d + g.getNode(i).computeDepthAssumingTree();
+          try {
+            interesting /= 1d + g.getNode(i).computeDepthAssumingTree();
+          } catch (Exception e) {
+            // May not be a tree
+            e.printStackTrace();
+            interesting /= 10;
+          }
           if (ps.startsWith("V"))
             interesting *= 2;
           assert interesting > 0;
