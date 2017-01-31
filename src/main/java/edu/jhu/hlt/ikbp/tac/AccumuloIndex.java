@@ -1197,26 +1197,20 @@ public class AccumuloIndex {
         assert c.first >= c.second;
 
         // Update the running score for all tokenizations
-        boolean first = true;
+        int toksIncremented = 0;
+        int toksCreated = 0;
         for (String t : fs.toks2) {
-          boolean canAdd = p > minScoreForNewTok || tokUuid2score.getCount(t) > 0;
+          boolean exists = tokUuid2score.getCount(t) > 0;
+          boolean canAdd = p > minScoreForNewTok || exists;
           if (!canAdd) {
             tokFeatTooSmall++;
             continue;
           }
           tokUuid2score.update(t, p);
-
-          int nt = tokUuid2score.numNonZero();
-          if (first && nt % 20000 == 0) {
-            System.out.println("numToks=" + nt
-                + " during featIdx=" + (fi+1)
-                + " of=" + triageFeats.size()
-                + " featStr=" + f
-                + " p=" + p
-                + " minScoreForNewTok=" + minScoreForNewTok
-                + " tokFeatTooSmall=" + tokFeatTooSmall);
-          }
-          first = false;
+          if (exists)
+            toksIncremented++;
+          else
+            toksCreated++;
 
           List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
           if (wfs == null) {
@@ -1226,6 +1220,16 @@ public class AccumuloIndex {
           wfs.add(new WeightedFeature(f, p));
         }
 
+        System.out.println("numToks=" + numToks
+            + " numDocs=" + numDocs
+            + " during featIdx=" + (fi+1)
+            + " of=" + triageFeats.size()
+            + " featStr=" + f
+            + " p=" + p
+            + " toksIncremented=" + toksIncremented
+            + " toksCreated=" + toksCreated
+            + " minScoreForNewTok=" + minScoreForNewTok
+            + " tokFeatTooSmall=" + tokFeatTooSmall);
 
         // Find the score of the maxToksPreDocRetrieval^th Tokenization so far
         // Measure the ratio between this number and an upper bound on the amount of mass to be given out
