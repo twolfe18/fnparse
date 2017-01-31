@@ -389,7 +389,8 @@ public class PkbpSearching implements Serializable {
           Double minTriageScore = config.getDouble("minTriageScore", -1);
           if (minTriageScore <= 0)
             minTriageScore = null;
-          ks = new KbpSearching(ts, df, minTriageScore, commRet, new HashMap<>());
+          boolean retrieveComms = true;
+          ks = new KbpSearching(ts, df, minTriageScore, retrieveComms, commRet, new HashMap<>());
         }
         if (sfCms == null) {
           // e.g. /export/projects/twolfe/sit-search/situation-feature-counts/count-min-sketch-v2/cag-cms.jser
@@ -576,8 +577,8 @@ public class PkbpSearching implements Serializable {
       queries.addAll(TacKbp.getKbp2013SfQueries());
 //      queries.addAll(TacKbp.getKbp2014SfQueries());
 //      int seed = 9001 + 2;
-//      int seed = (int) System.currentTimeMillis();
-      int seed = -239956474;
+//      int seed = -239956474;
+      int seed = (int) System.currentTimeMillis();
       Log.info("seed=" + seed);
       Collections.shuffle(queries, new Random(seed));
       
@@ -656,15 +657,12 @@ public class PkbpSearching implements Serializable {
 
       // Search for mentions of this seed, create EMs out of them
       int maxResults = 80;
-//      int maxResults = 320;
       double minInitialLinkScore = 10;
       PkbpNode seedEntNode = search.findIntersection(FeatureNames.SEED, FeatureNames.ENTITY).get(0);
       PkbpEntity seedEnt = (PkbpEntity) seedEntNode.obj;
-//      List<PkbpNode> seedEntMentions = search.searchForMentionsOf(seedEnt, maxResults, commRet::fetch, df, ts, null);
       List<EntLink> seedEntMentions = search.searchForMentionsOf(seedEnt, maxResults, minInitialLinkScore, commRet::fetch, df, ts, null);
       if (debug) {
         Log.info("[main] mentions after initial query:");
-//        showMentionsN(seedEntMentions);
         showLinks(seedEntMentions);
       }
       

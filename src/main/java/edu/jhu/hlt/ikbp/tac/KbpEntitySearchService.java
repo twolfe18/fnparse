@@ -428,11 +428,14 @@ public class KbpEntitySearchService implements SearchService.Iface {
     Double minTriageScore = config.getDouble("minTriageScore", -1);
     if (minTriageScore <= 0)
       minTriageScore = null;
+    
+    boolean retrieveComms = config.getBoolean("retrieveComms", false);
+    Log.info("retrieveComms=" + retrieveComms);
 
     // Make non-null if you want caching, which you probably don't for a long living process.
     // Need to come up with an eviction policy to make that work.
     Map<String, Communication> commRetCache = null;
-    try (KbpSearching s = new KbpSearching(ts, df, minTriageScore, commRet, commRetCache)) {
+    try (KbpSearching s = new KbpSearching(ts, df, minTriageScore, retrieveComms, commRet, commRetCache)) {
       KbpEntitySearchService ss = new KbpEntitySearchService(s);
       ss.verbose = config.getBoolean("verbose", false);
       try (SearchServiceWrapper sss = new SearchServiceWrapper(ss, port)) {

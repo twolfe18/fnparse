@@ -1616,13 +1616,16 @@ public class AccumuloIndex {
     private TriageSearch triageSearch;
     private ComputeIdf df;
     private Double minTriageScore;
+    private boolean retrieveComms;
 
     public KbpSearching(
         TriageSearch triageSearch,
         ComputeIdf df,
         Double minTriageScore,
+        boolean retrieveComms,
         DiskBackedFetchWrapper commRetFetch,
         Map<String, Communication> commRetCache) throws Exception {
+      this.retrieveComms = retrieveComms;
       this.commRetFetch = commRetFetch;
       this.commRetCache = commRetCache;
       this.triageSearch = triageSearch;
@@ -1674,24 +1677,23 @@ public class AccumuloIndex {
       List<SitSearchResult> res = triageSearch.searchMulti(qs, df);
 
       // 4-5) Retrieve communications and prune
-      // TODO Batch retrieval
-      {
-      TIMER.start("getCommsForSitSearchResults");
-      List<SitSearchResult> resKeep = new ArrayList<>();
-      int failed = 0;
-      for (SitSearchResult r : res) {
-        Communication c = getCommCaching(r.getCommunicationId());
-        if (c == null) {
-          Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
-          failed++;
-        } else {
-          r.setCommunication(c);
-          resKeep.add(r);
+      if (retrieveComms) {
+        try (TB tb = TIMER.new TB("getCommsForSitSearchResults")) {
+          List<SitSearchResult> resKeep = new ArrayList<>();
+          int failed = 0;
+          for (SitSearchResult r : res) {
+            Communication c = getCommCaching(r.getCommunicationId());
+            if (c == null) {
+              Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
+              failed++;
+            } else {
+              r.setCommunication(c);
+              resKeep.add(r);
+            }
+          }
+          Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
+          res = resKeep;
         }
-      }
-      Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
-      res = resKeep;
-      TIMER.stop("getCommsForSitSearchResults");
       }
       
       // 6) Find entities and situations
@@ -1721,39 +1723,36 @@ public class AccumuloIndex {
       List<SitSearchResult> res = triageSearch.search(triageFeats, context, df, minTriageScore);
 
       // 4-5) Retrieve communications and prune
-      // TODO Batch retrieval
-      {
-      TIMER.start("getCommsForSitSearchResults");
-      List<SitSearchResult> resKeep = new ArrayList<>();
-      int failed = 0;
-      for (SitSearchResult r : res) {
-        Communication c = getCommCaching(r.getCommunicationId());
-        if (c == null) {
-          Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
-          failed++;
-        } else {
-          r.setCommunication(c);
-          resKeep.add(r);
+      if (retrieveComms) {
+        try (TB tb = TIMER.new TB("getCommsForSitSearchResults")) {
+          List<SitSearchResult> resKeep = new ArrayList<>();
+          int failed = 0;
+          for (SitSearchResult r : res) {
+            Communication c = getCommCaching(r.getCommunicationId());
+            if (c == null) {
+              Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
+              failed++;
+            } else {
+              r.setCommunication(c);
+              resKeep.add(r);
+            }
+          }
+          Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
+          res = resKeep;
         }
       }
-      Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
-      res = resKeep;
-      TIMER.stop("getCommsForSitSearchResults");
-      }
 
-      // 6) Find entities and situations
-      // (technically situations are not needed, only entities for attribute features)
-      {
-      List<SitSearchResult> withEntAndSit = new ArrayList<>();
-      for (SitSearchResult r : res)
-        if (findEntitiesAndSituations(r, df, false))
-          withEntAndSit.add(r);
-      Log.info("[filter] lost " + (res.size()-withEntAndSit.size()) + " SitSearchMention b/c ent/sit finding");
-      res = withEntAndSit;
-      }
-      
-      // 7) Rescore according to attribute features
-      attrFeatureReranking(attrFeats, res);
+//      // 6) Find entities and situations
+//      // (technically situations are not needed, only entities for attribute features)
+//      List<SitSearchResult> withEntAndSit = new ArrayList<>();
+//      for (SitSearchResult r : res)
+//        if (findEntitiesAndSituations(r, df, false))
+//          withEntAndSit.add(r);
+//      Log.info("[filter] lost " + (res.size()-withEntAndSit.size()) + " SitSearchMention b/c ent/sit finding");
+//      res = withEntAndSit;
+//      
+//      // 7) Rescore according to attribute features
+//      attrFeatureReranking(attrFeats, res);
       
       return res;
     }
@@ -1768,7 +1767,7 @@ public class AccumuloIndex {
       assert query.head >= 0;
       TIMER.start("kbpQuery/setup");
 
-      // 1a) Retrieve the context Communication
+      // Retrieve the context Communication
       if (query.getCommunication() == null) {
         Communication c = getCommCaching(query.getCommunicationId());
         if (c == null) {
@@ -1778,82 +1777,10 @@ public class AccumuloIndex {
         }
         query.setCommunication(c);
       }
-
-//      // 1b) Create an EntityMention for the query mention (for parma features I think?)
-//      boolean addEmToCommIfMissing = true;
-//      findEntityMention.resolve(q, addEmToCommIfMissing);
-
-      // 1c) Build the context vector
-//      if (query.context == null)
-//        query.context = new StringTermVec(query.getCommunication());
-      query.getContextDoc();
-//      if (query.importantTerms == null)
-//        query.importantTerms = df.importantTerms(queryContext, 20);
       
-      // 2) Extract entity mention features
-      if (query.span == null) {
-        DependencyParse deps = IndexCommunications.getPreferredDependencyParse(query.getTokenization());
-        query.span = IndexCommunications.nounPhraseExpand(query.head, deps);
-      }
-      // TODO Remove headwords, switch to purely a key-word based retrieval model.
-      // NOTE that headwords must match the headwords extracted during the indexing phrase.
-      String entityName = query.getSpanString();
-      String[] headwords = entityName.split("\\s+");    // TODO Filter to NNP words?
-      String entityType = query.nerType;
-      TokenObservationCounts tokObs = null;
-      TokenObservationCounts tokObsLc = null;
-      List<String> triageFeats = IndexCommunications.getEntityMentionFeatures(entityName, headwords, entityType, tokObs, tokObsLc);
-      TIMER.stop("kbpQuery/setup");
-      
-      // 3) Search
-      List<SitSearchResult> res = triageSearch.search(triageFeats, query.getContextDoc(), df, minTriageScore);
-      // Set all results to be the same NER type as input
-      for (SitSearchResult r : res)
-        r.yhatQueryEntityNerType = query.nerType;
-
-      // 4-5) Retrieve communications and prune
-      // TODO Batch retrieval
-      {
-      TIMER.start("getCommsForSitSearchResults");
-      List<SitSearchResult> resKeep = new ArrayList<>();
-      int failed = 0;
-      for (SitSearchResult r : res) {
-        Communication c = getCommCaching(r.getCommunicationId());
-        if (c == null) {
-          Log.info("warning: pruning result! Could not find Communication with id " + r.getCommunicationId());
-          failed++;
-        } else {
-          r.setCommunication(c);
-          resKeep.add(r);
-        }
-      }
-      Log.info("[filter] resultsGiven=" + res.size() + " resultsFailed=" + failed + " resultsKept=" + resKeep.size());
-      res = resKeep;
-      TIMER.stop("getCommsForSitSearchResults");
-      }
-
-      // 6) Find entities and situations
-      // (technically situations are not needed, only entities for attribute features)
-      {
-      List<SitSearchResult> withEntAndSit = new ArrayList<>();
-      for (SitSearchResult r : res)
-        if (findEntitiesAndSituations(r, df, false))
-          withEntAndSit.add(r);
-      Log.info("[filter] lost " + (res.size()-withEntAndSit.size()) + " SitSearchMention b/c ent/sit finding");
-      res = withEntAndSit;
-      }
-      
-      // 7) Rescore according to attribute features
-      // We need to have the Communications (specifically deps, POS, NER) to do this
-      // attributeFeatures look like "PERSON-nn-Dr." and are generated by {@link NNPSense}
-//      if (query.attrTokFeatures == null)
-//        query.attrTokFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(query.tokUuid, query.getCommunication(), headwords));
-//      if (query.attrCommFeatures == null)
-//        query.attrCommFeatures = Feat.promote(1, NNPSense.extractAttributeFeatures(null, query.getCommunication(), headwords));
-      String sourceTok = query.getTokenization().getUuid().getUuidString();
-      attrFeatureReranking(entityName, sourceTok, query.getCommunication(), res);
-      
-      return res;
+      boolean dedup = true;
+      List<String> tf = Feat.demote(query.getTriageFeatures(), dedup);
+      return entityMentionSearch(tf, query.getAttrFeatures(), query.getContextDoc());
     }
 
     @Override
