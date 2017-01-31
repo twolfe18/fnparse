@@ -380,7 +380,8 @@ public class PkbpSearching implements Serializable {
           Log.info("loading triage feature frequencies (FeatureCardinalityEstimator.New) from=" + fceFile.getPath());
           FeatureCardinalityEstimator.New triageFeatureFrequencies =
               (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceFile);
-          TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch);
+          boolean idfWeighting = config.getBoolean("idfWeighting", true);
+          TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch, idfWeighting);
           File fetchCacheDir = config.getOrMakeDir("fetch.cacheDir");
           String fetchHost = config.getString("fetch.host");
           int fetchPort = config.getInt("fetch.port");
@@ -558,7 +559,8 @@ public class PkbpSearching implements Serializable {
       Log.info("loading triage feature frequencies (FeatureCardinalityEstimator.New) from=" + fceFile.getPath());
       FeatureCardinalityEstimator.New triageFeatureFreq =
           (FeatureCardinalityEstimator.New) FileUtil.deserialize(fceFile);
-      TriageSearch ts = new TriageSearch(triageFeatureFreq);
+      boolean idfWeighting = config.getBoolean("idfWeighting", true);
+      TriageSearch ts = new TriageSearch(triageFeatureFreq, idfWeighting);
       triageFeatDebug(ts);
 
       

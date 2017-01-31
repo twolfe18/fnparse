@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -609,6 +610,9 @@ public class AccumuloIndex {
     
     // If true, use a batch scanner to do the words query given a communication
     boolean batchC2W;
+    
+    // If true, use tf-idf retrieval, otherwise use 1/freq weighting
+    boolean idfWeighting;
 
     // Stop searching through inverted indices of features belonging to any
     // EMQuery once this many documents have been searched through.
@@ -629,12 +633,14 @@ public class AccumuloIndex {
     public TriageSearch(
         FeatureCardinalityEstimator.New triageFeatureFrequencies,
         int maxResults,
-        int maxDocsForMultiEntSearch) throws Exception {
+        int maxDocsForMultiEntSearch,
+        boolean idfWeighting) throws Exception {
       this(SimpleAccumuloConfig.DEFAULT_INSTANCE,
           SimpleAccumuloConfig.DEFAULT_ZOOKEEPERS,
           "reader",
           new PasswordToken("an accumulo reader"),
           triageFeatureFrequencies,
+          idfWeighting,
           4,
           maxResults,
           maxDocsForMultiEntSearch,
@@ -643,18 +649,21 @@ public class AccumuloIndex {
     }
 
     /** Use this for cases where you don't need to talk to accumulo, only compute feature frequencies/scores */
-    public TriageSearch(FeatureCardinalityEstimator.New triageFeatureFrequencies) {
+    public TriageSearch(FeatureCardinalityEstimator.New triageFeatureFrequencies, boolean idfWeighting) {
       this.triageFeatureFrequencies = triageFeatureFrequencies;
+      this.idfWeighting = idfWeighting;
     }
     
     public TriageSearch(String instanceName, String zks, String username, AuthenticationToken password,
         FeatureCardinalityEstimator.New triageFeatureFrequencies,
+        boolean idfWeighting,
         int nThreads,
         int maxResults,
         int maxDocsForMultiEntSearch,
         double triageFeatNBPrior,
         boolean batchC2W) throws Exception {
       Log.info("maxResults=" + maxResults
+          + " idfWeighting=" + idfWeighting
           + " maxDocsForMultiEntSearch=" + maxDocsForMultiEntSearch
           + " triageFeatureFrequencies=" + triageFeatureFrequencies
           + " batchC2W=" + batchC2W
@@ -663,6 +672,7 @@ public class AccumuloIndex {
           + " username=" + username
           + " nThreads=" + nThreads
           + " zks=" + zks);
+      this.idfWeighting = idfWeighting;
       this.maxResults = maxResults;
       this.maxDocsForMultiEntSearch = maxDocsForMultiEntSearch;
       this.triageFeatNBPrior = triageFeatNBPrior;
@@ -716,6 +726,21 @@ public class AccumuloIndex {
     public double getFeatureScore(IntPair tcFreq) {
       return getFeatureScore(tcFreq.first, tcFreq.second);
     }
+    
+    private long _numDocEst = -1;
+    public long getNumDocumentsEstimate() {
+      if (_numDocEst < 0) {
+        for (String s : Arrays.asList(
+            "pi:of", "pi:the", "pi:and", "h:John", "pi:john", "h:Smith", "pi:smith",
+            "hi:monday", "pi:day", "hi:france", "hi:london", "pi:mr", "pi:dr")) {
+          IntPair f = triageFeatureFrequencies.getFrequency(s);
+          long m = (long) ((1d / 0.8) * Math.max(f.first, f.second) + 0.5d);
+          _numDocEst = Math.max(_numDocEst, m);
+          Log.info("after " + s + " m=" + m + " _numDocEst=" + _numDocEst);
+        }
+      }
+      return _numDocEst;
+    }
 
     public double getFeatureScore(int numToks, int numDocs) {
 
@@ -731,13 +756,20 @@ public class AccumuloIndex {
       }
 
       double freq = (2d * numToks * numDocs) / (numToks + numDocs);
-      double p = (triageFeatNBPrior + 1) / (triageFeatNBPrior + freq);
+      double p;
+      if (idfWeighting) {
+        double D = Math.max(freq, getNumDocumentsEstimate());   // TODO
+        p = Math.log(D) - Math.log(freq);
+      } else {
+        p = (triageFeatNBPrior + 1) / (triageFeatNBPrior + freq);
+      }
       if (SHOW_TRIAGE_FEAT_SCORES) {
         System.out.println("triage:"
             + " numToks=" + numToks
             + " numDocs=" + numDocs
             + " freq=" + freq
             + " triageFeatNBPrior=" + triageFeatNBPrior
+            + " idfWeighting=" + idfWeighting
             + " p=" + p);
       }
       return p;
@@ -767,117 +799,6 @@ public class AccumuloIndex {
       public String toString() {
         return String.format("(EMQuery id=%s w=%.2f)", id, weight);
       }
-    }
-
-    // Only called by commented-out section of searchMulti
-    public Counts.Pseudo<String> findIntersectionPlus(List<String> triageFeats) throws Exception {
-      TIMER.start("f2t/triage");
-      Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
-
-      // Features which have a score below this value cannot introduce new
-      // tokenizations to the result set, only add to the score of tokenizations
-      // retrieved using more selective features.
-      double minScoreForNewTok = 1e-6;
-      int tokFeatTooSmall = 0;
-
-      // TODO Consider computing a bound based on the K-th best result so far:
-      // given the gap between that score and the K+1-th, may not need to continue
-      // of remaining features have little mass to contribute.
-      Map<String, List<WeightedFeature>> tokUuid2MatchedFeatures = new HashMap<>();
-      for (int fi = 0; fi < triageFeats.size(); fi++) {
-        String f = triageFeats.get(fi);
-
-        // Collect all of the tokenizations which this feature co-occurs with
-        List<String> toks = new ArrayList<>();
-        Set<String> commUuidPrefixes = new HashSet<>();
-        try (Scanner f2tScanner = conn.createScanner(T_f2t.toString(), auths)) {
-          f2tScanner.setRange(Range.exact(f));
-          for (Entry<Key, Value> e : f2tScanner) {
-            String tokUuid = e.getKey().getColumnQualifier().toString();
-            toks.add(tokUuid);
-            commUuidPrefixes.add(getCommUuidPrefixFromTokUuid(tokUuid));
-          }
-        }
-
-        // Compute a score based on how selective this feature is
-        int numToks = toks.size();
-        int numDocs = commUuidPrefixes.size();
-        double p = getFeatureScore(numToks, numDocs);
-
-        // Check that the estimate is valid
-        IntPair c = getFeatureFrequency(f);
-        if (numToks > c.first)
-          Log.info("WARNING: f=" + f + " numToks=" + numToks + " approxFreq=" + c + " [probably means approx counts are still being built]");
-        if (numDocs > c.second)
-          Log.info("WARNING: f=" + f + " numDocs=" + numDocs + " approxFreq=" + c + " [probably means approx counts are still being built]");
-        assert c.first >= c.second;
-
-        // Update the running score for all tokenizations
-        boolean first = true;
-        for (String t : toks) {
-          boolean canAdd = p > minScoreForNewTok || tokUuid2score.getCount(t) > 0;
-          if (!canAdd) {
-            tokFeatTooSmall++;
-            continue;
-          }
-          tokUuid2score.update(t, p);
-
-          int nt = tokUuid2score.numNonZero();
-          if (first && nt % 20000 == 0) {
-            System.out.println("numToks=" + nt
-                + " during featIdx=" + (fi+1)
-                + " of=" + triageFeats.size()
-                + " featStr=" + f
-                + " p=" + p
-                + " minScoreForNewTok=" + minScoreForNewTok
-                + " tokFeatTooSmall=" + tokFeatTooSmall);
-          }
-          first = false;
-
-          List<WeightedFeature> wfs = tokUuid2MatchedFeatures.get(f);
-          if (wfs == null) {
-            wfs = new ArrayList<>();
-            tokUuid2MatchedFeatures.put(t, wfs);
-          }
-          wfs.add(new WeightedFeature(f, p));
-        }
-
-
-        // Find the score of the maxToksPreDocRetrieval^th Tokenization so far
-        // Measure the ratio between this number and an upper bound on the amount of mass to be given out
-        // You can get an upper bound by taking this feat's score (p) and assuming that all the remaining features get the same score
-        int remainingFeats = triageFeats.size() - (fi+1);
-        if (tokUuid2score.numNonZero() > 50 && remainingFeats > 0) {
-          double upperBoundOnRemainingMass = p * remainingFeats;
-          double lastTokScore = rank(tokUuid2score, maxResults);
-          double goodTokScore = rank(tokUuid2score, 50);
-          double safetyFactor = 5;
-          if ((lastTokScore+goodTokScore)/2 > safetyFactor * upperBoundOnRemainingMass) {
-            Log.info("probably don't need any other feats,"
-                + " fi=" + fi
-                + " remainingFeats=" + remainingFeats
-                + " boundOnRemainingMass=" + upperBoundOnRemainingMass
-                + " lastTokScore=" + lastTokScore
-                + " goodTokScore=" + goodTokScore
-                + " maxToksPreDocRetrieval=" + maxResults);
-            break;
-          }
-        }
-        // NOTE: If you do a good job of sorting features you can break out of this loop
-        // after a certain amount of score has already been dolled out.
-      }
-      TIMER.stop("f2t/triage");
-      return tokUuid2score;
-    }
-    
-    public static <T> Counts.Pseudo<T> normalizeToMaxTimesWeight(Counts.Pseudo<T> m, double weight) {
-      double mx = 1e-8;
-      for (Entry<T, Double> x : m.entrySet())
-        mx = Math.max(mx, x.getValue());
-      Counts.Pseudo<T> out = new Counts.Pseudo<>();
-      for (Entry<T, Double> x : m.entrySet())
-        out.update(x.getKey(), (weight * x.getValue()) / mx);
-      return out;
     }
     
     class FeatSearch {
@@ -1115,85 +1036,6 @@ public class AccumuloIndex {
 //      Map<java.util.UUID, Double> t2s = intersectiveQuery(qs.get(0), qs.get(1), new HashMap<>());
 //      Counts.Pseudo<String> tokUuid2score = convert(t2s);
       Counts.Pseudo<String> tokUuid2score = intersectiveQuery(qs.get(0), qs.get(1), new HashMap<>());
-      
-      /*
-      // score(tok, qs) = prod_{q in qs} 1+score(tok,q)
-      // where the score(tok,q) is the already implemented bit
-      Map<String, Double> tokUuid2ScoreMap = new HashMap<>();
-      Map<String, LL<Feat>> tok2sources = new HashMap<>();
-      int K = 0;
-      for (EMQuery q : qs) {
-        if (debug)
-          Log.info("processing toks from " + q);
-        try {
-          
-          // This map contains keys which are tok UUIDs and the values are total
-          // scores for this sentence mentioning this query entity.
-          Counts.Pseudo<String> t2s = findIntersectionPlus(q.triageFeats);
-          
-          // We are going to normalize this mapping so that the maximum value is the entity weight;
-          t2s = normalizeToMaxTimesWeight(t2s, q.weight);
-          
-          K = Math.max(K, t2s.numNonZero());
-          Set<String> uniq = new HashSet<>();
-          for (Entry<String, Double> tok : t2s.entrySet()) {
-            assert tok.getValue() > 0;
-            double prev = tokUuid2ScoreMap.getOrDefault(tok, 1d);
-            double cur = prev * (1 + tok.getValue());
-            if (debug) {
-              Log.info("overlap: tok=" + tok.getKey()
-                  + " prev=" + prev
-                  + " cur=1+" + tok.getValue()
-                  + " q=" + q
-                  + " q.tf=" + q.triageFeats);
-            }
-            tokUuid2ScoreMap.put(tok.getKey(), cur);
-            
-            String k = tok.getKey();
-            Feat f = new Feat(q.id, tok.getValue());
-            tok2sources.put(k, new LL<>(f, tok2sources.get(k)));
-            assert uniq.add(k);
-          }
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
-      }
-      K += 10;
-
-      if (debug) {
-        Log.info("K=" + K);
-        List<String> keys = new ArrayList<>(tok2sources.keySet());
-        Collections.sort(keys, new Comparator<String>() {
-          @Override
-          public int compare(String o1, String o2) {
-            List<Feat> a = LL.toList(tok2sources.get(o1));
-            List<Feat> b = LL.toList(tok2sources.get(o2));
-            if (a.size() > b.size())
-              return -1;
-            if (a.size() < b.size())
-              return +1;
-            return 0;
-          }
-        });
-        for (String k : keys) {
-          List<Feat> sources = LL.toList(tok2sources.get(k));
-          if (sources.size() > 1) {
-            Log.info("sources: " + k + "\t" + sources + "\t" + tokUuid2ScoreMap.get(k));
-          }
-        }
-      }
-      
-      // Trim to only take at most K
-      // where K = 10 + max_{q : qs} sizeof(triageSearch(q))
-      // This will mimic the performance characteristics (mainly memory) of the existing single-mention implementation
-      List<Feat> toks = Feat.deindex(tokUuid2ScoreMap.entrySet());
-      Counts.Pseudo<String> tokUuid2score = new Counts.Pseudo<>();
-      for (Feat f : Feat.sortAndPrune(toks, K)) {
-        tokUuid2score.update(f.name, f.weight);
-        if (debug)
-          Log.info("topTok: " + f.name + " " + f.weight);
-      }
-      */
 
       // Now we have scores for every tokenization
       // Need to add in the document tf-idf score
@@ -2081,6 +1923,7 @@ public class AccumuloIndex {
       "reader",
       new PasswordToken("an accumulo reader"),
       fce,
+      config.getBoolean("idfWeighting"),
       config.getInt("nThreadsSearch", 4),
       maxToksPreDocRetrieval,
       maxDocsForMultiEntSearch,
@@ -2606,7 +2449,7 @@ public class AccumuloIndex {
 //      IndexCommunications.develop(config);
 //    } else {
 //      Log.info("unknown command: " + c);
-    //    }
+//    }
 
     /*
     File cacheDir = config.getOrMakeDir("cacheDir", new File("data/sit-search/fetch-comms-cache"));
@@ -2639,7 +2482,10 @@ public class AccumuloIndex {
     File f = config.getExistingFile("triageFeatureFrequencies", new File("/export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin/fce-mostFreq1000000-nhash12-logb20.jser"));
     Log.info("loading from " + f.getPath());
     FeatureCardinalityEstimator.New fce = (FeatureCardinalityEstimator.New) FileUtil.deserialize(f);
-    TriageSearch ts = new TriageSearch(fce, maxResults, maxDocsMulti);
+    TriageSearch ts = new TriageSearch(
+        fce,
+        maxResults, maxDocsMulti,
+        config.getBoolean("idfWeighting", true));
     ts.benchmarkAll(fs);
     
     Log.info("done");

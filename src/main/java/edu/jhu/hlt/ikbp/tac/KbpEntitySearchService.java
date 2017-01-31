@@ -412,7 +412,8 @@ public class KbpEntitySearchService implements SearchService.Iface {
     ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
     int maxResults = config.getInt("maxResults", 100);
     int maxDocsForMultiEntSearch = config.getInt("maxDocsForMultiEntSearch", 100_000);
-    TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch);
+    boolean idfWeighting = config.getBoolean("idfWeighting", true);
+    TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch, idfWeighting);
     
     PkbpSearching.triageFeatDebug(ts);
 
