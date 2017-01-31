@@ -111,6 +111,10 @@ public class ComputeIdf implements Serializable {
     assert a <= Integer.MAX_VALUE;
     return (int) a;
   }
+  
+  public long numDocs() {
+    return numDocs;
+  }
 
   public double idf(String t) {
     assert numDocs > 0;

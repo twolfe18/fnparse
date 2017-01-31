@@ -12,6 +12,7 @@ import java.util.Set;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
+import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenTagging;
@@ -80,18 +81,28 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
           mentionText, headwords, nerType, tokObs, tokObsLc);
       AccumuloIndex.findEntitiesAndSituations(canonical, df, false);
 
-      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
-      canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(canonical.yhatQueryEntityHead, deps);
+//      DependencyParse deps = IndexCommunications.getPreferredDependencyParse(canonical.getTokenization());
+//      canonical.yhatQueryEntitySpan = IndexCommunications.nounPhraseExpand(canonical.yhatQueryEntityHead, deps);
+      // Take the span from the query
+      // Sometimes noun phrase expand doesn't do exactly what you want, e.g. "Public <head>Library</head> of Science" => "Public Library"
+//      EntityMention em = TacQueryEntityMentionResolver.find(seed, 3d);
+//      boolean addEmToCommIfMissing = true;
+//      TacQueryEntityMentionResolver t = new TacQueryEntityMentionResolver("tacEmFinder");
+//      t.resolve(seed, addEmToCommIfMissing);
+      EntityMention em = seed.entityMention;
+      if (em == null)
+        throw new RuntimeException("could not find " + seed + " in " + canonical.getCommunicationId());
+      if (!em.getTokens().getTokenizationId().getUuidString().equals(canonical.tokUuid))
+        throw new RuntimeException();
+      canonical.yhatQueryEntitySpan = IndexCommunications.MturkCorefHit.convert(em.getTokens());
 
       PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
+      assert canonical2.span == canonical.yhatQueryEntitySpan;
       assert canonical2.getCommunication() != null;
       canonical2.getContextDoc();
-//      canonical2.getAttrCommFeatures();
-//      canonical2.getAttrTokFeatures();
       canonical2.getAttrFeatures();
       assert canonical2.triageFeatures != null;
       canonical2.nerType = seed.entity_type;
-      
       canonical2.scoreTriageFeatures(ts);
       
       return canonical2;
