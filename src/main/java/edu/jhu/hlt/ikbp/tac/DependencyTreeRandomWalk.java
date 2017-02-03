@@ -476,12 +476,19 @@ public class DependencyTreeRandomWalk {
   }
 
   /** aggregates possible trigger words across many sentences (one per MEM) */
-  public static FindCommonPredicate.Explanation findBestExplanation(List<MultiEntityMention> mems, WalkFeatCounts wfc) {
+  public static FindCommonPredicate.Explanation findBestExplanation(List<MultiEntityMention> mems, WalkFeatCounts wfc, boolean useLinkScore) {
     FindCommonPredicate.Explanation ex = new FindCommonPredicate.Explanation();
     int triggersPerSent = 5;
-    for (MultiEntityMention mem : mems)
-      for (PFeat pf : explain(mem, wfc, triggersPerSent))
+    for (MultiEntityMention mem : mems) {
+      double ls = mem.getLinkingScore();
+      for (PFeat pf : explain(mem, wfc, triggersPerSent)) {
+        if (useLinkScore) {
+          for (Feat f : pf.weight)
+            f.rescale("MEMlinkScore", ls);
+        }
         ex.add(pf);
+      }
+    }
     return ex;
   }
   

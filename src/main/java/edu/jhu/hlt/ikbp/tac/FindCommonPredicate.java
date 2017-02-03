@@ -92,16 +92,6 @@ public class FindCommonPredicate implements Serializable {
   private String[] featTypes;
   private int maxEdges;
   
-  // TODO Take this as an arg
-  public static final ComputeIdf df;
-  static {
-    try {
-      df = new ComputeIdf(new File("data/idf/cms/df-cms-simpleaccumulo-twolfe-cag1-nhash12-logb20.jser"));
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-  }
-  
   public FindCommonPredicate() {
     this(4, 10, 20);
   }
@@ -204,7 +194,7 @@ public class FindCommonPredicate implements Serializable {
     }
   }
   
-  public Explanation findBestExplanation(List<MultiEntityMention> mems) {
+  public Explanation findBestExplanation(List<MultiEntityMention> mems, ComputeIdf df) {
     boolean debug = true;
     Explanation e = new Explanation();
     for (MultiEntityMention mem : mems) {
@@ -546,7 +536,7 @@ public class FindCommonPredicate implements Serializable {
       if (!mem.allMentionsUniq())
         continue;
 //      String pred = fp.findBestExplanation(Arrays.asList(mem));
-      List<Feat> pred = fp.findBestExplanation(Arrays.asList(mem)).getBestExplanations(3);
+      List<Feat> pred = fp.findBestExplanation(Arrays.asList(mem), df).getBestExplanations(3);
 
       System.out.println(pred);
       PkbpSearching.New.showMultiEntityMention(mem);

@@ -586,9 +586,9 @@ public class PkbpSearching implements Serializable {
 //      int seed = 9001 + 2;
 //      int seed = -239956474;
 //      int seed = -223362562;
-      int seed = (int) System.currentTimeMillis();
-      Log.info("seed=" + seed);
-      Collections.shuffle(queries, new Random(seed));
+//      int seed = (int) System.currentTimeMillis();
+//      Log.info("seed=" + seed);
+//      Collections.shuffle(queries, new Random(seed));
       
       System.out.println();
       for (KbpQuery q : queries)
@@ -622,6 +622,12 @@ public class PkbpSearching implements Serializable {
         DependencyTreeRandomWalk.WalkFeatCounts wfc) throws Exception {
 
       boolean debug = true;
+      
+      boolean addInitialQueryMentionsToEntity = config.getBoolean("addInitialQueryMentionsToEntity", false);
+      Log.info("addInitialQueryMentionsToEntity=" + addInitialQueryMentionsToEntity);
+
+      boolean useMemLinkScoreInExplanations = config.getBoolean("useMemLinkScoreInExplanations", true);
+      Log.info("useMemLinkScoreInExplanations=" + useMemLinkScoreInExplanations);
       
       File evalOutputDir = config.getFile("evalOutputDir", null);
       if (evalOutputDir != null) {
@@ -700,9 +706,11 @@ public class PkbpSearching implements Serializable {
       PkbpEntity seedEnt = (PkbpEntity) seedEntNode.obj;
       Log.info("num seed mentions: " + seedEnt.numMentions());
       List<EntLink> seedEntMentions = search.searchForMentionsOf(seedEnt, maxResults, minInitialLinkScore, commRet::fetch, df, ts, null);
-      // Execute the links
-      for (EntLink el : seedEntMentions)
-        el.target.addMention(el);
+      if (addInitialQueryMentionsToEntity) {
+        // Execute the links
+        for (EntLink el : seedEntMentions)
+          el.target.addMention(el);
+      }
       if (debug) {
         Log.info("[main] mentions after initial query:");
         showLinks(seedEntMentions);
@@ -844,8 +852,13 @@ public class PkbpSearching implements Serializable {
         
         
         // Compute an explanation of the MEM predicates
+        /*
+         * TODO I have found cases where a good explanation is not attested to by a good MEM,
+         * that is one which certainly mentions the query and related entities.
+         * I think I mistakenly gave up on MEM.linkScore re-weighting.
+         */
 //        FindCommonPredicate.Explanation relationExplanation = fcp.findBestExplanation(res);
-        FindCommonPredicate.Explanation relationExplanation = DependencyTreeRandomWalk.findBestExplanation(res, wfc);
+        FindCommonPredicate.Explanation relationExplanation = DependencyTreeRandomWalk.findBestExplanation(res, wfc, useMemLinkScoreInExplanations);
         for (Feat predWord : relationExplanation.getBestExplanations(5)) {
           System.out.println("possible explanation: " + predWord);
           List<PFeat> bc = relationExplanation.getReasonsFor(predWord.name);
@@ -869,6 +882,17 @@ public class PkbpSearching implements Serializable {
         // Show results
         showRelevantEntities(search.relevantEntities(), df);
         showMEMsForRelevantEntities(search.relevantEntities(), mems, seedEnt.getMention(0), df);
+
+
+        System.out.println();
+        System.out.println("TIMER:");
+        System.out.println(timer());
+        System.out.println();
+
+//        System.out.println();
+//        System.out.println("COUNTS:");
+//        System.out.println(ec);
+//        System.out.println();
 
       } // END loop over SEED+X queries
       
@@ -1978,7 +2002,7 @@ public class PkbpSearching implements Serializable {
           Log.info("found " + mems.size() + " MEMs in " + nres + " results and " + comms.size() + " comms so far");
         }
         
-        int maxToks = 200;
+        int maxToks = 100;
         if (toks.getTokenList().getTokenListSize() > maxToks) {
           // There are some really long sentences breaking stuff
           // I mean ones with >4000 words.
@@ -3781,6 +3805,9 @@ public class PkbpSearching implements Serializable {
       throw new IllegalArgumentException("prior=" + prior);
 
     boolean verboseLinking = false;
+    
+    // Forces e and r to match on NER type, should greatly reduce the amount of work done
+    boolean stopTryingAfterNerMismatch = true;
 
     List<Feat> fs = new ArrayList<>();
     //fs.add(new Feat("intercept", -1));
@@ -3800,6 +3827,8 @@ public class PkbpSearching implements Serializable {
     
     if (!e.containsMentionWithNer(r.getHeadNer())) {
       fs.add(new Feat("nerMismatch/" + r.getHeadNer(), -2.5));
+      if (stopTryingAfterNerMismatch)
+        return new EntLink(r, e, fs, false);
     }
 
     // Cosine similarity at document level
