@@ -50,6 +50,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
+import edu.jhu.hlt.ikbp.tac.DependencyTreeRandomWalk.WalkFeatCounts;
 import edu.jhu.hlt.ikbp.tac.FindCommonPredicate.PFeat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
@@ -572,6 +573,11 @@ public class PkbpSearching implements Serializable {
       FindCommonPredicate fcp = (FindCommonPredicate) FileUtil.deserialize(fcpF);
       
       
+      File wfcF = new File("data/sit-search/random-dependency-walks/wfc-15k.jser");
+      Log.info("loading DependencyTreeRandomWalk.WalkFeatCounts from " + wfcF.getPath());
+      DependencyTreeRandomWalk.WalkFeatCounts wfc = (DependencyTreeRandomWalk.WalkFeatCounts) FileUtil.deserialize(wfcF);
+
+      
       Log.info("loading queries...");
       List<KbpQuery> queries = new ArrayList<>();
 //      queries.add(DarmstadtExample.getQuery());
@@ -601,7 +607,7 @@ public class PkbpSearching implements Serializable {
           }
         }
 
-        runOneSearch(q, config, kbpEntSearch, commRet, sitFeatFreq, df, ts, fcp);
+        runOneSearch(q, config, kbpEntSearch, commRet, sitFeatFreq, df, ts, fcp, wfc);
       }
     }
 
@@ -612,7 +618,8 @@ public class PkbpSearching implements Serializable {
         StringCountMinSketch sitFeatFreq,
         ComputeIdf df,
         TriageSearch ts,
-        FindCommonPredicate fcp) throws Exception {
+        FindCommonPredicate fcp,
+        DependencyTreeRandomWalk.WalkFeatCounts wfc) throws Exception {
 
       boolean debug = true;
       
@@ -684,7 +691,6 @@ public class PkbpSearching implements Serializable {
         } catch (Exception e) {
           e.printStackTrace();
         }
-//        return;
       }
 
       // Search for mentions of this seed, create EMs out of them
@@ -838,7 +844,8 @@ public class PkbpSearching implements Serializable {
         
         
         // Compute an explanation of the MEM predicates
-        FindCommonPredicate.Explanation relationExplanation = fcp.findBestExplanation(res);
+//        FindCommonPredicate.Explanation relationExplanation = fcp.findBestExplanation(res);
+        FindCommonPredicate.Explanation relationExplanation = DependencyTreeRandomWalk.findBestExplanation(res, wfc);
         for (Feat predWord : relationExplanation.getBestExplanations(5)) {
           System.out.println("possible explanation: " + predWord);
           List<PFeat> bc = relationExplanation.getReasonsFor(predWord.name);
@@ -963,7 +970,7 @@ public class PkbpSearching implements Serializable {
                 for (int j = m.span.start; j < m.span.end; j++)
                   exclude.set(j);
               }
-              int fakeTrigger = drawRandomNodeUnder(pred, mem.pred.getDeps(), exclude, rand);
+              int fakeTrigger = drawRandomNodeUnder(pred, mem.pred.getTokenization(), mem.pred.getDeps(), exclude, rand);
               assert fakeTrigger >= 0;
 
               // Write out mention with 2 entities and 2 triggers highlighted
@@ -1037,7 +1044,8 @@ public class PkbpSearching implements Serializable {
         return -1;
       }
 
-      private static int drawRandomNodeUnder(int root, DependencyParse deps, BitSet exclude, Random rand) {
+      private static int drawRandomNodeUnder(int root, Tokenization t, DependencyParse deps, BitSet exclude, Random rand) {
+        TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
         ChooseOne<Integer> c = new ChooseOne<>(rand);
         while (root >= 0) {
           // Go over all nodes under root which aren't in the excluded set
@@ -1045,8 +1053,12 @@ public class PkbpSearching implements Serializable {
           while (bfs.hasNext()) {
             int n = bfs.next();
             assert n >= 0;
-            if (!exclude.get(n))
-              c.offer(n, 1d);
+            if (!exclude.get(n)) {
+              String pp = pos.getTaggedTokenList().get(n).getTag();
+              if (pp.startsWith("NN") || pp.startsWith("VB") || pp.startsWith("JJ") || pp.startsWith("RB")) {
+                c.offer(n, 1d);
+              }
+            }
           }
           if (c.numOffers() > 0)
             return c.choose();
