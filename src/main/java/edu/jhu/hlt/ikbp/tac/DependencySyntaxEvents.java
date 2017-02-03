@@ -59,7 +59,7 @@ import edu.mit.jwi.item.IWordID;
  */
 public class DependencySyntaxEvents {
 
-  static Integer head(int i, DependencyParse deps) {
+  static Dependency head(int i, DependencyParse deps) {
     List<Dependency> h = new ArrayList<>(1);
     for (Dependency d : deps.getDependencyList()) {
       if (d.getDep() == i)
@@ -70,20 +70,30 @@ public class DependencySyntaxEvents {
     //assert h.size() == 1;
     if (h.size() > 1)
       Log.info("warning: not a tree: " + deps.getMetadata());
-    if (h.get(0).isSetGov())
-      return h.get(0).getGov();
-    return -1;
+    return h.get(0);
   }
 
   static boolean rootNNP(int i, TokenTagging pos, DependencyParse deps) {
     String p = pos.getTaggedTokenList().get(i).getTag();
     if (p.toUpperCase().startsWith("NNP")) {
-      Integer h = head(i, deps);
+      Dependency h = head(i, deps);
       if (h == null)    // punctuation?
         return false;
-      if (h < 0)        // root
+      if (!h.isSetGov() || h.getGov() < 0)  // root
         return true;
-      String hp = pos.getTaggedTokenList().get(h).getTag();
+      
+      // check for NNP->prep->of-pobj->NNP United States of <head>America</head>
+      int parent = -1;
+      if ("pobj".equals(h.getEdgeType())) {
+        Dependency hh = head(h.getGov(), deps);
+        if ("prep".equals(hh.getEdgeType())) {
+          parent = hh.getGov();
+        }
+      }
+      if (parent < 0)
+        parent = h.getGov();
+      
+      String hp = pos.getTaggedTokenList().get(parent).getTag();
       return !hp.toUpperCase().startsWith("NNP");
     }
     return false;
@@ -920,6 +930,19 @@ public class DependencySyntaxEvents {
     for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i+1))
       a[j++] = i;
     return a;
+  }
+  public static List<Integer> nnp(Tokenization t) {
+    TokenTagging pos = IndexCommunications.getPreferredPosTags(t);
+    int n = pos.getTaggedTokenListSize();
+    assert n == t.getTokenList().getTokenListSize();
+    List<Integer> nnps = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      TaggedToken p = pos.getTaggedTokenList().get(i);
+      assert i == p.getTokenIndex();
+      if (p.getTag().startsWith("NNP"))
+        nnps.add(i);
+    }
+    return nnps;
   }
   
   public static List<Integer> extractEntityHeads(Tokenization t) {

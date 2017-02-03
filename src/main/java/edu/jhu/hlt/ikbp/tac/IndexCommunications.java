@@ -775,6 +775,11 @@ public class IndexCommunications implements AutoCloseable {
 
   /**
    * Takes all nn dependencies out of a head to get a span
+   * 
+   * TODO Handle the cases like "United States of America",
+   * both for head=States and head=America (arguably a mistake, but happens)
+   * 
+   * TODO Anything to do about "John and Mary Smith"?
    */
   public static Span nounPhraseExpand(int head, DependencyParse deps) {
     assert head >= 0;

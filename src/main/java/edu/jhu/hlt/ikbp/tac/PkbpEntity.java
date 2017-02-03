@@ -25,8 +25,10 @@ import edu.jhu.hlt.ikbp.tac.PkbpSearching.EntLink;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
+import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.TokenizationIter;
 
 /**
@@ -107,9 +109,79 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       
       return canonical2;
     }
+
+    public static Mention convertWithoutHeadSpecified(SearchResultItem r, Communication c, ComputeIdf df, TriageSearch ts, PkbpEntity searchedFor) {
+      
+//      List<Feat> fs = Feat.sortAndPrune(searchedFor.getTriageFeatures(), 20);
+      List<Feat> fs = searchedFor.getTriageFeatures();
+      List<Integer> args;
+      Tokenization toks = IndexCommunications.findTok(r.getSentenceId().getUuidString(), c);
+
+      // Loop over the arg heads, use score function to find best
+      args = DependencySyntaxEvents.extractEntityHeads(toks);
+      ArgMax<Mention> a = new ArgMax<>();
+      for (int ent : args) {
+        PkbpEntity.Mention entm = PkbpEntity.Mention.build(ent, toks, c);
+        
+        // Check for some triage feature overlap
+        Pair<Double, List<Feat>> x = Feat.cosineSim(fs, entm.getTriageFeatures());
+        assert (x.get1() == 0) == x.get2().isEmpty();
+        if (x.get2().isEmpty())
+          continue;
+        
+        EntLink el = PkbpSearching.scoreEntLink(searchedFor, entm, df, ts);
+        a.offer(entm, Feat.sum(el.score));
+      }
+      
+      // Backoff to NNP* tokens
+      if (a.numOffers() == 0) {
+        args = DependencySyntaxEvents.nnp(toks);
+        Log.info("all NNP* backoff, n=" + args.size());
+        for (int ent : args) {
+          PkbpEntity.Mention entm = PkbpEntity.Mention.build(ent, toks, c);
+
+          // Check for some triage feature overlap
+          Pair<Double, List<Feat>> x = Feat.cosineSim(fs, entm.getTriageFeatures());
+          assert (x.get1() == 0) == x.get2().isEmpty();
+          if (x.get2().isEmpty())
+            continue;
+
+          EntLink el = PkbpSearching.scoreEntLink(searchedFor, entm, df, ts);
+          a.offer(entm, Feat.sum(el.score));
+        }
+      }
+
+      // Backoff to all tokens
+      if (a.numOffers() == 0) {
+        args = new ArrayList<>();
+        int n = toks.getTokenList().getTokenListSize();
+        for (int i = 0; i < n; i++)
+          args.add(i);
+        Log.info("all tokens backoff, n=" + n);
+        for (int ent : args) {
+          PkbpEntity.Mention entm = PkbpEntity.Mention.build(ent, toks, c);
+
+          // Check for some triage feature overlap
+          Pair<Double, List<Feat>> x = Feat.cosineSim(fs, entm.getTriageFeatures());
+          assert (x.get1() == 0) == x.get2().isEmpty();
+          if (x.get2().isEmpty())
+            continue;
+
+          EntLink el = PkbpSearching.scoreEntLink(searchedFor, entm, df, ts);
+          a.offer(entm, Feat.sum(el.score));
+        }
+      }
+
+      assert a.numOffers() > 0;
+      return a.get();
+    }
     
     public static Mention convert(SearchResultItem r, Communication c, TriageSearch ts) {
       if (c == null)
+        throw new IllegalArgumentException();
+      if (r == null)
+        throw new IllegalArgumentException();
+      if (!r.isSetTokens())
         throw new IllegalArgumentException();
       String tokUuid = r.getSentenceId().getUuidString();
       Tokenization toks = IndexCommunications.findTok(tokUuid, c);
@@ -150,6 +222,22 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
       String nerType = ner.getTaggedTokenList().get(head).getTag();
       return new Mention(head, span, nerType, toks, deps, comm);
+    }
+  
+    public String getContextAroundSpanHtml(String spanClass) {
+      StringBuilder sb = new StringBuilder();
+      List<Token> toks = getTokenization().getTokenList().getTokenList();
+      for (int i = 0; i < toks.size(); i++) {
+        Token t = toks.get(i);
+        if (i > 0)
+          sb.append(' ');
+        if (t.getTokenIndex() == span.start)
+          sb.append("<span class=\"" + spanClass + "\">");
+        sb.append(t.getText());
+        if (t.getTokenIndex() == span.end-1)
+          sb.append("</span>");
+      }
+      return sb.toString();
     }
     
     public void scoreTriageFeatures(TriageSearch ts) {

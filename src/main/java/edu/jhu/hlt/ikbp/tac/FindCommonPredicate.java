@@ -65,9 +65,10 @@ public class FindCommonPredicate implements Serializable {
     String predWordTokUuid; // the location of predWord
     List<Feat> weight;
 
+    public int[] origPredArgs;  // [pred, seed, related, etc...]
+
     /** @deprecated */
     public List<Dependency> path; // path from orig pred to predWordIdx
-    public int[] origPredArgs;  // [pred, seed, related, etc...]
 
     public PFeat(String featType, String featValue, String predWord, int predWordIdx, String predWordTokUuid) {
       this.featType = featType;
@@ -76,15 +77,7 @@ public class FindCommonPredicate implements Serializable {
       this.predWordIdx = predWordIdx;
       this.predWordTokUuid = predWordTokUuid;
       this.weight = new ArrayList<>();
-//      this.weight.add(intercept);
     }
-    
-//    public void setWeight(double w) {
-//      this.weight = w;
-//    }
-//    public double getWeight() {
-//      return this.weight;
-//    }
     
     @Override
     public String toString() {
@@ -323,10 +316,13 @@ public class FindCommonPredicate implements Serializable {
         f.weight.add(Feat.prod(lpw, tdSum).rescale("good", 10));
         f.weight.add(Feat.prod(lpw, tdProd).rescale("good", 10));
         
-        if (pos.getTaggedTokenList().get(f.predWordIdx).getTag().toUpperCase().startsWith("V")) {
-//          f.weight.add(new Feat("preferVerbs", 1d));
+        String predPos = pos.getTaggedTokenList().get(f.predWordIdx).getTag().toUpperCase();
+        if (predPos.startsWith("V")) {
           for (Feat ff : f.weight)
             ff.rescale("preferVerbs", 1.5);
+        } else if (predPos.equals("CD")) {
+          for (Feat ff : f.weight)
+            ff.rescale("preferVerbs", 0.25);
         }
         
         // Rescale by the weight indicating all linking decisions are right
@@ -388,7 +384,6 @@ public class FindCommonPredicate implements Serializable {
     
     Set<Integer> seen = new HashSet<>();
     for (int head : heads) {
-//      List<Pair<Integer, LL<Dependency>>> ppaths = NNPSense.kHop(pred, maxEdges, deps);
       List<Pair<Integer, LL<Dependency>>> ppaths = NNPSense.kHop(head, maxEdges, deps);
       for (Pair<Integer, LL<Dependency>> pp : ppaths) {
         int endpoint = pp.get1();

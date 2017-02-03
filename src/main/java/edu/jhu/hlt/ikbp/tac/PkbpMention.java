@@ -16,6 +16,7 @@ import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.util.TokenizationIter;
+import edu.stanford.nlp.pipeline.CoreNLPProtos.Span;
 
 public class PkbpMention implements Serializable {
   private static final long serialVersionUID = 795646509667723395L;
