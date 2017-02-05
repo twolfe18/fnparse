@@ -26,6 +26,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
@@ -33,6 +34,8 @@ import edu.jhu.util.DiskBackedFetchWrapper;
 import edu.jhu.util.TokenizationIter;
 
 public class DependencyTreeRandomWalk {
+  
+  public static boolean INCLUDE_TOP_DOWN_FACTOR = false;
   
   private LabeledDirectedGraph deps;
   private double[] beliefs;
@@ -65,6 +68,8 @@ public class DependencyTreeRandomWalk {
     next[source] += pSource;
     for (int i = 0; i < next.length; i++) {
       LabeledDirectedGraph.Node node = deps.getNode(i);
+      if (node == null)
+        continue;
       int[] out = node.getNeighbors();
       double p = beliefs[i] * (1-pSource) / out.length;
       for (int j = 0; j < out.length; j++) {
@@ -182,26 +187,28 @@ public class DependencyTreeRandomWalk {
   public static ReservoirSample<WalkFeat> sample(Random rand, Tokenization t, double pStay, double anneal, int nSamples, boolean verbose) {
     if (verbose)
       System.out.println("#######################################################################");
-    DependencyParse deps = IndexCommunications.getPreferredDependencyParse(t);
-    int n = t.getTokenList().getTokenListSize();
-    List<Integer> args = DependencySyntaxEvents.extractEntityHeads(t);
-    List<DependencyTreeRandomWalk> walks = new ArrayList<>();
-    for (int arg : args) {
-      DependencyTreeRandomWalk walk = new DependencyTreeRandomWalk(arg, n, deps);
-      for (int i = 0; i < 3*n; i++)
-        walk.iterate(pStay);
-      walks.add(walk);
-    }
-
-    // Compute the product
     ReservoirSample<WalkFeat> res = new ReservoirSample<>(nSamples, rand);
-    for (int i = 0; i < args.size()-1; i++) {
-      for (int j = i+1; j < args.size(); j++) {
-        DependencyTreeRandomWalk w1 = walks.get(i);
-        DependencyTreeRandomWalk w2 = walks.get(j);
-        List<WalkFeat> wfwf = sample(t, w1, w2, anneal, nSamples, rand, verbose);
-        for (WalkFeat wf : wfwf)
-          res.add(wf);
+    DependencyParse deps = IndexCommunications.getPreferredDependencyParse(t);
+    if (deps != null) {
+      int n = t.getTokenList().getTokenListSize();
+      List<Integer> args = DependencySyntaxEvents.extractEntityHeads(t);
+      List<DependencyTreeRandomWalk> walks = new ArrayList<>();
+      for (int arg : args) {
+        DependencyTreeRandomWalk walk = new DependencyTreeRandomWalk(arg, n, deps);
+        for (int i = 0; i < 3*n; i++)
+          walk.iterate(pStay);
+        walks.add(walk);
+      }
+
+      // Compute the product
+      for (int i = 0; i < args.size()-1; i++) {
+        for (int j = i+1; j < args.size(); j++) {
+          DependencyTreeRandomWalk w1 = walks.get(i);
+          DependencyTreeRandomWalk w2 = walks.get(j);
+          List<WalkFeat> wfwf = sample(t, w1, w2, anneal, nSamples, rand, verbose);
+          for (WalkFeat wf : wfwf)
+            res.add(wf);
+        }
       }
     }
     return res;
@@ -227,6 +234,9 @@ public class DependencyTreeRandomWalk {
     return true;
   }
 
+  /**
+   * NOTE: Does not have root-flow log probability term
+   */
   public static List<WalkFeat> sample(
       Tokenization t,
       DependencyTreeRandomWalk w1,
@@ -367,8 +377,12 @@ public class DependencyTreeRandomWalk {
       wr.iterate(pSource, 3*n);
 
       rootWalkLogProbs = Arrays.copyOf(wr.beliefs, wr.beliefs.length);
-      for (int i = 0; i < rootWalkLogProbs.length; i++)
-        rootWalkLogProbs[i] = Math.log(rootWalkLogProbs[i]);
+      if (INCLUDE_TOP_DOWN_FACTOR) {
+        for (int i = 0; i < rootWalkLogProbs.length; i++)
+          rootWalkLogProbs[i] = Math.log(rootWalkLogProbs[i]);
+      } else {
+        Arrays.fill(rootWalkLogProbs, 0);
+      }
       
       logWordFreq = new double[rootWalkLogProbs.length];
       wordFreq = new int[rootWalkLogProbs.length];
@@ -391,8 +405,8 @@ public class DependencyTreeRandomWalk {
           b[i] += rootWalkLogProbs[i];
         }
 
-        setMaxTo(16, b);
-        anneal(4, b);
+        setMaxTo(8, b);
+        anneal(INCLUDE_TOP_DOWN_FACTOR ? 4 : 3, b);
         convertLogProbsToProbs(b);
       }
     }
@@ -449,11 +463,15 @@ public class DependencyTreeRandomWalk {
     String tokUuid = t.getUuid().getUuidString();
     int arg0 = mem.getMention(0).head;
     int arg1 = mem.getMention(1).head;
+    Span s0 = mem.getMention(0).span;
+    Span s1 = mem.getMention(1).span;
     Analysis a = new Analysis(t, arg0, arg1, wfc);
     List<Integer> best = a.getBestTriggerWordIndices();
     for (int i = 0; i < best.size() && pf.size() < maxTriggerTheories; i++) {
       int idx = best.get(i);
       if (idx == arg0 || idx == arg1)
+        continue;
+      if (s0.covers(idx) || s1.covers(idx))
         continue;
       if (a.wordFreq[idx] < 8) {
         Log.info("too rare: " + a.words[idx] + " count=" + a.wordFreq[idx]);
@@ -480,7 +498,7 @@ public class DependencyTreeRandomWalk {
     FindCommonPredicate.Explanation ex = new FindCommonPredicate.Explanation();
     int triggersPerSent = 5;
     for (MultiEntityMention mem : mems) {
-      double ls = mem.getLinkingScore();
+      double ls = 2d + Math.sqrt(mem.getLinkingScore());
       for (PFeat pf : explain(mem, wfc, triggersPerSent)) {
         if (useLinkScore) {
           for (Feat f : pf.weight)
@@ -492,10 +510,12 @@ public class DependencyTreeRandomWalk {
     return ex;
   }
   
+  public static final File FETCH_CACHE_DIR = new File("../fetch-comms-cache");
+//  public static final File FETCH_CACHE_DIR = new File("data/sit-search/fetch-comms-cache");
+  
   public static ReservoirSample<String> getRandomCommIds(int n, Random rand) {
     ReservoirSample<String> comms = new ReservoirSample<>(n, rand);
-    File f = new File("data/sit-search/fetch-comms-cache");
-    for (String fn : f.list()) {
+    for (String fn : FETCH_CACHE_DIR.list()) {
       String suf = ".comm.gz";
       if (fn.endsWith(suf)) {
         String id = fn.substring(0, fn.length()-suf.length());
@@ -510,7 +530,7 @@ public class DependencyTreeRandomWalk {
     Random rand = config.getRandom();
     String fetchHost = "localhost";
     int fetchPort = 9999;
-    File fetchCacheDir = config.getOrMakeDir("fetchCacheDir", new File("data/sit-search/fetch-comms-cache/"));
+    File fetchCacheDir = config.getOrMakeDir("fetchCacheDir", FETCH_CACHE_DIR);
     try (DiskBackedFetchWrapper commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort)) {
 
       WalkFeatCounts wfc;
@@ -522,7 +542,7 @@ public class DependencyTreeRandomWalk {
       } else {
         // Compute it
         wfc = new WalkFeatCounts();
-        for (String commId : getRandomCommIds(15000, rand)) {
+        for (String commId : getRandomCommIds(50000, rand)) {
           Log.info("working on " + commId);
           Communication c = commRet.fetch(commId);
           wfc.increment(rand, c);

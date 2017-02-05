@@ -142,6 +142,15 @@ class Explanation:
       f.write('\n')
     return ff
 
+class ArgMax:
+  def __init__(self):
+    self.best = None
+    self.best_score = None
+
+  def add(self, item, score):
+    if self.best is None or score > self.best_score:
+      self.best = item
+      self.best_score = score;
 
 class DocStore:
   def __init__(self, root):
@@ -306,12 +315,13 @@ def trigger_write_html(rand, parent_dir, key, mention):
 
 
 if __name__ == '__main__':
-  ds = DocStore('data/sit-search/fetch-comms-cache/')
+  #ds = DocStore('data/sit-search/fetch-comms-cache/')
+  ds = DocStore('../fetch-comms-cache/')
   #c = ds.get_comm('10,000_Black_Men_Named_George')
   #print c.text
-  toks = ds.get_tok_context('Robert_Paxton', '626a11a9-2bc6-a1cf-f757-0000505de41d')
-  print len(toks)
-  print ' '.join([t.text for t in toks[1].tokenList.tokenList])
+  #toks = ds.get_tok_context('Robert_Paxton', '626a11a9-2bc6-a1cf-f757-0000505de41d')
+  #print len(toks)
+  #print ' '.join([t.text for t in toks[1].tokenList.tokenList])
 
   d_queries = 'data/sit-search/query-mentions'
   d_explanations = 'data/sit-search/trigger-id-hit'
@@ -340,6 +350,11 @@ if __name__ == '__main__':
   csv_trigger.writerow(['sfId', 'key', 'flip', 'linkScore', 'relatedScore', 'mentionHtml'])
 
   for q_id in os.listdir(d_explanations):
+
+    # DEBUGGING
+    #if q_id != 'SF13_ENG_053':
+    #  continue
+
     d_mentions = os.path.join(d_explanations, q_id)
     query = os.path.join(d_queries, q_id + '.txt')
     es = []
@@ -350,21 +365,28 @@ if __name__ == '__main__':
       meta = os.path.join(d_mentions, ex.replace('related-', 'meta-'))
       key = q_id + '_' + ex.replace('related-', '').replace('.txt', '')
 
-      es_now = []
+      # Select the explanation with the highest trigger score
+      a = ArgMax()
       for idx, (lr, lm) in enumerate(zip(codecs.open(related, 'r', 'utf-8'), codecs.open(meta, 'r', 'utf-8'))):
         e = Explanation(idx, q_id, key, lm, lr)
-        s = harmonic_mean(e.link_score, e.trigger_score/10.0)
-        #es_now.append( (e,s) )
-        es_now.append( (e,e.link_score) )
-      if es_now:
-        es_now.sort(key=itemgetter(1))
-        es.append(es_now[-1])
+        a.add(e, e.trigger_score)
+      if a.best:
+        #ts = harmonic_mean(a.best.trigger_score, math.sqrt(a.best.link_score))
+        #ts = a.best.trigger_score * a.best.link_score
+        #ts = a.best.trigger_score
+        #ts = a.best.link_score
+        ts = a.best.trigger_score + a.best.link_score
+        es.append( (a.best, ts) )
 
-    es.sort(key=itemgetter(1))
-    k = 10
+    es.sort(key=itemgetter(1), reverse=True)
+    k = 15
     if len(es) > k:
       es = es[:k]
     for e, s in es:
+      print 'working on trigger=' + e.trigger \
+          + ' trigger_score=' + str(e.trigger_score) \
+          + ' link_score=' + str(e.link_score) \
+          + ' score=' + str(s)
       f_id = qs.faker(e.q_id)
       f_comm, f_tok, f_head, f_span = qs.id2commTokHeadSpan[f_id]
       q_comm, q_tok, q_head, q_span = qs.id2commTokHeadSpan[e.q_id]

@@ -50,7 +50,6 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
-import edu.jhu.hlt.ikbp.tac.DependencyTreeRandomWalk.WalkFeatCounts;
 import edu.jhu.hlt.ikbp.tac.FindCommonPredicate.PFeat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
@@ -58,6 +57,7 @@ import edu.jhu.hlt.ikbp.tac.PkbpEntity.Mention;
 import edu.jhu.hlt.ikbp.tac.PkbpSearching.New.PkbpNode;
 import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.ArgMax;
+import edu.jhu.hlt.tutils.ArgMin;
 import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Counts;
@@ -66,6 +66,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.LL;
+import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.MultiTimer.TB;
@@ -531,7 +532,7 @@ public class PkbpSearching implements Serializable {
       // Fetch service for retrieving communications
       String fetchHost = "localhost";
       int fetchPort = 9999;
-      File fetchCacheDir = config.getOrMakeDir("fetchCacheDir", new File("data/sit-search/fetch-comms-cache/"));
+      File fetchCacheDir = config.getOrMakeDir("fetchCacheDir");//, new File("data/sit-search/fetch-comms-cache/"));
       try (DiskBackedFetchWrapper commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort)) {
         // SearchService for basic accumulo-backed search
         String searchHost = "localhost";
@@ -573,7 +574,7 @@ public class PkbpSearching implements Serializable {
       FindCommonPredicate fcp = (FindCommonPredicate) FileUtil.deserialize(fcpF);
       
       
-      File wfcF = new File("data/sit-search/random-dependency-walks/wfc-15k.jser");
+      File wfcF = config.getFile("walkFeatCounts"); //new File("data/sit-search/random-dependency-walks/wfc-15k.jser");
       Log.info("loading DependencyTreeRandomWalk.WalkFeatCounts from " + wfcF.getPath());
       DependencyTreeRandomWalk.WalkFeatCounts wfc = (DependencyTreeRandomWalk.WalkFeatCounts) FileUtil.deserialize(wfcF);
 
@@ -583,12 +584,12 @@ public class PkbpSearching implements Serializable {
 //      queries.add(DarmstadtExample.getQuery());
       queries.addAll(TacKbp.getKbp2013SfQueries());
 //      queries.addAll(TacKbp.getKbp2014SfQueries());
-//      int seed = 9001 + 2;
+      int seed = 9001 + 3;
 //      int seed = -239956474;
 //      int seed = -223362562;
 //      int seed = (int) System.currentTimeMillis();
-//      Log.info("seed=" + seed);
-//      Collections.shuffle(queries, new Random(seed));
+      Log.info("seed=" + seed);
+      Collections.shuffle(queries, new Random(seed));
       
       System.out.println();
       for (KbpQuery q : queries)
@@ -874,7 +875,6 @@ public class PkbpSearching implements Serializable {
           PredHitOutput.outputTriggerIdHit(relationExplanation, res, p, key, nMem, search.rand);
         }
         
-        
 
         // Add MEM links to PKB
         // Update our notion of relevant entities in light of these links
@@ -944,6 +944,20 @@ public class PkbpSearching implements Serializable {
     }
     
     static class PredHitOutput {
+      
+      public static int getRoot(MultiEntityMention mem) {
+        LabeledDirectedGraph deps = mem.pred.getDeps2();
+        int a0 = mem.getMention(0).head;
+        int a1 = mem.getMention(1).head;
+        int[] path = deps.shortestPath(a0, a1, true, true);
+        // Choose the closest to root
+        ArgMin<Integer> a = new ArgMin<>();
+        for (int i : path) {
+          int d = deps.getNode(i).computeDepthAssumingTree();
+          a.offer(i, d);
+        }
+        return a.get();
+      }
 
       /**
        * Outputs all information about a given SEED+X
@@ -979,10 +993,15 @@ public class PkbpSearching implements Serializable {
               r.add(pf);
             for (PFeat pf : r) {
 
-              // Look up the source of this explanation
-              int pred = pf.origPredArgs[0];
-              Pair<String, Integer> key = new Pair<>(pf.predWordTokUuid, pred);
+              // TODO this pred is already chosen smartly, it is not just the token which dominates both arguments
+//              Tokenization t = mem.pred.getTokenization();
+//              DependencyParse deps = IndexCommunications.getPreferredDependencyParse(t);
+//              Path2 path = new Path2(pf.origPredArgs[1], pf.origPredArgs[2], deps, t);
+//              int pred = pf.origPredArgs[0];
+              Pair<String, Integer> key = new Pair<>(pf.predWordTokUuid, pf.origPredArgs[0]);
               MultiEntityMention mem = mems.get(key);
+              int pred = getRoot(mem);
+
               if (!pf.predWord.equalsIgnoreCase(mem.pred.getTokenization().getTokenList().getTokenList().get(pf.predWordIdx).getText()))
                 Log.info("mismatch! pf=" + pf.predWord + " pfi=" + pf.predWordIdx + " tok=" + pf.predWordTokUuid);
 
@@ -995,7 +1014,10 @@ public class PkbpSearching implements Serializable {
                   exclude.set(j);
               }
               int fakeTrigger = drawRandomNodeUnder(pred, mem.pred.getTokenization(), mem.pred.getDeps(), exclude, rand);
-              assert fakeTrigger >= 0;
+              if (fakeTrigger < 0) {
+                Log.info("WARNING: failed to make fake trigger on " + mem.pred.getCommTokHeadWordAndLoc());
+                continue;
+              }
 
               // Write out mention with 2 entities and 2 triggers highlighted
               String sent = buildTriggerHitSentence(pf.predWordIdx, fakeTrigger, mem);
@@ -1090,7 +1112,6 @@ public class PkbpSearching implements Serializable {
           // Backoff to parent of root
           root = getParent(root, deps);
         }
-        assert false;
         return -1;
       }
       
