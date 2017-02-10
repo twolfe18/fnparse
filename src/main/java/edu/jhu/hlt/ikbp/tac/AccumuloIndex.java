@@ -629,6 +629,8 @@ public class AccumuloIndex {
     // pi:centre has freq=   (183_436,    138_225)
     // pi:jacques has freq=  (147_706,    123_829)
     private int ignoreFeatsWithEstTokListLongerThan = 8_000_000;
+    
+    public static final double DEFAULT_TRIAGE_FEAT_NB_PRIOR = 30;
 
     public TriageSearch(
         FeatureCardinalityEstimator.New triageFeatureFrequencies,
@@ -644,7 +646,7 @@ public class AccumuloIndex {
           4,
           maxResults,
           maxDocsForMultiEntSearch,
-          30,
+          DEFAULT_TRIAGE_FEAT_NB_PRIOR,
           true);
     }
 
@@ -1625,6 +1627,8 @@ public class AccumuloIndex {
         boolean retrieveComms,
         DiskBackedFetchWrapper commRetFetch,
         Map<String, Communication> commRetCache) throws Exception {
+      if (retrieveComms && commRetCache == null)
+        throw new IllegalArgumentException();
       this.retrieveComms = retrieveComms;
       this.commRetFetch = commRetFetch;
       this.commRetCache = commRetCache;
@@ -2360,12 +2364,12 @@ public class AccumuloIndex {
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-//    String c = config.getString("command");
-//    if (c.equalsIgnoreCase("buildIndexMR")) {
-//      Log.info("you probably don't want to so this, use regular");
-//      BuildIndexMR.main(config);
-//    } else if (c.equalsIgnoreCase("buildIndexRegular")) {
-//      BuildIndexRegular.main(config);
+    String c = config.getString("command");
+    if (c.equalsIgnoreCase("buildIndexMR")) {
+      Log.info("you probably don't want to so this, use regular");
+      BuildIndexMR.main(config);
+    } else if (c.equalsIgnoreCase("buildIndexRegular")) {
+      BuildIndexRegular.main(config);
 //    } else if (c.equalsIgnoreCase("computeIdf")) {
 //      ComputeIdf.main(config);
 //    } else if (c.equalsIgnoreCase("kbpSearch")) {
@@ -2378,9 +2382,9 @@ public class AccumuloIndex {
 //      kbpSearchingMemo(config);
 //    } else if (c.equalsIgnoreCase("develop")) {
 //      IndexCommunications.develop(config);
-//    } else {
-//      Log.info("unknown command: " + c);
-//    }
+    } else {
+      Log.info("unknown command: " + c);
+    }
 
     /*
     File cacheDir = config.getOrMakeDir("cacheDir", new File("data/sit-search/fetch-comms-cache"));
@@ -2399,25 +2403,25 @@ public class AccumuloIndex {
     }
     */
     
-    List<String> fs = new ArrayList<>();
-    fs.add("pb:BBBB_karzai");
-    fs.add("h:Karzai");
-    fs.add("h:Ghazni");
-    fs.add("pb:ramazan_bashardost");
-    fs.add("pi:mr");
-    fs.add("pi:ghazni");
-    fs.add("pb:ghazni_AAAA");
-
-    int maxResults = 100;
-    int maxDocsMulti = 100_000;
-    File f = config.getExistingFile("triageFeatureFrequencies", new File("/export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin/fce-mostFreq1000000-nhash12-logb20.jser"));
-    Log.info("loading from " + f.getPath());
-    FeatureCardinalityEstimator.New fce = (FeatureCardinalityEstimator.New) FileUtil.deserialize(f);
-    TriageSearch ts = new TriageSearch(
-        fce,
-        maxResults, maxDocsMulti,
-        config.getBoolean("idfWeighting", true));
-    ts.benchmarkAll(fs);
+//    List<String> fs = new ArrayList<>();
+//    fs.add("pb:BBBB_karzai");
+//    fs.add("h:Karzai");
+//    fs.add("h:Ghazni");
+//    fs.add("pb:ramazan_bashardost");
+//    fs.add("pi:mr");
+//    fs.add("pi:ghazni");
+//    fs.add("pb:ghazni_AAAA");
+//
+//    int maxResults = 100;
+//    int maxDocsMulti = 100_000;
+//    File f = config.getExistingFile("triageFeatureFrequencies", new File("/export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin/fce-mostFreq1000000-nhash12-logb20.jser"));
+//    Log.info("loading from " + f.getPath());
+//    FeatureCardinalityEstimator.New fce = (FeatureCardinalityEstimator.New) FileUtil.deserialize(f);
+//    TriageSearch ts = new TriageSearch(
+//        fce,
+//        maxResults, maxDocsMulti,
+//        config.getBoolean("idfWeighting", true));
+//    ts.benchmarkAll(fs);
     
     Log.info("done");
   }

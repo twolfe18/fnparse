@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.thrift.TException;
 
 import edu.jhu.hlt.concrete.AnnotationMetadata;
@@ -413,17 +414,35 @@ public class KbpEntitySearchService implements SearchService.Iface {
     int maxResults = config.getInt("maxResults", 100);
     int maxDocsForMultiEntSearch = config.getInt("maxDocsForMultiEntSearch", 100_000);
     boolean idfWeighting = config.getBoolean("idfWeighting", true);
-    TriageSearch ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch, idfWeighting);
+    
+    TriageSearch ts;
+    String accInstance = config.getString("accumulo.instance", null);
+    if (accInstance != null) {
+      String accZks = config.getString("accumulo.zookeepers");
+      String accUser = config.getString("accumulo.user");
+      PasswordToken accPw = new PasswordToken(config.getString("accumulo.password"));
+      int nThreads = 4;
+      boolean batchC2W = true;
+      ts = new TriageSearch(accInstance, accZks, accUser, accPw, triageFeatureFrequencies, idfWeighting,
+          nThreads, maxResults, maxDocsForMultiEntSearch, TriageSearch.DEFAULT_TRIAGE_FEAT_NB_PRIOR, batchC2W);
+    } else {
+      Log.info("using default accumulo configuration");
+      ts = new TriageSearch(triageFeatureFrequencies, maxResults, maxDocsForMultiEntSearch, idfWeighting);
+    }
     
     PkbpSearching.triageFeatDebug(ts);
 
-    File fetchCacheDir = config.getOrMakeDir("fetch.cacheDir");
-    String fetchHost = config.getString("fetch.host");
-    int fetchPort = config.getInt("fetch.port");
-    DiskBackedFetchWrapper commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort);
-
-    commRet.disableCache = !config.getBoolean("fetch.caching", false);
-    Log.info("fetch.caching=" + (!commRet.disableCache));
+    DiskBackedFetchWrapper commRet = null;
+    String fetchHost = config.getString("fetch.host", null);
+    if (fetchHost == null) {
+      Log.info("not using a fetch service");
+    } else {
+      int fetchPort = config.getInt("fetch.port");
+      File fetchCacheDir = config.getOrMakeDir("fetch.cacheDir");
+      commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort);
+      commRet.disableCache = !config.getBoolean("fetch.caching", false);
+      Log.info("fetch.caching=" + (!commRet.disableCache));
+    }
     
     Double minTriageScore = config.getDouble("minTriageScore", -1);
     if (minTriageScore <= 0)
