@@ -4,6 +4,11 @@ created by this ingester. If you use `tableNamespace foo_corpus`, this ingester 
 that the tables `foo_corpus_f2t`, `foo_corpus_t2c`, and `foo_corpus_c2w` all exist and have
 write permissions for the accumulo user you specify.
 
+NOTE: This code *adds to* an index. You remove/delete by removing tables. Because this is append-only
+you can run this ingester multiple times, and the index will contain the union of all the comms you
+ran on. This code does not deduplicate comms and has undefined behavior when run on two comms with the
+same id.
+
 NOTE: This has only been tested on the concretely-annotated-gigaword and concretely-annotated-wikipedia data
 which has concrete-stanford annotations. I expect that it will work with arbitrary data which has been annotated
 with concrete-stanford, but no promises.
