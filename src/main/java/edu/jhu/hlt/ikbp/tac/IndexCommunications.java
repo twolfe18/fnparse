@@ -4879,6 +4879,14 @@ public class IndexCommunications implements AutoCloseable {
       cn.increment(w);
     return cn;
   }
+  
+  static StringTermVec terms3(Communication c, boolean normalizeNumbers) {
+    List<String> cc = terms(c, normalizeNumbers);
+    StringTermVec cn = new StringTermVec();
+    for (String w : cc)
+      cn.add(w, 1);
+    return cn;
+  }
 
   @Override
   public void close() throws Exception {

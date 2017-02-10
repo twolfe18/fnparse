@@ -9,6 +9,7 @@ Run this to start a server on port 8888:
 java -Xmx2G -ea -server -cp fnparse.jar \
   edu.jhu.hlt.ikbp.tac.KbpEntitySearchService \
     port 8888 \
+    tableNamespace twolfe_cag1_index2 \
     accumulo.instance INSTANCE \
     accumulo.zookeepers ZOOKEEPERS \
     accumulo.user USERNAME \

@@ -4,7 +4,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -49,16 +48,12 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.thrift.TDeserializer;
-import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
-
-import com.google.common.hash.BloomFilter;
-import com.google.common.hash.Funnels;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.DependencyParse;
@@ -68,12 +63,7 @@ import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.access.FetchCommunicationService;
-import edu.jhu.hlt.concrete.access.FetchRequest;
-import edu.jhu.hlt.concrete.access.FetchResult;
 import edu.jhu.hlt.concrete.search.SearchResultItem;
-import edu.jhu.hlt.concrete.services.NotImplementedException;
-import edu.jhu.hlt.concrete.services.ServiceInfo;
-import edu.jhu.hlt.concrete.services.ServicesException;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumulo;
 import edu.jhu.hlt.concrete.simpleaccumulo.SimpleAccumuloConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -129,8 +119,7 @@ import edu.jhu.util.TokenizationIter;
  * TODO Prune c2w down to only the top-128 or so words by idf.
  * This is strictly for compute tf-idf, as we later use Fetch to get the whole communication.
  * 
- * TODO Remove t2f, which I don't think I ever use.
- * Concerning values, e.g. tf(feat,tok), I'm never going to use that.
+ * TODO Concerning values, e.g. tf(feat,tok), I'm never going to use that.
  * I compress all of those down to approximations with count-min sketch anyway.
  * Usually I just need to know whether an f-t edge exists, and weights come for free when looking this up.
  *
@@ -144,16 +133,18 @@ public class AccumuloIndex {
   public final static MultiTimer TIMER = new MultiTimer();
 
   public final static byte[] NA = new byte[0];
-  public final static String TABLE_NAMESPACE = "twolfe_cag1_index2";
+  public static String TABLE_NAMESPACE = "twolfe_cag1_index2";
+  
+  /*
+   * I need a multi-table solution.
+   * option 1: require TABLE_NAMESPACE as a runtime string, requires replacing a lot of field accesses with functions
+   * option 2: only fix the ingest side to set the TABLE_NAMESPACE string via a mandatory config option. perfectly backwards compatible and easy to implement!
+   */
   
   // These have to be made by hand ahead of time
   public final static Text T_f2t = new Text(TABLE_NAMESPACE + "_f2t");
-  public final static Text T_t2f = new Text(TABLE_NAMESPACE + "_t2f");
   public final static Text T_t2c = new Text(TABLE_NAMESPACE + "_t2c");
   public final static Text T_c2w = new Text(TABLE_NAMESPACE + "_c2w");
-  
-  // TODO See if this is worth it
-  public static final Text T_w2df = new Text(TABLE_NAMESPACE + "_w2df");
 
 
   public static byte[] encodeCount(int count) {
@@ -182,22 +173,22 @@ public class AccumuloIndex {
   }
 
   /** Returns the set of inserts for this comm, all things we are indexing (across all tables) */
-  public static List<Pair<Text, Mutation>> buildMutations(Communication comm) {
+  public static List<Pair<Text, Mutation>> buildMutations(Communication comm, ComputeIdf df) {
     List<Pair<Text, Mutation>> mut = new ArrayList<>();
     CharSequence c = comm.getId();
     byte[] cb = comm.getId().getBytes();
 
     // c2w
-    // TODO Only index the top 128 or so terms in the document
-    // This requires building a count-min sketch for document-frequency ahead of time.
-    boolean normalizeNumbers = false;
-    Counts<String> terms = IndexCommunications.terms2(comm, normalizeNumbers);
-    for (Entry<String, Integer> t : terms.entrySet()) {
-      String w = t.getKey();
-      int cn = t.getValue();
+    {
+    boolean normalizeNumbers = true;
+    StringTermVec terms = IndexCommunications.terms3(comm, normalizeNumbers);
+    List<String> important = df.importantTerms(terms, 128);
+    for (String w : important) {
+      int cn = terms.getCount(w).intValue();
       Mutation m = new Mutation(c);
       m.put(NA, w.getBytes(), encodeCount(cn));
       mut.add(new Pair<>(T_c2w, m));
+    }
     }
 
 
@@ -242,9 +233,9 @@ public class AccumuloIndex {
         byte[] f = e.getKey().getBytes();
         byte[] cn = encodeCount(e.getValue());
 
-        Mutation m_t2f = new Mutation(t);
-        m_t2f.put(NA, f, cn);
-        mut.add(new Pair<>(T_t2f, m_t2f));
+//        Mutation m_t2f = new Mutation(t);
+//        m_t2f.put(NA, f, cn);
+//        mut.add(new Pair<>(T_t2f, m_t2f));
 
         Mutation m_f2t = new Mutation(f);
         m_f2t.put(NA, t, cn);
@@ -293,6 +284,20 @@ public class AccumuloIndex {
     }
     
     public static void main(ExperimentProperties config) throws Exception {
+      
+      // Current solution for table names:
+      // Over-write TABLE_NAMESPACE with a dynamic string
+      String key = "tableNamespace";
+      if (!config.containsKey(key)) {
+        throw new RuntimeException("you must provide a table namespace which"
+            + " serves as a prefix for the indexing tables created by this ingester");
+      }
+      TABLE_NAMESPACE = config.getString(key);
+      Log.info("using tableNamespace=" + TABLE_NAMESPACE);
+      
+      // Load word counts for only storing top 128 words by tf-idf
+      ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
+      
       SimpleAccumuloConfig saConf = SimpleAccumuloConfig.fromConfig(config);
       Log.info("starting with " + saConf);
       SimpleAccumulo sa = new SimpleAccumulo(saConf);
@@ -306,7 +311,7 @@ public class AccumuloIndex {
         while (iter.hasNext()) {
           Communication comm = iter.next();
           writes.increment("read/comm");
-          for (Pair<Text, Mutation> m : buildMutations(comm)) {
+          for (Pair<Text, Mutation> m : buildMutations(comm, df)) {
             Text table = m.get1();
             BatchWriter w = bi.getWriter(table);
             w.addMutation(m.get2());
@@ -327,7 +332,12 @@ public class AccumuloIndex {
   public static class BuildIndexReducer extends Reducer<WritableComparable<?>, Writable, Text, Mutation> {
     public final static TDeserializer deser = new TDeserializer(SimpleAccumulo.COMM_SERIALIZATION_PROTOCOL);
     
+    private ComputeIdf df;
+    
     public void reduce(WritableComparable<?> key, Iterable<Text> values, Context ctx) {
+      if (df == null) {
+        throw new RuntimeException("TODO: set word freq's");
+      }
       for (Text v : values) {
         Communication comm = new Communication();
         try {
@@ -335,7 +345,7 @@ public class AccumuloIndex {
         } catch (Exception e) {
           e.printStackTrace();
         }
-        for (Pair<Text, Mutation> m : buildMutations(comm)) {
+        for (Pair<Text, Mutation> m : buildMutations(comm, df)) {
           try {
             ctx.write(m.get1(), m.get2());
           } catch (Exception e) {}
@@ -388,120 +398,6 @@ public class AccumuloIndex {
   }
 
   
-  /**
-   * Some features appear in a ton of mentions/tokenizations. This really slow down retrieval
-   * and are not informative. This class makes a pass over the f2t table and builds a bloom
-   * filter for features which return more than K tokenizations. You can do what you like with
-   * these features given the BF (e.g. eliminating them may not be a good idea, but using them
-   * as a last resort if more selective features don't return a good result is an option).
-   * 
-   * @deprecated
-   * @see FeatureCardinalityEstimator
-   */
-  public static class BuildBigFeatureBloomFilters {
-    
-    public static void main(ExperimentProperties config) throws Exception {
-      File writeTo = config.getFile("output");
-      Log.info("writing bloom filter to " + writeTo.getPath());
-      int minToks = config.getInt("minToks", 32000);
-      int minDocs = config.getInt("minDocs", 16000);
-      BuildBigFeatureBloomFilters bbfbf = new BuildBigFeatureBloomFilters(minToks, minDocs, writeTo);
-      bbfbf.count(
-          config.getString("accumulo.username"),
-          new PasswordToken(config.getString("accumulo.password")),
-          config.getString("accumulo.instance"),
-          config.getString("accumulo.zookeepers"));
-      Log.info("done");
-    }
-
-    // If either of these trip, then this is a "big feature"
-    private int minToks;
-    private int minDocs;
-    private BloomFilter<String> bf;
-    private File writeTo;
-    
-    // Meta/debugging
-    Counts<String> ec;
-
-    public BuildBigFeatureBloomFilters(int minToks, int minDocs, File writeTo) {
-      this.writeTo = writeTo;
-      this.minDocs = minDocs;
-      this.minToks = minToks;
-      int expectedInsertions = 10 * 1000 * 1000;
-      double fpp = 0.01;
-      bf = BloomFilter.create(Funnels.stringFunnel(Charset.forName("UTF8")), expectedInsertions, fpp);
-      ec = new Counts<>();
-      Log.info("minToks=" + minDocs + " minDocs=" + minDocs + "expectedInserts=" + expectedInsertions + " fpp=" + fpp);
-    }
-    
-    /**
-     * Assumes key.row are "documents" for computing numDocs.
-     * In a sense we must make this assumption to have O(1) memory (accumulo only sorts by row) for counting.
-     */
-    public void count(
-        String username, AuthenticationToken password,
-        String instanceName, String zookeepers) throws AccumuloException, AccumuloSecurityException, TableNotFoundException {
-      Log.info("starting, username=" + username);
-
-      TimeMarker tm = new TimeMarker();
-      Instance inst = new ZooKeeperInstance(instanceName, zookeepers);
-      Connector conn = inst.getConnector(username, password);
-      Scanner s = conn.createScanner(T_f2t.toString(), new Authorizations());
-
-      // Statistics tracked for each row
-      String prevFeat = null;
-      int prevToks = 0;
-      HashSet<String> prevDocs = new HashSet<>();   // determined by tokUuid 32-bit prefix
-
-      for (Entry<Key, Value> e : s) {
-        ec.increment("entry");
-        String feat = e.getKey().getRow().toString();
-        String tokUuid = e.getKey().getColumnQualifier().toString();
-        String commUuid = tokUuid.substring(0, (8+1)+1);  // 8 hex = 4 bytes = 32 bits, +1 for a dash, +1 for exclusive end
-        
-        if (!feat.equals(prevFeat)) {
-          output(prevFeat, prevToks, prevDocs);
-          prevFeat = feat;
-          prevToks = 0;
-          prevDocs.clear();
-        }
-
-        prevToks++;
-        prevDocs.add(commUuid);
-
-        if (tm.enoughTimePassed(10))
-          Log.info(ec + " curFeat=" + feat + "\t" + Describe.memoryUsage());
-      }
-      output(prevFeat, prevToks, prevDocs);
-
-      Log.info("done, " + ec);
-      writeToDisk();
-    }
-    
-    private TimeMarker _outputTM = new TimeMarker();
-    private void output(String feat, int numToks, Set<String> docs) {
-      ec.increment("feat");
-      boolean a = numToks > minToks;
-      boolean b = docs.size() > minDocs;
-      if (a || b) {
-        bf.put(feat);
-        ec.increment("feat/kept");
-        if (a && b) ec.increment("feat/kept/both");
-        else if (a) ec.increment("feat/kept/toks");
-        else if (b) ec.increment("feat/kept/docs");
-
-        if (_outputTM.enoughTimePassed(1 * 60))
-          writeToDisk();
-      }
-    }
-    
-    private void writeToDisk() {
-      Log.info("serializing to " + writeTo.getPath());
-      FileUtil.serialize(bf, writeTo);
-    }
-  }
-
-
   public static String getCommUuidPrefixFromTokUuid(String tokUuid) {
     int bytes = 4;    // 32 bits
     int chars = 0;
@@ -530,67 +426,6 @@ public class AccumuloIndex {
     }
   }
   
-  /**
-   * Tokenization UUID => Communication, backed by T_t2c.
-   *
-   * Implements fetch where it interprets the UUIDs as Tokenization UUIDs
-   * instead of Communication ids, as is described in the documentation.
-   */
-  public static class TokFetchSerivce implements FetchCommunicationService.Iface {
-    
-    private ServiceInfo info;
-    private Connector conn;
-    private int numQueryThreads;
-
-    public TokFetchSerivce() {
-      info = new ServiceInfo()
-          .setName("tokfetch")
-          .setDescription("foo")
-          .setVersion("0.01");
-    }
-
-    @Override
-    public FetchResult fetch(FetchRequest arg0) throws ServicesException, TException {
-      
-      List<Range> ranges = new ArrayList<>();
-      Set<String> seen = new HashSet<>();
-      for (String tokUuid : arg0.getCommunicationIds())
-        if (seen.add(getCommUuidPrefixFromTokUuid(tokUuid)))
-          ranges.add(Range.exact(tokUuid));
-      
-      try (BatchScanner bs = conn.createBatchScanner(T_t2c.toString(), new Authorizations(), numQueryThreads)) {
-        bs.setRanges(ranges);
-        for (Entry<Key, Value> e : bs) {
-          
-          String commUuid = e.getValue().toString();
-        }
-      } catch (Exception e) {
-        throw new ServicesException(e.getMessage());
-      }
-      
-      return null;
-    }
-
-    @Override
-    public ServiceInfo about() throws TException {
-      return info;
-    }
-
-    @Override
-    public boolean alive() throws TException {
-      return true;
-    }
-
-    @Override
-    public long getCommunicationCount() throws NotImplementedException, TException {
-      throw new NotImplementedException();
-    }
-
-    @Override
-    public List<String> getCommunicationIDs(long arg0, long arg1) throws NotImplementedException, TException {
-      throw new NotImplementedException();
-    }
-  }
 
   public static class TriageSearch implements Serializable {
     private static final long serialVersionUID = -5875667519520042444L;
@@ -2314,7 +2149,6 @@ public class AccumuloIndex {
 
   /**
    * @deprecated
-   * @see BuildBigFeatureBloomFilters
    * @see FeatureCardinalityEstimator
    */
   public static class ComputeFeatureFrequencies {
@@ -2376,8 +2210,6 @@ public class AccumuloIndex {
 //      kbpSearching(config);
 //    } else if (c.equalsIgnoreCase("featureFrequency")) {
 //      ComputeFeatureFrequencies.main(config);
-//    } else if (c.equalsIgnoreCase("buildBigFeatureBloomFilters")) {
-//      BuildBigFeatureBloomFilters.main(config);
 //    } else if (c.equalsIgnoreCase("kbpSearchMemo")) {
 //      kbpSearchingMemo(config);
 //    } else if (c.equalsIgnoreCase("develop")) {

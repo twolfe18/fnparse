@@ -404,6 +404,13 @@ public class KbpEntitySearchService implements SearchService.Iface {
    */
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
+    
+    // Set the index tables that we're working with
+    String tnsKey = "tableNamespace";
+    if (config.containsKey(tnsKey))
+      AccumuloIndex.TABLE_NAMESPACE = config.getString(tnsKey);
+    Log.info("using tableNamespace=" + AccumuloIndex.TABLE_NAMESPACE);
+    
     int port = config.getInt("port", 9999);
     Log.info("using port=" + port);
     File fceFile = config.getExistingFile("triageFeatureFrequencies");

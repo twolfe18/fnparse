@@ -30,6 +30,10 @@ public class StringTermVec implements Iterable<Entry<String, Double>>, Serializa
       add(s, 1);
   }
   
+  public Double getCount(String word) {
+    return tf.get(word);
+  }
+  
   public double getTotalCount() {
     return z;
   }
