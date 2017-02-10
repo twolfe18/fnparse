@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -27,6 +28,7 @@ import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.accumulo.core.data.Range;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
+import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
@@ -4962,6 +4964,15 @@ public class IndexCommunications implements AutoCloseable {
       throw new RuntimeException("scion is no longer supported");
     }
     
+    if (method.startsWith("fetch:")) {
+      String[] ar = method.split(":");
+      if (ar.length != 3)
+        throw new RuntimeException("must use form: fetch:host:port");
+      String host = ar[1];
+      int port = Integer.parseInt(ar[2]);
+      return new FetchCommIter(host, port);
+    }
+    
     String saPref = "simpleAccumulo:".toLowerCase();
     if (method.toLowerCase().startsWith(saPref)) {
       // simpleAccumulo:<namespace>
@@ -5020,6 +5031,57 @@ public class IndexCommunications implements AutoCloseable {
 //      throw new RuntimeException(e);
 //    }
 //  }
+  
+  public static class FetchCommIter implements AutoCloseableIterator<Communication> {
+    private FetchCommunicationService.Client fetch;
+    private TTransport transport;
+    private Deque<String> ids;
+
+    public FetchCommIter(String host, int port) {
+      try {
+        transport = new TFramedTransport(new TSocket(host, port));
+        transport.open();
+        TProtocol prot = new TCompactProtocol(transport);
+        fetch = new FetchCommunicationService.Client(prot);
+        long n = fetch.getCommunicationCount();
+        assert n <= Integer.MAX_VALUE && n >= 0;
+        ids = new ArrayDeque<>();
+        for (String id : fetch.getCommunicationIDs(0, (int) n))
+          ids.push(id);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    @Override
+    public void close() throws Exception {
+      if (transport != null) {
+        transport.close();
+        transport = null;
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return !ids.isEmpty();
+    }
+
+    @Override
+    public Communication next() {
+      while (ids.isEmpty()) {
+        FetchRequest fr = new FetchRequest();
+        fr.addToCommunicationIds(ids.pop());
+        try {
+          FetchResult x = fetch.fetch(fr);
+          if (x.getCommunicationsSize() == 1)
+            return x.getCommunications().get(0);
+        } catch (TException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      return null;
+    }
+  }
 
   public static class SimpleAccumuloCommIter implements AutoCloseableIterator<Communication> {
     private edu.jhu.hlt.concrete.simpleaccumulo.AutoCloseableIterator<Communication> iter;

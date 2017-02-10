@@ -29,7 +29,9 @@ java -ea -server -Xmx2G \
     dataProvider DATA
 ```
 
-Where `DATA` is either `disk:/path/to/dir/containing/comm.tgz/files/`
+Where `DATA` is either
+`fetch:FETCH_HOST:FETCH_PORT`,
+`disk:/path/to/dir/containing/comm-tgz/files/`
 or `file:/path/to/single/comms.tgz`.
 
 If you want to build this code from source, make sure you have
