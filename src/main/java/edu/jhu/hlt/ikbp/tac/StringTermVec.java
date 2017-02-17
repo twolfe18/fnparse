@@ -30,8 +30,19 @@ public class StringTermVec implements Iterable<Entry<String, Double>>, Serializa
       add(s, 1);
   }
   
+  public Iterable<String> getKeys() {
+    return tf.keySet();
+  }
+  
   public Double getCount(String word) {
     return tf.get(word);
+  }
+  
+  public Double getProb(String word) {
+    Double t = tf.get(word);
+    if (t == null)
+      return null;
+    return t / z;
   }
   
   public double getTotalCount() {

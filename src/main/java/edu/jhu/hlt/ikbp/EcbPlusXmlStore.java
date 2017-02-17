@@ -6,7 +6,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.thrift.TDeserializer;
+import org.apache.thrift.protocol.TCompactProtocol;
+
+import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 
 /**
@@ -93,4 +99,52 @@ public class EcbPlusXmlStore {
     }
     return xml;
   }
+  
+  public static List<String> select(int[] indices, List<String> from) {
+    List<String> out = new ArrayList<>(indices.length);
+    for (int i : indices)
+      out.add(from.get(i));
+    return out;
+  }
+  
+  public static void main(String[] args) throws Exception {
+    ExperimentProperties config = ExperimentProperties.init(args);
+
+    // Iterate over XML
+//    EcbPlusXmlStore store = new EcbPlusXmlStore(config);
+//    for (File topic : store.getTopicDirs()) {
+//      for (File f : store.getDocs(topic)) {
+//        if (!"2_2ecb.xml".equals(f.getName()))
+//          continue;
+//        EcbPlusXmlWrapper xml = store.get(f);
+//
+//        // Show all the ACTION_* and NEG_ACTION_* lexicalizations
+//        List<String> toks = xml.getTokens();
+//        for (Node n : xml.getNodes()) {
+//          if (n.isGrounded() && n.type.contains("ACTION_")) {
+//            System.out.println(n + "\t" + select(n.t_id, toks));
+//          }
+//        }
+//      }
+//    }
+    
+    // Iterate over Concrete
+    TDeserializer deser = new TDeserializer(new TCompactProtocol.Factory());
+    File commRoot = new File("data/parma/ecbplus/ECB+_LREC2014/concrete-parsey-and-stanford");
+    for (File f : commRoot.listFiles()) {
+      if (!f.getName().endsWith(".comm"))
+        continue;
+      System.out.println(f);
+      Communication c = new Communication();
+      byte[] bs = FileUtil.readBytes(f);
+      deser.deserialize(c, bs);
+      
+      System.out.println(c.getId());
+//      System.out.println(c.getSituationMentionSetListSize());
+      System.out.println(c.getSituationSetListSize());
+      System.out.println();
+    }
+
+  }
+
 }

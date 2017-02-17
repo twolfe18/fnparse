@@ -45,10 +45,14 @@ public class DependencyHeadFinder implements HeadFinder {
     if (s.width() == 1)
       return s.start;
     DependencyParse deps = getDeps(sent);
+    if (deps == null)
+      throw new IllegalArgumentException("could not find deps, mode=" + mode + " sent=" + sent);
     int h = -1;
     int hd = 0;
     for (int i = s.start; i < s.end; i++) {
-      if (sent.isPunc(i) || deps.getLabel(i).equals("UNK"))
+      if (sent.isPunc(i))
+        continue;
+      if (deps.getLabel(i) != null && deps.getLabel(i).equals("UNK"))
         continue;
 
       int d = deps.getDepth(i);

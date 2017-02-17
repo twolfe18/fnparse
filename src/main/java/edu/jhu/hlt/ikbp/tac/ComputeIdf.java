@@ -124,6 +124,15 @@ public class ComputeIdf implements Serializable {
     return Math.log(numDocs / c);
   }
 
+  public StringTermVec prune(StringTermVec a, int k) {
+    StringTermVec pruned = new StringTermVec();
+    for (String s : importantTerms(a, k)) {
+      double w = a.getCount(s);
+      pruned.add(s, w);
+    }
+    return pruned;
+  }
+
   public List<String> importantTerms(StringTermVec a, int k) {
     return importantTerms(a, k, false);
   }
@@ -171,6 +180,92 @@ public class ComputeIdf implements Serializable {
     }
     //      System.out.println();
     return p;
+  }
+
+  public double tfIdfMaxExpCosineSim(StringTermVec a, StringTermVec b, double temp) {
+    
+    // Find the max idf of a temr in a or b
+    double max = 0;
+    for (String w : a.getKeys())
+      max = Math.max(max, idf(w));
+    for (String w : b.getKeys())
+      max = Math.max(max, idf(w));
+    assert max > 0;
+
+    double ssa = 0;
+    double na = a.getTotalCount();
+    Map<String, Double> tfa_idf = new HashMap<>();
+    for (Entry<String, Double> word : a) {
+      double idf = idf(word.getKey());
+      idf /= max;
+      idf = Math.exp(idf * temp);
+      idf = Math.sqrt(idf);
+      double tfa = word.getValue() / na;
+      double sa = tfa * idf;
+      if (tfa * idf > 0) {
+        tfa_idf.put(word.getKey(), sa);
+        ssa += sa * sa;
+      }
+    }
+
+    double ssb = 0;
+    double nb = b.getTotalCount();
+    double dot = 0;
+    for (Entry<String, Double> word : b) {
+      double sa = tfa_idf.getOrDefault(word.getKey(), 0d);
+      double idf = idf(word.getKey());
+      idf /= max;
+      idf = Math.exp(idf * temp);
+      idf = Math.sqrt(idf);
+      double tfb = word.getValue() / nb;
+      double sb = tfb * idf;
+      dot += sa * sb;
+      ssb += sb * sb;
+    }
+
+    if (dot == 0)
+      return 0;
+    if (ssa * ssb == 0)
+      return 0;
+
+    return dot / (Math.sqrt(ssa) * Math.sqrt(ssb));
+  }
+
+  public double tfIdfExpCosineSim(StringTermVec a, StringTermVec b, double temp) {
+
+    double ssa = 0;
+    double na = a.getTotalCount();
+    Map<String, Double> tfa_idf = new HashMap<>();
+    for (Entry<String, Double> word : a) {
+      double idf = Math.sqrt(idf(word.getKey()));
+      idf = Math.exp(idf * temp);
+      double tfa = word.getValue() / na;
+      double sa = tfa * idf;
+      if (tfa * idf > 0) {
+        tfa_idf.put(word.getKey(), sa);
+        ssa += sa * sa;
+      }
+    }
+
+    double ssb = 0;
+    double nb = b.getTotalCount();
+    double dot = 0;
+    for (Entry<String, Double> word : b) {
+      double sa = tfa_idf.getOrDefault(word.getKey(), 0d);
+      double idf = Math.sqrt(idf(word.getKey()));
+      idf = Math.exp(idf * temp);
+      double tfb = word.getValue() / nb;
+      double sb = tfb * idf;
+      dot += sa * sb;
+      ssb += sb * sb;
+    }
+
+    if (dot == 0)
+      return 0;
+    if (ssa * ssb == 0)
+      return 0;
+
+    return dot / (Math.sqrt(ssa) * Math.sqrt(ssb));
   }
 
   public double tfIdfCosineSim(StringTermVec a, StringTermVec b) {

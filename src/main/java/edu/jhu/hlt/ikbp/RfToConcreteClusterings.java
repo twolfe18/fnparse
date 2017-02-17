@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
 import org.apache.thrift.protocol.TCompactProtocol;
@@ -24,6 +25,7 @@ import edu.jhu.hlt.concrete.Cluster;
 import edu.jhu.hlt.concrete.ClusterMember;
 import edu.jhu.hlt.concrete.Clustering;
 import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.EntityMention;
 import edu.jhu.hlt.concrete.EntityMentionSet;
 import edu.jhu.hlt.concrete.Section;
@@ -32,11 +34,17 @@ import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
+import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory;
 import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory.AnalyticUUIDGenerator;
+import edu.jhu.hlt.fnparse.inference.heads.DependencyHeadFinder;
+import edu.jhu.hlt.ikbp.tac.DependencySyntaxEvents;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications;
+import edu.jhu.hlt.ikbp.tac.PkbpMention;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -398,9 +406,14 @@ public class RfToConcreteClusterings implements ConcreteIkbpAnnotations {
       // Show the mentions
       int cid = 0;
       for (Cluster cluster : c.getClusterList()) {
+        int n = cluster.getClusterMemberIndexListSize();
+
+        // Only show non-singletons
+        if (n < 2)
+          continue;
+
         System.out.println("in Cluster " + (cid++) + ":");
         
-        int n = cluster.getClusterMemberIndexListSize();
         assert n == cluster.getConfidenceListSize();
         for (int i = 0; i < n; i++) {
           int mid = cluster.getClusterMemberIndexList().get(i);
@@ -412,7 +425,35 @@ public class RfToConcreteClusterings implements ConcreteIkbpAnnotations {
           SituationMentionSet sms = ConcreteIkbpAnnotations.lookupSms(comm, item.getSetId());
           if (sms != null) {
             SituationMention sm = ConcreteIkbpAnnotations.lookup(sms, item.getElementId());
-            System.out.println("\tSIT\t" + sm.getText() + "\t" + conf);
+            System.out.println("\tSIT\t" + sm.getText() + "\t" + conf + "\t" + comm.getId());
+
+            // Show the pred
+            DependencyHeadFinder hf = new DependencyHeadFinder();
+            String tokUuid = sm.getTokens().getTokenizationId().getUuidString();
+            Tokenization toks = IndexCommunications.findTok(tokUuid, comm);
+            int nToks = toks.getTokenList().getTokenListSize();
+            BiPredicate<String, String> tiebreaker = 
+                edu.jhu.hlt.fnparse.datatypes.Sentence.takeParseyOr(edu.jhu.hlt.fnparse.datatypes.Sentence.KEEP_LAST);
+            edu.jhu.hlt.fnparse.datatypes.Sentence sent = edu.jhu.hlt.fnparse.datatypes.Sentence.convertFromConcrete(
+                "ds", "id", toks, tiebreaker, tiebreaker, tiebreaker);
+            sent.setParseyDeps(
+                edu.jhu.hlt.fnparse.datatypes.DependencyParse.fromConcrete(
+                    nToks, edu.jhu.hlt.fnparse.datatypes.Sentence.extractDeps(toks, tiebreaker), true));
+//            int pred = sm.getTokens().getAnchorTokenIndex();
+            int pred = hf.head(Span.getSpan(sm.getTokens().getTokenIndexList(), true), sent);
+            DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
+            PkbpMention sm2 = new PkbpMention(pred, toks, deps, comm);
+            int w = 60;
+            System.out.println("\t" + sm2.getContextAroundHead(w, w, true));
+            
+            // Find potential args
+            List<Integer> args = DependencySyntaxEvents.extractEntityHeads(toks);
+            List<String> argStrings = new ArrayList<>();
+            for (int a : args)
+              argStrings.add(toks.getTokenList().getTokenList().get(a).getText());
+            System.out.println("\targs: " + argStrings);
+            
+
           } else {
             EntityMentionSet ems = ConcreteIkbpAnnotations.lookupEms(comm, item.getSetId());
             EntityMention em = ConcreteIkbpAnnotations.lookup(ems, item.getElementId());

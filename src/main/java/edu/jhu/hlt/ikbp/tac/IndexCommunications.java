@@ -796,7 +796,6 @@ public class IndexCommunications implements AutoCloseable {
     }
     return Span.getSpan(left, right+1);
   }
-
   
   /**
    * Provides a paragraph-length snippet which summarizes a {@link Communication} news story.
@@ -4481,7 +4480,7 @@ public class IndexCommunications implements AutoCloseable {
     }
   }
 
-  static TokenTagging getPreferredLemmas(Tokenization t) {
+  public static TokenTagging getPreferredLemmas(Tokenization t) {
     List<TokenTagging> all = new ArrayList<>(1);
     for (TokenTagging tt : t.getTokenTaggingList())
       if (tt.getTaggingType().equalsIgnoreCase("lemma"))
@@ -4493,7 +4492,7 @@ public class IndexCommunications implements AutoCloseable {
     return all.get(0);
   }
 
-  static TokenTagging getPreferredNerTags(Tokenization t) {
+  public static TokenTagging getPreferredNerTags(Tokenization t) {
     List<TokenTagging> tt = new ArrayList<>();
     for (TokenTagging tags : t.getTokenTaggingList()) {
       if (tags.getTaggingType().equalsIgnoreCase("NER")) {
@@ -4509,7 +4508,7 @@ public class IndexCommunications implements AutoCloseable {
     throw new RuntimeException("implement a preference over: " + tt);
   }
 
-  static TokenTagging getPreferredPosTags(Tokenization t) {
+  public static TokenTagging getPreferredPosTags(Tokenization t) {
     List<TokenTagging> tt = new ArrayList<>();
     for (TokenTagging tags : t.getTokenTaggingList()) {
       if (tags.getTaggingType().equalsIgnoreCase("POS")) {
@@ -4525,7 +4524,7 @@ public class IndexCommunications implements AutoCloseable {
     throw new RuntimeException("implement a preference over: " + tt);
   }
   
-  static DependencyParse getPreferredDependencyParse(Tokenization toks) {
+  public static DependencyParse getPreferredDependencyParse(Tokenization toks) {
     for (DependencyParse dp : toks.getDependencyParseList()) {
       if ("parsey".equalsIgnoreCase(dp.getMetadata().getTool())) {
         EC.increment("preferredDParse/parsey");

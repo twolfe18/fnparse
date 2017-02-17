@@ -12,6 +12,8 @@ import org.w3c.dom.Document;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.NodeList;
 
+import edu.jhu.hlt.tutils.ExperimentProperties;
+
 /**
  * NOTE: This class makes a few conversions when it reads in the XML fields, namely
  * 1) token ids (t_id) are converted from 1-indexed to 0-indexed
