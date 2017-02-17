@@ -452,6 +452,14 @@ low-data case to see what \textsc{qanta} gets right and \textsc{tfidf} wrong.
 
 
 
+% TODO is it possible that they are conditioning their response on the category?
+% This seems plausible that this would boost the performance at the low end, without
+% affecting it at the high end.
+
+
+
+
+
 \section{Consequences of the Mistakes}
 A lot of folks thinks that neural methods are great at everything these days.
 This belief is so prevalent that critical thinking is fading.
@@ -459,6 +467,26 @@ Cases like this discourage even skeptical readers due to good performance
 compared to the poorly implemented baselines.
 Understanding proposed methods means being critical of them,
 and explaining why they work in face of this criticism.
+
+
+\section{Bad Apple?}
+The work of \newcite{iyyer:2015} is lax with respect to
+research methods as well.
+They study neural bag of words models.
+One of their evaluations is on sentiment, for which they do
+not include a Naive Bayes or or logitistic regression baseline.
+The examples they give in table 3 are consistent with the
+behavior of a vanilla bag of words model.
+They also evaluate on the quiz bowl QA data described above
+and get even worse results than \textsc{qanta}.
+They say this is because it is an un-ordered (syntax-free)
+model which requires significantly less training time.
+This is not a sufficient explanation given that the \textsc{tfidf}
+baseline described here is un-ordered and requires no
+training time.\footnote{If computing document frequencies
+counts as training, then we would have to run experiments
+on the fastest way to do this. For this work, I had some word
+counts laying around.}
 
 
 \bibliographystyle{acl2017}
