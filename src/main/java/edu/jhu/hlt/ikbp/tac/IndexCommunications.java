@@ -48,6 +48,7 @@ import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.Token;
+import edu.jhu.hlt.concrete.TokenList;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
@@ -773,6 +774,35 @@ public class IndexCommunications implements AutoCloseable {
     TaggedToken nt = ner.getTaggedTokenList().get(head);
     assert nt.getTokenIndex() == head;
     return nt.getTag();
+  }
+  
+  public static Tokenization toConcrete(
+      String uuidString,
+      List<String> words,
+      String posToolname,
+      List<String> pos,
+      String depToolname,
+      edu.jhu.hlt.fnparse.datatypes.DependencyParse deps) {
+    int n = words.size();
+    if (n != pos.size())
+      throw new IllegalArgumentException();
+    Tokenization t = new Tokenization();
+    t.setUuid(new UUID().setUuidString(uuidString));
+    t.setTokenList(new TokenList());
+    t.addToTokenTaggingList(new TokenTagging().setTaggingType("POS").setMetadata(new AnnotationMetadata().setTool(posToolname)));
+    for (int i = 0; i < n; i++) {
+      t.getTokenList().addToTokenList(new Token(i).setText(words.get(i)));
+      t.getTokenTaggingList().get(0).addToTaggedTokenList(new TaggedToken().setTag(pos.get(i)).setTokenIndex(i));
+    }
+    DependencyParse d = new DependencyParse();
+    for (int i = 0; i < deps.size(); i++) {
+      int h = deps.getHead(i);
+      String l = deps.getLabel(i);
+      d.addToDependencyList(new Dependency().setGov(h).setDep(i).setEdgeType(l));
+    }
+    d.setMetadata(new AnnotationMetadata().setTool(depToolname));
+    t.addToDependencyParseList(d);
+    return t;
   }
 
   /**
@@ -2075,6 +2105,12 @@ public class IndexCommunications implements AutoCloseable {
         if (o2.weight > o1.weight)
           return +1;
         return 0;
+      }
+    };
+    public static final Comparator<Feat> BY_SCORE_ASC = new Comparator<Feat>() {
+      @Override
+      public int compare(Feat o1, Feat o2) {
+        return BY_SCORE_DESC.compare(o2, o1);
       }
     };
     public static final Comparator<Feat> BY_SCORE_MAG_DESC = new Comparator<Feat>() {
@@ -4501,8 +4537,10 @@ public class IndexCommunications implements AutoCloseable {
         tt.add(tags);
       }
     }
-    if (tt.isEmpty())
-      throw new RuntimeException("no NER in " + t);
+    if (tt.isEmpty()) {
+//      throw new RuntimeException("no NER in " + t);
+      return null;
+    }
     if (tt.size() == 1)
       return tt.get(0);
     throw new RuntimeException("implement a preference over: " + tt);

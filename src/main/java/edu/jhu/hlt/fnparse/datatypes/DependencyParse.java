@@ -1,7 +1,10 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,6 +16,7 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 
 import edu.jhu.hlt.concrete.Dependency;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Span;
@@ -73,26 +77,41 @@ public class DependencyParse implements Serializable {
   }
   
   public static DependencyParse fromTutils(LabeledDirectedGraph deps, IntFunction<String> edgeLabels, int firstToken, int lastToken) {
-    int n = deps.getNumEdges();
+    
     int width = (lastToken-firstToken)+1;
     int[] heads = new int[width];
     String[] labels = new String[width];
-    for (int i = 0; i < n; i++) {
-      long e = deps.getEdge(i);
-      int d = LabeledDirectedGraph.unpackDep(e);
-      if (firstToken <= d && d <= lastToken) {
-        // keep
-        d -= firstToken;
-
-        int g = LabeledDirectedGraph.unpackGov(e);
-        if (g < firstToken || g > lastToken)
-          g = -1; // ROOT
-        heads[d] = g;
-        
-        int el = LabeledDirectedGraph.unpackEdge(e);
-        labels[d] = edgeLabels.apply(el);
+    
+    for (int i = firstToken; i <= lastToken; i++) {
+      LabeledDirectedGraph.Node n = deps.getNode(firstToken);
+      assert n.numParents() <= 1;
+      if (n.numParents() == 1) {
+        int h = n.getParent(0);
+        int e = n.getParentEdgeLabel(0);
+        heads[i - firstToken] = h - firstToken;
+        labels[i - firstToken] = edgeLabels.apply(e);
       }
     }
+    
+//    int n = deps.getNumEdges()/2;
+//    for (int i = 0; i < n; i++) {
+//      long e = deps.getEdge(i);
+//      int d = LabeledDirectedGraph.unpackDep(e);
+//      if (firstToken <= d && d <= lastToken) {
+//        // keep
+//        d -= firstToken;
+//
+//        int g = LabeledDirectedGraph.unpackGov(e);
+//        if (g < firstToken || g > lastToken)
+//          g = -1; // ROOT
+//        else
+//          g -= firstToken;
+//        heads[d] = g;
+//        
+//        int el = LabeledDirectedGraph.unpackEdge(e);
+//        labels[d] = edgeLabels.apply(el);
+//      }
+//    }
     return new DependencyParse(heads, labels);
   }
   
@@ -109,6 +128,22 @@ public class DependencyParse implements Serializable {
       }
     }
     return new DependencyParse(heads, labels);
+  }
+  
+  public static List<DependencyParse> fromConllx(File f) throws IOException {
+    List<DependencyParse> out = new ArrayList<>();
+    List<String[]> cur = new ArrayList<>();
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        if (line.isEmpty()) {
+          out.add(fromConllx(cur));
+          cur.clear();
+        } else {
+          cur.add(line.split("\t"));
+        }
+      }
+    }
+    return out;
   }
   
   public static DependencyParse fromConllx(List<String[]> conllx) {

@@ -36,7 +36,7 @@ import edu.jhu.util.TokenizationIter;
  *
  * @author travis
  */
-class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
+public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
   private static final long serialVersionUID = 6258694570076400637L;
   
   public static class Mention extends PkbpMention implements Serializable {
@@ -220,7 +220,7 @@ class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
       Span span = IndexCommunications.nounPhraseExpand(head, deps);
       TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
-      String nerType = ner.getTaggedTokenList().get(head).getTag();
+      String nerType = ner == null ? null : ner.getTaggedTokenList().get(head).getTag();
       return new Mention(head, span, nerType, toks, deps, comm);
     }
   
