@@ -2967,7 +2967,7 @@ public class IndexCommunications implements AutoCloseable {
       
 //      // Natural language expressions for slot filling relations
 //      if (this.commRet != null) {
-//        String commId = fuck i have no way to get from comm uuid to id.
+//        String commId = crap i have no way to get from comm uuid to id.
 //        commRet.get(commId);
 //        Sentence passage = convert(f);
 //        List<NaturalLanguageSlotFill.Match> matches = nlsf.scoreAll(passage);

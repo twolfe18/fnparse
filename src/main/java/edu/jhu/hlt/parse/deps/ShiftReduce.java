@@ -1622,7 +1622,7 @@ public class ShiftReduce {
    *                    + (1-alpha_2 * (     alpha_1  * beam([b], k)
    *                                    + (1-alpha_1) * Uniform(sentenceLen))))
    * 
-   * Fuck, this is too complex. Can we just do n=1, [s0,b]?
+   * Crap, this is too complex. Can we just do n=1, [s0,b]?
    */
   static class Basic {
   }

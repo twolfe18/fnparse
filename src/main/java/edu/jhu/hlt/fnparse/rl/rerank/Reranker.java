@@ -661,7 +661,7 @@ public class Reranker implements Serializable {
 
       this.y = ((deltaLoss == 0) ^ (wx > 0)) ? +1 : -1;
 
-      // HO SHIT I'M DUMB
+      // HO CRAP I'M DUMB
       // y=1,yhat=0 for COMMIT has cost 5
       // y=1,yhat=0 for PRUNE has cost 1
       boolean commit = a.getAction().getActionType() == ActionType.COMMIT;

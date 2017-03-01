@@ -22,6 +22,18 @@ public class TokenizationIter implements Iterable<Tokenization> {
     this.comm = comm;
     this.maxSentLength = maxSentenceLength;
   }
+  
+  public Tokenization get(int tokenizationIndex) {
+    assert tokenizationIndex >= 0;
+    Iterator<Tokenization> itr = iterator();
+    Tokenization t = null;
+    for (int i = 0; i <= tokenizationIndex; i++) {
+      if (!itr.hasNext())
+        return null;
+      t = itr.next();
+    }
+    return t;
+  }
 
   @Override
   public Iterator<Tokenization> iterator() {
