@@ -40,6 +40,7 @@ import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
+import edu.jhu.hlt.concrete.access.FetchCommunicationService;
 import edu.jhu.hlt.concrete.search.SearchQuery;
 import edu.jhu.hlt.concrete.search.SearchResult;
 import edu.jhu.hlt.concrete.search.SearchResultItem;
@@ -50,6 +51,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.AttrFeatMatch;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.KbpSearching;
 import edu.jhu.hlt.ikbp.tac.AccumuloIndex.TriageSearch;
+import edu.jhu.hlt.ikbp.tac.ClusterPredsByEntityArgument.PotentialExtraction;
 import edu.jhu.hlt.ikbp.tac.FindCommonPredicate.PFeat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.SitSearchResult;
@@ -93,7 +95,6 @@ import redis.clients.jedis.Jedis;
 public class PkbpSearching implements Serializable {
   private static final long serialVersionUID = 3891008944720961213L;
 
-//  public static final MultiTimer TIMER = AccumuloIndex.TIMER;
   public static MultiTimer timer() {
     return AccumuloIndex.TIMER;
   }
@@ -526,17 +527,28 @@ public class PkbpSearching implements Serializable {
 
   static class New {
     
+    /**
+     * Before calling this ensure that you have:
+     * 1) {@link KbpEntitySearchService} running on a test machine
+     * 2) {@link SimpleAccumuloCommRetrieval} (or another {@link FetchCommunicationService}) running on a test machine
+     * 3) ssh forwards setup to point to 1 and 2
+     * 
+     * These commands may change (see the classes themselves), but here are examples:
+     * 1) java -ea -server -cp jars/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar edu.jhu.hlt.ikbp.tac.KbpEntitySearchService port 8989 triageFeatureFrequencies /export/projects/twolfe/sit-search/feature-cardinality-estimate_maxMin_stable/fce-mostFreq1000000-nhash12-logb20.jser wordDocFreq /export/projects/twolfe/sit-search/idf/cms/df-cms-simpleaccumulo-twolfe-cag1-nhash12-logb20.jser
+     * 2) java -cp jars/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar -ea -server edu.jhu.hlt.ikbp.tac.SimpleAccumuloCommRetrieval port 9999 debugCommIds "NYT_ENG_20090825.0083,AFP_ENG_20090831.0329,XIN_ENG_20090824.0098"
+     * 3) ssh -fNL 8989:localhost:8989 test2b; ssh -fNL 9999:localhost:9999 test2b
+     */
     static void main(ExperimentProperties config) throws Exception {
       Log.info("starting...");
       Feat.SHOW_REASON_IN_TOSTRING = false;
       // Fetch service for retrieving communications
-      String fetchHost = "localhost";
-      int fetchPort = 9999;
+      String fetchHost = config.getString("fetchHost"); //, "localhost");
+      int fetchPort = config.getInt("fetchPort");  //9999;
       File fetchCacheDir = config.getOrMakeDir("fetchCacheDir");//, new File("data/sit-search/fetch-comms-cache/"));
       try (DiskBackedFetchWrapper commRet = KbpSearching.buildFetchWrapper(fetchCacheDir, fetchHost, fetchPort)) {
         // SearchService for basic accumulo-backed search
-        String searchHost = "localhost";
-        int searchPort = 8989;
+        String searchHost = config.getString("entitySearchHost"); // "localhost"
+        int searchPort = config.getInt("entitySearchPort");   // 8989
         try (TTransport trans = new TFramedTransport(new TSocket(searchHost, searchPort))) {
           trans.open();
           TProtocol prot = new TCompactProtocol(trans);
@@ -569,12 +581,11 @@ public class PkbpSearching implements Serializable {
 
       
       // Produces an explanation for the predicate words/features of the MEMs on a spoke
-      File fcpF = config.getFile("findCommonPredicate", new File("/tmp/FindCommonPredicate.jser"));
-      Log.info("loading FindCommonPredicate from " + fcpF.getPath());
-      FindCommonPredicate fcp = (FindCommonPredicate) FileUtil.deserialize(fcpF);
-      
-      
-      File wfcF = config.getFile("walkFeatCounts"); //new File("data/sit-search/random-dependency-walks/wfc-15k.jser");
+//      File fcpF = config.getFile("findCommonPredicate", new File("/tmp/FindCommonPredicate.jser"));
+//      Log.info("loading FindCommonPredicate from " + fcpF.getPath());
+//      FindCommonPredicate fcp = (FindCommonPredicate) FileUtil.deserialize(fcpF);
+      FindCommonPredicate fcp = null;
+      File wfcF = config.getFile("walkFeatCounts"); //new File("data/sit-search/random-dependency-walks/wfc-50k.jser");
       Log.info("loading DependencyTreeRandomWalk.WalkFeatCounts from " + wfcF.getPath());
       DependencyTreeRandomWalk.WalkFeatCounts wfc = (DependencyTreeRandomWalk.WalkFeatCounts) FileUtil.deserialize(wfcF);
 
@@ -610,6 +621,13 @@ public class PkbpSearching implements Serializable {
 
         runOneSearch(q, config, kbpEntSearch, commRet, sitFeatFreq, df, ts, fcp, wfc);
       }
+    }
+    
+    /**
+     * Find cities for now
+     */
+    static void miscDevelopingOnQuery(KbpQuery q) {
+      
     }
 
     static void runOneSearch(KbpQuery q,
@@ -654,7 +672,7 @@ public class PkbpSearching implements Serializable {
         queryMentionOutputDir.mkdirs();
       }
       
-      File searchServiceCacheDir = config.getOrMakeDir("searchServiceCacheDir", null);
+      File searchServiceCacheDir = config.getOrMakeDir("searchServiceCacheDir");
       if (searchServiceCacheDir != null) {
         searchServiceCacheDir = new File(searchServiceCacheDir, q.id);
         searchServiceCacheDir.mkdirs();
@@ -671,10 +689,16 @@ public class PkbpSearching implements Serializable {
       New search = new New(kbpEntSearch, sitFeatFreq, config.getRandom());
 
       TacQueryEntityMentionResolver emFinder = new TacQueryEntityMentionResolver("tacQuery");
+      
+      // Stores attribute feature function caches.
+      // Keys are commIds.
+      Map<String, NNPSense.Caching> attrFeatFuncs = new HashMap<>();
+      NNPSense.Caching attrFeatFuncQuery = new NNPSense.Caching(q.sourceComm);
+      attrFeatFuncs.put(q.docid, attrFeatFuncQuery);
 
       // Add the query as a seed
       double seedWeight = config.getDouble("seedWeight", 10);
-      PkbpEntity.Mention seed = PkbpEntity.Mention.convert(q, emFinder, df, ts);
+      PkbpEntity.Mention seed = PkbpEntity.Mention.convert(q, emFinder, df, ts, attrFeatFuncQuery);
       boolean createEnt = true;
       search.addSeed(seed, seedWeight, createEnt);
       if (debug) {
@@ -706,7 +730,8 @@ public class PkbpSearching implements Serializable {
       PkbpNode seedEntNode = search.findIntersection(FeatureNames.SEED, FeatureNames.ENTITY).get(0);
       PkbpEntity seedEnt = (PkbpEntity) seedEntNode.obj;
       Log.info("num seed mentions: " + seedEnt.numMentions());
-      List<EntLink> seedEntMentions = search.searchForMentionsOf(seedEnt, maxResults, minInitialLinkScore, commRet::fetch, df, ts, null);
+      List<EntLink> seedEntMentions = search.searchForMentionsOf(
+          seedEnt, maxResults, minInitialLinkScore, commRet::fetch, attrFeatFuncs, df, ts, null);
       if (addInitialQueryMentionsToEntity) {
         // Execute the links
         for (EntLink el : seedEntMentions)
@@ -718,6 +743,79 @@ public class PkbpSearching implements Serializable {
       }
       Log.info("num seed mentions: " + seedEnt.numMentions());
       
+
+      // DEVELOPING
+      clusterPredsByEntity(q, seedEntMentions, df, ts, commRet);
+
+      // PKB experiments
+//      buildPkbOfRelevantEntities(q, df, ts, commRet, wfc, debug,
+//          useMemLinkScoreInExplanations, evalOutputDir, debugOutputDir,
+//          triggerIdHitDir, search, maxResults, seedEnt, seedEntMentions);
+      
+      search.clear();
+    }
+    
+    private static ClusterPredsByEntityArgument clusterPredsByEntArgs;
+    public static void clusterPredsByEntity(
+        KbpQuery q,
+        List<EntLink> seedEntMentions,
+        ComputeIdf df,
+        TriageSearch ts,
+        DiskBackedFetchWrapper commRet) throws Exception {
+
+      System.out.println(q);
+      System.out.println();
+      
+      // Only work with PERSON queries
+      if (!q.entity_type.toUpperCase().startsWith("PER")) {
+        Log.info("skipping query with type=" + q.entity_type);
+        return;
+      }
+      
+      if (clusterPredsByEntArgs == null) {
+        File dbpediaCitiesDir = new File("data/dbpedia/cities/");
+        clusterPredsByEntArgs = new ClusterPredsByEntityArgument(dbpediaCitiesDir, df);
+      }
+      
+      List<PkbpEntity.Mention> mentions = links2mentions(seedEntMentions);
+      List<PotentialExtraction<KbpQuery>> cs = clusterPredsByEntArgs.findCities(q, mentions);
+      Log.info("found " + cs.size() + " city mentions");
+      int w = 80;
+      for (PotentialExtraction<KbpQuery> c : cs) {
+        System.out.println("[city] " + c.arg0.getContextAroundHead(w, w, true));
+        System.out.println("[city] " + c.arg1.getContextAroundHead(w, w, true));
+        System.out.println();
+      }
+      System.out.println();
+
+      System.out.println();
+      System.out.println("TIMER:");
+      System.out.println(timer());
+      System.out.println();
+    }
+
+    /**
+     * This is the process described in my last PKBP paper.
+     * Find relevant entity mentions using seedEntMention,
+     * cluster/link them to entities,
+     * then search for each entity and the query and find a trigger word for the pair.
+     */
+    static void buildPkbOfRelevantEntities(
+        KbpQuery q,
+        ComputeIdf df,
+        TriageSearch ts,
+        DiskBackedFetchWrapper commRet,
+        DependencyTreeRandomWalk.WalkFeatCounts wfc,
+        boolean debug,
+        boolean useMemLinkScoreInExplanations,
+        File evalOutputDir,
+        File debugOutputDir,
+        File triggerIdHitDir,
+        New search,
+        int maxResults,
+        PkbpEntity seedEnt,
+        List<EntLink> seedEntMentions) throws IOException {
+
       /*
        * Lets say that we are given a query entity q and we want to fill a slot s
        * We are doing optimization to find a good (q,s,f) extraction
@@ -758,7 +856,6 @@ public class PkbpSearching implements Serializable {
        * PMI analysis: p(ROOT -> made a decision) >> p(ROOT -> made) * p(VBD -> a decision)
        */
       
-
 //      // Link the EMs to create Es
 //      if (debug)
 //        Log.info("[main] initial mentions (hopefully to one entity):");
@@ -883,7 +980,6 @@ public class PkbpSearching implements Serializable {
         showRelevantEntities(search.relevantEntities(), df);
         showMEMsForRelevantEntities(search.relevantEntities(), mems, seedEnt.getMention(0), df);
 
-
         System.out.println();
         System.out.println("TIMER:");
         System.out.println(timer());
@@ -939,9 +1035,8 @@ public class PkbpSearching implements Serializable {
       System.out.println("TIMER:\t" + Describe.memoryUsage());
       System.out.println(timer());
       System.out.println();
-      
-      search.clear();
     }
+    
     
     static class PredHitOutput {
       
@@ -1253,8 +1348,8 @@ public class PkbpSearching implements Serializable {
       return c.choose();
     }
 
-    public static List<PkbpMention> links2mentions(Iterable<EntLink> links) {
-      List<PkbpMention> m = new ArrayList<>();
+    public static List<PkbpEntity.Mention> links2mentions(Iterable<EntLink> links) {
+      List<PkbpEntity.Mention> m = new ArrayList<>();
       for (EntLink n : links)
         m.add(n.source);
       return m;
@@ -1804,6 +1899,7 @@ public class PkbpSearching implements Serializable {
           DependencySyntaxEvents.CoverArgumentsWithPredicates dse,
           Tokenization toks,
           Communication comm,
+          NNPSense.Caching attrFeatFunc,
           int maxSentenceLength) {
         
         int n = toks.getTokenList().getTokenListSize();
@@ -1825,7 +1921,7 @@ public class PkbpSearching implements Serializable {
           List<PkbpEntity> ents = new ArrayList<>(args.length);
           
           for (int i = 0; i < args.length; i++) {
-            PkbpEntity.Mention m = PkbpEntity.Mention.build(args[i], toks, comm);
+            PkbpEntity.Mention m = PkbpEntity.Mention.build(args[i], toks, comm, attrFeatFunc);
             mentions.add(m);
             ents.add(new PkbpEntity("arg" + i, m, new ArrayList<>()));
           }
@@ -1843,13 +1939,14 @@ public class PkbpSearching implements Serializable {
       }
       
       public static List<MultiEntityMention> makeDummyMems(Communication comm, ComputeIdf df, int maxSentenceLength) {
+        NNPSense.Caching attrFeatFunc = new NNPSense.Caching(comm);
         List<MultiEntityMention> res = new ArrayList<>();
         for (Tokenization tok : new TokenizationIter(comm)) {
           DependencyParse deps = IndexCommunications.getPreferredDependencyParse(tok);
           List<Integer> args = DependencySyntaxEvents.extractEntityHeads(tok);
           DependencySyntaxEvents.CoverArgumentsWithPredicates dse =
               new DependencySyntaxEvents.CoverArgumentsWithPredicates(comm, tok, deps, args, df);
-          List<MultiEntityMention> mems = MultiEntityMention.makeDummyMems(args, dse, tok, comm, maxSentenceLength);
+          List<MultiEntityMention> mems = MultiEntityMention.makeDummyMems(args, dse, tok, comm, attrFeatFunc, maxSentenceLength);
           res.addAll(mems);
         }
         return res;
@@ -2014,6 +2111,7 @@ public class PkbpSearching implements Serializable {
       Set<String> comms = new HashSet<>();
       for (SearchResultItem r : res.getSearchResultItems()) {
         Communication comm = commRet.apply(r.getCommunicationId());
+        NNPSense.Caching attrFeatFunc = new NNPSense.Caching(comm);
         Tokenization toks = IndexCommunications.findTok(r.getSentenceId().getUuidString(), comm);
         DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
         
@@ -2043,7 +2141,7 @@ public class PkbpSearching implements Serializable {
         try (TB tb = timer().new TB("linkMEMs")) {
           for (int pred : dse.situation2args.keySet()) {
             MultiEntityMention mem = resolveArguments(
-                pred, dse, deps, toks, comm, entities, df, ts, sitFeatCounts, reasonsForFiltering);
+                pred, dse, deps, toks, comm, attrFeatFunc, entities, df, ts, sitFeatCounts, reasonsForFiltering);
             if (mem != null)
               mems.add(mem);
           }
@@ -2061,6 +2159,7 @@ public class PkbpSearching implements Serializable {
         DependencyParse deps,
         Tokenization toks,
         Communication comm,
+        NNPSense.Caching attrFeatFunc,
         List<PkbpEntity> entities,
         ComputeIdf df,
         TriageSearch ts,
@@ -2103,7 +2202,7 @@ public class PkbpSearching implements Serializable {
       for (int i = 0; i < ars.length; i++) {
         Span span = IndexCommunications.nounPhraseExpand(ars[i], deps);
         String nerType = IndexCommunications.nerType(ars[i], toks);
-        argMentions[i] = new PkbpEntity.Mention(ars[i], span, nerType, toks, deps, comm);
+        argMentions[i] = new PkbpEntity.Mention(ars[i], span, nerType, toks, deps, comm, attrFeatFunc);
         if (debug) {
           Log.info("arg(" + i + "): " + argMentions[i].getContextAroundHead(w, w, true));
         }
@@ -2180,6 +2279,7 @@ public class PkbpSearching implements Serializable {
         int maxResults,
         double minLinkScore,
         Function<String, Communication> commRet,
+        Map<String, NNPSense.Caching> attrFeatFuncs,
         ComputeIdf df,
         TriageSearch ts,
         Set<String> ignoreCommToks) {
@@ -2211,25 +2311,50 @@ public class PkbpSearching implements Serializable {
 
       try {
         Log.info("issuing query: " + query);
+        timer().start("kbpEntitySearchService/search");
         SearchResult res = kbpEntitySearchService.search(query);
+        timer().stop("kbpEntitySearchService/search");
         Log.info("got back " + res.getSearchResultItemsSize() + " results for " + entity + ", retrieving comms...");
         int skipped = 0;
+
+        Map<String, Communication> commRetCache = new HashMap<>();
+        PkbpEntity.Mention m0 = entity.getMention(0);
+        assert m0.getCommunication() != null;
+        commRetCache.put(m0.getCommunicationId(), m0.getCommunication());
+
         List<EntLink> added = new ArrayList<>();
         TimeMarker tm = new TimeMarker();
         for (SearchResultItem r : res.getSearchResultItems()) {
-          Communication comm;
-          try (TB tb = timer().new TB("fetchCommForSearchResult")) {
-            comm = commRet.apply(r.getCommunicationId());
+
+          String commId = r.getCommunicationId();
+          Communication comm = commRetCache.get(commId);
+          NNPSense.Caching attrFeatFunc;
+          if (comm == null) {
+            try (TB tb = timer().new TB("fetchCommForSearchResult")) {
+              comm = commRet.apply(r.getCommunicationId());
+            }
+            commRetCache.put(commId, comm);
+            attrFeatFunc = new NNPSense.Caching(comm);
+            Object old = attrFeatFuncs.put(commId, attrFeatFunc);
+            assert old == null;
+          } else {
+            attrFeatFunc = attrFeatFuncs.get(commId);
+            assert attrFeatFunc != null;
           }
-          PkbpEntity.Mention m = null;
-          try (TB tb = timer().new TB("recoverEntHeadFromSearchResult")) {
-            m = PkbpEntity.Mention.convertWithoutHeadSpecified(r, comm, df, ts, entity);
-          }
-          
+
           if (tm.enoughTimePassed(2)) {
             Log.info("processed=" + added.size() + " skipped=" + skipped);
           }
-      
+          
+          PkbpEntity.Mention m = null;
+          try (TB tb = timer().new TB("recoverEntHeadFromSearchResult")) {
+            m = PkbpEntity.Mention.convertWithoutHeadSpecified(r, comm, attrFeatFunc, df, ts, entity);
+            if (m == null) {
+              skipped++;
+              continue;
+            }
+          }
+          
           EntLink link = scoreEntLink(entity, m, df, ts);
           if (Feat.sum(link.score) < minLinkScore) {
             skipped++;
@@ -2458,8 +2583,6 @@ public class PkbpSearching implements Serializable {
     /**
      * @param outputSitAndArgs contains values of (sitMention, entMentionsWithArgArgsOfThisSitMention)
      */
-//    public void extractSituationsAndArgument(PkbpNode emNode, List<PA> output, ComputeIdf df, TriageSearch ts) {
-//      PkbpEntity.Mention em = (PkbpEntity.Mention) emNode.obj;
     public void extractSituationsAndArgument(PkbpEntity.Mention em, List<PA> output, ComputeIdf df, TriageSearch ts) {
       timer().start("extractSituationsAndArgument");
       Communication c = em.getCommunication();
@@ -2511,7 +2634,7 @@ public class PkbpSearching implements Serializable {
           
           Span argSpan = IndexCommunications.nounPhraseExpand(argHead, deps);
           String nerType = IndexCommunications.nerType(argHead, t);
-          PkbpEntity.Mention argEm = new PkbpEntity.Mention(argHead, argSpan, nerType, t, deps, c);
+          PkbpEntity.Mention argEm = new PkbpEntity.Mention(argHead, argSpan, nerType, t, deps, c, em.getAttrFeatFunc());
           argEm.scoreTriageFeatures(ts);
 //          outputArgumentEntMentions.add(argEm);
           pa.otherArgs.add(argEm);
@@ -2980,7 +3103,8 @@ public class PkbpSearching implements Serializable {
     List<Feat> relevanceReasons = new ArrayList<>();
     relevanceReasons.add(new Feat("seed", seedWeight));
 
-    PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
+    NNPSense.Caching attrFeatFunc = null;   // TODO Thread this up the stack if needed
+    PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical, attrFeatFunc);
     assert canonical2.getCommunication() != null;
     canonical2.getContextDoc();
 //    canonical2.getAttrCommFeatures();
@@ -3169,7 +3293,8 @@ public class PkbpSearching implements Serializable {
     Map<PkbpEntity.Mention, LL<PkbpEntity>> entDups = new HashMap<>();
     Map<PkbpSituation.Mention, LL<PkbpSituation>> sitDups = new HashMap<>();
     for (SitSearchResult s : mentions) {
-      PkbpEntity.Mention em = new PkbpEntity.Mention(s);
+      NNPSense.Caching attrFeatFunc = null;   // TODO Thread this up the stack if needed
+      PkbpEntity.Mention em = new PkbpEntity.Mention(s, attrFeatFunc);
       TokenTagging ner = IndexCommunications.getPreferredNerTags(em.getTokenization());
       em.nerType = ner.getTaggedTokenList().get(em.head).getTag();
       Pair<List<EntLink>, List<SitLink>> x = proposeLinks(em, df);
@@ -3618,7 +3743,7 @@ public class PkbpSearching implements Serializable {
     for (int entHead : entHeads) {
       Span span = IndexCommunications.nounPhraseExpand(entHead, deps);
       String nerType = ner.getTaggedTokenList().get(entHead).getTag();
-      PkbpEntity.Mention m = new PkbpEntity.Mention(entHead, span, nerType, t, deps, c);
+      PkbpEntity.Mention m = new PkbpEntity.Mention(entHead, span, nerType, t, deps, c, searchResult.getAttrFeatFunc());
       List<EntLink> el = linkEntityMention(m, defaultScoreOfCreatingNewEntity);
       assert el.size() > 0;
       assert el.get(0).newEntity;
@@ -3817,14 +3942,10 @@ public class PkbpSearching implements Serializable {
 //    AccumuloIndex.TIMER.stop("expandEntity");
 //  }
   
+  private static MultiTimer debugScoreEntLinkMT = new MultiTimer();
+  
   public static EntLink scoreEntLink(PkbpEntity e, PkbpEntity.Mention r, ComputeIdf df, TriageSearch ts) {
-    double prior = 1;
-    return scoreEntLink(e, r, df, ts, prior);
-  }
-  public static EntLink scoreEntLink(PkbpEntity e, PkbpEntity.Mention r, ComputeIdf df, TriageSearch ts, double prior) {
-    if (prior < 0 || Double.isInfinite(prior) || Double.isNaN(prior))
-      throw new IllegalArgumentException("prior=" + prior);
-
+    long start = System.currentTimeMillis();
     boolean verboseLinking = false;
     
     // Forces e and r to match on NER type, should greatly reduce the amount of work done
@@ -3833,6 +3954,7 @@ public class PkbpSearching implements Serializable {
     List<Feat> fs = new ArrayList<>();
     //fs.add(new Feat("intercept", -1));
 
+    debugScoreEntLinkMT.start("gigawordDate");
     GigawordId gwE = new GigawordId(e.getMention(0).getCommunicationId());
     GigawordId gwR = new GigawordId(r.getCommunicationId());
     if (gwE.isValid() && gwR.isValid()) {
@@ -3845,6 +3967,7 @@ public class PkbpSearching implements Serializable {
       if (gwE.matchesSource(gwR))
         fs.add(new Feat("matchesSource", 0.5));
     }
+    debugScoreEntLinkMT.stop("gigawordDate");
     
     if (!e.containsMentionWithNer(r.getHeadNer())) {
       fs.add(new Feat("nerMismatch/" + r.getHeadNer(), -2.5));
@@ -3855,6 +3978,7 @@ public class PkbpSearching implements Serializable {
     // Cosine similarity at document level
     if (verboseLinking)
       Log.info("cosine sim for " + e.id);
+    debugScoreEntLinkMT.start("ctxDoc");
     StringTermVec eCtxDoc = e.getContextDoc();
     StringTermVec rCtxDoc = r.getContextDoc();
     double tfidfCosineDoc = df.tfIdfCosineSim(eCtxDoc, rCtxDoc);
@@ -3864,17 +3988,21 @@ public class PkbpSearching implements Serializable {
       tfidfCosineDoc = 0.75;   // same doc
     }
     fs.add(new Feat("tfidfCosineDoc", 0.25 * (tfidfCosineDoc - 0.5)));
+    debugScoreEntLinkMT.stop("ctxDoc");
     
     
+    debugScoreEntLinkMT.start("ctxLocal");
     StringTermVec eCtxLocal = e.getContextLocal();
     StringTermVec rCtxLocal = r.getContextLocal();
     double tfidfCosineLocal = df.tfIdfCosineSim(eCtxLocal, rCtxLocal);
     fs.add(new Feat("tfidfCosineLocal", 0.5 * (tfidfCosineLocal - 0.5)));
+    debugScoreEntLinkMT.stop("ctxLocal");
 
 
     // Average triage feature similarity
     if (verboseLinking)
       Log.info("triage feats for " + e.id + " which has " + e.numMentions() + " mentions");
+    debugScoreEntLinkMT.start("triageSim");
     Average triage = new Average.Uniform();
     double triageMax = 0;
     for (PkbpEntity.Mention ss : e) {
@@ -3904,12 +4032,15 @@ public class PkbpSearching implements Serializable {
     fs.add(new Feat("triageMaxTfidfDoc", 10 * (0.1 + tfidfCosineDoc) * triageMax));
     fs.add(new Feat("triageAvgTfidfLocal", 20 * (0.1 + tfidfCosineLocal) * triage.getAverage()));
     fs.add(new Feat("triageMaxTfidfLocal", 10 * (0.1 + tfidfCosineLocal) * triageMax));
+    debugScoreEntLinkMT.stop("triageSim");
 
     // Attribute Features
     if (verboseLinking)
       Log.info("attr feats for " + e.id);
+    debugScoreEntLinkMT.start("attrSim");
     double attrFeatScore = 0;
     ArgMax<PkbpEntity.Mention> attrFeatMax = new ArgMax<>();
+//    attrFeatMax.offer(null, 0);
     for (PkbpEntity.Mention ss : e) {
       List<Feat> x = ss.getAttrFeatures();
       List<Feat> y = r.getAttrFeatures();
@@ -3935,11 +4066,7 @@ public class PkbpSearching implements Serializable {
     fs.add(new Feat("tfIdfAttrSqrtTriageMax", 2 * (0.1 + tfidfCosineDoc + tfidfCosineLocal) * (0.1 + triageMax) * attrFeatSqrt));
     fs.add(new Feat("tfIdfAttrMaxTriageMax",  2 * (0.1 + tfidfCosineDoc + tfidfCosineLocal) * (0.1 + triageMax) * attrFeatMax.getBestScore()));
     fs.add(new Feat("tfIdfAttrAvgTriageMax", 20 * (0.1 + tfidfCosineDoc + tfidfCosineLocal) * (0.1 + triageMax) * attrFeatAvg));
-
-    if (prior != 1) {
-      for (Feat f : fs)
-        f.rescale("prior", prior);
-    }
+    debugScoreEntLinkMT.stop("attrSim");
 
     double score = Feat.sum(fs);
 
@@ -3950,6 +4077,13 @@ public class PkbpSearching implements Serializable {
       System.out.println("features: " + fs);
       System.out.println();
     }
+    
+    double sec = (System.currentTimeMillis() - start) / 1000d;
+    if (sec > 0.2) {
+      System.out.println("debugScoreEntLinkMT: " + debugScoreEntLinkMT);
+      Log.info("very slow scoring! sec=" + sec + " e=" + e + " r=" + r);
+    }
+
     return new EntLink(r, e, fs, false);
   }
 
@@ -4109,119 +4243,6 @@ public class PkbpSearching implements Serializable {
     return fs;
   }
 
-//  private Pair<PkbpEntity, PkbpEntity.Mention> chooseMentionToExpand() {
-//    AccumuloIndex.timer().start("chooseMentionToExpand");
-//    if (verbose)
-//      Log.info("nPkbEntities=" + entities.size());
-//    ChooseOne<PkbpEntity> ce = new ChooseOne<>(rand);
-//    for (PkbpEntity e : entities) {
-//      // This score characterizes centrality to the PKB/seed
-//      double w = Math.max(0d, e.getRelevanceWeight());
-//      if (verbose)
-//        Log.info("considering weight=" + w + "\t" + e);
-//      ce.offer(e, w);
-//    }
-//    PkbpEntity e = ce.choose();
-//    if (verbose)
-//      Log.info("chose " + e);
-//
-//    ec.increment("chooseMentionToExpand");
-//    if (e.id.startsWith("seed"))
-//      ec.increment("chooseMentionToExpand/seedEnt");
-//
-//    ChooseOne<PkbpEntity.Mention> cr = new ChooseOne<>(rand);
-//    if (verbose)
-//      Log.info("nMentions=" + e.numMentions() + " for=" + e.id);
-//    for (PkbpEntity.Mention r : e) {
-//      // This score measures quality of link to the entity
-////      double w = Math.max(1e-8, r.getScore());
-//      double w = 0;
-//      if (w == 0)
-//        throw new RuntimeException("impelment me");
-//      if (verbose) {
-//        Log.info("considering weight=" + w + "\t" + r.getEntitySpanGuess());
-//        System.out.println(r.getWordsInTokenizationWithHighlightedEntAndSit());
-//      }
-//      cr.offer(r, w);
-//    }
-//    PkbpEntity.Mention r = cr.choose();
-//    if (verbose) {
-//      Log.info("chose " + r.getEntitySpanGuess());
-//      System.out.println(r.getWordsInTokenizationWithHighlightedEntAndSit());
-//    }
-//    AccumuloIndex.TIMER.stop("chooseMentionToExpand");
-//    return new Pair<>(e, r);
-//  }
-
-//  /**
-//   * We can do three things with a relevant entity:
-//   * A) link it against an entity in the PKB
-//   * B) create a new Entity to put in PKB
-//   * C) nothing (prune/ignore the mention)
-//   * 
-//   * We break this down into two steps:
-//   * 1) Find the best entity and decide whether or not to link to it
-//   * 2) Conditioned on (1) decide whether to prune or add to PKB based on centrality score
-//   */
-////  public void linkRelatedEntity(SitSearchResult r, List<Feat> relevanceReasons) {
-//  public void linkRelatedEntity(PkbpEntity.Mention r, List<Feat> relevanceReasons) {
-//    AccumuloIndex.TIMER.start("linkRelatedEntity");
-//    if (verbose)
-//      Log.info("starting relevanceReasons=" + relevanceReasons);
-//    Pair<PkbpEntity, List<Feat>> link = linkEntityMentionToPkb(r);
-//    PkbpEntity e = link.get1();
-//    double linkingScore = Feat.sum(link.get2());
-//    if (linkingScore > 4) {
-//      // Link
-//      if (verbose)
-//        Log.info("LINKING " + r.getEntitySpanGuess() + " to " + e.id);
-//      e.addMention(r);
-//      history.add(new Action("LINKING", e, r));
-//      ec.increment("linkRel/pkbEnt");
-//    } else {
-//      // Decide whether to create a new entity
-//      double centralityScore = Feat.sum(relevanceReasons);
-//
-//      List<Feat> fNewEnt = new ArrayList<>();
-//
-//      fNewEnt.add(new Feat("relevance", 0.1 * centralityScore));    // only link relevant things
-//      fNewEnt.add(new Feat("linkQual", -2 * Math.max(0, linkingScore)));    // if it might not be NIL, then don't make it a new entity
-//      fNewEnt.add(new Feat("pkbSize", -0.05 * Math.sqrt(entity2situation.size()+1)));    // don't grow the PKB indefinitely
-//      fNewEnt.add(new Feat("triagePrec", 1 * (10*estimatePrecisionOfTriageFeatures(r, 0.01) - 2.0)));  // a proxy for whether this is a common entity or not
-//
-//      double lpNewEnt = Feat.sum(fNewEnt);
-//      double pNewEnt = 1 / (1 + Math.exp(-lpNewEnt));
-//      double t = rand.nextDouble();
-//
-//      if (verbose) {
-//        //Log.info("mention=" + r.getEntitySpanGuess() + "\tpNewEnt=" + pNewEnt + " lpNewEnt=" + lpNewEnt + " fNewEnt=" + fNewEnt);
-//        Log.info(String.format("%-38s pNewEnt=%.2f draw=%.2f lpNewEnt=%+.3f fNewEnt=%s",
-//            StringUtils.trim(r.getEntitySpanGuess(), 34), pNewEnt, t, lpNewEnt, fNewEnt));
-//      }
-//
-//      if (t < pNewEnt) {
-//        // New entity
-//        if (verbose)
-//          Log.info("NEW ENTITY " + r.getEntitySpanGuess());
-//        String id = r.getEntitySpanGuess().replaceAll("\\s+", "_");
-//        PkbpEntity newEnt = new PkbpEntity(id, r, relevanceReasons);
-//        entities.add(newEnt);
-//        history.add(new Action("NEW_ENTITY", newEnt, r, e));
-//        ec.increment("linkRel/newEnt");
-//      } else {
-//        // Prune this mention
-//        // no-op
-//        if (verbose)
-//          Log.info("PRUNING " + r.getEntitySpanGuess());
-//        history.add(new Action("PRUNE", e, r));
-//        ec.increment("linkRel/prune");
-//      }
-//    }
-//    if (verbose)
-//      Log.info("done");
-//    AccumuloIndex.TIMER.stop("linkRelatedEntity");
-//  }
-
   public static double estimatePrecisionOfTriageFeatures(PkbpEntity.Mention r, TriageSearch ts, double tolerance) {
     boolean verbose = false;
     timer().start("estimatePrecisionOfTriageFeatures");
@@ -4277,7 +4298,7 @@ public class PkbpSearching implements Serializable {
    * 
    * This method doesn't modify the PKB/state of this instance.
    */
-  public List<Pair<PkbpEntity.Mention, List<Feat>>> extractRelatedEntities(PkbpEntity relevantTo, SitSearchResult newMention) {
+  public List<Pair<PkbpEntity.Mention, List<Feat>>> extractRelatedEntities(PkbpEntity relevantTo, SitSearchResult newMention, NNPSense.Caching attrFeatFunc) {
     timer().start("extractRelatedEntities");
     List<Pair<PkbpEntity.Mention, List<Feat>>> out = new ArrayList<>();
     ec.increment("exRel");
@@ -4312,7 +4333,7 @@ public class PkbpSearching implements Serializable {
       int headIdx = em.getTokens().getAnchorTokenIndex();
       assert headIdx >= 0;
       Span span = IndexCommunications.nounPhraseExpand(headIdx, deps);
-      PkbpEntity.Mention rel = new PkbpEntity.Mention(headIdx, span, nerType, toks, deps, comm);
+      PkbpEntity.Mention rel = new PkbpEntity.Mention(headIdx, span, nerType, toks, deps, comm, attrFeatFunc);
 
 
       List<Feat> relevanceReasons = new ArrayList<>();

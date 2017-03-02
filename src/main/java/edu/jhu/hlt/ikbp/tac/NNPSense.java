@@ -1,9 +1,12 @@
 package edu.jhu.hlt.ikbp.tac;
 
+import java.io.File;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -39,12 +42,16 @@ import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.ConcreteUtil;
+import edu.jhu.util.MultiMap;
 import edu.jhu.util.TokenizationIter;
 
 /**
@@ -215,7 +222,9 @@ public class NNPSense {
 //      }
 //    }
     
-    countCommonPathsLeavingEntities(config);
+//    countCommonPathsLeavingEntities(config);
+    
+    Caching.test();
   }
   
   public static void countFirstNames(ExperimentProperties config) throws Exception {
@@ -237,10 +246,12 @@ public class NNPSense {
   }
   
   // TODO Put this in tutils
-  public static void oneHop(List<Pair<Integer, LL<Dependency>>> from, BitSet visited, DependencyParse deps) {
+//  public static void oneHop(List<Pair<Integer, LL<Dependency>>> from, BitSet visited, DependencyParse deps) {
+  public static void oneHop(List<Walk> from, BitSet visited, DependencyParse deps) {
     int n = from.size();
     for (int i = 0; i < n; i++) {
-      int f = from.get(i).get1();
+//      int f = from.get(i).get1();
+      int f = from.get(i).dest;
       visited.set(f);
       for (Dependency d : deps.getDependencyList()) {
         int to = -1;
@@ -250,8 +261,11 @@ public class NNPSense {
           to = d.getGov();
         if (to >= 0 && !visited.get(to)) {
           visited.set(to);  // You only need this line if not a tree
-          LL<Dependency> path = new LL<>(d, from.get(i).get2());
-          from.add(new Pair<>(to, path));
+//          LL<Dependency> path = new LL<>(d, from.get(i).get2());
+          LL<Dependency> path = new LL<>(d, from.get(i).edges);
+//          from.add(new Pair<>(to, path));
+          int source = from.get(0).source;
+          from.add(new Walk(source, to, path));
         }
       }
     }
@@ -261,14 +275,31 @@ public class NNPSense {
   /**
    * returned values are (pathEndpointTokenIndex, path)
    */
-  public static List<Pair<Integer, LL<Dependency>>> kHop(int from, int k, DependencyParse deps) {
-    List<Pair<Integer, LL<Dependency>>> paths = new ArrayList<>();
-    paths.add(new Pair<>(from, null));
+//  public static List<Pair<Integer, LL<Dependency>>> kHop(int from, int k, DependencyParse deps) {
+  public static List<Walk> kHop(int from, int k, DependencyParse deps) {
+//    List<Pair<Integer, LL<Dependency>>> paths = new ArrayList<>();
+    List<Walk> paths = new ArrayList<>();
+//    paths.add(new Pair<>(from, null));
+    paths.add(new Walk(from, from, null));
     BitSet visited = new BitSet();
     for (int i = 0; i < k; i++)
       oneHop(paths, visited, deps);
     return paths;
   }
+
+  static class Walk {
+    public final int source, dest;
+    public final LL<Dependency> edges;
+//    private List<Dependency> edgeList;
+    
+    public Walk(int source, int dest, LL<Dependency> edges) {
+      this.source = source;
+      this.dest = dest;
+      this.edges = edges;
+    }
+  }
+  
+
   
   private static ArrayDeque<String> reverseDeps(LL<Dependency> deps) {
     ArrayDeque<String> d = new ArrayDeque<>();
@@ -333,17 +364,16 @@ public class NNPSense {
             String sourcePos = pos.get(source).getTag();
             if (!sourcePos.toUpperCase().startsWith("NNP"))
               continue;
-            List<Pair<Integer, LL<Dependency>>> paths = kHop(source, 4, deps);
-            for (Pair<Integer, LL<Dependency>> p : paths) {
-              int dest = p.get1();
-              String destPos = pos.get(dest).getTag();
+            List<Walk> paths = kHop(source, k, deps);
+            for (Walk p : paths) {
+              String destPos = pos.get(p.dest).getTag();
               
               // TODO Check that path only *ends* in an interesting POS, rather that going over them.
               // e.g. we want a path that leads to "New York" to end with the head, "York", and not include "New"
               // This matters for backoff (where the path is lost) and avoiding double-counting.
               int length = 0;
               BitSet interestingOnPath = new BitSet();
-              for (LL<Dependency> cur = p.get2(); cur != null; cur = cur.next) {
+              for (LL<Dependency> cur = p.edges; cur != null; cur = cur.next) {
                 length++;
                 Dependency d = cur.item;
                 if (d.isSetGov() && interestingPos.contains(pos.get(d.getGov()).getTag()))
@@ -354,8 +384,8 @@ public class NNPSense {
 
               // Build the path
               String sourceNer = ner.get(source).getTag();
-              String destWord = t.get(dest).getText();
-              ArrayDeque<String> path = reverseDeps(p.get2());
+              String destWord = t.get(p.dest).getText();
+              ArrayDeque<String> path = reverseDeps(p.edges);
               path.addFirst(sourceNer);
               path.addLast(destWord);
               // e.g. ORGANIZATION-appos-nn-Boston
@@ -366,29 +396,29 @@ public class NNPSense {
               // See if you want to keep it
               if (length == 0) {
                 if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("skipping b/c length=0: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                  Log.info("skipping b/c length=0: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
                 continue;
               }
               if (interestingOnPath.cardinality() > 2) {
                 if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("skipping b/c mult interesting on path: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                  Log.info("skipping b/c mult interesting on path: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
                 continue;
               }
               if (destPos.startsWith("JJ") && length > 1) {
                 if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("skipping b/c long JJ*: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                  Log.info("skipping b/c long JJ*: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
                 continue;
               }
               if (interestingPos.contains(destPos)) {
                 if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("keeping: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                  Log.info("keeping: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
                 if (uniq.add(x))
                   attr.add(x);
                 if (uniq.add(xBackoff))
                   attr.add(xBackoff);
               } else {
                 if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("skipping b/c not interesting: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                  Log.info("skipping b/c not interesting: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
               }
 
             }
@@ -413,26 +443,258 @@ public class NNPSense {
     double k = 2;
     return (k + 1) / (k + deps.size());
   }
-
+  
   /**
-   * Returns strings like "PERSON-nn-Dr." where PERSON matches the given nameHead
+   * Caches extractAttributeFeaturesNewAndImproved in an efficient way.
+   * Instantiate one of these per Communication.
    */
-  public static List<Feat> extractAttributeFeaturesNewAndImproved(String tokUuid, Communication c, String nerType, String... nameHeads) {
-    return extractAttributeFeaturesNewAndImproved(tokUuid, c, nerType, Arrays.asList(nameHeads));
-  }
-  public static List<Feat> extractAttributeFeaturesNewAndImproved(String tokUuid, Communication c, String nerType, List<String> nameHeads) {
-    if (EXTRACT_ATTR_FEAT_VERBOSE)
-      Log.info("comm=" + c.getId() + " nameHeads=" + nameHeads + " tok=" + tokUuid);
+  public static class Caching {
+    private Communication comm;
+    private List<Tokenization> toks;
+    private List<DependencyParse> deps;
+    private List<TokenTagging> pos;
+    private List<TokenTagging> ner;
+    private MultiMap<String, IntPair> word2loc;
+    private Map<IntPair, List<Walk>> khopCache;
     
+    public Caching(Communication comm) {
+      this.comm = comm;
+      this.khopCache = new HashMap<>();
+      // Be lazy about initializing fields
+    }
+    
+    List<Walk> kHop(int tokenization, int token) {
+      IntPair ij = new IntPair(tokenization, token);
+      List<Walk> w = khopCache.get(ij);
+      if (w == null) {
+        w = NNPSense.kHop(token, k, deps.get(tokenization));
+        khopCache.put(ij, w);
+      }
+      return w;
+    }
+
+    public List<Feat> extractAttributeFeaturesNewAndImproved(
+        String tokUuid, Communication c, String nerType, List<String> nameHeads) {
+
+      if (EXTRACT_ATTR_FEAT_VERBOSE)
+        Log.info("starting, tokUuid=" + tokUuid + " nerType=" + nerType + " nameHeads=" + nameHeads);
+      
+      if (toks == null) {
+        if (EXTRACT_ATTR_FEAT_VERBOSE)
+          Log.info("building toks/deps/pos/ner");
+        toks = new ArrayList<>();
+        deps = new ArrayList<>();
+        pos = new ArrayList<>();
+        ner = new ArrayList<>();
+        for (Tokenization t : new TokenizationIter(comm)) {
+          toks.add(t);
+          deps.add(IndexCommunications.getPreferredDependencyParse(t));
+          pos.add(IndexCommunications.getPreferredPosTags(t));
+          ner.add(IndexCommunications.getPreferredNerTags(t));
+        }
+      }
+      
+      if (word2loc == null) {
+        if (EXTRACT_ATTR_FEAT_VERBOSE)
+          Log.info("building word2loc");
+        word2loc = new MultiMap<>();
+        for (int i = 0; i < toks.size(); i++) {
+          List<Token> t = toks.get(i).getTokenList().getTokenList();
+          for (int j = 0; j < t.size(); j++) {
+            String w = t.get(j).getText().toLowerCase();
+            word2loc.add(w, new IntPair(i, j));
+          }
+        }
+      }
+      
+      List<Feat> attr = new ArrayList<>();
+      Set<String> uniq = new HashSet<>();
+      
+      // Loop over each (word, position) in the document matching any word in nameHeads
+      Set<IntPair> seen = new HashSet<>();
+      for (String nameHead : nameHeads) {
+        for (IntPair ij : word2loc.get(nameHead.toLowerCase())) {
+          boolean s = seen.add(ij);
+          if (EXTRACT_ATTR_FEAT_VERBOSE)
+            Log.info("sent=" + ij.first + " tok=" + ij.second + " word=" + nameHead);
+          if (!s)
+            continue;
+
+          int source = ij.second;
+          boolean sameTok = tokUuid != null && tokUuid.equals(toks.get(ij.first).getUuid().getUuidString());
+          List<Token> t = toks.get(ij.first).getTokenList().getTokenList();
+          List<TaggedToken> pos = this.pos.get(ij.first).getTaggedTokenList();
+          
+          // nameHead/source must be an NNP*
+          String sourcePos = pos.get(source).getTag();
+          if (!sourcePos.toUpperCase().startsWith("NNP"))
+            continue;
+
+          // Only walk from heads which match on NER type
+          String sourceNer = ner.get(ij.first).getTaggedTokenList().get(source).getTag();
+          if (!sourceNer.equalsIgnoreCase(nerType))
+            continue;
+
+          // Perform a khop walk away from this location, collecting "interesting" walks */
+          List<Walk> paths = kHop(ij.first, source);
+          for (Walk p : paths) {
+            String destPos = pos.get(p.dest).getTag();
+            
+            // TODO Check that path only *ends* in an interesting POS, rather that going over them.
+            // e.g. we want a path that leads to "New York" to end with the head, "York", and not include "New"
+            // This matters for backoff (where the path is lost) and avoiding double-counting.
+            int length = 0;
+            BitSet interestingOnPath = new BitSet();
+            for (LL<Dependency> cur = p.edges; cur != null; cur = cur.next) {
+              length++;
+              Dependency d = cur.item;
+              if (d.isSetGov() && interestingPos.contains(pos.get(d.getGov()).getTag()))
+                interestingOnPath.set(d.getGov());
+              if (interestingPos.contains(pos.get(d.getDep()).getTag()))
+                interestingOnPath.set(d.getDep());
+            }
+            
+            // Bail out if not needed
+            if (length == 0) {
+              String x = "???";
+              if (EXTRACT_ATTR_FEAT_VERBOSE)
+                Log.info("skipping b/c length=0: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
+              continue;
+            }
+            if (interestingOnPath.cardinality() > 2) {
+              String x = "???";
+              if (EXTRACT_ATTR_FEAT_VERBOSE)
+                Log.info("skipping b/c mult interesting on path: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
+              continue;
+            }
+            if (destPos.startsWith("JJ") && length > 1) {
+              String x = "???";
+              if (EXTRACT_ATTR_FEAT_VERBOSE)
+                Log.info("skipping b/c long JJ*: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
+              continue;
+            }
+
+            // Build the path
+            String destWord = t.get(p.dest).getText();
+            ArrayDeque<String> path = reverseDeps(p.edges);
+
+            List<String> dp = new ArrayList<>();
+            dp.addAll(path);
+
+            path.addFirst(sourceNer);
+            path.addLast(destWord);
+            // e.g. ORGANIZATION-appos-nn-Boston
+            String x = StringUtils.join("-", path);
+            // e.g. ORGANIZATION-backoff-Boston
+            String xBackoff = sourceNer + "-backoff-" + destWord;
+            
+            Feat xf = new Feat(x, endpointPosScore(destPos) * attrFeatPathScore(dp, false));
+            Feat xbf = new Feat(xBackoff, 0.2 * endpointPosScore(destPos) * attrFeatPathScore(dp, true));
+            
+            if (sameTok) {
+              xf.rescale("tokSpecific", 2);
+              xbf.rescale("tokSpecific", 2);
+            }
+
+            // See if you want to keep it
+            if (interestingPos.contains(destPos)) {
+              if (EXTRACT_ATTR_FEAT_VERBOSE)
+                Log.info("keeping: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
+              if (uniq.add(x))
+                attr.add(xf);
+              if (uniq.add(xBackoff))
+                attr.add(xbf);
+            } else {
+              if (EXTRACT_ATTR_FEAT_VERBOSE)
+                Log.info("skipping b/c not interesting: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
+            }
+          }
+        }
+      }
+      
+      return attr;
+    }
+    
+    /**
+     * Check that static and caching methods return the same values.
+     */
+    public static void test() throws Exception {
+//      EXTRACT_ATTR_FEAT_VERBOSE = true;
+      MultiTimer mt = new MultiTimer();
+      File p = new File("../data/fetch-comms-cache");
+      List<String> comms = Arrays.asList(
+          "Gender_bias_on_Wikipedia.comm.gz", "AFP_ENG_20060322.0643.comm.gz", "Kaisheim.comm.gz", "AFP_ENG_19970214.0628.comm.gz", "AFP_ENG_20090419.0333.comm.gz",
+          "History_of_Derry_City_F.C..comm.gz", "Wilmington,_Delaware.comm.gz", "AFP_ENG_19970212.0764.comm.gz", "AFP_ENG_20041006.0637.comm.gz",
+          "Chuck_Jones.comm.gz", "Malawi_Independence_Medal.comm.gz", "NYT_ENG_20050919.0269.comm.gz", "AFP_ENG_20031013.0306.comm.gz",
+          "NYT_ENG_19960927.0601.comm.gz", "Ayyubid_dynasty.comm.gz", "NYT_ENG_20021028.0277.comm.gz", "2007_American_League_Division_Series.comm.gz",
+          "Arnold_Orville_Beckman.comm.gz", "Pierre_Fatou.comm.gz", "XIN_ENG_19970812.0020.comm.gz", "Douglas_Gibson.comm.gz");
+      for (String cf : comms) {
+        File f = new File(p, cf);
+        Log.info("reading from " + f.getPath());
+        Communication c = ConcreteUtil.readOneComm(f);
+        Caching ac = new Caching(c);
+
+        // Get a sentence with some entities in it
+        for (Tokenization t : new TokenizationIter(c)) {
+          List<Integer> args = DependencySyntaxEvents.extractEntityHeads(t);
+          if (args.isEmpty())
+            continue;
+          if (EXTRACT_ATTR_FEAT_VERBOSE)
+            Log.info("tok: " + t.getUuid().getUuidString());
+
+          // Extract attribute features for these mentions
+          int w = 60;
+          for (int a : args) {
+            PkbpEntity.Mention m = PkbpEntity.Mention.build(a, t, c, ac);
+            mt.start("optimized");
+            List<Feat> f1 = m.getAttrFeatures();
+            mt.stop("optimized");
+            mt.start("regular");
+            List<Feat> f2 = NNPSense.extractAttributeFeaturesNewAndImproved(m.tokUuid, c, m.getHeadNer(), m.getNNPWordsInSpan());
+            mt.stop("regular");
+
+            List<String> fs1 = Feat.demote(f1, false);
+            List<String> fs2 = Feat.demote(f2, false);
+            Collections.sort(fs1);
+            Collections.sort(fs2);
+
+            if (!fs1.equals(fs2)) {
+              System.out.println(m.getContextAroundHead(w, w, true));
+              System.out.println(fs1);
+              System.out.println(fs2);
+              System.out.println(mt);
+              throw new RuntimeException();
+            }
+          }
+        }
+      }
+      System.out.println(mt);
+      System.out.println(mt.get("regular").totalTimeInSeconds()
+          / mt.get("optimized").totalTimeInSeconds());
+      Log.info("done");
+    }
+  }
+  
+  public static final int k = 4;
+  static Set<String> interestingPos;
+  static {
     // Might want to expand this set
     // Currently it will miss "Italian" because it is an JJ
     // Perhaps I could actually take all high idf terms? This would miss titles like "Dr."
-    Set<String> interestingPos = new HashSet<>();
+    interestingPos = new HashSet<>();
     interestingPos.add("NNP");
     interestingPos.add("NNPS");
     interestingPos.add("CD");
     interestingPos.add("JJ");
     interestingPos.add("JJS");    // TODO might want to restrict these to one-hop paths
+  }
+
+  /**
+   * Returns strings like "PERSON-nn-Dr." where PERSON matches the given nameHead
+   */
+  public static List<Feat> extractAttributeFeaturesNewAndImproved(String tokUuid, Communication c, String nerType, List<String> nameHeads) {
+    if (EXTRACT_ATTR_FEAT_VERBOSE)
+      Log.info("starting, tokUuid=" + tokUuid + " nerType=" + nerType + " nameHeads=" + nameHeads);
     
     /*
      * TODO I need to be more strict than word match. I'm getting cases like "London"
@@ -440,6 +702,8 @@ public class NNPSense {
      */
 
     List<Feat> attr = new ArrayList<>();
+    Set<String> uniq = new HashSet<>();
+    
     for (Tokenization toks : new TokenizationIter(c)) {
       boolean sameTok = tokUuid != null && !tokUuid.equals(toks.getUuid().getUuidString());
       DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
@@ -449,7 +713,7 @@ public class NNPSense {
       if (EXTRACT_ATTR_FEAT_VERBOSE)
         Log.info("scanning: " + join(t));
       for (Token tok : t) {
-        Set<String> uniq = new HashSet<>(); // uniq per tokenization, otherwise multiple nameHeads means duplicates
+//        Set<String> uniq = new HashSet<>(); // uniq per tokenization, otherwise multiple nameHeads means duplicates
         for (String nameHead : nameHeads) {
           if (nameHead.equalsIgnoreCase(tok.getText())) {
             int source = tok.getTokenIndex();
@@ -461,17 +725,16 @@ public class NNPSense {
             if (!sourceNer.equalsIgnoreCase(nerType))
               continue;
 
-            List<Pair<Integer, LL<Dependency>>> paths = kHop(source, 4, deps);
-            for (Pair<Integer, LL<Dependency>> p : paths) {
-              int dest = p.get1();
-              String destPos = pos.get(dest).getTag();
+            List<Walk> paths = kHop(source, k, deps);
+            for (Walk p : paths) {
+              String destPos = pos.get(p.dest).getTag();
               
               // TODO Check that path only *ends* in an interesting POS, rather that going over them.
               // e.g. we want a path that leads to "New York" to end with the head, "York", and not include "New"
               // This matters for backoff (where the path is lost) and avoiding double-counting.
               int length = 0;
               BitSet interestingOnPath = new BitSet();
-              for (LL<Dependency> cur = p.get2(); cur != null; cur = cur.next) {
+              for (LL<Dependency> cur = p.edges; cur != null; cur = cur.next) {
                 length++;
                 Dependency d = cur.item;
                 if (d.isSetGov() && interestingPos.contains(pos.get(d.getGov()).getTag()))
@@ -479,10 +742,30 @@ public class NNPSense {
                 if (interestingPos.contains(pos.get(d.getDep()).getTag()))
                   interestingOnPath.set(d.getDep());
               }
+              
+              // Bail out if not needed
+              if (length == 0) {
+                String x = "???";
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c length=0: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
+                continue;
+              }
+              if (interestingOnPath.cardinality() > 2) {
+                String x = "???";
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c mult interesting on path: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
+                continue;
+              }
+              if (destPos.startsWith("JJ") && length > 1) {
+                String x = "???";
+                if (EXTRACT_ATTR_FEAT_VERBOSE)
+                  Log.info("skipping b/c long JJ*: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
+                continue;
+              }
 
               // Build the path
-              String destWord = t.get(dest).getText();
-              ArrayDeque<String> path = reverseDeps(p.get2());
+              String destWord = t.get(p.dest).getText();
+              ArrayDeque<String> path = reverseDeps(p.edges);
 
               List<String> dp = new ArrayList<>();
               dp.addAll(path);
@@ -503,31 +786,16 @@ public class NNPSense {
               }
 
               // See if you want to keep it
-              if (length == 0) {
-                if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("skipping b/c length=0: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
-                continue;
-              }
-              if (interestingOnPath.cardinality() > 2) {
-                if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("skipping b/c mult interesting on path: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
-                continue;
-              }
-              if (destPos.startsWith("JJ") && length > 1) {
-                if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("skipping b/c long JJ*: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
-                continue;
-              }
               if (interestingPos.contains(destPos)) {
                 if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("keeping: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                  Log.info("keeping: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
                 if (uniq.add(x))
                   attr.add(xf);
                 if (uniq.add(xBackoff))
                   attr.add(xbf);
               } else {
                 if (EXTRACT_ATTR_FEAT_VERBOSE)
-                  Log.info("skipping b/c not interesting: " + x + " endPos=" + pos.get(dest).getTag() + " head=" + nameHead);
+                  Log.info("skipping b/c not interesting: " + x + " endPos=" + pos.get(p.dest).getTag() + " head=" + nameHead);
               }
 
             }
@@ -572,13 +840,12 @@ public class NNPSense {
           String w0 = em.getEntityType(); //tokz.getTokenList().getTokenList().get(h).getText();
           
           // New cleaner way
-          List<Pair<Integer, LL<Dependency>>> paths = kHop(h, 3, deps);
-          for (Pair<Integer, LL<Dependency>> p : paths) {
-            int dest = p.get1();
-            String destPos = pos.get(dest).getTag();
-            if (properNouns.contains(destPos) && p.get2() != null) {
-              String destWord = tokz.getTokenList().getTokenList().get(dest).getText();
-              ArrayDeque<String> path = reverseDeps(p.get2());
+          List<Walk> paths = kHop(h, 3, deps);
+          for (Walk p : paths) {
+            String destPos = pos.get(p.dest).getTag();
+            if (properNouns.contains(destPos) && p.edges != null) {
+              String destWord = tokz.getTokenList().getTokenList().get(p.dest).getText();
+              ArrayDeque<String> path = reverseDeps(p.edges);
               path.addFirst(w0);
               path.addLast(destWord);
               String x = StringUtils.join("-", path);

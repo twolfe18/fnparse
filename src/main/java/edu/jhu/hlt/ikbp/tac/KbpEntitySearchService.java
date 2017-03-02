@@ -334,7 +334,7 @@ public class KbpEntitySearchService implements SearchService.Iface {
 
     /* PERFORM THE QUERY ******************************************************/
     try {
-      PkbpEntity.Mention query = new PkbpEntity.Mention(head, span, nerType, toks, deps, comm);
+      PkbpEntity.Mention query = new PkbpEntity.Mention(head, span, nerType, toks, deps, comm, null);
       if (verbose)
         Log.info("query: " + query);
       List<SitSearchResult> mentions = wrapped.entityMentionSearch(query);

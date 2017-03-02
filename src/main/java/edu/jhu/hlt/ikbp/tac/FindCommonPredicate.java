@@ -22,6 +22,7 @@ import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.ikbp.tac.NNPSense.Walk;
 import edu.jhu.hlt.ikbp.tac.PkbpSearching.New.MultiEntityMention;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -30,7 +31,6 @@ import edu.jhu.hlt.tutils.LabeledDirectedGraph;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimedCallback;
-import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
 import edu.jhu.util.DiskBackedFetchWrapper;
 
@@ -48,6 +48,9 @@ import edu.jhu.util.DiskBackedFetchWrapper;
  * This is done by extracting features on a token position and
  * summing the weight of these features across the situation mentions.
  * The weight of a feature is proportional to 1/frequency(feature).
+ * 
+ * @deprecated
+ * @see DependencyTreeRandomWalk.Analysis for the new way of doing trigger id.
  * 
  * @author travis
  */
@@ -374,9 +377,9 @@ public class FindCommonPredicate implements Serializable {
     
     Set<Integer> seen = new HashSet<>();
     for (int head : heads) {
-      List<Pair<Integer, LL<Dependency>>> ppaths = NNPSense.kHop(head, maxEdges, deps);
-      for (Pair<Integer, LL<Dependency>> pp : ppaths) {
-        int endpoint = pp.get1();
+      List<Walk> ppaths = NNPSense.kHop(head, maxEdges, deps);
+      for (Walk pp : ppaths) {
+        int endpoint = pp.dest;
         
         // Endpoints should be uniq
         if (!seen.add(endpoint))
@@ -385,7 +388,7 @@ public class FindCommonPredicate implements Serializable {
         //      String predWord = toks.get(endpoint).getText();
         //      String predWord = lemmas.getTaggedTokenList().get(endpoint).getTag().toLowerCase();
         String predWord = toks.get(endpoint).getText().toLowerCase();
-        LL<Dependency> path = pp.get2();
+        LL<Dependency> path = pp.edges;
         if (argPositions.get(endpoint) || pathContains(path, argPositions))
           continue;
         String featType = "pred"; // TODO
@@ -507,7 +510,8 @@ public class FindCommonPredicate implements Serializable {
   public static void mainTrainOnSmallCommCollection(ExperimentProperties config) throws Exception {
     Log.info("starting...");
     ComputeIdf df = new ComputeIdf(config.getFile("wordDocFreq"));
-    File commDir = config.getExistingDir("commDir", new File("data/sit-search/fetch-comms-cache"));
+//    File commDir = config.getExistingDir("commDir", new File("data/sit-search/fetch-comms-cache"));
+    File commDir = config.getExistingDir("commDir", new File("../data/fetch-comms-cache"));
     File output = config.getFile("output");
     int maxEdges = config.getInt("maxEdges", 4);
     int nhash = config.getInt("nhash", 10);

@@ -110,7 +110,7 @@ public class FeatureCardinalityEstimator implements Serializable {
         for (int arg : args) {
           Span s = IndexCommunications.nounPhraseExpand(arg, deps);
           String nerType = ner.getTaggedTokenList().get(arg).getTag();
-          PkbpEntity.Mention m = new PkbpEntity.Mention(arg, s, nerType, t, deps, c);
+          PkbpEntity.Mention m = new PkbpEntity.Mention(arg, s, nerType, t, deps, c, null);
           String mentionText = m.getSpanString();
           String[] headwords = mentionText.split("\\s+");
           List<String> tf = IndexCommunications.getEntityMentionFeatures(mentionText, headwords, nerType, tokObs, tokObsLc);

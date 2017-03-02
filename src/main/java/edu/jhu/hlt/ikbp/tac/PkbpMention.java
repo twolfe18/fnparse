@@ -86,10 +86,18 @@ public class PkbpMention implements Serializable {
     LabeledDirectedGraph g = getDeps2();
     return g.shortestPath(source, dest, true, includeEndpoints);
   }
+  
+  public String getWord(int i) {
+    return toks.getTokenList().getTokenList().get(i).getText();
+  }
+  
+  public String getNer(int i) {
+    TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
+    return ner.getTaggedTokenList().get(i).getTag();
+  }
 
   public String getHeadNer() {
-    TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
-    return ner.getTaggedTokenList().get(head).getTag();
+    return getNer(head);
   }
 
   public String getHeadPos() {

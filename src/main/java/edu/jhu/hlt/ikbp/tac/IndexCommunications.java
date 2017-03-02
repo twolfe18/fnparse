@@ -824,6 +824,8 @@ public class IndexCommunications implements AutoCloseable {
         if (d.getDep() > right) right = d.getDep();
       }
     }
+    assert left <= right;
+    assert right <= 1000;
     return Span.getSpan(left, right+1);
   }
   

@@ -27,6 +27,7 @@ import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.ikbp.tac.NNPSense.Walk;
 import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -41,7 +42,6 @@ import edu.jhu.hlt.uberts.io.ManyDocRelationFileIterator.RelDoc;
 import edu.jhu.hlt.uberts.io.RelationFileIterator;
 import edu.jhu.hlt.uberts.io.RelationFileIterator.RelLine;
 import edu.jhu.hlt.utilt.AutoCloseableIterator;
-import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
 import edu.jhu.util.TokenizationIter;
 import edu.mit.jwi.IRAMDictionary;
@@ -1095,16 +1095,16 @@ public class DependencySyntaxEvents {
       fx.add("word/" + predWord + "." + predPos);
       fx.add("pos/" + predPos);
       int k = 5;
-      List<Pair<Integer, LL<Dependency>>> paths = NNPSense.kHop(pred, k, deps);
+      List<Walk> paths = NNPSense.kHop(pred, k, deps);
       pathloop:
-      for (Pair<Integer, LL<Dependency>> path : paths) {
-        if (path.get2() == null)
+      for (Walk path : paths) {
+        if (path.edges == null)
           continue;
         StringBuilder sb = new StringBuilder();
         sb.append("dsyn/");
-        int to = path.get1();
+        int to = path.dest;
         int len = 0;
-        for (LL<Dependency> cur = path.get2(); cur != null; cur = cur.next) {
+        for (LL<Dependency> cur = path.edges; cur != null; cur = cur.next) {
           Dependency d = cur.item;
           boolean up = d.getDep() == to;
           assert up || d.getGov() == to;
@@ -1118,7 +1118,7 @@ public class DependencySyntaxEvents {
           to = up ? d.getGov() : d.getDep();
           len++;
         }
-        String arg = t.getTokenList().getTokenList().get(path.get1()).getText();
+        String arg = t.getTokenList().getTokenList().get(path.dest).getText();
         fx.add(sb.toString());
         sb.append('/');
         sb.append(arg);

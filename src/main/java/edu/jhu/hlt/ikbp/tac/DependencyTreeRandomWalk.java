@@ -33,6 +33,12 @@ import edu.jhu.util.CountMinSketch.StringCountMinSketch;
 import edu.jhu.util.DiskBackedFetchWrapper;
 import edu.jhu.util.TokenizationIter;
 
+/**
+ * Methods for computing probabilities of landing at various nodes in a dependency
+ * tree by doing random walks.
+ *
+ * @author travis
+ */
 public class DependencyTreeRandomWalk {
   
   public static boolean INCLUDE_TOP_DOWN_FACTOR = false;
@@ -135,8 +141,8 @@ public class DependencyTreeRandomWalk {
   static class WalkFeat implements Serializable {
     private static final long serialVersionUID = 1119162602335405132L;
 
-    public final String arg0Type, arg1Type;
-    public final String dest;
+    public final String arg0Type, arg1Type; // e.g. NER types like PERSON and ORGANIZATION
+    public final String dest;   // e.g. a trigger word like "resigned"
     private int count;    // for merging samples
     
     public WalkFeat(String a0Type, String a1Type, String dest) {
@@ -277,11 +283,14 @@ public class DependencyTreeRandomWalk {
     return wf;
   }
   
+  /**
+   * Stores the counts for (arg0NerType, arg1NerType, triggerWord)
+   */
   static class WalkFeatCounts implements Serializable {
     private static final long serialVersionUID = 904047685299756787L;
 
     private Map<WalkFeat, StringCountMinSketch> counts;
-    private StringCountMinSketch countsBackoff;
+    private StringCountMinSketch countsBackoff;   // trigger word counts ignoring arg/NER types
     private int nhash, logb;
     private int maxSentLen;
     private Set<String> importantNerTypes;
@@ -349,6 +358,11 @@ public class DependencyTreeRandomWalk {
     }
   }
 
+  /**
+   * Given two positions in a dependency tree (argument heads) and some
+   * aggregate statistics (WalkFeatCounts) about what is common,
+   * make a prediction about what is likely to be the trigger in situ.
+   */
   static class Analysis {
     private Tokenization toks;
     private String[] words;   // word.pos

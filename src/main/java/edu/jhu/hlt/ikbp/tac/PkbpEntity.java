@@ -26,7 +26,9 @@ import edu.jhu.hlt.ikbp.tac.TacKbp.KbpQuery;
 import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.TokenObservationCounts;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.TokenizationIter;
@@ -46,11 +48,17 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     Span span;  // should contain the head
     String nerType;
     List<Feat> triageFeatures;
-//    private List<Feat> attrCommFeatures;
-//    private List<Feat> attrTokFeatures;
+    
+    private NNPSense.Caching attrFeatureFunction;
     private List<Feat> attrFeatures;
 
-    public static PkbpEntity.Mention convert(KbpQuery seed, TacQueryEntityMentionResolver emFinder, ComputeIdf df, TriageSearch ts) {
+    public static PkbpEntity.Mention convert(
+        KbpQuery seed,
+        TacQueryEntityMentionResolver emFinder,
+        ComputeIdf df,
+        TriageSearch ts,
+        NNPSense.Caching attrFeatFunc) {
+
       if (seed.sourceComm == null)
         throw new IllegalArgumentException("KbpQuery must have comm");
       if (seed.entityMention == null) {
@@ -98,7 +106,7 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
         throw new RuntimeException();
       canonical.yhatQueryEntitySpan = IndexCommunications.MturkCorefHit.convert(em.getTokens());
 
-      PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical);
+      PkbpEntity.Mention canonical2 = new PkbpEntity.Mention(canonical, attrFeatFunc);
       assert canonical2.span == canonical.yhatQueryEntitySpan;
       assert canonical2.getCommunication() != null;
       canonical2.getContextDoc();
@@ -110,66 +118,105 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       return canonical2;
     }
 
-    public static Mention convertWithoutHeadSpecified(SearchResultItem r, Communication c, ComputeIdf df, TriageSearch ts, PkbpEntity searchedFor) {
+    static Counts<String> debugConvertWithoutHeadEC = new Counts<>();
+    static MultiTimer debugConvertWithoutHeadMT = new MultiTimer();
+    static TimeMarker debugConvertWithoutHeadTM = new TimeMarker();
+    
+    public static Mention convertWithoutHeadSpecified(
+        SearchResultItem r,
+        Communication c,
+        NNPSense.Caching attrFeatCache,
+        ComputeIdf df,
+        TriageSearch ts,
+        PkbpEntity searchedFor) {
       
 //      List<Feat> fs = Feat.sortAndPrune(searchedFor.getTriageFeatures(), 20);
       List<Feat> fs = searchedFor.getTriageFeatures();
       List<Integer> args;
       Tokenization toks = IndexCommunications.findTok(r.getSentenceId().getUuidString(), c);
+      int nn = toks.getTokenList().getTokenListSize();
+      if (nn > 100) {
+        Log.info("skipping really long sentence, n=" + nn);
+        return null;
+      }
 
       // Loop over the arg heads, use score function to find best
       args = DependencySyntaxEvents.extractEntityHeads(toks);
       ArgMax<Mention> a = new ArgMax<>();
+      debugConvertWithoutHeadMT.start("try0");
+      debugConvertWithoutHeadEC.increment("try0/sentence");
       for (int ent : args) {
-        PkbpEntity.Mention entm = PkbpEntity.Mention.build(ent, toks, c);
+        PkbpEntity.Mention entm = PkbpEntity.Mention.build(ent, toks, c, attrFeatCache);
         
         // Check for some triage feature overlap
         Pair<Double, List<Feat>> x = Feat.cosineSim(fs, entm.getTriageFeatures());
         assert (x.get1() == 0) == x.get2().isEmpty();
-        if (x.get2().isEmpty())
+        if (x.get2().isEmpty()) {
+          debugConvertWithoutHeadEC.increment("try0/arg/skip");
           continue;
+        }
+        debugConvertWithoutHeadEC.increment("try0/arg/keep");
         
         EntLink el = PkbpSearching.scoreEntLink(searchedFor, entm, df, ts);
         a.offer(entm, Feat.sum(el.score));
       }
+      debugConvertWithoutHeadMT.stop("try0");
       
       // Backoff to NNP* tokens
       if (a.numOffers() == 0) {
+        debugConvertWithoutHeadMT.start("try1");
+        debugConvertWithoutHeadEC.increment("try1/sentence");
         args = DependencySyntaxEvents.nnp(toks);
         Log.info("all NNP* backoff, n=" + args.size());
         for (int ent : args) {
-          PkbpEntity.Mention entm = PkbpEntity.Mention.build(ent, toks, c);
+          PkbpEntity.Mention entm = PkbpEntity.Mention.build(ent, toks, c, attrFeatCache);
 
           // Check for some triage feature overlap
           Pair<Double, List<Feat>> x = Feat.cosineSim(fs, entm.getTriageFeatures());
           assert (x.get1() == 0) == x.get2().isEmpty();
-          if (x.get2().isEmpty())
+          if (x.get2().isEmpty()) {
+            debugConvertWithoutHeadEC.increment("try1/arg/skip");
             continue;
+          }
+          debugConvertWithoutHeadEC.increment("try1/arg/keep");
 
           EntLink el = PkbpSearching.scoreEntLink(searchedFor, entm, df, ts);
           a.offer(entm, Feat.sum(el.score));
         }
+        debugConvertWithoutHeadMT.stop("try1");
       }
 
       // Backoff to all tokens
       if (a.numOffers() == 0) {
+        debugConvertWithoutHeadMT.start("try2");
+        debugConvertWithoutHeadEC.increment("try2/sentence");
         args = new ArrayList<>();
         int n = toks.getTokenList().getTokenListSize();
         for (int i = 0; i < n; i++)
           args.add(i);
         Log.info("all tokens backoff, n=" + n);
         for (int ent : args) {
-          PkbpEntity.Mention entm = PkbpEntity.Mention.build(ent, toks, c);
+          PkbpEntity.Mention entm = PkbpEntity.Mention.build(ent, toks, c, attrFeatCache);
 
           // Check for some triage feature overlap
           Pair<Double, List<Feat>> x = Feat.cosineSim(fs, entm.getTriageFeatures());
           assert (x.get1() == 0) == x.get2().isEmpty();
-          if (x.get2().isEmpty())
+          if (x.get2().isEmpty()) {
+            debugConvertWithoutHeadEC.increment("try2/arg/skip");
             continue;
+          }
+          debugConvertWithoutHeadEC.increment("try2/arg/keep");
 
           EntLink el = PkbpSearching.scoreEntLink(searchedFor, entm, df, ts);
           a.offer(entm, Feat.sum(el.score));
         }
+        debugConvertWithoutHeadMT.stop("try2");
+      }
+      
+      if (debugConvertWithoutHeadTM.enoughTimePassed(2)) {
+        Log.info("debugConvertWithoutHeadEC: " + debugConvertWithoutHeadEC);
+        Log.info("debugConvertWithoutHeadMT: " + debugConvertWithoutHeadMT);
+        System.out.println();
       }
 
       assert a.numOffers() > 0;
@@ -190,21 +237,22 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       Span span = IndexCommunications.nounPhraseExpand(head, deps);
       TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
       String nerType = ner.getTaggedTokenList().get(head).getTag();
-      Mention m = new Mention(head, span, nerType, toks, deps, c);
+      Mention m = new Mention(head, span, nerType, toks, deps, c, null);
       m.scoreTriageFeatures(ts);
       return m;
     }
 
-    public Mention(SitSearchResult ss) {
+    public Mention(SitSearchResult ss, NNPSense.Caching attrFeatFunc) {
       this(ss.yhatQueryEntityHead,
           ss.yhatQueryEntitySpan,
           ss.yhatQueryEntityNerType,
           ss.getTokenization(),
           IndexCommunications.getPreferredDependencyParse(ss.getTokenization()),
-          ss.getCommunication());
+          ss.getCommunication(),
+          attrFeatFunc);
     }
 
-    public Mention(int head, Span span, String nerType, Tokenization toks, DependencyParse deps, Communication comm) {
+    public Mention(int head, Span span, String nerType, Tokenization toks, DependencyParse deps, Communication comm, NNPSense.Caching attrFeatFunc) {
       super(head, toks, deps, comm);
       this.span = span;
       this.nerType = nerType;
@@ -214,14 +262,15 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       TokenObservationCounts tokObsLc = null;
       triageFeatures = Feat.promote(1, IndexCommunications.getEntityMentionFeatures(
           mentionText, headwords, nerType, tokObs, tokObsLc));
+      attrFeatureFunction = attrFeatFunc;
     }
 
-    public static Mention build(int head, Tokenization toks, Communication comm) {
+    public static Mention build(int head, Tokenization toks, Communication comm, NNPSense.Caching attrFeatFunc) {
       DependencyParse deps = IndexCommunications.getPreferredDependencyParse(toks);
       Span span = IndexCommunications.nounPhraseExpand(head, deps);
       TokenTagging ner = IndexCommunications.getPreferredNerTags(toks);
       String nerType = ner == null ? null : ner.getTaggedTokenList().get(head).getTag();
-      return new Mention(head, span, nerType, toks, deps, comm);
+      return new Mention(head, span, nerType, toks, deps, comm, attrFeatFunc);
     }
   
     public String getContextAroundSpanHtml(String spanClass) {
@@ -251,8 +300,6 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       t += "..";
       t += tokUuid.substring(tokUuid.length()-4);
       String nTf = triageFeatures == null ? "null" : "" + triageFeatures.size();
-//      String nAf = "(c=" + (attrCommFeatures == null ? "null" : attrCommFeatures.size());
-//      nAf += ",t=" + (attrTokFeatures == null ? "null" : attrTokFeatures.size()) + ")";
       String nAf = attrFeatures == null ? "null" : String.valueOf(attrFeatures.size());
       return "(EM h=" + getHeadWord() + "@" + head
           + " neType=" + nerType
@@ -266,26 +313,10 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
     public List<Feat> getTriageFeatures() {
       if (triageFeatures == null) {
 //        IndexCommunications.getEntityMentionFeatures(mentionText, headwords, nerType, tokObs, tokObsLc)
-        throw new RuntimeException("implement me");
+        throw new RuntimeException("implement me (or provide triageFeatures at construction)");
       }
       return triageFeatures;
     }
-    
-//    public List<Feat> getAttrCommFeatures() {
-//      if (attrCommFeatures == null) {
-//        attrCommFeatures = Feat.promote(1,
-//            NNPSense.extractAttributeFeatures(null, getCommunication(), getEntitySpanGuess().split("\\s+")));
-//      }
-//      return attrCommFeatures;
-//    }
-//    
-//    public List<Feat> getAttrTokFeatures() {
-//      if (attrTokFeatures == null) {
-//        attrTokFeatures = Feat.promote(1,
-//            NNPSense.extractAttributeFeatures(tokUuid, getCommunication(), getEntitySpanGuess().split("\\s+")));
-//      }
-//      return attrTokFeatures;
-//    }
     
     public String getHeadNer() {
       TokenTagging ner = IndexCommunications.getPreferredNerTags(getTokenization());
@@ -305,15 +336,31 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
       }
       return l;
     }
+    
+    public NNPSense.Caching getAttrFeatFunc() {
+      return attrFeatureFunction;
+    }
 
     public List<Feat> getAttrFeatures() {
       if (attrFeatures == null) {
-        attrFeatures = NNPSense.extractAttributeFeaturesNewAndImproved(
+        
+        if (attrFeatureFunction == null)
+          throw new RuntimeException("must set func if you want attr feats");
+        
+        attrFeatures = attrFeatureFunction.extractAttributeFeaturesNewAndImproved(
             tokUuid,
             getCommunication(),
             getHeadNer(),
             getNNPWordsInSpan());
 //            getEntitySpanGuess().split("\\s+"));
+
+//        attrFeatures = NNPSense.extractAttributeFeaturesNewAndImproved(
+//            tokUuid,
+//            getCommunication(),
+//            getHeadNer(),
+//            getNNPWordsInSpan());
+////            getEntitySpanGuess().split("\\s+"));
+
       }
       return attrFeatures;
     }
@@ -360,7 +407,6 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 
   public final String id;
 
-//  private List<Mention> mentions;
   // The first link is from source->this link, and its link features are effectively the "relevance features"
   private List<EntLink> mentions;
 
@@ -381,7 +427,6 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 //    this.relevantReasons = relevanceReasons;
     this.mentions = new ArrayList<>();
     addMention(new EntLink(canonical, this, relevanceReasons, true));
-    //Log.info(this);
   }
   
   public boolean containsMentionWithNer(String ner) {
@@ -427,11 +472,7 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
   public Mention guessCanonicalMention(ComputeIdf df) {
     // TODO Try out a few ways of doing this
     // For now: longest mention + tfidf with centroid
-//    StringTermVec center = getDocVec();
     ArgMax<Mention> a = new ArgMax<>();
-//    for (Mention m : this) {
-//      double s = df.tfIdfCosineSim(center, m.getContext());
-//      a.offer(m, m.span.width() + s/10d);
     for (EntLink l : mentions) {
       double w = 2 + Math.sqrt(1d+l.source.span.width());
       w *= Feat.sum(l.score);
@@ -548,7 +589,6 @@ public class PkbpEntity implements Serializable, Iterable<PkbpEntity.Mention> {
 
   @Override
   public Iterator<Mention> iterator() {
-//    return mentions.iterator();
     List<Mention> m = new ArrayList<>();
     for (EntLink l : mentions)
       m.add(l.source);
