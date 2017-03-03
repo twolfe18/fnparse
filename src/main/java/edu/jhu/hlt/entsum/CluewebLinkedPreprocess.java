@@ -3,6 +3,7 @@ package edu.jhu.hlt.entsum;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -36,14 +37,16 @@ public class CluewebLinkedPreprocess {
   /**
    * First pass: get an approximate frequency for all the entities
    */
-  static class EntCounts {
+  static class EntCounts implements Serializable {
+    private static final long serialVersionUID = 7277345287463990963L;
+
     private StringCountMinSketch midCounts;
     private int maxMidFreq;
     private long nMidObservations;
     
     public EntCounts() {
       int nhash = 12;
-      int logb = 22;
+      int logb = 23;
       midCounts = new StringCountMinSketch(nhash, logb, true);
       maxMidFreq = 0;
       nMidObservations = 0;
@@ -216,19 +219,29 @@ public class CluewebLinkedPreprocess {
     
     File outputDir = config.getOrMakeDir("outputDir");
     Log.info("outputDir=" + outputDir.getPath());
-
-    Log.info("starting Pass 1: count entities' mention frequencies...");
-    EntCounts ec = new EntCounts();
-    for (File f : fs) {
-      Log.info("reading " + f.getPath());
-      try (ValidatorIterator iter = new ValidatorIterator(f)) {
-        while (iter.hasNext()) {
-          CluewebLinkedSentence sent = iter.next();
-          ec.observe(sent);
-          if (tm.enoughTimePassed(10))
-            Log.info(Describe.memoryUsage());
+    
+    // Checkpoint pass 1 (counting mids)
+    File ecFile = new File(outputDir, "freebase-mid-mention-frequency.cms.jser");
+    EntCounts ec;
+    if (ecFile.isFile()) {
+      Log.info("loading entity counts from " + ecFile.getPath());
+      ec = (EntCounts) FileUtil.deserialize(ecFile);
+    } else {
+      Log.info("starting Pass 1: count entities' mention frequencies...");
+      ec = new EntCounts();
+      for (File f : fs) {
+        Log.info("reading " + f.getPath());
+        try (ValidatorIterator iter = new ValidatorIterator(f)) {
+          while (iter.hasNext()) {
+            CluewebLinkedSentence sent = iter.next();
+            ec.observe(sent);
+            if (tm.enoughTimePassed(10))
+              Log.info(Describe.memoryUsage());
+          }
         }
       }
+      Log.info("saving entity counts to " + ecFile.getPath());
+      FileUtil.serialize(ec, ecFile);
     }
     
     Log.info("starting Pass 2: sample entities...");
