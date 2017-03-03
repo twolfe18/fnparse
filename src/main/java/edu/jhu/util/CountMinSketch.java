@@ -99,6 +99,7 @@ public class CountMinSketch implements Serializable {
         if (z[i][hi] == m)
           z[i][hi]++;
       }
+      m++;
     }
     if (increment)
       ninc++;
