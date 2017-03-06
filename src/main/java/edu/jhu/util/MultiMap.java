@@ -56,4 +56,8 @@ public class MultiMap<K, V> {
     numEntries++;
     return vals.add(value);
   }
+  
+  public Iterable<K> keySet() {
+    return map.keySet();
+  }
 }

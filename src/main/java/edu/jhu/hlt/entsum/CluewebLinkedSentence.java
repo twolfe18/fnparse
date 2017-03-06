@@ -3,9 +3,13 @@ package edu.jhu.hlt.entsum;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+
+import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -18,6 +22,8 @@ import edu.jhu.hlt.tutils.Log;
  * @author travis
  */
 public class CluewebLinkedSentence {
+
+  static final Charset UTF8 = Charset.forName("UTF-8");
   
   public static class Link {
     static final String tail = "[/FREEBASE]";
@@ -128,6 +134,7 @@ public class CluewebLinkedSentence {
   private String markup;
   private Link[] links;
   private boolean allLinksValid;
+  private byte[] hash;    // 128 bits, aka UUID size
   
   public CluewebLinkedSentence(String markup) {
     this.markup = markup;
@@ -141,6 +148,25 @@ public class CluewebLinkedSentence {
       this.links[i] = links.get(i);
       this.allLinksValid &= this.links[i].valid;
     }
+  }
+  
+  public byte[] hash() {
+    if (hash == null) {
+//      hash = Hashing.murmur3_128().hashString(markup, UTF8).asBytes();
+      hash = Hashing.sha256().hashString(markup, UTF8).asBytes();
+      assert hash.length == 32;
+      hash = Arrays.copyOf(hash, 16);
+      assert hash.length == 16;
+    }
+    return hash;
+  }
+  
+  public String hashHex() {
+    StringBuilder sb = new StringBuilder();
+    byte[] h = hash();
+    for (int i = 0; i < h.length; i++)
+      sb.append(String.format("%02x", h[i]));
+    return sb.toString();
   }
   
   public String getMarkup() {
