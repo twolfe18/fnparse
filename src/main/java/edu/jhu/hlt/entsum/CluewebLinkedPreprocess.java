@@ -5,10 +5,12 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
-import java.io.StringReader;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -17,22 +19,25 @@ import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 
-import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
+import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.EntityMentionRanker.ScoredPassage;
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.EntitySplit.DataSetSplit;
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.Link;
+import edu.jhu.hlt.entsum.CluewebLinkedSentence.SegmentedTextAroundLink;
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.ValidatorIterator;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.ikbp.tac.ComputeIdf;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.tutils.ArgMin;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.CountMinSketch.StringCountMinSketch;
-import edu.stanford.nlp.ling.CoreLabel;
-import edu.stanford.nlp.process.CoreLabelTokenFactory;
-import edu.stanford.nlp.process.PTBTokenizer;
 
 /**
  * 1) extract counts for all entities, use this to produce a train/dev/test set
@@ -188,18 +193,9 @@ public class CluewebLinkedPreprocess {
         s.add(new Pair<>("nTrain", ""+train.size()));
         s.add(new Pair<>("nDev", ""+dev.size()));
         s.add(new Pair<>("nTest", ""+test.size()));
-//        s.add(new Pair<>("nTrainUniq", ""+nUniq(train)));
-//        s.add(new Pair<>("nDevUniq", ""+nUniq(dev)));
-//        s.add(new Pair<>("nTestUniq", ""+nUniq(test)));
         s.add(new Pair<>("types", ""+types));
         return s;
       }
-      
-//      public static <T> int nUniq(List<T> items) {
-//        Set<T> u = new HashSet<>();
-//        u.addAll(items);
-//        return u.size();
-//      }
     }
     
     public DataSetSplit[] draw() {
@@ -225,7 +221,8 @@ public class CluewebLinkedPreprocess {
     File linkedCluewebRoot = config.getExistingDir("linkedCluewebRoot",
         new File("/home/travis/code/data/clueweb09-freebase-annotation/extractedAnnotation"));
     List<File> fs = FileUtil.find(linkedCluewebRoot, "glob:**/*.gz");
-    Log.info("found " + fs.size() + " *.gz files in linkedCluewebRoot=" + linkedCluewebRoot.getPath());
+    int nfs = fs.size();
+    Log.info("found " + nfs + " *.gz files in linkedCluewebRoot=" + linkedCluewebRoot.getPath());
     
     File outputDir = config.getOrMakeDir("outputDir");
     Log.info("outputDir=" + outputDir.getPath());
@@ -239,8 +236,9 @@ public class CluewebLinkedPreprocess {
     } else {
       Log.info("starting Pass 1: count entities' mention frequencies...");
       ec = new EntCounts();
-      for (File f : fs) {
-        Log.info("reading " + f.getPath());
+      for (int i = 0; i < nfs; i++) {
+        File f = fs.get(i);
+        Log.info("reading " + (i+1) + " of " + nfs + " " + f.getPath());
         try (ValidatorIterator iter = new ValidatorIterator(f)) {
           while (iter.hasNext()) {
             CluewebLinkedSentence sent = iter.next();
@@ -263,8 +261,9 @@ public class CluewebLinkedPreprocess {
     int nFreqBuckets = config.getInt("nFreqBuckets", 8);
     int cMin = config.getInt("cMin", 4);
     es.init(nFreqBuckets, cMin);
-    for (File f : fs) {
-      Log.info("reading " + f.getPath());
+    for (int i = 0; i < nfs; i++) {
+      File f = fs.get(i);
+      Log.info("reading " + (i+1) + " of " + nfs + " " + f.getPath());
       try (ValidatorIterator iter = new ValidatorIterator(f)) {
         while (iter.hasNext()) {
           CluewebLinkedSentence sent = iter.next();
@@ -296,6 +295,17 @@ public class CluewebLinkedPreprocess {
   }
   
   /**
+   * Converts "/m/01ctvk" to "m.01ctvk".
+   * Useful, e.g. if you want to put a mid in a filename without extra directories.
+   */
+  public static String normalizeMid(String mid) {
+    assert mid.charAt(0) == '/';
+    assert mid.charAt(1) == 'm';
+    assert mid.charAt(2) == '/';
+    return "m." + mid.substring(3);
+  }
+  
+  /**
    * Scans through sentences looking for a set of relevant mid's
    * which are specified in a text file at construction.
    * Sentences containing a relevant mid are put into a separate file.
@@ -314,7 +324,8 @@ public class CluewebLinkedPreprocess {
       String suf = gzipOutput ? ".txt.gz" : ".txt";
       for (String mid : FileUtil.getLines(inputMidFile)) {
         assert mid.split("\\s+").length == 1;
-        File f = new File(outputDir, MID_SENT_FILE_PREFIX + mid + suf);
+        String midNorm = normalizeMid(mid);
+        File f = new File(outputDir, MID_SENT_FILE_PREFIX + midNorm + suf);
         BufferedWriter w = FileUtil.getWriter(f);
         Object old = mids.put(mid, w);
         assert old == null;
@@ -371,8 +382,10 @@ public class CluewebLinkedPreprocess {
     TimeMarker tm = new TimeMarker();
     boolean gzipOutput = config.getBoolean("gzipOutput", true);
     try (ExtractRelevantSentence e = new ExtractRelevantSentence(outputDir, midFile, gzipOutput)) {
-      for (File f : fs) {
-        Log.info("reading " + f.getPath());
+      int n = fs.size();
+      for (int i = 0; i < n; i++) {
+        File f = fs.get(i);
+        Log.info("reading " + (i+1) + " of " + n + " " + f.getPath());
         e.process(f);
         if (tm.enoughTimePassed(10))
           Log.info(Describe.memoryUsage() + "\t" + e.ec);
@@ -421,43 +434,95 @@ public class CluewebLinkedPreprocess {
    * each sentence in the CoNLL-X output file (generated with {@link CluewebLinkedSentence#hash()}).
    * This can be used as a key to store parses in a stand-off map.
    */
-  public static class PrepareSentecesForParsey implements AutoCloseable {
+  public static class PrepareSentencesForParsey implements AutoCloseable {
+
+    // Many lines for every sentence
     private BufferedWriter outputConll;
+
+    // One line for every sentence
     private BufferedWriter outputHashes;
+
+    // One line for every sentence
+    // mention := <mid> <space> <startTokOffset> <dash> <endTokOffset>
+    // line := <mention> (<tab> <mention>)*
+    private BufferedWriter outputMentionLocs;
     
-    public PrepareSentecesForParsey(File outputConll, File outputHashes) throws IOException {
+    private Counts<String> ec = new Counts<>();
+    
+    public PrepareSentencesForParsey(File outputConll, File outputHashes, File outputMentionLocs) throws IOException {
       this.outputConll = FileUtil.getWriter(outputConll);
       this.outputHashes = FileUtil.getWriter(outputHashes);
+      this.outputMentionLocs = FileUtil.getWriter(outputMentionLocs);
     }
     
     public void add(CluewebLinkedSentence sent) throws IOException {
+      List<SegmentedTextAroundLink> tx = sent.getTextTokenized();
+      ec.increment("sent/output");
+      
+      // Hash of markup
       String h = sent.hashHex();
       outputHashes.write(h);
       outputHashes.newLine();
       
-      // Tokenize
-      // http://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/process/PTBTokenizer.html
-      List<String> toks = new ArrayList<>();
-      String options = null;
-      String source = sent.getText();
-      PTBTokenizer<CoreLabel> tok = new PTBTokenizer<>(new StringReader(source), new CoreLabelTokenFactory(), options);
-      while (tok.hasNext())
-        toks.add(tok.next().word().toLowerCase());
-      
-      // CoNLL-X is 10 columns; 1-indexed id, word, then 8 "_"
-      // Sentences end with an empty line
-      for (int i = 0; i < toks.size(); i++) {
-        outputConll.write((i+1) + "\t" + toks.get(i));
-        for (int j = 0; j < 8; j++)
-          outputConll.write("\t_");
-        outputConll.newLine();
+      // Mention Locations
+      for (int i = 0; i < tx.size(); i++) {
+        if (i > 0)
+          outputMentionLocs.write('\t');
+        SegmentedTextAroundLink txi = tx.get(i);
+        if (txi.hasLink()) {
+          String mid = txi.getLink().getMid(sent.getMarkup());
+          IntPair tokLoc = txi.getTokLoc();
+          assert 0 <= tokLoc.first && tokLoc.first < tokLoc.second;
+          outputMentionLocs.write(mid + " " + tokLoc.first + "-" + tokLoc.second);
+          ec.increment("mention/output");
+        }
       }
+      outputMentionLocs.newLine();
+      
+      // Conll tokens
+      int tokIdx = 1;
+      for (SegmentedTextAroundLink st : tx) {
+        for (String tok : st.allTokens()) {
+          outputConll.write(tokIdx + "\t" + tok);
+          for (int j = 0; j < 8; j++)
+            outputConll.write("\t_");
+          outputConll.newLine();
+          tokIdx++;
+          ec.increment("token/output");
+        }
+      }
+      // Sentences end with an empty line
+      outputConll.newLine();
+      
+      
+//      // Tokenize
+//      // http://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/process/PTBTokenizer.html
+//      List<String> toks = new ArrayList<>();
+//      String options = null;
+//      String source = sent.getText();
+//      PTBTokenizer<CoreLabel> tok = new PTBTokenizer<>(new StringReader(source), new CoreLabelTokenFactory(), options);
+//      while (tok.hasNext())
+//        toks.add(tok.next().word().toLowerCase());
+//      
+//      // CoNLL-X is 10 columns; 1-indexed id, word, then 8 "_"
+//      // Sentences end with an empty line
+//      for (int i = 0; i < toks.size(); i++) {
+//        outputConll.write((i+1) + "\t" + toks.get(i));
+//        for (int j = 0; j < 8; j++)
+//          outputConll.write("\t_");
+//        outputConll.newLine();
+//      }
+//      // Sentences end with an empty line
+//      outputConll.newLine();
     }
 
     @Override
     public void close() throws Exception {
+      ec.increment("close");
       outputConll.close();
       outputHashes.close();
+      outputMentionLocs.close();
+      Log.info("counts: " + ec);
     }
   }
   
@@ -472,8 +537,8 @@ public class CluewebLinkedPreprocess {
     // Sort and dedup all the sentences
     File outputDir = config.getOrMakeDir("outputDir");
     File sentences = new File(outputDir, "sentences.txt");
-    String command = "cat " + sentencesDir.getPath()
-        + "/" + ExtractRelevantSentence.MID_SENT_FILE_PREFIX + "*"
+    String command = "zcat " + sentencesDir.getPath()
+        + "/" + ExtractRelevantSentence.MID_SENT_FILE_PREFIX + "*.gz"
         + " | sort -u >" + sentences.getPath();
     Log.info("sorting and deduping sentences");
     System.out.println(command);
@@ -486,9 +551,11 @@ public class CluewebLinkedPreprocess {
     // Go through the sorted+uniq sentence and output conll and a hash/key
     File outputConll = new File(outputDir, "raw.conll");
     File outputHashes = new File(outputDir, "hashes.txt");
-    try (PrepareSentecesForParsey p = new PrepareSentecesForParsey(outputConll, outputHashes)) {
+    File outputMentionLocs = new File(outputDir, "mentionLocs.txt");
+    int maxSentLength = config.getInt("maxSentLength", 80);
+    try (PrepareSentencesForParsey p = new PrepareSentencesForParsey(outputConll, outputHashes, outputMentionLocs)) {//, maxSentLength)) {
       Log.info("computing hashes and generating CoNLL-X for sentences in " + sentences.getPath());
-      try (ValidatorIterator iter = new ValidatorIterator(sentences)) {
+      try (ValidatorIterator iter = new ValidatorIterator(sentences, maxSentLength)) {
         while (iter.hasNext()) {
           CluewebLinkedSentence sent = iter.next();
           p.add(sent);
@@ -504,12 +571,16 @@ public class CluewebLinkedPreprocess {
    */
   public static class EntityMentionRanker {
     
+    static int MAX_SENT_LENGTH = 60;
+    static boolean MUST_HAVE_NSUBJ = true;
+    
     /**
      * All sentences within a given cluster, like rare4.
      * Keys are hashes created by {@link CluewebLinkedSentence#hash()}
      */
     private Map<UUID, Token[]> parsedSentences;
     private MultiAlphabet alph;
+    private ComputeIdf df;
     
     // TODO Need a way to retrieve a parse...
     // If there are 100 entities * 1000 sentence/entity * 40 words/sentence * (10*2 + 4*2 + 4 + 4) bytes/word
@@ -519,27 +590,160 @@ public class CluewebLinkedPreprocess {
      * hashes and conll are files with the (abstract) indices.
      * @param hashes contains one entry (and line) per sentence, generated by {@link CluewebLinkedSentence#hash()}
      * @param conll contains one entry (and many lines) per sentence
-     * @see PrepareSentecesForParsey
+     * @see PrepareSentencesForParsey
      */
-    public EntityMentionRanker(File hashes, File conll) throws Exception {
+    public EntityMentionRanker(ComputeIdf df, File hashes, File conll) throws Exception {
+      this.df = df;
       alph = new MultiAlphabet();
       parsedSentences = new HashMap<>();
-      try (Token.ConllFileReader iter = new Token.ConllFileReader(conll, alph);
+      Log.info("hashes=" + hashes.getPath() + " conll=" + conll.getPath());
+      try (Token.ConllxFileReader iter = new Token.ConllxFileReader(conll, alph);
           BufferedReader hashReader = FileUtil.getReader(hashes)) {
         while (iter.hasNext()) {
           Token[] sentence = iter.next();
           String hash = hashReader.readLine();
-          UUID h = UUID.fromString(hash);
+          assert hash.length() == 32;
+          long hi = Long.parseUnsignedLong(hash.substring(0, 16), 16);
+          long lo = Long.parseUnsignedLong(hash.substring(16), 16);
+          UUID h = new UUID(hi, lo);
+          assert hash.equals(h.toString().replaceAll("-", ""));
           Object old = parsedSentences.put(h, sentence);
           assert old == null;
         }
+        assert hashReader.readLine() == null;
       }
     }
-    
-    public List<Pair<CluewebLinkedSentence, Token[]>> rank(File mentionsOfGivenEntity) {
-      
 
-      throw new RuntimeException("implement me");
+    static class ScoredPassage {
+      CluewebLinkedSentence sent;
+      Token[] parse;
+      List<Feat> score;
+      
+      public ScoredPassage(CluewebLinkedSentence sent, Token[] parse) {
+        this.sent = sent;
+        this.parse = parse;
+        this.score = new ArrayList<>();
+      }
+
+      public List<Feat> getScoreReason() {
+        return score;
+      }
+
+      public double getScore() {
+        double s = Feat.sum(score);
+        assert !Double.isNaN(s);
+        assert Double.isFinite(s);
+        return s;
+      }
+
+      public static final Comparator<ScoredPassage> BY_SCORE_DESC = new Comparator<ScoredPassage>() {
+        @Override
+        public int compare(ScoredPassage o1, ScoredPassage o2) {
+          double s1 = o1.getScore();
+          double s2 = o2.getScore();
+          if (s1 > s2)
+            return -1;
+          if (s2 > s1)
+            return +1;
+          return 0;
+        }
+      };
+    }
+
+    public List<ScoredPassage> rank(String mid, File mentionsOfGivenEntity, int maxSentLength) throws IOException {
+      Log.info("reading sentences from " + mentionsOfGivenEntity.getPath());
+      try (ValidatorIterator iter = new ValidatorIterator(mentionsOfGivenEntity, maxSentLength)) {
+        List<CluewebLinkedSentence> l = iter.toList();
+        return rank(mid, l);
+      }
+    }
+    public List<ScoredPassage> rank(String mid, List<CluewebLinkedSentence> mentionsOfGivenEntity) {
+      Log.info("scoring " + mentionsOfGivenEntity.size() + " sentences");
+      List<ScoredPassage> s = new ArrayList<>();
+      for (CluewebLinkedSentence sent : mentionsOfGivenEntity) {
+        UUID h = sent.hashUuid();
+        Token[] parse = parsedSentences.get(h);
+        assert parse != null : "h=" + h + " nParsed=" + parsedSentences.size()
+            + " sent=" + sent.getMarkup();
+        ScoredPassage sp = new ScoredPassage(sent, parse);
+        double[] st = scoreTokens(mid, parse, sent, alph, df);
+        sp.score.add(new Feat("bestTrigger", max(st)));
+        sp.score.add(new Feat("avgTrigger", avg(st)));
+        s.add(sp);
+      }
+      Collections.sort(s, ScoredPassage.BY_SCORE_DESC);
+      return s;
+    }
+    
+    private static double max(double[] items) {
+      double m = items[0];
+      for (int i = 1; i < items.length; i++)
+        m = Math.max(m, items[i]);
+      return m;
+    }
+
+    private static double avg(double[] items) {
+      double s = 0;
+      for (int i = 0; i < items.length; i++)
+        s += items[i];
+      return s / items.length;
+    }
+    
+    /** Baseline: max_{t in tokens} idf(t) / (k + depDist(t)) */
+    private double[] scoreTokens(String mid, Token[] parse, CluewebLinkedSentence sent, MultiAlphabet a, ComputeIdf df) {
+      
+      // 1) Find the relevant mention (location)
+      int[] tokenDepths = Token.depths(parse);
+      ArgMin<Integer> shallowest = new ArgMin<>();
+      BitSet partOfMention = new BitSet(parse.length);
+      for (SegmentedTextAroundLink st : sent.getTextTokenized()) {
+        if (!st.hasLink())
+          continue;
+        if (!mid.equals(st.getMid()))
+          continue;
+        // Choose the head token as the shallowest node
+        for (Pair<Integer, String> p : st.getLinkTokensGlobalIndexed()) {
+          partOfMention.set(p.get1());
+          int d = tokenDepths[p.get1()];
+          shallowest.offer(p.get1(), d);
+        }
+      }
+      
+      // 2) Compute the distance to the entity head
+      double k = 2;
+      int source = shallowest.get();
+      int[] dists = Token.distances(source, parse);
+      double[] scores = new double[parse.length];
+      for (int i = 0; i < dists.length; i++) {
+        if (partOfMention.get(i))
+          continue;
+        String w = a.word(parse[i].word);
+        scores[i] = df.idf(w) / (k + dists[i]);
+      }
+      return scores;
+    }
+  }
+  
+  public static void testScoring(ExperimentProperties config) throws Exception {
+    File sp = new File("/home/travis/code/data/clueweb09-freebase-annotation/gen-for-entsum");
+
+    File hashes = config.getExistingFile("hashes", new File(sp, "parsed-sentences-rare4/hashes.txt"));
+    File conll = config.getExistingFile("conll", new File(sp, "parsed-sentences-rare4/parsed.conll"));
+    ComputeIdf df = new ComputeIdf(config.getExistingFile("wordDocFreq"));
+    EntityMentionRanker emr = new EntityMentionRanker(df, hashes, conll);
+    
+    // Make sure this matches is no higher than the value specified when
+    // PrepareSentencesForParsey was run or it will seem like parses are missing!
+    int maxSentLength = config.getInt("maxSentLength", 80);
+
+    File sentences = new File(sp, "sentences-rare4/sentences-containing-m.01lrzng.txt.gz");
+    List<ScoredPassage> ranked = emr.rank("/m/01lrzng", sentences, maxSentLength);
+    int k = 30;
+    for (int i = 0; i < k; i++) {
+      ScoredPassage s = ranked.get(i);
+      System.out.println(s.getScoreReason());
+      System.out.println(s.sent.getMarkup());
+      System.out.println();
     }
   }
   
@@ -556,6 +760,9 @@ public class CluewebLinkedPreprocess {
       break;
     case "cwsent2conll":
       convertPerEntitySentencesToConll(config);
+      break;
+    case "testscoring":
+      testScoring(config);
       break;
     default:
       throw new RuntimeException("unknown command=" + m);

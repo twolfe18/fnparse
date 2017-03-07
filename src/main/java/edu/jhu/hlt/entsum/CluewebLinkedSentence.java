@@ -3,16 +3,24 @@ package edu.jhu.hlt.entsum;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.StringReader;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 
 import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.prim.tuple.Pair;
+import edu.stanford.nlp.ling.CoreLabel;
+import edu.stanford.nlp.process.CoreLabelTokenFactory;
+import edu.stanford.nlp.process.PTBTokenizer;
 
 /**
  * Represents a sentence like:
@@ -81,11 +89,23 @@ public class CluewebLinkedSentence {
   public static class ValidatorIterator implements Iterator<CluewebLinkedSentence>, AutoCloseable {
     private BufferedReader r;
     private CluewebLinkedSentence cur;
+    private int maxSentenceLength;
     private int linesRead, validLines;
     
     public ValidatorIterator(File f) throws IOException {
+      this(f, 0);
+    }
+    public ValidatorIterator(File f, int maxSentenceLength) throws IOException {
       r = FileUtil.getReader(f);
+      this.maxSentenceLength = maxSentenceLength;
       advance();
+    }
+    
+    public List<CluewebLinkedSentence> toList() {
+      List<CluewebLinkedSentence> l = new ArrayList<>();
+      while (hasNext())
+        l.add(next());
+      return l;
     }
     
     private void advance() {
@@ -98,6 +118,8 @@ public class CluewebLinkedSentence {
           linesRead++;
           cur = new CluewebLinkedSentence(line);
           if (!cur.allLinksValid)
+            cur = null;
+          if (maxSentenceLength > 0 && cur.getTextTokenizedNumTokens() > maxSentenceLength)
             cur = null;
         } catch (Exception e) {
           cur = null;
@@ -161,6 +183,13 @@ public class CluewebLinkedSentence {
     return hash;
   }
   
+  public UUID hashUuid() {
+    ByteBuffer bb = ByteBuffer.wrap(hash());
+    long hi = bb.getLong();
+    long lo = bb.getLong();
+    return new UUID(hi, lo);
+  }
+  
   public String hashHex() {
     StringBuilder sb = new StringBuilder();
     byte[] h = hash();
@@ -171,6 +200,128 @@ public class CluewebLinkedSentence {
   
   public String getMarkup() {
     return markup;
+  }
+  
+  static class SegmentedText {
+    int origStartGlobal;
+    String orig;
+    List<String> toks;
+    List<IntPair> tokLocalOffsets;
+    
+    public SegmentedText(String orig, int offset) {
+      this.origStartGlobal = offset;
+      this.orig = orig;
+      this.toks = new ArrayList<>();
+      this.tokLocalOffsets = new ArrayList<>();
+      String options = null;
+      PTBTokenizer<CoreLabel> tok = new PTBTokenizer<>(new StringReader(orig), new CoreLabelTokenFactory(), options);
+      while (tok.hasNext()) {
+        CoreLabel cl = tok.next();
+        toks.add(cl.word());
+        IntPair ij = new IntPair(cl.beginPosition(), cl.endPosition() + 1);
+        tokLocalOffsets.add(ij);
+      }
+    }
+    
+    public int numTokens() {
+      return toks.size();
+    }
+    
+    public IntPair getCharsLocal(int i) {
+      return tokLocalOffsets.get(i);
+    }
+    
+    public IntPair getCharsGlobal(int i) {
+      IntPair ij = tokLocalOffsets.get(i);
+      return new IntPair(ij.first + origStartGlobal, ij.second + origStartGlobal);
+    }
+  }
+  
+  class SegmentedTextAroundLink {
+    int charStart;            // characters which appear before this segment
+    int tokStart;             // tokens which appear before this segment
+    int linkIdx;              // <0 iff the last one
+    SegmentedText outside;    // text before link unless link not specified, then this is after the last link
+    SegmentedText inside;     // text within the link (if present)
+    
+    public SegmentedTextAroundLink(int charStart, int tokStart, int linkIdx) {
+      this.charStart = charStart;
+      this.tokStart = tokStart;
+      this.linkIdx = linkIdx;
+      if (linkIdx < 0) {
+        String t = markup.substring(charStart);
+        this.outside = new SegmentedText(t, charStart);
+        this.inside = null;
+      } else {
+        Link l = links[linkIdx];
+        String t = markup.substring(charStart, l.hstart);
+        this.outside = new SegmentedText(t, charStart);
+        this.inside = new SegmentedText(l.getMention(markup), l.mstart);
+      }
+    }
+    
+    public boolean hasLink() {
+      return linkIdx >= 0;
+    }
+    
+    public String getMid() {
+      return getLink().getMid(markup);
+    }
+    
+    public Link getLink() {
+      if (linkIdx < 0)
+        return null;
+      return links[linkIdx];
+    }
+    
+    public IntPair getTokLoc() {
+      int start = tokStart + outside.numTokens();
+      int end = start + inside.numTokens();
+      return new IntPair(start, end);
+    }
+    
+    public List<String> allTokens() {
+      if (linkIdx < 0)
+        return outside.toks;
+      List<String> t = new ArrayList<>();
+      t.addAll(outside.toks);
+      t.addAll(inside.toks);
+      return t;
+    }
+    
+    public List<Pair<Integer, String>> getLinkTokensGlobalIndexed() {
+      List<Pair<Integer, String>> l = new ArrayList<>();
+      for (int i = 0; i < inside.numTokens(); i++) {
+        int t = tokStart + i;
+        String w = inside.toks.get(i);
+        l.add(new Pair<>(t, w));
+      }
+      return l;
+    }
+  }
+  
+  /**
+   * Forces the tokenizer to work around the mentions in the markup.
+   */
+  public List<SegmentedTextAroundLink> getTextTokenized() {
+    List<SegmentedTextAroundLink> foo = new ArrayList<>();
+    int preChar = 0;
+    int preTok = 0;
+    for (int i = 0; i < links.length; i++) {
+      SegmentedTextAroundLink st = new SegmentedTextAroundLink(preChar, preTok, i);
+      foo.add(st);
+      preChar = links[i].tend();
+      preTok += st.allTokens().size();
+    }
+    foo.add(new SegmentedTextAroundLink(preChar, preTok, -1));
+    return foo;
+  }
+  
+  public int getTextTokenizedNumTokens() {
+    int nt = 0;
+    for (SegmentedTextAroundLink st : getTextTokenized())
+      nt += st.allTokens().size();
+    return nt;
   }
   
   public String getText() {
@@ -187,7 +338,8 @@ public class CluewebLinkedSentence {
     
     // Text after last link
     int last = links.length - 1;
-    sb.append(markup.substring(links[last].tend()));
+    if (last >= 0)
+      sb.append(markup.substring(links[last].tend()));
     
     return sb.toString();
   }

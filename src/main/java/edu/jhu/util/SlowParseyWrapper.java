@@ -10,6 +10,14 @@ import java.util.List;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Log;
 
+/**
+ * Pays the cost of reading an entire model in every time you call parse
+ * (which is excessively wasteful if say you're only parsing a sentence).
+ *
+ * TODO Expose batch processing via static function
+ *
+ * @author travis
+ */
 public class SlowParseyWrapper {
   
   /** http://ilk.uvt.nl/conll/#dataformat */
