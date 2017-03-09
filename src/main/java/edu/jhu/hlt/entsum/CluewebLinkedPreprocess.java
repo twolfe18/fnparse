@@ -447,12 +447,18 @@ public class CluewebLinkedPreprocess {
     // line := <mention> (<tab> <mention>)*
     private BufferedWriter outputMentionLocs;
     
+    // Looks like sentences.txt (contains xuchen/clueweb markup) but only contains sentences
+    // which this class has had add called for. This is needed to ensure that
+    // (conll, hashes, mentionLocs, markup) are all perfectly parallel.
+    private BufferedWriter outputMarkup;
+    
     private Counts<String> ec = new Counts<>();
     
-    public PrepareSentencesForParsey(File outputConll, File outputHashes, File outputMentionLocs) throws IOException {
+    public PrepareSentencesForParsey(File outputConll, File outputHashes, File outputMentionLocs, File outputMarkup) throws IOException {
       this.outputConll = FileUtil.getWriter(outputConll);
       this.outputHashes = FileUtil.getWriter(outputHashes);
       this.outputMentionLocs = FileUtil.getWriter(outputMentionLocs);
+      this.outputMarkup = FileUtil.getWriter(outputMarkup);
     }
     
     public void add(CluewebLinkedSentence sent) throws IOException {
@@ -463,6 +469,10 @@ public class CluewebLinkedPreprocess {
       String h = sent.hashHex();
       outputHashes.write(h);
       outputHashes.newLine();
+      
+      // Markup
+      outputMarkup.write(sent.getMarkup());
+      outputMarkup.newLine();
       
       // Mention Locations
       for (int i = 0; i < tx.size(); i++) {
@@ -494,7 +504,6 @@ public class CluewebLinkedPreprocess {
       // Sentences end with an empty line
       outputConll.newLine();
       
-      
 //      // Tokenize
 //      // http://nlp.stanford.edu/nlp/javadoc/javanlp/edu/stanford/nlp/process/PTBTokenizer.html
 //      List<String> toks = new ArrayList<>();
@@ -522,6 +531,7 @@ public class CluewebLinkedPreprocess {
       outputConll.close();
       outputHashes.close();
       outputMentionLocs.close();
+      outputMarkup.close();
       Log.info("counts: " + ec);
     }
   }
@@ -536,10 +546,10 @@ public class CluewebLinkedPreprocess {
 
     // Sort and dedup all the sentences
     File outputDir = config.getOrMakeDir("outputDir");
-    File sentences = new File(outputDir, "sentences.txt");
+    File sentencesPreFilter = new File(outputDir, "sentences-preFilter.txt");
     String command = "zcat " + sentencesDir.getPath()
         + "/" + ExtractRelevantSentence.MID_SENT_FILE_PREFIX + "*.gz"
-        + " | sort -u >" + sentences.getPath();
+        + " | sort -u >" + sentencesPreFilter.getPath();
     Log.info("sorting and deduping sentences");
     System.out.println(command);
     ProcessBuilder pb = new ProcessBuilder("/bin/bash", "-c", command);
@@ -552,10 +562,11 @@ public class CluewebLinkedPreprocess {
     File outputConll = new File(outputDir, "raw.conll");
     File outputHashes = new File(outputDir, "hashes.txt");
     File outputMentionLocs = new File(outputDir, "mentionLocs.txt");
+    File outputMarkup = new File(outputDir, "sentences.txt");
     int maxSentLength = config.getInt("maxSentLength", 80);
-    try (PrepareSentencesForParsey p = new PrepareSentencesForParsey(outputConll, outputHashes, outputMentionLocs)) {//, maxSentLength)) {
-      Log.info("computing hashes and generating CoNLL-X for sentences in " + sentences.getPath());
-      try (ValidatorIterator iter = new ValidatorIterator(sentences, maxSentLength)) {
+    try (PrepareSentencesForParsey p = new PrepareSentencesForParsey(outputConll, outputHashes, outputMentionLocs, outputMarkup)) {
+      Log.info("computing hashes and generating CoNLL-X for sentences in " + sentencesPreFilter.getPath());
+      try (ValidatorIterator iter = new ValidatorIterator(sentencesPreFilter, maxSentLength)) {
         while (iter.hasNext()) {
           CluewebLinkedSentence sent = iter.next();
           p.add(sent);

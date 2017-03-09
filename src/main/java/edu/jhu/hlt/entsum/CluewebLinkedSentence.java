@@ -8,12 +8,14 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 
 import com.google.common.hash.Hashing;
 
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
@@ -170,6 +172,23 @@ public class CluewebLinkedSentence {
       this.links[i] = links.get(i);
       this.allLinksValid &= this.links[i].valid;
     }
+  }
+  
+  public <T extends Collection<String>> T getAllMids(T addTo) {
+    for (int i = 0; i < links.length; i++)
+      addTo.add(links[i].getMid(markup));
+    return addTo;
+  }
+
+  public <T extends Collection<String>> T getAllWords(T addTo, boolean lowercase) {
+    for (SegmentedTextAroundLink st : getTextTokenized()) {
+      for (String t : st.allTokens()) {
+        if (lowercase)
+          t = t.toLowerCase();
+        addTo.add(t);
+      }
+    }
+    return addTo;
   }
   
   public byte[] hash() {
@@ -357,7 +376,26 @@ public class CluewebLinkedSentence {
     return "(CWLinkSent nLink=" + links.length + " nChar=" + markup.length() + ")";
   }
   
+  public static void testHashing() {
+    String markup = "04/19/09 7:00p [FREEBASE mid=/m/01mjjvk Garrison Keillor]Garrison Keillor[/FREEBASE] - [FREEBASE mid=/m/0gly1 A Prairie Home Companion]A Prairie Home Companion[/FREEBASE] .";
+    CluewebLinkedSentence sent = new CluewebLinkedSentence(markup);
+    
+    byte[] h1 = sent.hash();
+    String h2 = sent.hashHex();
+    UUID h3 = sent.hashUuid();
+    System.out.println(Arrays.toString(h1));
+    System.out.println(h2);
+    System.out.println(h3.toString());
+  }
+  
   public static void main(String[] args) {
+    ExperimentProperties config = ExperimentProperties.init(args);
+
+    if (config.getBoolean("test", true)) {
+      testHashing();
+      return;
+    }
+
     String t = "Raja Annamalai Mandram, [FREEBASE mid=/m/058z43 Parrys]Parrys[/FREEBASE], [FREEBASE mid=/m/0c8tk Chennai]Chennai[/FREEBASE] between 10am to 6pm .";
     CluewebLinkedSentence sent = new CluewebLinkedSentence(t);
     Log.info(sent);

@@ -2303,6 +2303,9 @@ public class IndexCommunications implements AutoCloseable {
     public String getName() {
       return name;
     }
+    public double getWeight() {
+      return weight;
+    }
     
     public Feat rescale(String reason, double factor) {
       this.weight *= factor;
