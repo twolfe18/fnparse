@@ -99,6 +99,7 @@ import edu.jhu.prim.util.Lambda.FnIntFloatToFloat;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
 import edu.jhu.prim.vector.IntIntHashVector;
 import edu.jhu.util.DiskBackedFetchWrapper;
+import edu.jhu.util.MultiMap;
 import edu.jhu.util.SlowParseyWrapper;
 import edu.jhu.util.TokenizationIter;
 import edu.mit.jwi.IRAMDictionary;
@@ -2013,6 +2014,38 @@ public class IndexCommunications implements AutoCloseable {
     private static final long serialVersionUID = -2723964704627341786L;
     
     public static boolean SHOW_REASON_IN_TOSTRING = true;
+    
+    /**
+     * e.g. ["foo/a":1, "foo/b":3, "bar/d":1] => {"foo":["a":1, "b":3], "bar":["d":1]}
+     * Features must contain at least one '/' and the prefix is considered the namespace.
+     * Useful for converting to vowpal wabbit feature format.
+     */
+    public static MultiMap<String, Feat> groupByNamespace(List<Feat> fs, char delim) {
+      MultiMap<String, Feat> m = new MultiMap<>();
+      for (Feat f : fs) {
+        int i = f.getName().indexOf(delim);
+        assert i >= 0;
+        String ns = f.getName().substring(0, i);
+        String rest = f.getName().substring(i+1);
+        m.add(ns, new Feat(rest, f.getWeight()));
+      }
+      return m;
+    }
+    
+    public static List<Feat> dedup(List<Feat> mayContainRepeatedKeysWithSameValue) {
+      List<Feat> fs = new ArrayList<>();
+      Map<String, Double> seen = new HashMap<>();
+      for (Feat f : mayContainRepeatedKeysWithSameValue) {
+        Double p = seen.get(f.getName());
+        if (p == null) {
+          seen.put(f.getName(), f.getWeight());
+          fs.add(f);
+        } else {
+          assert p == f.getWeight();
+        }
+      }
+      return fs;
+    }
   
     /**
      * @returns (cosineSim, commonFeatures)

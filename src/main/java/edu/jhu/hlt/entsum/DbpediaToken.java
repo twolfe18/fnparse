@@ -2,6 +2,12 @@ package edu.jhu.hlt.entsum;
 
 import edu.jhu.hlt.tutils.hash.Hash;
 
+/**
+ * A token in a *.ttl file, e.g. "<http://dbpedia.org/resource/Langenstein_Castle>".
+ * Handles some basic parsing like figuring out the type and stripping brackets.
+ *
+ * @author travis
+ */
 public class DbpediaToken {
   public static final String INT_TYPE_STR = "^^<http://www.w3.org/2001/XMLSchema#integer>";
   public static final String DATE_TYPE_STR = "^^<http://www.w3.org/2001/XMLSchema#date>";

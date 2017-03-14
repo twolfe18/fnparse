@@ -19,6 +19,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.prim.tuple.Pair;
 import edu.stanford.nlp.ling.CoreLabel;
 import edu.stanford.nlp.process.CoreLabelTokenFactory;
@@ -98,6 +99,7 @@ public class CluewebLinkedSentence {
       this(f, 0);
     }
     public ValidatorIterator(File f, int maxSentenceLength) throws IOException {
+      Log.info("f=" + f.getPath() + " maxSentenceLength=" + maxSentenceLength);
       r = FileUtil.getReader(f);
       this.maxSentenceLength = maxSentenceLength;
       advance();
@@ -343,6 +345,38 @@ public class CluewebLinkedSentence {
     return nt;
   }
   
+  public String getResultsHighlighted(String mid) {
+    StringBuilder sb = new StringBuilder();
+    List<SegmentedTextAroundLink> segs = getTextTokenized();
+    for (SegmentedTextAroundLink seg : segs) {
+      if (seg.linkIdx < 0) {
+        // Last part
+        sb.append(' ');
+        sb.append(StringUtils.join(" ", seg.allTokens()));
+      } else {
+        if (seg.linkIdx > 0)
+          sb.append(' ');
+        // Pre
+        sb.append(StringUtils.join(" ", seg.outside.toks));
+        // Inside
+        sb.append(' ');
+        String tag = mid.equals(seg.getMid()) ? "ENT" : "OTHER";
+        sb.append("<" + tag + ">");
+        sb.append(StringUtils.join(" ", seg.inside.toks));
+        sb.append("</" + tag + ">");
+      }
+    }
+    return sb.toString();
+  }
+  
+  public List<String> getMentionStrings(String mid) {
+    List<String> s = new ArrayList<>();
+    for (int i = 0; i < links.length; i++)
+      if (mid.equals(links[i].getMid(markup)))
+        s.add(links[i].getMention(markup));
+    return s;
+  }
+  
   public String getText() {
     StringBuilder sb = new StringBuilder();
 
@@ -361,6 +395,18 @@ public class CluewebLinkedSentence {
       sb.append(markup.substring(links[last].tend()));
     
     return sb.toString();
+  }
+  
+  public int indexOfMid(String mid) {
+    return indexOfMid(mid, 0);
+  }
+  public int indexOfMid(String mid, int from) {
+    for (int i = from; i < links.length; i++) {
+      String m = links[i].getMid(markup);
+      if (mid.equals(m))
+        return i;
+    }
+    return -1;
   }
   
   public int numLinks() {
