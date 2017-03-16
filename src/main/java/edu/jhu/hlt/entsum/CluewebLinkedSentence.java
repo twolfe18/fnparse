@@ -325,18 +325,21 @@ public class CluewebLinkedSentence {
    * Forces the tokenizer to work around the mentions in the markup.
    */
   public List<SegmentedTextAroundLink> getTextTokenized() {
-    List<SegmentedTextAroundLink> foo = new ArrayList<>();
-    int preChar = 0;
-    int preTok = 0;
-    for (int i = 0; i < links.length; i++) {
-      SegmentedTextAroundLink st = new SegmentedTextAroundLink(preChar, preTok, i);
-      foo.add(st);
-      preChar = links[i].tend();
-      preTok += st.allTokens().size();
+    if (segCache == null) {
+      segCache = new ArrayList<>();
+      int preChar = 0;
+      int preTok = 0;
+      for (int i = 0; i < links.length; i++) {
+        SegmentedTextAroundLink st = new SegmentedTextAroundLink(preChar, preTok, i);
+        segCache.add(st);
+        preChar = links[i].tend();
+        preTok += st.allTokens().size();
+      }
+      segCache.add(new SegmentedTextAroundLink(preChar, preTok, -1));
     }
-    foo.add(new SegmentedTextAroundLink(preChar, preTok, -1));
-    return foo;
+    return segCache;
   }
+  private List<SegmentedTextAroundLink> segCache;
   
   public int getTextTokenizedNumTokens() {
     int nt = 0;

@@ -21,3 +21,8 @@ mvn install:install-file -Dfile=lib/ws4j-1.0.1.jar -DgroupId=edu.cmu.lti.ws4j -D
 
 
 
+# Gurobi for ILP models
+mvn install:install-file -Dfile=lib/gurobi702.jar -DgroupId=gurobi -DartifactId=gurobi -Dversion=7.0.2 -Dpackaging=jar
+
+
+

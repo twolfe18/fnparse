@@ -21,7 +21,6 @@ import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
-import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.ParsedSentenceMap;
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.SegmentedTextAroundLink;
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.ValidatorIterator;
 import edu.jhu.hlt.entsum.DbpediaToken.Type;
