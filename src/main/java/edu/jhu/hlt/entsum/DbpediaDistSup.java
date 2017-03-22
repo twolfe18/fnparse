@@ -1146,8 +1146,8 @@ public class DbpediaDistSup {
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-//    String mode = config.getString("mode", "generateDistSupInstances");
-    String mode = config.getString("mode", "extractFeatures");
+    String mode = config.getString("mode", "generateDistSupInstances");
+//    String mode = config.getString("mode", "extractFeatures");
     switch (mode) {
     case "generateDistSupInstances":
       generateDistSupInstances(config);

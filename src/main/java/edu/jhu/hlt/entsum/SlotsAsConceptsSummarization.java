@@ -298,6 +298,15 @@ public class SlotsAsConceptsSummarization {
           int con = concepts.lookupIndex(cons);
           double cost = Math.max(0, c.getWeight());
           occ.add(new SoftConceptMention(con, i, cost));
+          
+          
+          // Lets add concepts for the verb and the object
+          // This will encourage further diversity
+          // NOTE: This does not work now, given how I compute the concept utilities,
+          // which is based on repetition. Coarse grain concepts are more likely to repeat.
+          // I need to have a codebook cost to divide out, need to count over more data than we're trying to summarize.
+//          occ.add(new SoftConceptMention(concepts.lookupIndex("verb/" + c.getName()), i, cost));
+//          occ.add(new SoftConceptMention(concepts.lookupIndex("obj/" + f.object()), i, cost));
         }
       }
       
