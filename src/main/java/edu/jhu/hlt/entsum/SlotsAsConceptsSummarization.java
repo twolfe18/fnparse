@@ -13,7 +13,9 @@ import java.util.Set;
 
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.Link;
 import edu.jhu.hlt.entsum.DbpediaDistSup.FeatExData;
-import edu.jhu.hlt.entsum.DbpediaDistSup.Join;
+import edu.jhu.hlt.entsum.GillickFavre09Summarization.ConceptMention;
+import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftConceptMention;
+import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftSolution;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -21,7 +23,9 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.list.DoubleArrayList;
+import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.util.Alphabet;
 import edu.jhu.util.MultiMap;
 
 /**
@@ -57,20 +61,6 @@ public class SlotsAsConceptsSummarization {
    *    (this model could be rule/code-based rather than ML)
    * B) Given a mention pair, predict fact
    */
-  
-//  static class BatchFeatureExtraction {
-//    /**
-//     * Format: <sentHash> <extractionScore> <factMentionMapping> <subject> <verb> <object> <extractionFeature>+
-//     * e.g. dbpedia-distsup-rare4/facts.txt {@link DbpediaDistSup.Join}
-//     * Should only read <sentHash> and <factMentionMapping>, e.g. ("4ef0368789e83aa0308c6b0702826b85", "s=1,s=2,o=3")
-//     */
-//    private File factInput;
-//    /**
-//     * Create a file vwFeatureOutputDir/verbName.vw.txt for every verb in the input.
-//     * 
-//     */
-//    private File vwFeatureOutputDir;
-//  }
   
   public static String clean(String dbpediaUrl) {
     String x = dbpediaUrl.replace("http://", "");
@@ -226,72 +216,125 @@ public class SlotsAsConceptsSummarization {
       this.fed = fed;
     }
     
+    static List<DistSupFact> prefilter(List<DistSupFact> input) {
+      List<DistSupFact> keep = new ArrayList<>();
+      Set<String> uniq = new HashSet<>();
+      for (DistSupFact in : input) {
+        int nl = in.sentence().numLinks();
+        int nt = in.sentence().getTextTokenizedNumTokens();
+        if (nt < 10 || nt < 2 * nl)
+          continue;
+        
+        // check for exact duplicates
+        String h = in.sentence().hashHex();
+        if (!uniq.add(h))
+          continue;
+
+        keep.add(in);
+        
+        if (keep.size() == 5000)
+          break;
+      }
+      Log.info("nIn=" + input.size() + " nOut=" + keep.size());
+      return keep;
+    }
+    
     /**
      * @param inputFacts should have one line per *possible* fact (i.e. there may be multiple lines with the same subj and obj but different verbs/relations).
      */
     public List<DistSupFact> summarize(List<DistSupFact> input, int wordBudget) throws Exception {
       
-      File dbgCache = new File("/tmp/slots-summ-debug-cache.jser");
-      List<List<Feat>> pred;
+      input = prefilter(input);
       
-      if (dbgCache.isFile()) {
-        Log.info("loading from " + dbgCache.getPath());
-        pred = (List) FileUtil.deserialize(dbgCache);
-      } else {
-        // 1) read in sentences and retrieve parses
-        // 2) extract features for (sentence, subj, obj), write to file
-        //    (this should have one row for every (verb, features) pair)
-        File features = new File(workingDir, "features.vw");
-        assert !features.isFile();
-        List<List<String>> Y = new ArrayList<>();
-        try (BufferedWriter w = FileUtil.getWriter(features)) {
-          for (DistSupFact f : input) {
-            List<String> Ys = writeCsoaaLdfFact(w, f, fed, model.subjObjTypes2verbs);
-            if (Ys != null)
-              Y.add(Ys);
-          }
+      // 1) read in sentences and retrieve parses
+      // 2) extract features for (sentence, subj, obj), write to file
+      //    (this should have one row for every (verb, features) pair)
+      File features = new File(workingDir, "features.vw");
+      assert !features.isFile();
+      List<List<String>> Y = new ArrayList<>();
+      try (BufferedWriter w = FileUtil.getWriter(features)) {
+        for (DistSupFact f : input) {
+          List<String> Ys = writeCsoaaLdfFact(w, f, fed, model.subjObjTypes2verbs);
+          if (Ys != null)
+            Y.add(Ys);
         }
-        // 3) batch call to VW to get p(Occ_{ij}) scores
-        File scores = new File(workingDir, "scores.txt");
-        String[] command = new String[] {
-            "vw",
-            "-t",
-            "-i", model.getModelFile().getPath(),
-            "-d", features.getPath(),
-            "-r", scores.getPath(),
-        };
-        Log.info("running: " + Arrays.toString(command));
-        ProcessBuilder pb = new ProcessBuilder(command);
-        Process p = pb.start();
-        InputStreamGobbler stdout = new InputStreamGobbler(p.getInputStream());
-        InputStreamGobbler stderr = new InputStreamGobbler(p.getErrorStream());
-        stdout.start();
-        stderr.start();
-        int r = p.waitFor();
-        if (r != 0)
-          throw new RuntimeException("r=" + r);
-        // 4) Build MIQP based on soft concept model
-        List<DoubleArrayList> Yscores = readCsoaaLdfPredictions(scores);
-        pred = zipAndSort(Y, Yscores);
-        // Save for later
-        Log.info("saving to " + dbgCache.getPath());
-        FileUtil.serialize(pred, dbgCache);
       }
+      // 3) batch call to VW to get p(Occ_{ij}) scores
+      File scores = new File(workingDir, "scores.txt");
+      String[] command = new String[] {
+          "vw",
+          "-t",
+          "-i", model.getModelFile().getPath(),
+          "-d", features.getPath(),
+          "-r", scores.getPath(),
+      };
+      Log.info("running: " + Arrays.toString(command));
+      ProcessBuilder pb = new ProcessBuilder(command);
+      Process p = pb.start();
+      InputStreamGobbler stdout = new InputStreamGobbler(p.getInputStream());
+      InputStreamGobbler stderr = new InputStreamGobbler(p.getErrorStream());
+      stdout.start();
+      stderr.start();
+      int r = p.waitFor();
+      if (r != 0)
+        throw new RuntimeException("r=" + r);
+      // 4) Build MIQP based on soft concept model
+      List<DoubleArrayList> Yscores = readCsoaaLdfPredictions(scores);
+      int maxLabelsPerInstance = 10;
+      List<List<Feat>> pred = zipAndSortAndFilter(Y, Yscores, maxLabelsPerInstance);
 
       // 5) Call gurobi, read out results, build summary
-      for (int i = 0; i < pred.size(); i++) {
+      Log.info("there are " + pred.size() + " concept predictions");
+      Alphabet<String> concepts = new Alphabet<>();
+      List<ConceptMention> occ = new ArrayList<>();
+      IntArrayList sentenceLengths = new IntArrayList();
+      int n = pred.size();
+      for (int i = 0; i < n; i++) {
         DistSupFact f = input.get(i);
-        List<Feat> ys = pred.get(i);
-        System.out.println(f + "\t" + ys);
+        sentenceLengths.add(f.sentence().getTextTokenizedNumTokens());
+        for (Feat c : pred.get(i)) {
+          String cons = f.subject() + "\t" + c.getName() + "\t" + f.object();
+//          String cons = c.getName();
+          int con = concepts.lookupIndex(cons);
+          double cost = Math.max(0, c.getWeight());
+          occ.add(new SoftConceptMention(con, i, cost));
+        }
+      }
+      
+      double[] conceptUtilities = new double[concepts.size()];
+      for (ConceptMention c : occ)
+        conceptUtilities[c.i] += 1.0;
+
+      GillickFavre09Summarization gf = new GillickFavre09Summarization(occ, sentenceLengths, conceptUtilities);
+
+//      IntArrayList s = gf.solve(wordBudget);
+      SoftSolution s = gf.solveSoft(wordBudget);
+      Log.info(s);
+      for (int i = 0; i < s.sentences.size(); i++) {
+        int sent = s.sentences.get(i);
+        System.out.println(input.get(sent));
+      }
+      for (int i = 0; i < s.sentences.size(); i++) {
+        int sent = s.sentences.get(i);
+        System.out.println(input.get(sent).sentence().getMarkup());
       }
 
-      throw new RuntimeException("implement me");
+      List<DistSupFact> out = new ArrayList<>();
+      for (int i = 0; i < s.sentences.size(); i++) {
+        int sent = s.sentences.get(i);
+        out.add(input.get(sent));
+      }
+      return out;
     }
-    
+
     public List<List<Feat>> zipAndSort(List<List<String>> Ys, List<DoubleArrayList> Yscores) {
+      return zipAndSortAndFilter(Ys, Yscores, 0);
+    }
+    public List<List<Feat>> zipAndSortAndFilter(List<List<String>> Ys, List<DoubleArrayList> Yscores, int maxLabelsPerInstance) {
       int n = Ys.size();
       if (n != Yscores.size())
         throw new IllegalArgumentException();
+      int prunedRows = 0, pruned = 0;
       List<List<Feat>> out = new ArrayList<>(n);
       for (int i = 0; i < n; i++) {
         int d = Ys.get(i).size();
@@ -301,12 +344,24 @@ public class SlotsAsConceptsSummarization {
         for (int j = 0; j < d; j++)
           fs.add(new Feat(Ys.get(i).get(j), Yscores.get(i).get(j)));
         Collections.sort(fs, Feat.BY_SCORE_ASC);
+        if (maxLabelsPerInstance > 0 && fs.size() > maxLabelsPerInstance) {
+          prunedRows++;
+          pruned += (fs.size() - maxLabelsPerInstance);
+//          fs = fs.subList(0, maxLabelsPerInstance);   // NotSerializableException
+          fs = trim(fs, maxLabelsPerInstance);
+        }
         out.add(fs);
       }
+      Log.info("prunedRows=" + prunedRows + " pruned=" + pruned);
       return out;
     }
     
-    // TODO write pruning methods for List<List<Feat>>
+    static <T> List<T> trim(List<T> in, int k) {
+      List<T> out = new ArrayList<>();
+      for (int i = 0; i < k; i++)
+        out.add(in.get(i));
+      return out;
+    }
     
     /**
      * @param predictions is the vw predictions for a multi-line/class predictions.
@@ -325,6 +380,7 @@ public class SlotsAsConceptsSummarization {
           } else {
             String[] ar = line.split(":");
             assert ar.length == 2;
+            @SuppressWarnings("unused")
             long hy = Long.parseLong(ar[0]);
             double cost = Double.parseDouble(ar[1]);
             cur.add(cost);
@@ -351,22 +407,29 @@ public class SlotsAsConceptsSummarization {
     Log.info("reading from fedFile=" + fedFile.getPath());
     FeatExData fed = (FeatExData) FileUtil.deserialize(fedFile);
     
-//    File jf = config.getExistingFile("join", new File(p, "dbpedia-distsup-rare4/join.jser"));
-//    Join j = (Join) FileUtil.deserialize(jf);
-
     testFed(fed);
 
+    // Train on all facts
     File distSupFactJserStream = config.getExistingFile("distSupFactJserStream", new File(p, "dbpedia-distsup-rare4/facts.jser"));
     List<DistSupFact> facts = DistSupFact.readFacts(distSupFactJserStream);
     BatchVwTrain bt = new BatchVwTrain(fed, facts);
-    File outputTrainFile = config.getFile("outputTrainFile", new File("/tmp/a.vw"));
-    bt.buildTrainingFile(facts, outputTrainFile);
+//    File outputTrainFile = config.getFile("outputTrainFile", new File("/tmp/a.vw"));
+//    bt.buildTrainingFile(facts, outputTrainFile);
     File outputModelFile = config.getFile("outputModelFile", new File("/tmp/a-model.vw"));
-    bt.trainModel(outputTrainFile, outputModelFile);
+//    bt.trainModel(outputTrainFile, outputModelFile);
+    bt.model = outputModelFile;
     
+    // Summarize with only facts from a particular entity
+    List<DistSupFact> factsRelevant = new ArrayList<>();
+    for (DistSupFact f : facts) {
+      if ("/m/0gly1".equals(f.subjectMid()) || "/m/0gly1".equals(f.objectMid()))
+        factsRelevant.add(f);
+    }
+    Log.info("nFactsAll=" + facts.size() + " nFactsRelevant=" + factsRelevant.size());
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/summ-working-dir"));
     Summarize s = new Summarize(workingDir, bt, fed);
     int wordBudget = 100;
-    List<DistSupFact> summ = s.summarize(facts, wordBudget);
+    s.summarize(factsRelevant, wordBudget);
+    Log.info("done");
   }
 }

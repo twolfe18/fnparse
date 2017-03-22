@@ -10,7 +10,6 @@ import java.util.List;
 
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.SegmentedTextAroundLink;
 import edu.jhu.hlt.entsum.DbpediaDistSup.FeatExData;
-import edu.jhu.hlt.entsum.DbpediaDistSup.Join;
 import edu.jhu.hlt.entsum.DepNode.ShortestPath;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -70,7 +69,7 @@ public class DistSupFact implements Serializable {
   private byte[] sentHash;
   private Arg2Mention argMapping;
   private String subj, verb, obj;
-  private List<Feat> exFeats;       // features supporting the distsup selection of this fact
+  private List<Feat> distsupExFeats;       // features supporting the distsup selection of this fact
   
   public DistSupFact(
       CluewebLinkedSentence sent,
@@ -86,12 +85,32 @@ public class DistSupFact implements Serializable {
     this.subj = subj;
     this.verb = verb;
     this.obj = obj;
-    this.exFeats = exFeats;
+    this.distsupExFeats = exFeats;
   }
   
+  public CluewebLinkedSentence sentence() { return sent; }
+  public DepNode[] parse() { return parse; }
+  
+  public List<Feat> distsupExtractionFeatures() { return distsupExFeats; }
+  public byte[] sentenceHash() { return sentHash; }
+
   public String subject() { return subj; }
   public String verb() { return verb; }
   public String object() { return obj; }
+  
+  public String subjectMid() {
+    int m = argMapping.subj[0];
+    return sent.getLink(m).getMid(sent.getMarkup());
+  }
+  public String objectMid() {
+    int m = argMapping.obj[0];
+    return sent.getLink(m).getMid(sent.getMarkup());
+  }
+  
+  @Override
+  public String toString() {
+    return "(DSFact s=" + subj + " v=" + verb + " o=" + obj + ")";
+  }
   
   /**
    * Extracts features of the sentence by looking at the subject and object mentions.

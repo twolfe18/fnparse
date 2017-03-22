@@ -2015,6 +2015,13 @@ public class IndexCommunications implements AutoCloseable {
     
     public static boolean SHOW_REASON_IN_TOSTRING = true;
     
+    public static List<Feat> exp(List<Feat> in) {
+      List<Feat> out = new ArrayList<>(in.size());
+      for (Feat i : in)
+        out.add(new Feat(i.getName(), Math.exp(i.getWeight())));
+      return out;
+    }
+    
     /**
      * e.g. ["foo/a":1, "foo/b":3, "bar/d":1] => {"foo":["a":1, "b":3], "bar":["d":1]}
      * Features must contain at least one '/' and the prefix is considered the namespace.

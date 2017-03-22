@@ -2,6 +2,7 @@ package edu.jhu.hlt.entsum;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -23,6 +24,11 @@ import gurobi.GRBVar;
  * A scalable global model for summarization
  * Dan Gillick and Benoit Favre (2009)
  * https://dl.acm.org/citation.cfm?id=1611640
+ * 
+ * Make sure you have these in the environment:
+ * LD_LIBRARY_PATH=/home/travis/gurobi/gurobi702/linux64/lib
+ * GUROBI_HOME=/home/travis/gurobi/gurobi702/linux64
+ * GRB_LICENSE_FILE=/home/travis/code/gurobi/keys/gurobi.lic
  *
  * @author travis
  */
@@ -149,12 +155,17 @@ public class GillickFavre09Summarization {
   
   /** Specifies Occ_{ij} and w_i */
   static class ConceptMention {
-    int i;      // concept
-    int j;      // sentence
+    public final int i;      // concept
+    public final int j;      // sentence
     
     public ConceptMention(int concept, int sentence) {
       this.i = concept;
       this.j = sentence;
+    }
+
+    @Override
+    public String toString() {
+      return "(concept=" + i + " sentence=" + j + ")";
     }
     
     public static final Comparator<ConceptMention> BY_CONCEPT = new Comparator<ConceptMention>() {
@@ -169,6 +180,18 @@ public class GillickFavre09Summarization {
     };
   }
   
+  static class SoftConceptMention extends ConceptMention {
+    public final double costOfEvokingConcept;
+    public SoftConceptMention(int concept, int sentence, double costOfEvokingConcept) {
+      super(concept, sentence);
+      this.costOfEvokingConcept = costOfEvokingConcept;
+    }
+    @Override
+    public String toString() {
+      return "(concept=" + i + " sentence=" + j + " cost=" + costOfEvokingConcept + ")";
+    }
+  }
+  
   private List<ConceptMention> occ;
   private IntArrayList sentenceLengths;
   private double[] conceptUtilities;
@@ -179,10 +202,139 @@ public class GillickFavre09Summarization {
     this.conceptUtilities = conceptUtilities;
   }
 
+  static class SoftSolution {
+    IntArrayList sentences;   // TODO IntArrayList b/c of extreme sparsity
+    IntArrayList concepts;
+    List<SoftConceptMention> mentions;
+    int summaryLength;
+    int summaryLengthLimit;
+    
+    public SoftSolution(int summaryLengthLim) {
+      sentences = new IntArrayList();
+      concepts = new IntArrayList();
+      mentions = new ArrayList<>();
+      this.summaryLengthLimit = summaryLengthLim;
+    }
+    
+    public void addSentence(int sentenceIndex, int sentenceLength) {
+      sentences.add(sentenceIndex);
+      summaryLength += sentenceLength;
+    }
+    
+    public double totalConceptEvokingCost() {
+      double c = 0;
+      for (SoftConceptMention cm : mentions)
+        c += cm.costOfEvokingConcept;
+      return c;
+    }
+    
+    @Override
+    public String toString() {
+      return "(Sol nSent=" + sentences.size()
+          + " nConcept=" + concepts.size()
+          + " nMentions=" + mentions.size()
+          + " costMentions=" + totalConceptEvokingCost()
+          + " length=" + summaryLength + "/" + summaryLengthLimit
+          + ")";
+    }
+  }
+  
+  /**
+   * Casts all {@link ConceptMention}s as {@link SoftConceptMention}s.
+   */
+  public SoftSolution solveSoft(int summaryLength) throws GRBException {
+    Log.info("solving for summaryLength=" + summaryLength);
+    GRBEnv env = new GRBEnv();
+    GRBModel model = new GRBModel(env);
+    
+    // Create all the c_i (concept inclusion) variables
+    GRBVar[] c = new GRBVar[conceptUtilities.length];
+    for (int i = 0; i < c.length; i++)
+      c[i] = model.addVar(0, 1, 0, GRB.BINARY, null);
+
+    // Create all the s_j (sentence inclusion) variables
+    GRBVar[] s = new GRBVar[sentenceLengths.size()];
+    for (int j = 0; j < s.length; j++)
+      s[j] = model.addVar(0, 1, 0, GRB.BINARY, null);
+    
+    // Create all e_{ij} ...
+    MultiMap<Integer, GRBVar> e_i = new MultiMap<>();
+    MultiMap<Integer, GRBVar> e_j = new MultiMap<>();
+    for (ConceptMention cm : occ) {
+      SoftConceptMention scm = (SoftConceptMention) cm;
+      GRBVar var = model.addVar(0, 1, 0, GRB.BINARY, null);
+      e_i.add(scm.i, var);
+      e_j.add(scm.j, var);
+    }
+
+    setConceptObjective(model, c);
+    addLengthConstraint(model, s, summaryLength);
+    
+    // sum_j e_ij >= c_i
+    for (int i = 0; i < c.length; i++) {
+      GRBLinExpr sum_j = new GRBLinExpr();
+      List<GRBVar> ee = e_i.get(i);
+      assert ee.size() > 0;
+      for (GRBVar v : ee)
+        sum_j.addTerm(1, v);
+      model.addConstr(sum_j, GRB.GREATER_EQUAL, c[i], null);
+    }
+    
+    // e_ij <= c_i
+    for (int i = 0; i < c.length; i++)
+      for (GRBVar e_ij : e_i.get(i))
+        model.addConstr(e_ij, GRB.LESS_EQUAL, c[i], null);
+    
+    // s_j >= e_ij
+    for (int j = 0; j < s.length; j++)
+      for (GRBVar e_ij : e_j.get(j))
+        model.addConstr(s[j], GRB.GREATER_EQUAL, e_ij, null);
+
+    Log.info("optmizing...");
+    model.optimize();
+    
+    // Read out the solution
+    SoftSolution sol = new SoftSolution(summaryLength);
+    for (int j = 0; j < s.length; j++) {
+      double s_j = s[j].get(GRB.DoubleAttr.X);
+      assert 0 <= s_j && s_j <= 1;
+      if (s_j > 0)
+        sol.addSentence(j, sentenceLengths.get(j));
+    }
+    for (int i = 0; i < c.length; i++) {
+      double c_i = c[i].get(GRB.DoubleAttr.X);
+      assert 0 <= c_i && c_i <= 1;
+      if (c_i > 0)
+        sol.concepts.add(i);
+    }
+    
+    model.dispose();
+    env.dispose();
+    
+    return sol;
+  }
+  
+  public void setConceptObjective(GRBModel model, GRBVar[] c) throws GRBException {
+    GRBLinExpr obj = new GRBLinExpr();
+    for (int i = 0; i < c.length; i++) {
+      assert conceptUtilities[i] >= 0;
+      if (conceptUtilities[i] != 0)
+        obj.addTerm(conceptUtilities[i], c[i]);
+    }
+    model.setObjective(obj, GRB.MAXIMIZE);
+  }
+  
+  public void addLengthConstraint(GRBModel model, GRBVar[] s, int summaryLength) throws GRBException {
+    GRBLinExpr solutionLength = new GRBLinExpr();
+    for (int j = 0; j < s.length; j++)
+      solutionLength.addTerm(this.sentenceLengths.get(j), s[j]);
+    model.addConstr(summaryLength, GRB.GREATER_EQUAL, solutionLength, null);
+  }
+
   /**
    * @return the list of sentence indices in the summary
    */
-  private IntArrayList solve(int summaryLength) throws GRBException {
+  public IntArrayList solve(int summaryLength) throws GRBException {
     Log.info("solving for summaryLength=" + summaryLength);
     GRBEnv env = new GRBEnv();
     GRBModel model = new GRBModel(env);
@@ -198,20 +350,11 @@ public class GillickFavre09Summarization {
       s[j] = model.addVar(0, 1, 0, GRB.BINARY, null);
     
     // Concept utility objective
-    GRBLinExpr obj = new GRBLinExpr();
-    for (int i = 0; i < c.length; i++) {
-      assert conceptUtilities[i] >= 0;
-      if (conceptUtilities[i] != 0)
-        obj.addTerm(conceptUtilities[i], c[i]);
-    }
-    model.setObjective(obj, GRB.MAXIMIZE);
+    setConceptObjective(model, c);
     
     // Constraint (0)
     // sum_j l_j s_j <= L
-    GRBLinExpr solutionLength = new GRBLinExpr();
-    for (int j = 0; j < s.length; j++)
-      solutionLength.addTerm(this.sentenceLengths.get(j), s[j]);
-    model.addConstr(summaryLength, GRB.GREATER_EQUAL, solutionLength, null);
+    addLengthConstraint(model, s, summaryLength);
     
     // Constraint (1)
     // s_j Occ_{ij} <= c_i \forall i,j

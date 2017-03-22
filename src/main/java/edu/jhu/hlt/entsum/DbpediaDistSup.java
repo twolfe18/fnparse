@@ -254,6 +254,8 @@ public class DbpediaDistSup {
       case STRING_ENGLISH:
         ef.objUtf8Value = f.object().getValue().getBytes(UTF8);
         break;
+      default:
+        throw new RuntimeException("implement me, type=" + f.object().type);
       }
       
 //      if (DbpediaTtl.isKbNode(f.object())) {
@@ -491,7 +493,9 @@ public class DbpediaDistSup {
    * 2) have one entity mentioned and one textual mention which is reasonably well matched
    */
   static class FactSelector {
+    @SuppressWarnings("unused")
     private ComputeIdf df;
+    @SuppressWarnings("unused")
     private Join j;
     
     public FactSelector(ComputeIdf df, Join j) {
