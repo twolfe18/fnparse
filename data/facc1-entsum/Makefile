@@ -1,10 +1,14 @@
 
-GRID = test2b
+#GRID = test2b
+GRID = test2
 SPLIT = /export/projects/twolfe/entity-summarization/clueweb-linked/train-dev-test
 
 # NOTE: This is a TINY SUBSET of the full data
-FACC1 = /home/travis/code/data/clueweb09-freebase-annotation/extractedAnnotation
-DBPEDIA = /home/travis/code/fnparse/data/dbpedia/
+#FACC1 = /home/travis/code/data/clueweb09-freebase-annotation/extractedAnnotation
+#DBPEDIA = /home/travis/code/fnparse/data/dbpedia/
+# This is the full data
+FACC1 = /export/projects/tto8/ClueWeb/clueweb09-freebase-annotation/extractedAnnotation
+DBPEDIA = /export/projects/twolfe/data/dbpedia
 
 entities:
 	rsync -avz --delete $(GRID):$(SPLIT)/rare4/ $@
