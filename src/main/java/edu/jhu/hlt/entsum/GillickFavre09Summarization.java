@@ -75,17 +75,15 @@ public class GillickFavre09Summarization {
   /**
    * Given sentences, do the work of building the Occ_{ij} matrix of concept mentions.
    */
-  static class Adapter {
+  public static class Adapter {
     private Alphabet<String> conceptAlph;
-    private String mid;
     private List<ScoredPassage> mentions;
     public boolean cBigrams = false;
     public boolean cCopula = false;
     public boolean cInfobox = false;
     public boolean cRelated = true;
     
-    public Adapter(String mid, List<ScoredPassage> mentions, Alphabet<String> conceptAlph) {
-      this.mid = mid;
+    public Adapter(List<ScoredPassage> mentions, Alphabet<String> conceptAlph) {
       this.mentions = mentions;
       this.conceptAlph = conceptAlph;
     }
@@ -109,7 +107,7 @@ public class GillickFavre09Summarization {
       addTo.add(new ConceptMention(i, j));
     }
     
-    public List<ScoredPassage> rerank(int maxSentences) {
+    public List<ScoredPassage> rerank(int summaryLength) {
       List<ConceptMention> occ = new ArrayList<>();
       IntArrayList sentenceLengths = new IntArrayList();
       
@@ -136,7 +134,7 @@ public class GillickFavre09Summarization {
       Log.info("nOcc=" + occ.size() + " nSent=" + sentenceLengths.size() + " nConcept=" + conceptAlph.size());
       try {
         GillickFavre09Summarization solver = new GillickFavre09Summarization(occ, sentenceLengths, conceptUtilities);
-        IntArrayList keep = solver.solve(maxSentences);
+        IntArrayList keep = solver.solve(summaryLength);
         
         List<ScoredPassage> out = new ArrayList<>(keep.size());
         for (int i = 0; i < keep.size(); i++)
@@ -281,18 +279,16 @@ public class GillickFavre09Summarization {
   public static void foo() throws Exception {
     File p = new File("../data/clueweb09-freebase-annotation/gen-for-entsum/");
     File f = new File(p, "sentences-rare4/sentences-containing-m.0gly1.txt.gz");
-    List<CluewebLinkedSentence> sent;
     int maxSentenceLength = 80;
-    try (CluewebLinkedSentence.ValidatorIterator iter = new CluewebLinkedSentence.ValidatorIterator(f, maxSentenceLength)) {
-      sent = iter.toList();
-    }
+    List<CluewebLinkedSentence> sent = CluewebLinkedSentence.readAll(f, maxSentenceLength);
     File hashes = new File(p, "parsed-sentences-rare4/hashes.txt");
     File conll = new File(p, "parsed-sentences-rare4/parsed.conll");
     MultiAlphabet alph = new MultiAlphabet();
     ParsedSentenceMap parses = new ParsedSentenceMap(hashes, conll, alph);
     List<ScoredPassage> mentions = parses.getAllParses(sent);
     Alphabet<String> conceptAlph = new Alphabet<>();
-    Adapter a = new Adapter("/m/0gly1", mentions, conceptAlph);
+//    Adapter a = new Adapter("/m/0gly1", mentions, conceptAlph);
+    Adapter a = new Adapter(mentions, conceptAlph);
     int maxWordsInSummary = 200;
     int words = 0;
     List<ScoredPassage> summary = a.rerank(maxWordsInSummary);

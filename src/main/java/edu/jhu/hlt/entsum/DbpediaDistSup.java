@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
@@ -16,6 +17,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
@@ -25,6 +27,7 @@ import edu.jhu.hlt.entsum.CluewebLinkedSentence.SegmentedTextAroundLink;
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.ValidatorIterator;
 import edu.jhu.hlt.entsum.DbpediaToken.Type;
 import edu.jhu.hlt.entsum.DepNode.ShortestPath;
+import edu.jhu.hlt.entsum.DistSupFact.Arg2Mention;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
@@ -294,12 +297,12 @@ public class DbpediaDistSup {
       return new DbpediaTtl(st, vt, ot);
     }
     
-    private static String stripAngleBrackets(String f) {
-      int n = f.length();
-      if (f.charAt(0) != '<' || f.charAt(n-1) != '>')
-        throw new IllegalArgumentException();
-      return f.substring(0, n-1);
-    }
+//    private static String stripAngleBrackets(String f) {
+//      int n = f.length();
+//      if (f.charAt(0) != '<' || f.charAt(n-1) != '>')
+//        throw new IllegalArgumentException();
+//      return f.substring(0, n-1);
+//    }
     
 //    private static final String pre = "http://dbpedia.org/resource/";
 //    private int lookupDbpInt(String dbpediaId, boolean addIfNotPresent) {
@@ -557,8 +560,9 @@ public class DbpediaDistSup {
         new File("data/dbpedia/freebase_links_en.ttl.gz"));
     File infoboxFacts = config.getExistingFile("infoboxFacts",
         new File("data/dbpedia/infobox_properties_en.ttl.gz"));
+    File p = new File("../data/clueweb09-freebase-annotation/gen-for-entsum/");
     File sentences = config.getExistingFile("sentences",
-        new File("../data/clueweb09-freebase-annotation/gen-for-entsum/parsed-sentences-rare4/sentences.txt"));
+        new File(p, "parsed-sentences-rare4/sentences.txt"));
     
     File output = config.getOrMakeDir("output");
     File jf = new File(output, "join.jser");
@@ -596,13 +600,19 @@ public class DbpediaDistSup {
     ComputeIdf df = new ComputeIdf(dff);
     FactSelector fs = new FactSelector(df, j);
     
+    File hashes = config.getExistingFile("hashes", new File(p, "parsed-sentences-rare4/hashes.txt"));
+    File conll = config.getExistingFile("conll", new File(p, "parsed-sentences-rare4/parsed.conll"));
+    ParsedSentenceMap parses = new ParsedSentenceMap(hashes, conll, new MultiAlphabet());
+    
     Log.info("scanning sentences in " + sentences.getPath());
     Counts<Integer> resolvedShort = new Counts<>();
     Counts<Integer> resolvedLong = new Counts<>();
     File outFact = new File(output, "facts.txt");
+    File outFactJser = new File(output, "facts.jser");  // ObjectOuputStream of DistSupFacts
     int maxSentenceLength = config.getInt("maxSentenceLength", 80);
     try (ValidatorIterator iter = new ValidatorIterator(sentences, maxSentenceLength);
-        BufferedWriter wf = FileUtil.getWriter(outFact)) {
+        BufferedWriter wf = FileUtil.getWriter(outFact);
+        ObjectOutputStream oos = new ObjectOutputStream(FileUtil.getOutputStream(outFactJser))) {
       while (iter.hasNext()) {
         CluewebLinkedSentence sent = iter.next();
         j.ec.increment("sent");
@@ -615,8 +625,10 @@ public class DbpediaDistSup {
         else
           resolvedShort.increment(nr);
         
+        // Infobox facts which can be aligned to the sentence s
         MultiMap<DbpediaTtl, Feat> x = fs.scoreFacts3(s);
 
+        // Sort facts by score
         List<DbpediaTtl> f = new ArrayList<>();
         for (DbpediaTtl t : x.keySet())
           f.add(t);
@@ -632,6 +644,8 @@ public class DbpediaDistSup {
             return 0;
           }
         });
+
+        // Output top facts which have score >1
         int k = 10, c = 0;
         for (DbpediaTtl ff : f) {
           List<Feat> r = x.get(ff);
@@ -652,6 +666,13 @@ public class DbpediaDistSup {
           for (Feat feat : r)
             wf.write("\t" + feat.getName() + ":" + feat.getWeight());
           wf.newLine();
+          
+          Arg2Mention argMapping = new Arg2Mention(maas);
+          DepNode[] parse = parses.getParse(s.sent.hashHex());
+          assert parse != null;
+          DistSupFact fact = new DistSupFact(s.sent, parse, null, argMapping,
+              ff.subject().getValue(), ff.verb().getValue(), ff.object().getValue(), r);
+          oos.writeObject(fact);
           
           if (++c == k)
             break;
@@ -719,9 +740,44 @@ public class DbpediaDistSup {
       }
       Log.info("dbpediaIds.size=" + dbpediaIds.size() + " ents=" + ents + " types=" + types);
     }
+
+    public List<String> getDbpediaSupertypesFromMid(String mid) {
+      int midi = this.mids.lookupIndex(mid, false);
+      if (midi < 0)
+        return Collections.emptyList();
+      Set<String> seen = new HashSet<>();
+      List<String> out = new ArrayList<>();
+      IntArrayList ia = this.mid2dbp.get(midi);
+      for (int i = 0; i < ia.size(); i++) {
+        String dbp = this.dbpediaIds.lookupObject(ia.get(i));
+        for (String type : getDbpediaSupertypes(dbp)) {
+          if (seen.add(type))
+            out.add(type);
+        }
+      }
+      return out;
+    }
+    
+    public List<String> getDbpediaSupertypes(String dbpediaId) {
+      int key = this.dbpediaIds.lookupIndex(dbpediaId, false);
+      if (key < 0)
+        return null;
+      IntArrayList types = this.dbpediaEntity2dbpediaType.get(key);
+      if (types == null)
+        return Collections.emptyList();
+      int n = types.size();
+      List<String> stypes = new ArrayList<>(n);
+      for (int i = 0; i < n; i++)
+        stypes.add(this.dbpediaTypes.lookupObject(types.get(i)));
+      return stypes;
+    }
     
     public MultiAlphabet getParseAlph() {
       return parses.getAlph();
+    }
+    
+    public DepNode[] getParse(UUID hash) {
+      return parses.getParse(hash);
     }
     
     public int[][] getDbpediaIds(CluewebLinkedSentence sent) {
@@ -808,7 +864,9 @@ public class DbpediaDistSup {
             continue;
 
           ShortestPath p = new ShortestPath(heads[linkIdx], heads[i], parse);
-          List<DepNode.Edge> path = p.buildPath(fed.getParseAlph());
+          boolean hideEndpoints = true;
+          boolean usePosInsteadOfWord = false;
+          List<DepNode.Edge> path = p.buildPath(fed.getParseAlph(), hideEndpoints, usePosInsteadOfWord);
           List<DepNode.Edge[]> oneGrams = ShortestPath.ngrams(1, path);
           List<DepNode.Edge[]> twoGrams = ShortestPath.ngrams(2, path);
 
@@ -916,7 +974,7 @@ public class DbpediaDistSup {
     for (int i = 0; i < s.length; i++) {
       ArgMin<Integer> shallow = new ArgMin<>();
       for (int j = s[i].start; j < s[i].end; j++)
-        shallow.offer(j, d[i]);
+        shallow.offer(j, d[j]);
       h[i] = shallow.get();
     }
     return h;
@@ -969,7 +1027,10 @@ public class DbpediaDistSup {
   
   /**
    * Reads in the output of facts.txt file which has columns for:
-   * [sentHash, fact.extractionScore, fact.subject, fact.verb, fact.object, extractionFeatures+]
+   * [sentHash, fact.extractionScore, fact.subject, fact.verb, fact.object, sentToKbLinkFeats+]
+   *
+   * Produces a VW training file for the binary task of "does this sentence contain an
+   * infobox fact?" given features of the sentence.
    */
   public static void extractFeatures(ExperimentProperties config) throws Exception {
     TimeMarker tm = new TimeMarker();
@@ -1005,6 +1066,8 @@ public class DbpediaDistSup {
       Log.info("saving fed to " + fedFile.getPath());
       FileUtil.serialize(fed, fedFile);
     }
+    
+    SlotsAsConceptsSummarization.testFed(fed);
     
     // Read in the set of sentences which may contain an infobox fact (label for interestingness)
     // Using my rare4 example, 15121 out of 83323 sentences meet this criteria
@@ -1079,7 +1142,15 @@ public class DbpediaDistSup {
   
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
-//    generateDistSupInstances(config);
-    extractFeatures(config);
+//    String mode = config.getString("mode", "generateDistSupInstances");
+    String mode = config.getString("mode", "extractFeatures");
+    switch (mode) {
+    case "generateDistSupInstances":
+      generateDistSupInstances(config);
+      break;
+    case "extractFeatures":
+      extractFeatures(config);
+      break;
+    }
   }
 }

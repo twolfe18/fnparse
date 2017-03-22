@@ -13,12 +13,12 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.EntityMentionRanker.ScoredPassage;
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.EntitySplit.DataSetSplit;
@@ -30,8 +30,6 @@ import edu.jhu.hlt.entsum.DbpediaDistSup.SentenceInterestingnessFeatures;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
-import edu.jhu.hlt.ikbp.tac.StringTermVec;
-import edu.jhu.hlt.ikbp.tac.FeaturePacker.Buf;
 import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.ArgMin;
 import edu.jhu.hlt.tutils.Counts;
@@ -41,7 +39,6 @@ import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.OrderStatistics;
-import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.list.DoubleArrayList;
@@ -608,7 +605,6 @@ public class CluewebLinkedPreprocess {
      * @param conll contains one entry (and many lines) per sentence
      * @see PrepareSentencesForParsey
      */
-//    public EntityMentionRanker(ComputeIdf df, File hashes, File conll, File outputDir) throws Exception {
     public EntityMentionRanker(FeatExData fed, File hashes, File conll, File outputDir) throws Exception {
       this.df = fed.df;
       this.fed = fed;
@@ -625,6 +621,10 @@ public class CluewebLinkedPreprocess {
         this.sent = sent;
         this.parse = parse;
         this.score = new ArrayList<>();
+      }
+      
+      public CluewebLinkedSentence getSentence() {
+        return sent;
       }
 
       public List<Feat> getScoreReason() {
@@ -858,59 +858,6 @@ public class CluewebLinkedPreprocess {
     }
   }
   
-  public static class DeduplicatingIterator implements Iterator<ScoredPassage> {
-    private Iterator<ScoredPassage> inner;
-    private ScoredPassage next;
-    private Set<String> uniq;
-    private List<StringTermVec> outputVecs;
-    private ComputeIdf df;
-    private double cosineThresh;
-    
-    public DeduplicatingIterator(Iterator<ScoredPassage> inner, ComputeIdf df, double cosineThresh) {
-      this.cosineThresh = cosineThresh;
-      this.df = df;
-      this.inner = inner;
-      this.uniq = new HashSet<>();
-      this.outputVecs = new ArrayList<>();
-      advance();
-    }
-    
-    private void advance() {
-      next = null;
-      iter:
-      while (next == null && inner.hasNext()) {
-        ScoredPassage sp = inner.next();
-        if (!uniq.add(sp.sent.hashHex()))
-          continue;
-        
-        StringTermVec tv = new StringTermVec();
-        for (String t : sp.sent.getAllWords(new ArrayList<>(), false))
-          tv.add(t, 1);
-        for (StringTermVec prev : outputVecs) {
-          double c = df.tfIdfCosineSim(tv, prev);
-          if (c > cosineThresh)
-            continue iter;
-        }
-        outputVecs.add(tv);
-        
-        next = sp;
-      }
-
-    }
-
-    @Override
-    public boolean hasNext() {
-      return next != null;
-    }
-
-    @Override
-    public ScoredPassage next() {
-      ScoredPassage sp = next;
-      advance();
-      return sp;
-    }
-  }
-  
   public static void testScoring(ExperimentProperties config) throws Exception {
     File sp = new File("/home/travis/code/data/clueweb09-freebase-annotation/gen-for-entsum");
     
@@ -945,7 +892,8 @@ public class CluewebLinkedPreprocess {
       List<ScoredPassage> ranked = emr.rank(mid, sentences, maxSentLength);
       int k = 100, taken = 0;
       double cosineThresh = config.getDouble("cosineThresh", 0.5);
-      DeduplicatingIterator iter = new DeduplicatingIterator(ranked.iterator(), fed.df, cosineThresh);
+      DeduplicatingIterator<ScoredPassage> iter = new DeduplicatingIterator<>(
+          ranked.iterator(), ScoredPassage::getSentence, fed.df, cosineThresh);
       
       File rf = new File(outputDir, "results-" + a[3] + ".txt");
       Log.info("writing k=" + k + " results to=" + rf.getPath());

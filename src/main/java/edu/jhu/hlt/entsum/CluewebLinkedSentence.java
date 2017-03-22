@@ -3,14 +3,17 @@ package edu.jhu.hlt.entsum;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.io.StringReader;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import com.google.common.hash.Hashing;
@@ -32,11 +35,12 @@ import edu.stanford.nlp.process.PTBTokenizer;
  *
  * @author travis
  */
-public class CluewebLinkedSentence {
-
+public class CluewebLinkedSentence implements Serializable {
+  private static final long serialVersionUID = -2278735526320745802L;
   static final Charset UTF8 = Charset.forName("UTF-8");
   
-  public static class Link {
+  public static class Link implements Serializable {
+    private static final long serialVersionUID = -5907675848568292092L;
     static final String tail = "[/FREEBASE]";
     static final String pre = "[FREEBASE mid=";
     
@@ -223,7 +227,9 @@ public class CluewebLinkedSentence {
     return markup;
   }
   
-  static class SegmentedText {
+  static class SegmentedText implements Serializable {
+    private static final long serialVersionUID = 4576763536577213115L;
+
     int origStartGlobal;
     String orig;
     List<String> toks;
@@ -244,6 +250,11 @@ public class CluewebLinkedSentence {
       }
     }
     
+    @Override
+    public String toString() {
+      return "(ST " + toks + ")";
+    }
+    
     public int numTokens() {
       return toks.size();
     }
@@ -258,7 +269,9 @@ public class CluewebLinkedSentence {
     }
   }
   
-  class SegmentedTextAroundLink {
+  class SegmentedTextAroundLink implements Serializable {
+    private static final long serialVersionUID = -2358566998602122983L;
+
     int charStart;            // characters which appear before this segment
     int tokStart;             // tokens which appear before this segment
     int linkIdx;              // <0 iff the last one
@@ -279,6 +292,11 @@ public class CluewebLinkedSentence {
         this.outside = new SegmentedText(t, charStart);
         this.inside = new SegmentedText(l.getMention(markup), l.mstart);
       }
+    }
+    
+    @Override
+    public String toString() {
+      return "(SegTextArnLink cStart=" + charStart + " tStart=" + tokStart + " lIdx=" + linkIdx + ")";
     }
     
     public boolean hasLink() {
@@ -371,6 +389,32 @@ public class CluewebLinkedSentence {
     }
     return sb.toString();
   }
+
+  public String getResultsHighlighted2(Map<String, String> mid2tag) {
+    StringBuilder sb = new StringBuilder();
+    List<SegmentedTextAroundLink> segs = getTextTokenized();
+    for (SegmentedTextAroundLink seg : segs) {
+      if (seg.linkIdx < 0) {
+        // Last part
+        sb.append(' ');
+        sb.append(StringUtils.join(" ", seg.allTokens()));
+      } else {
+        if (seg.linkIdx > 0)
+          sb.append(' ');
+        // Pre
+        sb.append(StringUtils.join(" ", seg.outside.toks));
+        // Inside
+        sb.append(' ');
+        String tag = mid2tag.get(seg.getMid());
+        if (tag != null)
+          sb.append("<" + tag + ">");
+        sb.append(StringUtils.join(" ", seg.inside.toks));
+        if (tag != null)
+          sb.append("</" + tag + ">");
+      }
+    }
+    return sb.toString();
+  }
   
   public List<String> getMentionStrings(String mid) {
     List<String> s = new ArrayList<>();
@@ -423,6 +467,22 @@ public class CluewebLinkedSentence {
   @Override
   public String toString() {
     return "(CWLinkSent nLink=" + links.length + " nChar=" + markup.length() + ")";
+  }
+  
+  public static List<CluewebLinkedSentence> readAll(File source, int maxWordsPerSentence) throws IOException {
+    try (ValidatorIterator iter = new ValidatorIterator(source, maxWordsPerSentence)) {
+      return iter.toList();
+    }
+  }
+  
+  public static Map<UUID, CluewebLinkedSentence> readAllHashMap(File source, int maxWordsPerSentence) throws IOException {
+    Map<UUID, CluewebLinkedSentence> m = new HashMap<>();
+    for (CluewebLinkedSentence s : readAll(source, maxWordsPerSentence)) {
+      UUID key = s.hashUuid();
+      Object old = m.put(key, s);
+      assert old == null;
+    }
+    return m;
   }
   
   public static void testHashing() {

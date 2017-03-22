@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.IntFunction;
 
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -76,13 +77,13 @@ public class DepNode implements Serializable {
     }
     
     /** t must be a grand*-parent of s */
-    private List<Edge> pathHelper(int s, int t, MultiAlphabet a, boolean starTheEdges) {
+    private List<Edge> pathHelper(int s, int t, MultiAlphabet a, IntFunction<String> showNode, boolean starTheEdges) {
       List<Edge> e = new ArrayList<>();
       for (int p = s; p >= 0; p = parse[p].depParentNode) {
         int h = parse[p].depParentNode;
         int m = p;
-        String hs = h < 0 ? "ROOT" : a.word(parse[h].word);
-        String ms = a.word(parse[m].word);
+        String hs = showNode.apply(h);
+        String ms = showNode.apply(m);
         String es = a.dep(parse[m].depParentLabel);
         if (starTheEdges)
           es = es + "*";
@@ -94,11 +95,24 @@ public class DepNode implements Serializable {
     }
     
     // TODO take a show function for nodes, put the returned value in head/mod for Edge
-    public List<Edge> buildPath(MultiAlphabet a) {
+    public List<Edge> buildPath(MultiAlphabet a, boolean hideEndpoints, boolean usePosInsteadOfWords) {
+      IntFunction<String> showNode = i -> {
+        if (i < 0)
+          return "ROOT";
+        if (hideEndpoints) {
+          if (i == source)
+            return "SOURCE";
+          if (i == target)
+            return "TARGET";
+        }
+        if (usePosInsteadOfWords)
+          return a.pos(parse[i].pos);
+        return a.word(parse[i].word);
+      };
       // s -> c
-      List<Edge> path = pathHelper(source, commonParent, a, true);
+      List<Edge> path = pathHelper(source, commonParent, a, showNode, true);
       // c -> t
-      List<Edge> rev = pathHelper(target, commonParent, a, false);
+      List<Edge> rev = pathHelper(target, commonParent, a, showNode, false);
       Collections.reverse(rev);
       path.addAll(rev);
       return path;
@@ -336,11 +350,14 @@ public class DepNode implements Serializable {
     show(parse, Span.getSpan(head, head+1), a);
   }
   public static void show(DepNode[] parse, Span s, MultiAlphabet a) {
+    int[] d = depths(parse);
     for (int i = s.start; i < s.end; i++) {
       int h = parse[i].depParentNode;
       String w = a.word(parse[i].word);
+      String p = a.pos(parse[i].pos);
       String e = new DepNode.Edge(h, i, parse, a).toString();
-      System.out.printf("% 4d   %-20s   % 4d   %s\n", i, w, h, e);
+//      System.out.printf("% 4d   %-20s   %-5s   % 4d   %s\n", i, w, p, h, e);
+      System.out.printf("% 4d   %-20s   %-5s   d=% 3d  % 4d   %s\n", i, w, p, d[i], h, e);
     }
   }
   
@@ -437,7 +454,9 @@ public class DepNode implements Serializable {
     System.out.println("source: " + a.word(parse[path.source].word));
     System.out.println("target: " + a.word(parse[path.target].word));
     System.out.println("commonParent: " + a.word(parse[path.getCommonParent()].word));
-    List<Edge> p = path.buildPath(a);
+    boolean hideEndpoints = false;
+    boolean usePosInsteadOfWord = false;
+    List<Edge> p = path.buildPath(a, hideEndpoints, usePosInsteadOfWord);
     System.out.println("path: " + p);
 
     for (int n = 1; n <= 3; n++) {
