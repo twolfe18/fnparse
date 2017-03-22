@@ -29,11 +29,19 @@ sentences: entities fnparse.jar
 parsed-sentences: sentences
 	java -ea -server -Xmx2G -cp fnparse.jar edu.jhu.hlt.entsum.CluewebLinkedPreprocess \
 		mode cwsent2conll \
-		sentencesDir $< \
-		outputDir $@
-	@echo "parsing..."
-	~/code/concrete-parsey/scripts/parsey-docker-wrapper-local.sh \
-		<$@/raw.conll >$@/parsed.conll
+		sentencesDir $</dev \
+		outputDir $@/dev
+	java -ea -server -Xmx2G -cp fnparse.jar edu.jhu.hlt.entsum.CluewebLinkedPreprocess \
+		mode cwsent2conll \
+		sentencesDir $</test \
+		outputDir $@/test
+	java -ea -server -Xmx2G -cp fnparse.jar edu.jhu.hlt.entsum.CluewebLinkedPreprocess \
+		mode cwsent2conll \
+		sentencesDir $</train \
+		outputDir $@/train
+	#@echo "parsing..."
+	#~/code/concrete-parsey/scripts/parsey-docker-wrapper-local.sh \
+	#	<$@/dev/raw.conll >$@/dev/parsed.conll
 
 
 # have one of these folders for each of train/dev/test?
