@@ -26,7 +26,7 @@ sentences: entities fnparse.jar
 		midFile $</mids.train.txt \
 		outputDir $@/train
 
-parsed-sentences: sentences
+tokenized-sentences: sentences
 	java -ea -server -Xmx2G -cp fnparse.jar edu.jhu.hlt.entsum.CluewebLinkedPreprocess \
 		mode cwsent2conll \
 		sentencesDir $</dev \
@@ -39,9 +39,14 @@ parsed-sentences: sentences
 		mode cwsent2conll \
 		sentencesDir $</train \
 		outputDir $@/train
-	#@echo "parsing..."
-	#~/code/concrete-parsey/scripts/parsey-docker-wrapper-local.sh \
-	#	<$@/dev/raw.conll >$@/dev/parsed.conll
+
+parsed-sentences: tokenized-sentences
+	~/code/concrete-parsey/scripts/parsey-docker-wrapper-local.sh \
+		<$@/dev/raw.conll >$@/dev/parsed.conll
+	~/code/concrete-parsey/scripts/parsey-docker-wrapper-local.sh \
+		<$@/test/raw.conll >$@/test/parsed.conll
+	~/code/concrete-parsey/scripts/parsey-docker-wrapper-local.sh \
+		<$@/train/raw.conll >$@/train/parsed.conll
 
 
 # have one of these folders for each of train/dev/test?
