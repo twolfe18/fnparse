@@ -587,11 +587,15 @@ public class CluewebLinkedPreprocess {
         Log.info("removing duplicate sentences in: " + dups.getPath());
         
         String pre = "sentences-containing-";
-        String suf = ".gz";
+        String suf = ".txt.gz";
         String nam = dups.getName();
+        assert nam.startsWith(pre) && nam.endsWith(suf) : "nam=" + nam;
         String mid = nam.substring(pre.length(), nam.length() - suf.length());
         File parent = new File(outputDir, mid);
+        assert !parent.isDirectory();
+        parent.mkdirs();
 
+        // Remove duplicates (less parsing work)
         File uniq = new File(parent, "sentences-preFilter.txt");
         String command = "zcat " + dups.getPath() + " | sort -u >" + uniq.getPath();
         System.out.println(command);
@@ -601,8 +605,7 @@ public class CluewebLinkedPreprocess {
         if (r != 0)
           throw new RuntimeException();
 
-        assert !parent.isDirectory();
-        parent.mkdirs();
+        // Write out all the data which passes the sentence length filter
         File outputConll = new File(parent, "raw.conll");
         File outputHashes = new File(parent, "hashes.txt");
         File outputMentionLocs = new File(parent, "mentionLocs.txt");
