@@ -585,7 +585,14 @@ public class CluewebLinkedPreprocess {
     try (PrepareSentencesForParsey p = new PrepareSentencesForParsey()) {
       for (File dups : FileUtil.find(sentencesDir, "glob:**/sentences-containing-*.gz")) {
         Log.info("removing duplicate sentences in: " + dups.getPath());
-        File uniq = new File(outputDir, "sentences-preFilter.txt");
+        
+        String pre = "sentences-containing-";
+        String suf = ".gz";
+        String nam = dups.getName();
+        String mid = nam.substring(pre.length(), nam.length() - suf.length());
+        File parent = new File(outputDir, mid);
+
+        File uniq = new File(parent, "sentences-preFilter.txt");
         String command = "zcat " + dups.getPath() + " | sort -u >" + uniq.getPath();
         System.out.println(command);
         ProcessBuilder pb = new ProcessBuilder("/bin/bash", "-c", command);
@@ -593,13 +600,7 @@ public class CluewebLinkedPreprocess {
         int r = proc.waitFor();
         if (r != 0)
           throw new RuntimeException();
-        
-        String pre = "sentences-containing-";
-        String suf = ".gz";
-        String nam = dups.getName();
-        String mid = nam.substring(pre.length(), nam.length() - suf.length());
 
-        File parent = new File(outputDir, mid);
         assert !parent.isDirectory();
         parent.mkdirs();
         File outputConll = new File(parent, "raw.conll");
