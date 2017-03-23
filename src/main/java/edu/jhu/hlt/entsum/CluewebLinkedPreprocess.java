@@ -21,7 +21,6 @@ import java.util.UUID;
 
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.EntityMentionRanker.ScoredPassage;
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.EntitySplit.DataSetSplit;
-import edu.jhu.hlt.entsum.CluewebLinkedSentence.Link;
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.SegmentedTextAroundLink;
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.ValidatorIterator;
 import edu.jhu.hlt.entsum.DbpediaDistSup.FeatExData;
@@ -76,7 +75,7 @@ public class CluewebLinkedPreprocess {
     public void observe(CluewebLinkedSentence sent) {
       int n = sent.numLinks();
       for (int i = 0; i < n; i++) {
-        Link l = sent.getLink(i);
+        CluewebLinkedSentence.Link l = sent.getLink(i);
         String mid = l.getMid(sent.getMarkup());
         int c = midCounts.apply(mid, true);
         maxMidFreq = Math.max(maxMidFreq, c);
@@ -452,6 +451,9 @@ public class CluewebLinkedPreprocess {
     // mention := <mid> <space> <startTokOffset> <dash> <endTokOffset>
     // line := <mention> (<tab> <mention>)*
     private BufferedWriter outputMentionLocs;
+//    // If true then output one token per line using
+//    // B-<mid>, I, and O tags. Otherwise use format above.
+//    private boolean mentionLocsConllMode = true;
     
     // Looks like sentences.txt (contains xuchen/clueweb markup) but only contains sentences
     // which this class has had add called for. This is needed to ensure that
@@ -460,11 +462,30 @@ public class CluewebLinkedPreprocess {
     
     private Counts<String> ec = new Counts<>();
     
-    public PrepareSentencesForParsey(File outputConll, File outputHashes, File outputMentionLocs, File outputMarkup) throws IOException {
+    public PrepareSentencesForParsey() {
+    }
+
+    public void setOutput(File outputConll, File outputHashes, File outputMentionLocs, File outputMarkup) throws IOException {
+      if (this.outputConll != null)
+        close();
       this.outputConll = FileUtil.getWriter(outputConll);
       this.outputHashes = FileUtil.getWriter(outputHashes);
       this.outputMentionLocs = FileUtil.getWriter(outputMentionLocs);
       this.outputMarkup = FileUtil.getWriter(outputMarkup);
+    }
+
+    @Override
+    public void close() throws IOException {
+      ec.increment("close");
+      if (outputConll == null) {
+        ec.increment("close/neverOpened");
+      } else {
+        outputConll.close();
+        outputHashes.close();
+        outputMentionLocs.close();
+        outputMarkup.close();
+      }
+      Log.info("counts: " + ec);
     }
     
     public void add(CluewebLinkedSentence sent) throws IOException {
@@ -530,52 +551,69 @@ public class CluewebLinkedPreprocess {
 //      // Sentences end with an empty line
 //      outputConll.newLine();
     }
-
-    @Override
-    public void close() throws Exception {
-      ec.increment("close");
-      outputConll.close();
-      outputHashes.close();
-      outputMentionLocs.close();
-      outputMarkup.close();
-      Log.info("counts: " + ec);
-    }
   }
   
+  /**
+   * Old way: create one big [raw.conll, hashes.txt, sentences.txt] package
+   * New way: create one dir per mid
+   */
   public static void convertPerEntitySentencesToConll(ExperimentProperties config) throws Exception {
     File sentencesDir = config.getExistingDir("sentencesDir");
+    File outputDir = config.getOrMakeDir("outputDir");
+
     List<File> keep = new ArrayList<>();
     for (File f : sentencesDir.listFiles())
       if (f.getName().startsWith(ExtractRelevantSentence.MID_SENT_FILE_PREFIX))
         keep.add(f);
     Log.info("found " + keep.size() + " sentence files to output");
 
-    // Sort and dedup all the sentences
-    File outputDir = config.getOrMakeDir("outputDir");
-    File sentencesPreFilter = new File(outputDir, "sentences-preFilter.txt");
-    String command = "zcat " + sentencesDir.getPath()
-        + "/" + ExtractRelevantSentence.MID_SENT_FILE_PREFIX + "*.gz"
-        + " | sort -u >" + sentencesPreFilter.getPath();
-    Log.info("sorting and deduping sentences");
-    System.out.println(command);
-    ProcessBuilder pb = new ProcessBuilder("/bin/bash", "-c", command);
-    Process proc = pb.start();
-    int r = proc.waitFor();
-    if (r != 0)
-      throw new RuntimeException();
+//    // Sort and dedup all the sentences
+//    File sentencesPreFilter = new File(outputDir, "sentences-preFilter.txt");
+//    String command = "zcat " + sentencesDir.getPath()
+//        + "/" + ExtractRelevantSentence.MID_SENT_FILE_PREFIX + "*.gz"
+//        + " | sort -u >" + sentencesPreFilter.getPath();
+//    Log.info("sorting and deduping sentences");
+//    System.out.println(command);
+//    ProcessBuilder pb = new ProcessBuilder("/bin/bash", "-c", command);
+//    Process proc = pb.start();
+//    int r = proc.waitFor();
+//    if (r != 0)
+//      throw new RuntimeException();
     
     // Go through the sorted+uniq sentence and output conll and a hash/key
-    File outputConll = new File(outputDir, "raw.conll");
-    File outputHashes = new File(outputDir, "hashes.txt");
-    File outputMentionLocs = new File(outputDir, "mentionLocs.txt");
-    File outputMarkup = new File(outputDir, "sentences.txt");
     int maxSentLength = config.getInt("maxSentLength", 80);
-    try (PrepareSentencesForParsey p = new PrepareSentencesForParsey(outputConll, outputHashes, outputMentionLocs, outputMarkup)) {
-      Log.info("computing hashes and generating CoNLL-X for sentences in " + sentencesPreFilter.getPath());
-      try (ValidatorIterator iter = new ValidatorIterator(sentencesPreFilter, maxSentLength)) {
-        while (iter.hasNext()) {
-          CluewebLinkedSentence sent = iter.next();
-          p.add(sent);
+    try (PrepareSentencesForParsey p = new PrepareSentencesForParsey()) {
+      for (File dups : FileUtil.find(sentencesDir, "glob:**/sentences-containing-*.gz")) {
+        Log.info("removing duplicate sentences in: " + dups.getPath());
+        File uniq = new File(outputDir, "sentences-preFilter.txt");
+        String command = "zcat " + dups.getPath() + " | sort -u >" + uniq.getPath();
+        System.out.println(command);
+        ProcessBuilder pb = new ProcessBuilder("/bin/bash", "-c", command);
+        Process proc = pb.start();
+        int r = proc.waitFor();
+        if (r != 0)
+          throw new RuntimeException();
+        
+        String pre = "sentences-containing-";
+        String suf = ".gz";
+        String nam = dups.getName();
+        String mid = nam.substring(pre.length(), nam.length() - suf.length());
+
+        File parent = new File(outputDir, mid);
+        assert !parent.isDirectory();
+        parent.mkdirs();
+        File outputConll = new File(parent, "raw.conll");
+        File outputHashes = new File(parent, "hashes.txt");
+        File outputMentionLocs = new File(parent, "mentionLocs.txt");
+        File outputMarkup = new File(parent, "sentences.txt");
+        p.setOutput(outputConll, outputHashes, outputMentionLocs, outputMarkup);
+
+        Log.info("computing hashes and generating CoNLL-X for sentences: " + uniq.getPath());
+        try (ValidatorIterator iter = new ValidatorIterator(uniq, maxSentLength)) {
+          while (iter.hasNext()) {
+            CluewebLinkedSentence sent = iter.next();
+            p.add(sent);
+          }
         }
       }
     }
