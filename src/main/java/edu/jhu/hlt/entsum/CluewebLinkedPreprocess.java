@@ -509,7 +509,9 @@ public class CluewebLinkedPreprocess {
         if (txi.hasLink()) {
           String mid = txi.getLink().getMid(sent.getMarkup());
           IntPair tokLoc = txi.getTokLoc();
-          assert 0 <= tokLoc.first && tokLoc.first < tokLoc.second;
+//          assert 0 <= tokLoc.first && tokLoc.first < tokLoc.second : "tokLoc=" + tokLoc + " txi=" + txi;
+          if (!(0 <= tokLoc.first && tokLoc.first < tokLoc.second))
+            Log.info("WARNING: tokLoc=" + tokLoc + " txi=" + txi);
           outputMentionLocs.write(mid + " " + tokLoc.first + "-" + tokLoc.second);
           ec.increment("mention/output");
         }
