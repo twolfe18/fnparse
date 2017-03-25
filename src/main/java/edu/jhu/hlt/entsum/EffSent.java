@@ -2,9 +2,12 @@ package edu.jhu.hlt.entsum;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.Serializable;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.PrepareSentencesForParsey;
@@ -40,14 +43,13 @@ public class EffSent implements Serializable {
       end = (short) s.end;
     }
     
+    public Span span() {
+      return Span.getSpan(start, end);
+    }
+    
     public String getFullMid() {
       return "/m/" + new String(mid, UTF8);
     }
-  }
-  
-  public static class Fact {
-    String subj, verb, obj;
-    short subjMention, objMention;
   }
   
   private DepNode[] parse;
@@ -56,9 +58,28 @@ public class EffSent implements Serializable {
   public EffSent(DepNode[] parse) {
     this.parse = parse;
   }
+  
+  public DepNode[] parse() {
+    return parse;
+  }
+  public DepNode parse(int i) {
+    return parse[i];
+  }
 
   void setMentions(String mentionLine) {
     this.entities = parseMentions(mentionLine);
+  }
+  
+  public Mention mention(int i) {
+    return entities[i];
+  }
+  
+  public int numMentions() {
+    return entities.length;
+  }
+  
+  public Iterable<Mention> mentions() {
+    return Arrays.asList(entities);
   }
   
   /**
@@ -83,6 +104,47 @@ public class EffSent implements Serializable {
       entities[i].setSpan(s);
     }
     return entities;
+  }
+  
+  public static class Iter implements Iterator<EffSent>, AutoCloseable {
+    private DepNode.ConllxFileReader iter;
+    private BufferedReader r;
+    private EffSent cur;
+    
+    public Iter(File parses, File mentions, MultiAlphabet a) throws IOException {
+      iter = new DepNode.ConllxFileReader(parses, a);
+      r = FileUtil.getReader(mentions);
+      advance();
+    }
+
+    private void advance() throws IOException {
+      DepNode[] parse = iter.next();
+      String ms = r.readLine();
+      cur = new EffSent(parse);
+      cur.setMentions(ms);
+    }
+
+    @Override
+    public void close() throws IOException {
+      iter.close();
+      r.close();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return cur != null;
+    }
+
+    @Override
+    public EffSent next() {
+      EffSent c = cur;
+      try {
+        advance();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+      return c;
+    }
   }
   
   /**

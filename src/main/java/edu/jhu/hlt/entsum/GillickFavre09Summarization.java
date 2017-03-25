@@ -398,28 +398,7 @@ public class GillickFavre09Summarization {
     return keep;
   }
   
-  public static void main(String[] args) throws Exception {
-    Log.info("starting...");
-    
-//    System.out.println(System.getProperty("java.library.path"));
-//    System.setProperty("java.library.path", "/home/travis/gurobi/gurobi702");///linux64/lib");///libGurobiJni70.so");
-//    System.setProperty("PATH", "/home/travis/gurobi/gurobi702/linux64/lib");///libGurobiJni70.so");
-//    System.out.println(System.getProperty("java.library.path"));
-    System.out.println(System.getenv("PATH"));
-    System.out.println(System.getenv("GUROBI_HOME"));
-    
-//    GRBEnv e = new GRBEnv();
-//    GRBModel m = new GRBModel(e);
-//    m.optimize();
-//    m.dispose();
-//    e.dispose();
-    
-    foo();
-
-    Log.info("done");
-  }
-  
-  public static void foo() throws Exception {
+  public static void buildPkbSummary() throws Exception {
     File p = new File("../data/clueweb09-freebase-annotation/gen-for-entsum/");
     File f = new File(p, "sentences-rare4/sentences-containing-m.0gly1.txt.gz");
     int maxSentenceLength = 80;
@@ -442,5 +421,26 @@ public class GillickFavre09Summarization {
       words += summary.get(i).sent.getTextTokenizedNumTokens();
     }
     System.out.println("tokensInSummary=" + words);
+  }
+  
+  public static void main(String[] args) throws Exception {
+    Log.info("starting...");
+    
+//    System.out.println(System.getProperty("java.library.path"));
+//    System.setProperty("java.library.path", "/home/travis/gurobi/gurobi702");///linux64/lib");///libGurobiJni70.so");
+//    System.setProperty("PATH", "/home/travis/gurobi/gurobi702/linux64/lib");///libGurobiJni70.so");
+//    System.out.println(System.getProperty("java.library.path"));
+    System.out.println(System.getenv("PATH"));
+    System.out.println(System.getenv("GUROBI_HOME"));
+    
+//    GRBEnv e = new GRBEnv();
+//    GRBModel m = new GRBModel(e);
+//    m.optimize();
+//    m.dispose();
+//    e.dispose();
+    
+    buildPkbSummary();
+
+    Log.info("done");
   }
 }

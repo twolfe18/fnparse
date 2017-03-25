@@ -20,16 +20,18 @@ public class DbpediaTtl implements Serializable {
 
 //  private String subj, verb, obj;
   private DbpediaToken subj, verb, obj;
+  public final String line;
   public final boolean valid;
 
-  public DbpediaTtl(DbpediaToken subj, DbpediaToken verb, DbpediaToken obj) {
+  public DbpediaTtl(DbpediaToken subj, DbpediaToken verb, DbpediaToken obj, String line) {
     this.subj = subj;
     this.verb = verb;
     this.obj = obj;
     this.valid = true;
+    this.line = line;
   }
 
-  public DbpediaTtl(String line) {
+  public DbpediaTtl(String line, boolean keepLine) {
 //    int n = line.length();
 //    assert line.charAt(n-2) == ' ';
 //    assert line.charAt(n-1) == '.';
@@ -45,6 +47,7 @@ public class DbpediaTtl implements Serializable {
     String suf = line.substring(obj.end+1);
 //    System.out.println("suf: " + suf);
     valid = suf.equalsIgnoreCase(".");
+    this.line = keepLine ? line : null;
   }
   
 //  public DbpediaTtl(String s, String v, String o) {
@@ -83,6 +86,10 @@ public class DbpediaTtl implements Serializable {
           && obj.equals(d.obj);
     }
     return false;
+  }
+  
+  public String tsv() {
+    return subj.getValue() + "\t" + verb.getValue() + "\t" + obj.getValue();
   }
   
   @Override
@@ -136,8 +143,10 @@ public class DbpediaTtl implements Serializable {
 //    private String cur;
     private DbpediaTtl cur;
     private int read, skip;
+    public final boolean keepLines;
     
-    public LineIterator(File f) throws IOException {
+    public LineIterator(File f, boolean keepLines) throws IOException {
+      this.keepLines = keepLines;
       r = FileUtil.getReader(f);
       advance();
     }
@@ -152,7 +161,7 @@ public class DbpediaTtl implements Serializable {
           skip++;
           continue;
         }
-        this.cur = new DbpediaTtl(line);
+        this.cur = new DbpediaTtl(line, keepLines);
         if (!this.cur.valid) {
           skip++;
           this.cur = null;
@@ -184,7 +193,7 @@ public class DbpediaTtl implements Serializable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() throws IOException {
       r.close();
     }
   }
@@ -199,8 +208,8 @@ public class DbpediaTtl implements Serializable {
 //    System.out.println(a1);
 //    System.out.println(a.substring(a1.end+1));
 
-    System.out.println(new DbpediaTtl(a));
-    System.out.println(new DbpediaTtl(b));
-    System.out.println(new DbpediaTtl(c));
+    System.out.println(new DbpediaTtl(a, false));
+    System.out.println(new DbpediaTtl(b, false));
+    System.out.println(new DbpediaTtl(c, false));
   }
 }
