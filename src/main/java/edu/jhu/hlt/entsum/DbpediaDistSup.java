@@ -67,6 +67,7 @@ import edu.jhu.util.MultiMap;
 public class DbpediaDistSup {
   public static final Charset UTF8 = Charset.forName("UTF-8");
   
+  /** @deprecated */
   static class EfficientFact implements Serializable {
     private static final long serialVersionUID = 4610679485818142253L;
     int subj;
@@ -77,14 +78,9 @@ public class DbpediaDistSup {
     byte[] objUtf8Value;
   }
   
-  /*
-   * Now have better freebase~dbpedia mapping with
-   * /home/travis/code/fnparse/data/dbpedia/freebase_links_en.ttl.gz
-   * 
-   * HOWEVER, it is not functional when mapping into dbpedia, so I could have multiple links per mention
-   * 
-   * I could generate all (dbpedia:subj, dbpedia:obj, textualLocation) triples possible given freebase entlinks * mid2dbpedia
-   * and intersect it with all (dbpedia:subj, dbpedia:obj, infoboxRelation) triples
+  /**
+   * @deprecated
+   * @see DistSupSetup
    */
   public static class Join implements Serializable {
     private static final long serialVersionUID = -2148858047119667553L;
@@ -141,7 +137,8 @@ public class DbpediaDistSup {
       Log.info("reading mid->dbpedia mapping from " + freebaseLinks.getPath());
       this.dbpediaIds = new Alphabet<>();
       this.mid2dbp = new IntObjectHashMap<>();
-      try (DbpediaTtl.LineIterator lines = new DbpediaTtl.LineIterator(freebaseLinks)) {
+      boolean keepLines = false;
+      try (DbpediaTtl.LineIterator lines = new DbpediaTtl.LineIterator(freebaseLinks, keepLines)) {
         while (lines.hasNext()) {
           DbpediaTtl x = lines.next();
           String mid = DbpediaTtl.extractMidFromTtl(x.object().getValue());
@@ -180,7 +177,7 @@ public class DbpediaDistSup {
       // TODO Only keep facts for centrally relevant entities
       Log.info("reading in infobox facts in " + infoboxFacts.getPath());
       this.infobox = new IntObjectHashMap<>();
-      try (DbpediaTtl.LineIterator lines = new DbpediaTtl.LineIterator(infoboxFacts)) {
+      try (DbpediaTtl.LineIterator lines = new DbpediaTtl.LineIterator(infoboxFacts, keepLines)) {
         while (lines.hasNext()) {
           DbpediaTtl x = lines.next();
           ec.increment("infobox/fact");
@@ -296,7 +293,7 @@ public class DbpediaDistSup {
       } else {
         ot = new DbpediaToken(Type.INTEGER, String.valueOf(f.objIntValue));
       }
-      return new DbpediaTtl(st, vt, ot);
+      return new DbpediaTtl(st, vt, ot, null);
     }
     
 //    private static String stripAngleBrackets(String f) {
@@ -372,6 +369,9 @@ public class DbpediaDistSup {
    * Given an input {@link CluewebLinkedSentence} with freebase mids,
    * this represents the corresponding dbpedia ids (there may be more than one per mid)
    * and a set of infobox facts associated with these dbpedia ids.
+   * 
+   * @deprecated
+   * @see EffSent
    */
   static class LinkedSent {
     CluewebLinkedSentence sent;
@@ -491,6 +491,9 @@ public class DbpediaDistSup {
    * Find facts which are either:
    * 1) have two entities mentioned in the sentence
    * 2) have one entity mentioned and one textual mention which is reasonably well matched
+   * 
+   * @deprecated
+   * @see DistSupSetup
    */
   static class FactSelector {
     @SuppressWarnings("unused")
@@ -539,7 +542,12 @@ public class DbpediaDistSup {
     }
   }
   
-  /*
+  /**
+   * Scans through
+   * rare4/mids.dev.txt
+   * parsed-sentences-rare4/sentences.txt
+   * parsed-sentences-rare4/hashes.txt
+   * 
    * Produces two files:
    * sentences.txt := {@link CluewebLinkedSentence#hashHex()} <tab> {@link CluewebLinkedSentence#getMarkup()}
    * facts.txt: (hash, mid, infoboxSubj, infoboxVerb, infoboxObj)
@@ -547,13 +555,9 @@ public class DbpediaDistSup {
    * The two may be (sequentially) joined on hash.
    * 
    * facts.txt contains all the freebase facts related to a mid mentioned in that sentence.
-   */
-  /**
-   * Scans through
-   * rare4/mids.dev.txt
-   * parsed-sentences-rare4/sentences.txt
-   * parsed-sentences-rare4/hashes.txt
    * 
+   * @deprecated
+   * @see DistSupSetup
    */
   public static void generateDistSupInstances(ExperimentProperties config) throws Exception {
     Log.info("starting...");
@@ -694,6 +698,13 @@ public class DbpediaDistSup {
     Log.info("done");
   }
   
+  
+  /**
+   * This should not be necessary in light of the new extraction protocols which
+   * don't require alphabets or cross-entity data sharing.
+   * @deprecated
+   * @see DistSupSetup
+   */
   public static class FeatExData implements Serializable {
     private static final long serialVersionUID = -8980229091410928382L;
 
@@ -724,7 +735,8 @@ public class DbpediaDistSup {
       int ents = 0, types = 0;
       Log.info("dbpediaIds.size=" + dbpediaIds.size()
           + " reading dbpedia entity types from " + dbpediaEntity2Type.getPath());
-      try (DbpediaTtl.LineIterator iter = new DbpediaTtl.LineIterator(dbpediaEntity2Type)) {
+      boolean keepLines = false;
+      try (DbpediaTtl.LineIterator iter = new DbpediaTtl.LineIterator(dbpediaEntity2Type, keepLines)) {
         while (iter.hasNext()) {
           DbpediaTtl f = iter.next();
           assert f.subject().type == Type.DBPEDIA_ENTITY;
@@ -812,6 +824,9 @@ public class DbpediaDistSup {
    *   (fine grain type? e.g. if the mention is linked, perhaps walk into KB and output a fine-grain type like "musician")
    * dep-path n-grams connecting entity and some other entity
    * idf-weighted dep-path walks from the entity head (lets say one word lexicalized)
+   * 
+   * @deprecated
+   * @see DistSupFact#extractLexicoSyntacticFeats(FeatExData)
    */
   public static class SentenceInterestingnessFeatures {
     private FeatExData fed;
@@ -1035,6 +1050,8 @@ public class DbpediaDistSup {
    *
    * Produces a VW training file for the binary task of "does this sentence contain an
    * infobox fact?" given features of the sentence.
+   * 
+   * @deprecated This was used to make one binary classifier, I now train one model for each relation.
    */
   public static void extractFeatures(ExperimentProperties config) throws Exception {
     TimeMarker tm = new TimeMarker();
@@ -1071,7 +1088,7 @@ public class DbpediaDistSup {
       FileUtil.serialize(fed, fedFile);
     }
     
-    SlotsAsConceptsSummarization.testFed(fed);
+    SlotsAsConcepts.testFed(fed);
     
     // Read in the set of sentences which may contain an infobox fact (label for interestingness)
     // Using my rare4 example, 15121 out of 83323 sentences meet this criteria

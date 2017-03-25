@@ -193,7 +193,7 @@ public class DbpediaTtl implements Serializable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() throws IOException {
       r.close();
     }
   }

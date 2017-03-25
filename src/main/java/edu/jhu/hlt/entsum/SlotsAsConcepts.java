@@ -13,15 +13,19 @@ import java.util.Set;
 
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.Link;
 import edu.jhu.hlt.entsum.DbpediaDistSup.FeatExData;
+import edu.jhu.hlt.entsum.DbpediaToken.Type;
+import edu.jhu.hlt.entsum.EffSent.Mention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.ConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftSolution;
+import edu.jhu.hlt.entsum.ObservedArgTypes.Verb;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
@@ -53,8 +57,240 @@ import edu.jhu.util.MultiMap;
  *
  * @author travis
  */
-public class SlotsAsConceptsSummarization {
+public class SlotsAsConcepts {
   
+  /**
+   * Input:
+   *   tokenized-sentences/$ENTITY/facts-rel*-types.txt
+   *   tokenized-sentences/$ENTITY/mid2dbp-rel*.txt
+   *   tokenized-sentences/$ENTITY/mentionLocs.txt
+   *   tokenized-sentences/$ENTITY/parse.conll
+   *   distsup-infobox/observed-arg-types.jser
+   *
+   * And produces a VW training file where the label is an infobox fact's relation
+   * and the features are lexico-syntactic features derived from the sentence/parse.
+   * 
+   * Output:
+   *   distsup-infobox.locations.txt := <sentenceIdx> <subjMentionIdx> <objMentionIdx>, location of corresponding csoaa_ldf instance
+   *   distsup-infobox.csoaa_ldf.yhat := VW-format, just a list of instances
+   */
+  public static class StreamingDistSupFeatEx {
+    public static final String FACT_LOC_FILE_NAME = "distsup-infobox.locations.txt";
+    public static final String FACT_FEAT_FILE_NAME = "distsup-infobox.csoaa_ldf.yhat";
+
+    private ObservedArgTypes verbTypes;
+    private File entityDir;
+    private String entityMid;
+    private MultiMap<String, String> mid2dbp;           // tokenized-sentences/$ENTITY/mid2dbp-rel*.txt
+    private EntityTypes dbp2type;
+    private MultiMap<String, DbpediaTtl> dbp2facts;
+    private MultiAlphabet parseAlph;
+    
+    public StreamingDistSupFeatEx(ObservedArgTypes verbTypes, File entityDir, String entityMid) throws IOException {
+      Log.info("mid=" + entityMid + " dir=" + entityDir.getPath());
+      this.verbTypes = verbTypes;
+      this.entityDir = entityDir;
+      this.entityMid = entityMid;
+      // Read in data from files
+      mid2dbp = new MultiMap<>();
+      addMid2Dbp(new File(entityDir, "mid2dbp-rel0.txt"));
+      addMid2Dbp(new File(entityDir, "mid2dbp-rel1.txt"));
+      dbp2type = new EntityTypes(entityDir);
+      dbp2facts = new MultiMap<>();
+      addDbp2Fact(new File(entityDir, "facts-rel0-types.txt"));
+      addDbp2Fact(new File(entityDir, "facts-rel1-types.txt"));
+      parseAlph = new MultiAlphabet();
+    }
+
+    private void addDbp2Fact(File f) throws IOException {
+      if (!f.isFile()) {
+        Log.info("WARNING: not a file: " + f.getPath());
+        return;
+      }
+      Log.info("reading from " + f.getPath());
+      boolean keepLines = false;
+      try (DbpediaTtl.LineIterator iter = new DbpediaTtl.LineIterator(f, keepLines)) {
+        while (iter.hasNext()) {
+          DbpediaTtl x = iter.next();
+          if (x.subject().type == Type.DBPEDIA_ENTITY)
+            dbp2facts.add(x.subject().getValue(), x);
+          if (x.object().type == Type.DBPEDIA_ENTITY)
+            dbp2facts.add(x.object().getValue(), x);
+        }
+      }
+    }
+
+    private void addMid2Dbp(File f) throws IOException {
+      if (!f.isFile()) {
+        Log.info("WARNING: not a file: " + f.getPath());
+        return;
+      }
+      Log.info("reading from " + f.getPath());
+      boolean keepLines = false;
+      try (DbpediaTtl.LineIterator iter = new DbpediaTtl.LineIterator(f, keepLines)) {
+        while (iter.hasNext()) {
+          DbpediaTtl x = iter.next();
+          assert x.subject().type == Type.DBPEDIA_ENTITY;
+          String dbp = x.subject().getValue();
+          String mid = DbpediaTtl.extractMidFromTtl(x.object().getValue());
+          mid2dbp.add(mid, dbp);
+        }
+      }
+    }
+    
+    // TODO Memoize if slow
+    List<String> entityTypesForMid(String mid) {
+      List<String> at = new ArrayList<>();
+      for (String dbp : mid2dbp.get(mid))
+        at.addAll(dbp2type.typesForDbp(dbp));
+      return at;
+    }
+    
+    List<String> featurize(EffSent sent, int subjMention, int objMention) {
+      Mention subj = sent.mention(subjMention);
+      Mention obj = sent.mention(objMention);
+      List<String> subjTypes = entityTypesForMid(subj.getFullMid());
+      List<String> objTypes = entityTypesForMid(obj.getFullMid());
+      return DistSupFact.extractLexicoSyntacticFeats(
+          subj.head, subj.span(), subjTypes,
+          obj.head, obj.span(), objTypes,
+          sent.parse(), parseAlph);
+    }
+    
+    // TODO Investigate whether distsup is sensitive to the implementation of this method
+    List<String> plausibleVerbsFor(EffSent sent, int subjMention, int objMention) {
+      String subjMid = sent.mention(subjMention).getFullMid();
+      String objMid = sent.mention(objMention).getFullMid();
+      List<String> subjTypes = entityTypesForMid(subjMid);
+      List<String> objTypes = entityTypesForMid(objMid);
+      List<Verb> verbs = verbTypes.plausibleVerbs(subjTypes, objTypes);
+      List<String> vs = new ArrayList<>();
+      for (Verb v : verbs)
+        if (v.svoCount > 1)
+          vs.add(v.verb);
+      return vs;
+    }
+    
+    public void writeFeatures() throws IOException {
+      File parses = new File(entityDir, "parses.conll");
+      File mentions = new File(entityDir, "mentionLocs.txt");
+      File outLocs = new File(entityDir, FACT_LOC_FILE_NAME);
+      File outFeats = new File(entityDir, FACT_FEAT_FILE_NAME);
+      MultiAlphabet parseAlph = new MultiAlphabet();
+      try (EffSent.Iter iter = new EffSent.Iter(parses, mentions, parseAlph);
+          BufferedWriter wLoc = FileUtil.getWriter(outLocs);
+          BufferedWriter wFeat = FileUtil.getWriter(outFeats)) {
+        int sentIdx = 0;
+        while (iter.hasNext()) {
+          EffSent sent = iter.next();
+          // See what facts we can match up against this sentence
+          List<Fact> fs = findFacts(sentIdx++, sent);
+          for (Fact f : fs) {
+            // Output location of this fact
+            wLoc.write(f.tsv());
+            wLoc.newLine();
+            
+            // Output lexico-syntactic features (VW-format)
+            List<String> fx = featurize(sent, f.subjMention, f.objMention);
+            wFeat.write("shared |");
+            for (String feat : fx) {
+              wFeat.write(' ');
+              wFeat.write(feat);
+            }
+            wFeat.newLine();
+            int yes = 0, all = 0;
+            List<String> ys = plausibleVerbsFor(sent, f.subjMention, f.objMention);
+            for (String y : ys) {
+              if (f.verb.equals(y)) {
+                wFeat.write(y + ":0 | " + y);
+                yes++;
+              } else {
+                wFeat.write(y + ":1 | " + y);
+              }
+              wFeat.newLine();
+              all++;
+            }
+            wFeat.newLine();    // empty line for end of instance
+            assert yes > 0 && all > 1;
+          }
+        }
+      }
+    }
+    
+    public static class Fact {
+      int sentIdx;
+      int subjMention;
+      int objMention;
+      String verb;
+
+      public Fact(int sentIdx, int subjMention, int objMention, String verb) {
+        this.sentIdx = sentIdx;
+        this.subjMention = subjMention;
+        this.objMention = objMention;
+        this.verb = verb;
+      }
+
+      public String tsv() {
+        return sentIdx + "\t" + subjMention + "\t" + objMention + "\t" + verb;
+      }
+    }
+    
+    /**
+     * Look through the given {@link EffSent} for facts in facts-rel0-types.txt.
+     * @param sentIdx is just for handing off to a returned {@link Fact}, has nothing to do with the impl of this method.
+     */
+    public List<Fact> findFacts(int sentIdx, EffSent sent) {
+      List<Fact> fs = new ArrayList<>();
+      int n = sent.numMentions();
+      for (int i = 0; i < n; i++) {
+        Mention mi = sent.mention(i);
+        if (!entityMid.equals(mi.getFullMid()))
+          continue;
+        for (int j = 0; j < n; j++) {
+          if (i == j) continue;
+          Mention mj = sent.mention(j);
+          // All facts match mi's mid, enumerate mj's dbp and check dbp2fact
+          for (String dbpJ : mid2dbp.get(mj.getFullMid())) {
+            for (DbpediaTtl f : dbp2facts.get(dbpJ)) {
+              // f matches mi by construction (rel0) and mj by proof, output it
+              boolean mjIsSubj = dbpJ.equals(f.subject().getValue());
+              String v = f.verb().getValue();
+              if (mjIsSubj)
+                fs.add(new Fact(sentIdx, j, i, v));
+              else
+                fs.add(new Fact(sentIdx, i, j, v));
+            }
+          }
+        }
+      }
+      return fs;
+    }
+    
+    // Once you've created this for all $ENTITYs, to __train__ a VW relation model,
+    // mkdir distsup-infobox/
+    // cat tokenized-sentences/train/*/distsup-infobox.csoaa_ldf.vw | shuf >distsup-infobox/train.csoaa_ldf.vw
+    // vw --csoaa_ldf m ... <distsup-infobox/train.csoaa_ldf.vw >distsup-infobox/mode.vw
+
+    // To __predict__ with this model, maybe start a vw server like ikbp/.../VwWrapper.java?
+    // Alternative is to batch everything up.
+    // Or don't batch, just invoke model once per dev/test entity.
+    
+    public static void computeFeaturesForAllEntities(ExperimentProperties config) throws IOException {
+      File obsArgTypes = config.getExistingFile("obsArgTypes");
+      ObservedArgTypes oat = (ObservedArgTypes) FileUtil.deserialize(obsArgTypes);
+      File entityDirParent = config.getExistingDir("entityDirParent");
+      String entityDirGlob = config.getString("entityDirGlob");
+      List<File> entityDirs = FileUtil.find(entityDirParent, entityDirGlob);
+      Log.info("found " + entityDirs.size() + " entity directories to compute features for");
+      for (File ed : entityDirs) {
+        String mid = ed.getName().replaceAll("m.", "/m/");
+        StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, ed, mid);
+        f.writeFeatures();
+      }
+    }
+  }
+  
+
   /*
    * TODO have two models:
    * A) Given a sentence, what entity pairs should we even test for evoking a relation or not
@@ -68,6 +304,7 @@ public class SlotsAsConceptsSummarization {
     return x;
   }
   
+  
   /**
    * Creates a cost-sensitive multiclass training dataset for p(relation(fact) | features(pairOfEntityMentions)).
    * 
@@ -80,6 +317,8 @@ public class SlotsAsConceptsSummarization {
    * Check:
    *    observedSubjObjTypes(author) = [(author, book), (person, book), (person, workOfArt)]  => matches
    *    observedSubjObjTypes(architect) = [(person, workOfArt)]                               => doesn't match
+   *
+   * @deprecated The new pipeline doesn't use this path
    */
   static class BatchVwTrain {
     
@@ -407,10 +646,8 @@ public class SlotsAsConceptsSummarization {
     if (st.contains("http://dbpedia.org/resource/SFOR") || !st.contains("http://schema.org/MusicGroup"))
       throw new RuntimeException("fixme");
   }
-
-  public static void main(String[] args) throws Exception {
-    ExperimentProperties config = ExperimentProperties.init(args);
-    
+  
+  public static void prototypeTrainTestImpl(ExperimentProperties config) throws Exception {
     File p = new File("/home/travis/code/data/clueweb09-freebase-annotation/gen-for-entsum");
     File fedFile = config.getExistingFile("fedFile", new File(p, "feature-extracted/fed.jser"));
     Log.info("reading from fedFile=" + fedFile.getPath());
@@ -439,6 +676,36 @@ public class SlotsAsConceptsSummarization {
     Summarize s = new Summarize(workingDir, bt, fed);
     int wordBudget = 100;
     s.summarize(factsRelevant, wordBudget);
+    Log.info("done");
+  }
+
+  public static void main(String[] args) throws Exception {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    
+    String m = config.getString("mode");
+    switch (m) {
+    case "extractFeatures":   // makes tokenized-sentences/$ENTITY/distsup-infobox.csoaa_ldf.yx
+      StreamingDistSupFeatEx.computeFeaturesForAllEntities(config);
+      break;
+    case "extractFeaturesForOneEntity":
+      File obsArgTypes = config.getExistingFile("obsArgTypes");
+      ObservedArgTypes oat = (ObservedArgTypes) FileUtil.deserialize(obsArgTypes);
+      File output = config.getFile("output");
+      File entityDir = output.getParentFile();
+      String mid = entityDir.getName().replaceAll("m.", "/m/");
+      StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, entityDir, mid);
+      f.writeFeatures();
+      break;
+      // Other actions are carried out by Makefile and scripts in data/facc1-entsum/
+//    case "train":             // makes distsup-infobox/train.csoaa_ldf.yx
+//                              //   and distsup-infobox/model.vw
+//      break;
+//    case "predict":           // makes tokenized-sentences/$ENTITY/distsup-infobox.csoaa_ldf.yhat
+//      break;
+//    case "summarize":         // makes summaries/$ENTITY/distsup-infobox/summary-100.txt
+//      break;
+    }
+    
     Log.info("done");
   }
 }

@@ -17,6 +17,10 @@ import edu.jhu.hlt.tutils.MultiAlphabet;
 /**
  * Stores and retrieves parses ({@link DepNode} arrays) based on a sentence hash.
  * @see CluewebLinkedSentence#hashHex()
+ * 
+ * @deprecated and anything which uses this is also deprecated.
+ * Should never use hashmap containing sentences, stick to O(1) memory/streaming.
+ * @see DistSupSetup for new method which puts data in place.
  */
 public class ParsedSentenceMap implements Serializable {
   private static final long serialVersionUID = 6679267677753088077L;

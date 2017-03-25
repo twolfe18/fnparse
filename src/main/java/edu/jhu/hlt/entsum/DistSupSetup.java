@@ -245,12 +245,10 @@ public class DistSupSetup {
     List<File> rel1 = new ArrayList<>();
     for (String mid : dbpedia2mid.get(dbp)) {
       File wd0 = mid2wdRel0.get(mid);
-      if (wd0 != null) {
-//        return Arrays.asList(new File(wd0, "facts-rel0-types.txt"));
-        rel1.add(new File(wd0, "facts-rel0-types.txt"));
-      }
+      if (wd0 != null)
+        rel1.add(new File(wd0, "entity-types-rel0.txt"));
       for (File wd : mid2wdRel1.get(mid))
-        rel1.add(new File(wd, "facts-rel1-types.txt"));
+        rel1.add(new File(wd, "entity-types-rel1.txt"));
     }
     return rel1;
   }

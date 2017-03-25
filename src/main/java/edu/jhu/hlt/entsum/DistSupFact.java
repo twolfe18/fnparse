@@ -112,6 +112,66 @@ public class DistSupFact implements Serializable {
     return "(DSFact s=" + subj + " v=" + verb + " o=" + obj + ")";
   }
   
+  public static List<String> extractLexicoSyntacticFeats(
+      int subjHead, Span subjSpan, List<String> subjTypes,
+      int objHead, Span objSpan, List<String> objTypes,
+      DepNode[] parse, MultiAlphabet parseAlph) {
+    
+    List<String> fs = new ArrayList<>();
+
+    // (all) dbpedia entity types for subj/obj
+    for (String type : subjTypes) {
+      type = urlClean(type);
+      type = vwFeatureClean(type);
+      fs.add("s/" + type);
+    }
+    for (String type : objTypes) {
+      type = urlClean(type);
+      type = vwFeatureClean(type);
+      fs.add("o/" + type);
+    }
+    
+    // Words between
+    Span mid;
+    if (subjSpan.end < objSpan.start) {
+      mid = Span.getSpan(subjSpan.end, objSpan.start);
+    } else if (objSpan.end < subjSpan.start) {
+      mid = Span.getSpan(objSpan.end, subjSpan.start);
+    } else {
+      mid = Span.nullSpan;
+    }
+    for (int i = mid.start; i < mid.end; i++) {
+      String w = parseAlph.word(parse[i].word);
+      w = vwFeatureClean(w);
+      fs.add("m/" + w);
+    }
+    fs.add("m/w=" + Math.min(mid.width(), 10));
+
+    // Dependency path ngrams
+    ShortestPath p = new ShortestPath(subjHead, objHead, parse);
+    boolean hideEndpoints = true;
+    boolean usePosInsteadOfWord = false;
+    List<DepNode.Edge> path = p.buildPath(parseAlph, hideEndpoints, usePosInsteadOfWord);
+    List<DepNode.Edge[]> oneGrams = ShortestPath.ngrams(1, path);
+    List<DepNode.Edge[]> twoGrams = ShortestPath.ngrams(2, path);
+    for (DepNode.Edge[] ng : oneGrams) {
+      String feat = DepNode.Edge.ngramStr(ng);
+      fs.add("p/" + feat);
+    }
+    for (DepNode.Edge[] ng : twoGrams) {
+      String feat = DepNode.Edge.ngramStr(ng);
+      fs.add("q/" + feat);
+    }
+    
+    // TODO POS dep trigrams?
+    
+    // TODO sub-nodes of subj/obj which don't match NNP*
+    
+    // TODO one edge off of dep path? e.g. neg(release,not) in "Mary did not release Knives with Journalism"
+
+    return fs;
+  }
+  
   /**
    * Extracts features of the sentence by looking at the subject and object mentions.
    */
