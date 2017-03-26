@@ -174,7 +174,7 @@ public class SlotsAsConcepts {
     }
     
     public void writeFeatures() throws IOException {
-      File parses = new File(entityDir, "parses.conll");
+      File parses = new File(entityDir, "parse.conll");
       File mentions = new File(entityDir, "mentionLocs.txt");
       File outLocs = new File(entityDir, FACT_LOC_FILE_NAME);
       File outFeats = new File(entityDir, FACT_FEAT_FILE_NAME);
@@ -212,11 +212,14 @@ public class SlotsAsConcepts {
             wFeat.newLine();
             int yes = 0, all = 0;
             for (String y : ys) {
+              String yc = clean(y);
               if (f.verb.equals(y)) {
-                wFeat.write(y + ":0 | " + y);
+//                wFeat.write(y + ":0 | " + y);
+                wFeat.write(yc + ":0 | " + yc);
                 yes++;
               } else {
-                wFeat.write(y + ":1 | " + y);
+//                wFeat.write(y + ":1 | " + y);
+                wFeat.write(yc + ":1 | " + yc);
               }
               wFeat.newLine();
               all++;
