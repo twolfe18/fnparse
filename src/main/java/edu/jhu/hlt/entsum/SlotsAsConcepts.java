@@ -19,6 +19,7 @@ import edu.jhu.hlt.entsum.GillickFavre09Summarization.ConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftSolution;
 import edu.jhu.hlt.entsum.ObservedArgTypes.Verb;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -26,6 +27,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
@@ -98,7 +100,7 @@ public class SlotsAsConcepts {
       dbp2type = new EntityTypes(entityDir);
       dbp2facts = new MultiMap<>();
       addDbp2Fact(new File(entityDir, "facts-rel0-types.txt"));
-      addDbp2Fact(new File(entityDir, "facts-rel1-types.txt"));
+//      addDbp2Fact(new File(entityDir, "facts-rel1-types.txt"));
       parseAlph = new MultiAlphabet();
     }
 
@@ -176,16 +178,26 @@ public class SlotsAsConcepts {
       File mentions = new File(entityDir, "mentionLocs.txt");
       File outLocs = new File(entityDir, FACT_LOC_FILE_NAME);
       File outFeats = new File(entityDir, FACT_FEAT_FILE_NAME);
-      MultiAlphabet parseAlph = new MultiAlphabet();
+      TimeMarker tm = new TimeMarker();
+      Counts<String> ec = new Counts<>();
       try (EffSent.Iter iter = new EffSent.Iter(parses, mentions, parseAlph);
           BufferedWriter wLoc = FileUtil.getWriter(outLocs);
           BufferedWriter wFeat = FileUtil.getWriter(outFeats)) {
         int sentIdx = 0;
         while (iter.hasNext()) {
+          ec.increment("sentence");
           EffSent sent = iter.next();
           // See what facts we can match up against this sentence
           List<Fact> fs = findFacts(sentIdx++, sent);
           for (Fact f : fs) {
+            ec.increment("fact");
+
+            List<String> ys = plausibleVerbsFor(sent, f.subjMention, f.objMention);
+            if (!ys.contains(f.verb) || ys.size() < 2) {
+              ec.increment("fact/skip");
+              continue;
+            }
+
             // Output location of this fact
             wLoc.write(f.tsv());
             wLoc.newLine();
@@ -199,7 +211,6 @@ public class SlotsAsConcepts {
             }
             wFeat.newLine();
             int yes = 0, all = 0;
-            List<String> ys = plausibleVerbsFor(sent, f.subjMention, f.objMention);
             for (String y : ys) {
               if (f.verb.equals(y)) {
                 wFeat.write(y + ":0 | " + y);
@@ -213,8 +224,13 @@ public class SlotsAsConcepts {
             wFeat.newLine();    // empty line for end of instance
             assert yes > 0 && all > 1;
           }
+          
+          if (tm.enoughTimePassed(3)) {
+            Log.info(ec + "\t" + Describe.memoryUsage());
+          }
         }
       }
+      Log.info("done, " + ec + "\t" + Describe.memoryUsage());
     }
     
     public static class Fact {
