@@ -112,6 +112,7 @@ public class EffSent implements Serializable {
     private EffSent cur;
     
     public Iter(File parses, File mentions, MultiAlphabet a) throws IOException {
+      Log.info("parses=" + parses.getPath() + " mentions=" + mentions.getPath());
       iter = new DepNode.ConllxFileReader(parses, a);
       r = FileUtil.getReader(mentions);
       advance();
@@ -132,7 +133,7 @@ public class EffSent implements Serializable {
 
     @Override
     public boolean hasNext() {
-      return cur != null;
+      return iter.hasNext();
     }
 
     @Override

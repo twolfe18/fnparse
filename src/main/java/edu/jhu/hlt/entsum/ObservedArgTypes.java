@@ -73,6 +73,7 @@ public class ObservedArgTypes implements Serializable {
       List<Verb> vs = so2v.get(so);
       if (vs == null) {
         vs = wrapped.plausibleVerbs(Arrays.asList(so.left), Arrays.asList(so.right));
+        assert vs != null;
         so2v.put(so, vs);
         if (so2v.size() % 1000 == 0)
           Log.info("so2v.size=" + so2v.size());

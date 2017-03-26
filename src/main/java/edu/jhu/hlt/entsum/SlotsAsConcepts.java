@@ -199,8 +199,17 @@ public class SlotsAsConcepts {
             ec.increment("fact");
 
             List<String> ys = plausibleVerbsFor(sent, f.subjMention, f.objMention);
-            if (!ys.contains(f.verb) || ys.size() < 2) {
-              ec.increment("fact/skip");
+            
+            if (ys.hashCode() + f.verb.hashCode() % 100 == 0) {
+              System.out.println("f.verb=" + f.verb + " ys=" + ys);
+            }
+
+            if (!ys.contains(f.verb)) {
+              ec.increment("fact/skip/noGold");
+              continue;
+            }
+            if (ys.size() < 2) {
+              ec.increment("fact/skip/noOptions");
               continue;
             }
 
@@ -218,6 +227,7 @@ public class SlotsAsConcepts {
             wFeat.newLine();
             int yes = 0, all = 0;
             for (String y : ys) {
+              ec.increment("fact/label");
               String yc = clean(y);
               if (f.verb.equals(y)) {
 //                wFeat.write(y + ":0 | " + y);
