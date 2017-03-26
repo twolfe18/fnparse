@@ -103,6 +103,7 @@ public class ObservedArgTypes implements Serializable {
   public List<Verb> plausibleVerbs(List<String> subjTypes, List<String> objTypes) {
     List<Verb> out = new ArrayList<>();
     int n = verbs.size();
+    verbs:
     for (int i = 0; i < n; i++) {
       String v = verbs.lookupObject(i);
       for (String s : subjTypes) {
@@ -111,8 +112,10 @@ public class ObservedArgTypes implements Serializable {
               svo.apply(svoKey(s, v, o), false),
               sv.apply(svKey(s, v), false),
               vo.apply(voKey(v, o), false));
-          if (verb.totalCount() > 0)
+          if (verb.totalCount() > 0) {
             out.add(verb);
+            continue verbs;
+          }
         }
       }
     }
