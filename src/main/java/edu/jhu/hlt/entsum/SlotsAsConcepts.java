@@ -80,7 +80,8 @@ public class SlotsAsConcepts {
     public static final String FACT_LOC_FILE_NAME = "distsup-infobox.locations.txt";
     public static final String FACT_FEAT_FILE_NAME = "distsup-infobox.csoaa_ldf.yhat";
 
-    private ObservedArgTypes verbTypes;
+//    private ObservedArgTypes verbTypes;
+    private ObservedArgTypes.PlausibleMemoizer verbTypes;
     private File entityDir;
     private String entityMid;
     private MultiMap<String, String> mid2dbp;           // tokenized-sentences/$ENTITY/mid2dbp-rel*.txt
@@ -90,7 +91,8 @@ public class SlotsAsConcepts {
     
     public StreamingDistSupFeatEx(ObservedArgTypes verbTypes, File entityDir, String entityMid) throws IOException {
       Log.info("mid=" + entityMid + " dir=" + entityDir.getPath());
-      this.verbTypes = verbTypes;
+//      this.verbTypes = verbTypes;
+      this.verbTypes = new ObservedArgTypes.PlausibleMemoizerA(verbTypes);
       this.entityDir = entityDir;
       this.entityMid = entityMid;
       // Read in data from files
@@ -178,6 +180,10 @@ public class SlotsAsConcepts {
       File mentions = new File(entityDir, "mentionLocs.txt");
       File outLocs = new File(entityDir, FACT_LOC_FILE_NAME);
       File outFeats = new File(entityDir, FACT_FEAT_FILE_NAME);
+      
+      Log.info("nVerbObs=" + verbTypes.getWrapped().numObservations()
+          + " nVerbs=" + verbTypes.getWrapped().getVerbs().size());
+      
       TimeMarker tm = new TimeMarker();
       Counts<String> ec = new Counts<>();
       try (EffSent.Iter iter = new EffSent.Iter(parses, mentions, parseAlph);
