@@ -1,0 +1,28 @@
+#!/usr/bin/env python
+
+### multiline: a file with non-empty lines followed by an empty line (e.g. VW's *ldf format and CoNLL*)
+###            runs of lines between empty lines are called 'instances'
+### singleline: many instances on a single line, deliminated by a given separator like '|||'
+###             this format is unix-friendly (things like shuf, sort, grep, etc)
+
+# Use case: You want to shuffle some VW ldf training instances:
+# $ SEP="|||"
+# $ multiline-to-singleline train.ldf /dev/stdout $SEP | shuf | singleline-to-multiline /dev/stdin train.shuf.ldf $SEP
+
+import sys, codecs
+
+in_file, out_file, sep = sys.argv[1:]
+
+with codecs.open(in_file, 'r', 'utf-8') as i:
+  with codecs.open(out_file, 'w', 'utf-8') as o:
+    cur = []
+    for line in i:
+      line = line.rstrip()
+      assert sep not in line
+      if not line:
+        o.write(sep.join(cur))
+        o.write('\n')
+        cur = []
+      else:
+        cur.append(line)
+
