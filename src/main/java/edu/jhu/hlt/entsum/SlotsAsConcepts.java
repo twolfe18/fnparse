@@ -33,6 +33,7 @@ import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.MultiMap;
+import edu.jhu.util.UniqList;
 
 /**
  * Produces a set of lexico-syntactic patterns which have high MI with
@@ -162,19 +163,57 @@ public class SlotsAsConcepts {
     }
     
     // TODO Investigate whether distsup is sensitive to the implementation of this method
-    List<String> plausibleVerbsFor(EffSent sent, int subjMention, int objMention) {
+    List<String> plausibleVerbsFor(EffSent sent, int subjMention, int objMention, int minPlausible, Counts<String> ecDbg) {
       String subjMid = sent.mention(subjMention).getFullMid();
       String objMid = sent.mention(objMention).getFullMid();
       List<String> subjTypes = entityTypesForMid(subjMid);
       List<String> objTypes = entityTypesForMid(objMid);
       List<Verb> verbs = verbTypes.plausibleVerbs(subjTypes, objTypes);
-      List<String> vs = new ArrayList<>();
+//      List<String> vs = new ArrayList<>();
+      UniqList<String> vs = new UniqList<>();
+      
+      // First attempt: require (subjType, verb, objType) to have appeared
+      ecDbg.increment("plausible");
       for (Verb v : verbs)
-        if (v.svoCount > 1)
+        if (v.svoCount > 0)
           vs.add(v.verb);
-      return vs;
+
+      // Second attempt: ???
+      if (vs.size() < minPlausible) {
+        ecDbg.increment("plausible/backoff1a");
+        for (Verb v : verbs)
+          if (v.svCount > 1 && v.voCount > 1)
+            vs.add(v.verb);
+      }
+      if (vs.size() < minPlausible) {
+        ecDbg.increment("plausible/backoff1b");
+        for (Verb v : verbs)
+          if (v.svCount > 0 && v.voCount > 0)
+            vs.add(v.verb);
+      }
+      
+      // Third attempt: backoff to any relation matching (subjType, verb, *) or (*, verb, objType)
+      if (vs.size() < minPlausible) {
+        ecDbg.increment("plausible/backoff2");
+        for (Verb v : verbs)
+          if (v.svCount > 0 || v.voCount > 0)
+            vs.add(v.verb);
+      }
+
+      return vs.getList();
     }
     
+    /*
+     * TODO Implement and __test__:
+     * aggressiveSentenceDedup=k means that each "slot" receives ceil(k/(numMidsInSlot-1)) sentences which can fall into that slot.
+     * A slot is an ordered list of mids which appear in a sentence, which is a robust proxy for the sentence itself.
+     * 
+     * The reason I want this is that there appears to be duplicates still getting through, e.g.
+     *   tokenized-sentences/dev/m.017kjq/sentences.txt
+     *   2000 ([FREEBASE mid=/m/0hsqf Seoul]Seoul[/FREEBASE]-[FREEBASE mid=/m/017kjq Yonhap News Agency]Yonhap News Agency[/FREEBASE]
+     *   2000 ([FREEBASE mid=/m/0hsqf Seoul]Seoul[/FREEBASE]-[FREEBASE mid=/m/017kjq Yonhap News Agency]Yonhap News Agency[/FREEBASE]).
+     */
+
     public void writeFeatures() throws IOException {
       File parses = new File(entityDir, "parse.conll");
       File mentions = new File(entityDir, "mentionLocs.txt");
@@ -193,25 +232,20 @@ public class SlotsAsConcepts {
         while (iter.hasNext()) {
           ec.increment("sentence");
           EffSent sent = iter.next();
-          // See what facts we can match up against this sentence
+          // See what facts in the KB we can match up against this sentence
           List<Fact> fs = findFacts(sentIdx++, sent);
           for (Fact f : fs) {
-            ec.increment("fact");
 
-            List<String> ys = plausibleVerbsFor(sent, f.subjMention, f.objMention);
+            // Given a positive fact, we need to choose negative verbs/relations to score against
+            int minPlausible = 2;
+            List<String> ys = plausibleVerbsFor(sent, f.subjMention, f.objMention, minPlausible, ec);
             
-            if (ys.hashCode() + f.verb.hashCode() % 100 == 0) {
-              System.out.println("f.verb=" + f.verb + " ys=" + ys);
-            }
-
+            // If our heuristic doesn't retrieve the gold fact, then we add it anyway
             if (!ys.contains(f.verb)) {
-              ec.increment("fact/skip/noGold");
-              continue;
+              ys.add(f.verb);
+              ec.increment("fact/addGold");
             }
-            if (ys.size() < 2) {
-              ec.increment("fact/skip/noOptions");
-              continue;
-            }
+            ec.increment("fact");
 
             // Output location of this fact
             wLoc.write(f.tsv());
@@ -267,6 +301,11 @@ public class SlotsAsConcepts {
 
       public String tsv() {
         return sentIdx + "\t" + subjMention + "\t" + objMention + "\t" + verb;
+      }
+      
+      @Override
+      public String toString() {
+        return "(Fact sent=" + sentIdx + " verb=" + verb + " subj=" + subjMention + " obj=" + objMention + ")";
       }
     }
     
@@ -713,6 +752,101 @@ public class SlotsAsConcepts {
     s.summarize(factsRelevant, wordBudget);
     Log.info("done");
   }
+  
+  public static List<String> stripAngleBrackets(List<String> in) {
+    List<String> out = new ArrayList<>();
+    for (String s : in) {
+//      s = s.replace("<", "");
+      out.add(s.substring(1, s.length()-1));
+    }
+    return out;
+  }
+  
+  public static void test0(ObservedArgTypes.PlausibleMemoizer oatM) throws IOException {
+    // What we're trying to make work
+    String verb = "http://dbpedia.org/property/headquarters";
+    List<String> subj = new ArrayList<>();
+    subj.add("<http://www.wikidata.org/entity/Q141683>");
+    subj.add("<http://dbpedia.org/ontology/Broadcaster>");
+    subj.add("<http://www.wikidata.org/entity/Q15265344>");
+    subj.add("<http://dbpedia.org/ontology/Organisation>");
+//    subj.add("<http://schema.org/Organization>");
+//    subj.add("<http://www.ontologydesignpatterns.org/ont/dul/DUL.owl#SocialPerson>");
+//    subj.add("<http://www.wikidata.org/entity/Q43229>");
+//    subj.add("<http://dbpedia.org/ontology/Agent>");
+//    subj.add("<http://www.ontologydesignpatterns.org/ont/dul/DUL.owl#Agent>");
+//    subj.add("<http://www.w3.org/2002/07/owl#Thing>");
+    List<String> obj = new ArrayList<>();
+    obj.add("<http://schema.org/Country>");
+    obj.add("<http://www.wikidata.org/entity/Q6256>");
+    obj.add("<http://dbpedia.org/ontology/PopulatedPlace>");
+    obj.add("<http://www.wikidata.org/entity/Q486972>");
+    obj.add("<http://dbpedia.org/ontology/Place>");
+    obj.add("<http://schema.org/Place>");
+//    obj.add("<http://dbpedia.org/ontology/Location>");
+//    obj.add("<http://www.w3.org/2002/07/owl#Thing>");
+//    obj.add("<http://www.w3.org/2002/07/owl#Thing>");
+//    obj.add("<http://www.wikidata.org/entity/Q476028>");
+//    obj.add("<http://dbpedia.org/ontology/SportsTeam>");
+//    obj.add("<http://schema.org/SportsTeam>");
+//    obj.add("<http://dbpedia.org/ontology/Organisation>");
+//    obj.add("<http://schema.org/Organization>");
+//    obj.add("<http://www.ontologydesignpatterns.org/ont/dul/DUL.owl#SocialPerson>");
+//    obj.add("<http://www.wikidata.org/entity/Q43229>");
+//    obj.add("<http://dbpedia.org/ontology/Agent>");
+//    obj.add("<http://www.ontologydesignpatterns.org/ont/dul/DUL.owl#Agent>");
+//    obj.add("<http://www.w3.org/2002/07/owl#Thing>");
+    
+    
+    // See if this changes anything
+    subj = stripAngleBrackets(subj);
+    obj = stripAngleBrackets(obj);
+    
+    boolean verbose = false;
+    
+    // First sanity check
+    Log.info("sanity0");
+    ObservedArgTypes oat = new ObservedArgTypes(10, 21);
+    oat.add(subj, obj, verb, verbose);
+    System.out.println("dummyPlausible=" + oat.plausibleVerbs(subj, obj, verbose));
+    
+    // Midpoint
+    Log.info("sanity1");
+    oat = new ObservedArgTypes(10, 21);
+    File ed = new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev/m.017kjq");
+    EntityTypes ts = new EntityTypes(ed);
+    oat.addAll(ts, new File(ed, "facts-rel0-types.txt"), verbose);
+    System.out.println("maybePlausible=" + oat.plausibleVerbs(subj, obj, verbose));
+    
+    // Add what we're looking for
+    Log.info("sanity2");
+//    File ed = new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev/m.017kjq");
+//    EntityTypes ts = new EntityTypes(ed);
+    oatM.getWrapped().addAll(ts, new File(ed, "facts-rel0-types.txt"), verbose);
+    System.out.println("realPlausible=" + oatM.getWrapped().plausibleVerbs(subj, obj, verbose));
+    
+    Log.info("sanity3");
+    System.out.println("subj: " + subj);
+    System.out.println("obj: " + obj);
+
+    List<Verb> vs = oatM.plausibleVerbs(subj, obj);
+    Collections.sort(vs, Verb.BY_SVO_DESC);
+    System.out.println("vs: " + vs);
+    int k = 0;
+    for (Verb v : vs) {
+      System.out.println(v);
+      if (++k == 30)
+        break;
+    }
+    
+//    for (String st : subj) {
+//      for (String ot : obj) {
+//        Verb v = oatM.getWrapped().getCounts(st, verb, ot);
+//        if (v.totalCount() > 0)
+//          System.out.println(st + "\t" + ot + "\t" + v);
+//      }
+//    }
+  }
 
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -725,9 +859,17 @@ public class SlotsAsConcepts {
     case "extractFeaturesForOneEntity":
       File obsArgTypes = config.getExistingFile("obsArgTypes");
       ObservedArgTypes oat = (ObservedArgTypes) FileUtil.deserialize(obsArgTypes);
+//      if (oat != null) {
+//        test0(new ObservedArgTypes.PlausibleMemoizerA(oat));
+//        break;
+//      }
       File output = config.getFile("output");
       File entityDir = output.getParentFile();
       String mid = entityDir.getName().replaceAll("m.", "/m/");
+      
+      // If I used a train ED, this wouldn't be needed
+//      oat.addAll(new EntityTypes(entityDir), new File(entityDir, "facts-rel0-types.txt"));
+      
       StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, entityDir, mid);
       f.writeFeatures();
       break;

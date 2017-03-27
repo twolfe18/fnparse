@@ -7,9 +7,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.ToDoubleFunction;
 
 import edu.jhu.hlt.entsum.DbpediaToken.Type;
 import edu.jhu.hlt.tutils.Counts;
@@ -60,7 +62,7 @@ public class ObservedArgTypes implements Serializable {
           HPair<String, String> so = new HPair<>(st, ot);
           List<Verb> vs = plausibleHelper(so);
           for (Verb v : vs) {
-            if (!uniq.get(v.verbIdx))
+            if (uniq.get(v.verbIdx))
               continue;
             uniq.set(v.verbIdx);
             out.add(v);
@@ -103,17 +105,36 @@ public class ObservedArgTypes implements Serializable {
   }
   
   public void add(List<String> subjTypes, List<String> objTypes, String v) {
+    add(subjTypes, objTypes, v);
+  }
+  public void add(List<String> subjTypes, List<String> objTypes, String v, boolean verbose) {
     verbs.lookupIndex(v);
-    for (String s : subjTypes)
-      for (String o : objTypes)
-        svo.apply(svoKey(s, v, o), true);
-    for (String s : subjTypes)
-      sv.apply(svKey(s, v), true);
-    for (String o : objTypes)
-      vo.apply(voKey(v, o), true);
+    for (String s : subjTypes) {
+      for (String o : objTypes) {
+        String k = svoKey(s, v, o);
+        if (verbose)
+          Log.info(k);
+        svo.apply(k, true);
+      }
+    }
+    for (String s : subjTypes) {
+      String k = svKey(s, v);
+      if (verbose)
+        Log.info(k);
+      sv.apply(k, true);
+    }
+    for (String o : objTypes) {
+      String k = voKey(v, o);
+      if (verbose)
+        Log.info(k);
+      vo.apply(k, true);
+    }
   }
   
   public void addAll(EntityTypes entityTypes, File facts) throws IOException {
+    addAll(entityTypes, facts, false);
+  }
+  public void addAll(EntityTypes entityTypes, File facts, boolean verbose) throws IOException {
     if (!facts.isFile()) {
       Log.info("WARNING: not a file: " + facts.getPath());
       return;
@@ -131,7 +152,7 @@ public class ObservedArgTypes implements Serializable {
         nf++;
         List<String> st = entityTypes.typesForDbp(x.subject().getValue());
         List<String> ot = entityTypes.typesForDbp(x.object().getValue());
-        add(st, ot, x.verb().getValue());
+        add(st, ot, x.verb().getValue(), verbose);
       }
     }
     Log.info("nLines=" + nl + " nFacts=" + nf + " facts=" + facts.getPath());
@@ -153,6 +174,39 @@ public class ObservedArgTypes implements Serializable {
     public int totalCount() {
       return svoCount + svCount + voCount;
     }
+    
+    @Override
+    public String toString() {
+      return "(" + verb + " i=" + verbIdx + " svo=" + svoCount + " sv=" + svCount + " vo=" + voCount + ")";
+    }
+    
+    public static final Comparator<Verb> BY_SVO_DESC = new Comparator<Verb>() {
+      @Override
+      public int compare(Verb o1, Verb o2) {
+        int a = o1.svoCount;
+        int b = o2.svoCount;
+        if (a > b)
+          return -1;
+        if (b > a)
+          return +1;
+        return 0;
+      }
+    };
+    
+    public static Comparator<Verb> byScalarDesc(ToDoubleFunction<Verb> f) {
+      return new Comparator<Verb>() {
+        @Override
+        public int compare(Verb o1, Verb o2) {
+          double s1 = f.applyAsDouble(o1);
+          double s2 = f.applyAsDouble(o2);
+          if (s1 > s2)
+            return -1;
+          if (s2 > s1)
+            return +1;
+          return 0;
+        }
+      };
+    };
   }
   
   static String svoKey(String s, String v, String o) {
@@ -166,6 +220,9 @@ public class ObservedArgTypes implements Serializable {
   }
   
   public List<Verb> plausibleVerbs(List<String> subjTypes, List<String> objTypes) {
+    return plausibleVerbs(subjTypes, objTypes, false);
+  }
+  public List<Verb> plausibleVerbs(List<String> subjTypes, List<String> objTypes, boolean verbose) {
     List<Verb> out = null;
     int n = verbs.size();
     verbs:
@@ -173,10 +230,16 @@ public class ObservedArgTypes implements Serializable {
       String v = verbs.lookupObject(i);
       for (String s : subjTypes) {
         for (String o : objTypes) {
+          String svoK = svoKey(s, v, o);
+          String svK = svKey(s, v);
+          String voK = voKey(v, o);
           Verb verb = new Verb(v, i,
-              svo.apply(svoKey(s, v, o), false),
-              sv.apply(svKey(s, v), false),
-              vo.apply(voKey(v, o), false));
+              svo.apply(svoK, false),
+              sv.apply(svK, false),
+              vo.apply(voK, false));
+          if (verbose) {
+            Log.info(svoK + "\t" + svK + "\t" + voK + "\t" + verb);
+          }
           if (verb.totalCount() > 0) {
             if (out == null)
               out = new ArrayList<>();
@@ -189,6 +252,16 @@ public class ObservedArgTypes implements Serializable {
     if (out == null)
       out = Collections.emptyList();
     return out;
+  }
+  
+  public Verb getCounts(String subjType, String verb, String objType) {
+    int i = verbs.lookupIndex(verb, false);
+    if (i < 0)
+      return null;
+    return new Verb(verb, i,
+        svo.apply(svoKey(subjType, verb, objType), false),
+        sv.apply(svKey(subjType, verb), false),
+        vo.apply(voKey(verb, objType), false));
   }
   
   // TODO Iterate over every ($ENTITY/facts-rel1-types.txt, $ENTITY/entity-types-rel1.txt) pair and add to this instance
