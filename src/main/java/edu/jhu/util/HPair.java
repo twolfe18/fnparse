@@ -47,4 +47,9 @@ public class HPair<L, R> {
       return b == null;
     return a.equals(b);
   }
+  
+  @Override
+  public String toString() {
+    return "(" + left + ", " + right + ")";
+  }
 }
