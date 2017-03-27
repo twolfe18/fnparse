@@ -20,6 +20,7 @@ import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftSolution;
 import edu.jhu.hlt.entsum.ObservedArgTypes.Verb;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -28,6 +29,7 @@ import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.tuple.Pair;
@@ -118,9 +120,9 @@ public class SlotsAsConcepts {
         while (iter.hasNext()) {
           DbpediaTtl x = iter.next();
           if (x.subject().type == Type.DBPEDIA_ENTITY)
-            dbp2facts.add(x.subject().getValue(), x);
+            dbp2facts.addIfNotPresent(x.subject().getValue(), x);
           if (x.object().type == Type.DBPEDIA_ENTITY)
-            dbp2facts.add(x.object().getValue(), x);
+            dbp2facts.addIfNotPresent(x.object().getValue(), x);
         }
       }
     }
@@ -138,7 +140,7 @@ public class SlotsAsConcepts {
           assert x.subject().type == Type.DBPEDIA_ENTITY;
           String dbp = x.subject().getValue();
           String mid = DbpediaTtl.extractMidFromTtl(x.object().getValue());
-          mid2dbp.add(mid, dbp);
+          mid2dbp.addIfNotPresent(mid, dbp);
         }
       }
     }
@@ -205,16 +207,35 @@ public class SlotsAsConcepts {
     
     /*
      * TODO Implement and __test__:
+     * <badIdea>
      * aggressiveSentenceDedup=k means that each "slot" receives ceil(k/(numMidsInSlot-1)) sentences which can fall into that slot.
      * A slot is an ordered list of mids which appear in a sentence, which is a robust proxy for the sentence itself.
+     * </badIdea>
      * 
      * The reason I want this is that there appears to be duplicates still getting through, e.g.
      *   tokenized-sentences/dev/m.017kjq/sentences.txt
      *   2000 ([FREEBASE mid=/m/0hsqf Seoul]Seoul[/FREEBASE]-[FREEBASE mid=/m/017kjq Yonhap News Agency]Yonhap News Agency[/FREEBASE]
      *   2000 ([FREEBASE mid=/m/0hsqf Seoul]Seoul[/FREEBASE]-[FREEBASE mid=/m/017kjq Yonhap News Agency]Yonhap News Agency[/FREEBASE]).
+     *
+     * I think the key where I just have ordered-mids is not good enough, especially when there are only 2 mids for example.
+     * I think a better key to dedup on is:
+     *   <orderedMids> ++ <threeHighestIdfWordsInSentenceOrder>
+     *
+     * I had considered doing a __sample__ (e.g. reservoir) of all sentences which fall into a dedup key/bucket,
+     * which causes problems for streaming (can't implement an Iterator on top of reservoir sampling).
+     * HOWEVER, that dedup is fine grain, and doesn't require sampling.
+     * 
+     * Sampling could be used... but not to great effect.
+     * The other related thing I want to address is the "find the K easiest-to-predict instances for each relation",
+     * and throw out the remaining, which are likely to lack clear lexical evidence for the relation which we should
+     * be training on in the first place.
+     * 
+     * I'm going to implement dedup described above just to cut down on file sizes, should be good for a 30% speedup.
      */
 
-    public void writeFeatures() throws IOException {
+    public void writeFeatures(ComputeIdf df) throws IOException {
+      boolean debug = false;
+      
       File parses = new File(entityDir, "parse.conll");
       File mentions = new File(entityDir, "mentionLocs.txt");
       File outLocs = new File(entityDir, FACT_LOC_FILE_NAME);
@@ -225,25 +246,54 @@ public class SlotsAsConcepts {
       
       TimeMarker tm = new TimeMarker();
       Counts<String> ec = new Counts<>();
+      int numWordsInKey = 2;
       try (EffSent.Iter iter = new EffSent.Iter(parses, mentions, parseAlph);
+          EffSent.DedupMaW3Iter diter = new EffSent.DedupMaW3Iter(iter, df, numWordsInKey);
           BufferedWriter wLoc = FileUtil.getWriter(outLocs);
           BufferedWriter wFeat = FileUtil.getWriter(outFeats)) {
         int sentIdx = 0;
-        while (iter.hasNext()) {
+        while (diter.hasNext()) {
+          EffSent sent = diter.next();
           ec.increment("sentence");
-          EffSent sent = iter.next();
+          
+          if (debug) {
+            sent.showConllStyle(parseAlph);
+          }
+          
           // See what facts in the KB we can match up against this sentence
-          List<Fact> fs = findFacts(sentIdx++, sent);
+          List<Fact> fs = findFacts(sentIdx++, sent, debug);
+
+          if (debug) {
+            System.out.println();
+            System.out.println();
+          }
+
+          // Remove duplicates, e.g.
+          //588     2       0       http://dbpedia.org/property/name
+          //588     0       2       http://dbpedia.org/property/name
+//          Set<String> seen = new HashSet<>();
+//          List<Fact> fsu = new ArrayList<>();
+//          for (Fact f : fs) {
+//            if (seen.add(f.unorderedKeyNoSent()))
+//              fsu.add(f);
+//          }
+//          fs = fsu;
+
           for (Fact f : fs) {
 
             // Given a positive fact, we need to choose negative verbs/relations to score against
             int minPlausible = 2;
+            assert minPlausible > 0;
             List<String> ys = plausibleVerbsFor(sent, f.subjMention, f.objMention, minPlausible, ec);
             
             // If our heuristic doesn't retrieve the gold fact, then we add it anyway
             if (!ys.contains(f.verb)) {
               ys.add(f.verb);
               ec.increment("fact/addGold");
+            }
+            if (ys.size() < minPlausible) {
+              ec.increment("fact/skip");
+              continue;
             }
             ec.increment("fact");
 
@@ -275,7 +325,7 @@ public class SlotsAsConcepts {
               all++;
             }
             wFeat.newLine();    // empty line for end of instance
-            assert yes > 0 && all > 1;
+            assert yes > 0 && all >= minPlausible : "yes=" + yes + " all=" + all;
           }
           
           if (tm.enoughTimePassed(3)) {
@@ -307,37 +357,74 @@ public class SlotsAsConcepts {
       public String toString() {
         return "(Fact sent=" + sentIdx + " verb=" + verb + " subj=" + subjMention + " obj=" + objMention + ")";
       }
+      
+      public String unorderedKeyNoSent() {
+        int min = Math.min(subjMention, objMention);
+        int max = Math.max(subjMention, objMention);
+//        return verb + "/" + sentIdx + "/" + min + "-" + max;
+        return verb + "/" + min + "-" + max;
+      }
+      
+      @Override
+      public int hashCode() {
+        return Hash.mix(sentIdx, subjMention, objMention, verb.hashCode());
+      }
+      
+      @Override
+      public boolean equals(Object other) {
+        if (other instanceof Fact) {
+          Fact f = (Fact) other;
+          return sentIdx == f.sentIdx
+              && subjMention == f.subjMention
+              && objMention == f.objMention
+              && verb.equals(f.verb);
+        }
+        return false;
+      }
     }
     
     /**
      * Look through the given {@link EffSent} for facts in facts-rel0-types.txt.
      * @param sentIdx is just for handing off to a returned {@link Fact}, has nothing to do with the impl of this method.
      */
-    public List<Fact> findFacts(int sentIdx, EffSent sent) {
-      List<Fact> fs = new ArrayList<>();
+    public List<Fact> findFacts(int sentIdx, EffSent sent, boolean debug) {
+      UniqList<Fact> fs = new UniqList<>();
       int n = sent.numMentions();
       for (int i = 0; i < n; i++) {
         Mention mi = sent.mention(i);
         if (!entityMid.equals(mi.getFullMid()))
           continue;
         for (int j = 0; j < n; j++) {
-          if (i == j) continue;
           Mention mj = sent.mention(j);
+          
+          // To match up to a fact which presumably has different subj and objs,
+          // we require that the mentions are different as well.
+          if (Arrays.equals(mi.mid, mj.mid))
+            continue;
+//          if (i == j)   // INCORRECT! If a mid appears twice in a sentence this breaks!
+//            continue;
+
           // All facts match mi's mid, enumerate mj's dbp and check dbp2fact
           for (String dbpJ : mid2dbp.get(mj.getFullMid())) {
             for (DbpediaTtl f : dbp2facts.get(dbpJ)) {
               // f matches mi by construction (rel0) and mj by proof, output it
               boolean mjIsSubj = dbpJ.equals(f.subject().getValue());
+
               String v = f.verb().getValue();
+              boolean added;
               if (mjIsSubj)
-                fs.add(new Fact(sentIdx, j, i, v));
+                added = fs.add(new Fact(sentIdx, j, i, v));
               else
-                fs.add(new Fact(sentIdx, i, j, v));
+                added = fs.add(new Fact(sentIdx, i, j, v));
+              
+              if (debug) {
+                Log.info("added=" + added + " sent=" + sentIdx + " mi=" + mi + " mj=" + mj + " f=" + f.tsv() + " mjIsSubj=" + mjIsSubj);
+              }
             }
           }
         }
       }
-      return fs;
+      return fs.getList();
     }
     
     // Once you've created this for all $ENTITYs, to __train__ a VW relation model,
@@ -356,10 +443,14 @@ public class SlotsAsConcepts {
       String entityDirGlob = config.getString("entityDirGlob");
       List<File> entityDirs = FileUtil.find(entityDirParent, entityDirGlob);
       Log.info("found " + entityDirs.size() + " entity directories to compute features for");
+
+      File dfF = config.getExistingFile("wordDocFreq");
+      ComputeIdf df = (ComputeIdf) FileUtil.deserialize(dfF);
+      
       for (File ed : entityDirs) {
         String mid = ed.getName().replaceAll("m.", "/m/");
         StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, ed, mid);
-        f.writeFeatures();
+        f.writeFeatures(df);
       }
     }
   }
@@ -870,8 +961,11 @@ public class SlotsAsConcepts {
       // If I used a train ED, this wouldn't be needed
 //      oat.addAll(new EntityTypes(entityDir), new File(entityDir, "facts-rel0-types.txt"));
       
+      File dfF = config.getExistingFile("wordDocFreq");
+      ComputeIdf df = (ComputeIdf) FileUtil.deserialize(dfF);
+      
       StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, entityDir, mid);
-      f.writeFeatures();
+      f.writeFeatures(df);
       break;
       // Other actions are carried out by Makefile and scripts in data/facc1-entsum/
 //    case "train":             // makes distsup-infobox/train.csoaa_ldf.yx
