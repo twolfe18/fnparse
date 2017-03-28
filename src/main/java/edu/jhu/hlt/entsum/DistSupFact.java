@@ -6,12 +6,16 @@ import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.SegmentedTextAroundLink;
 import edu.jhu.hlt.entsum.DbpediaDistSup.FeatExData;
 import edu.jhu.hlt.entsum.DepNode.ShortestPath;
+import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.tutils.ArgMin;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
@@ -115,7 +119,8 @@ public class DistSupFact implements Serializable {
   public static List<String> extractLexicoSyntacticFeats(
       int subjHead, Span subjSpan, List<String> subjTypes,
       int objHead, Span objSpan, List<String> objTypes,
-      DepNode[] parse, MultiAlphabet parseAlph) {
+      int[] tok2ent,    // indexed by token, value of -1 means regular ^NNP* word, value >= 0 is a mention index
+      DepNode[] parse, MultiAlphabet parseAlph, ComputeIdf df) {
     
     List<String> fs = new ArrayList<>();
 
@@ -125,11 +130,20 @@ public class DistSupFact implements Serializable {
       type = vwFeatureClean(type);
       fs.add("s/" + type);
     }
+    // Edges leaving subj
+    List<DepNode.Edge> subjL = DepNode.getEdgesLeavingSpan(subjSpan, parse, parseAlph);
+    for (DepNode.Edge e : subjL)
+      fs.add("S/" + e);
+    fs.add("S/n=" + Math.min(10, subjL.size()));
     for (String type : objTypes) {
       type = urlClean(type);
       type = vwFeatureClean(type);
       fs.add("o/" + type);
     }
+    List<DepNode.Edge> objL = DepNode.getEdgesLeavingSpan(objSpan, parse, parseAlph);
+    for (DepNode.Edge e : objL)
+      fs.add("O/" + e);
+    fs.add("O/n=" + Math.min(10, objL.size()));
     
     // Words between
     Span mid;
@@ -140,31 +154,106 @@ public class DistSupFact implements Serializable {
     } else {
       mid = Span.nullSpan;
     }
+    Set<String> uniq = new HashSet<>();
+    Set<Integer> entsBetween = null;
+    if (tok2ent != null)
+      entsBetween = new HashSet<>();
     for (int i = mid.start; i < mid.end; i++) {
+      if (entsBetween != null && tok2ent[i] >= 0) {
+        entsBetween.add(tok2ent[i]);
+        continue;
+      }
       String w = parseAlph.word(parse[i].word);
       w = vwFeatureClean(w);
-      fs.add("m/" + w);
+      w = w.replaceAll("\\d", "0");
+      if (uniq.add(w))
+        fs.add("m/" + w);
     }
-    fs.add("m/w=" + Math.min(mid.width(), 10));
+    fs.add("M/w=" + Math.min(mid.width(), 10));
+    if (entsBetween != null)
+      fs.add("M/e=" + Math.min(entsBetween.size(), 10));
 
     // Dependency path ngrams
     ShortestPath p = new ShortestPath(subjHead, objHead, parse);
-    boolean hideEndpoints = true;
-    boolean usePosInsteadOfWord = false;
-    List<DepNode.Edge> path = p.buildPath(parseAlph, hideEndpoints, usePosInsteadOfWord);
-    List<DepNode.Edge[]> oneGrams = ShortestPath.ngrams(1, path);
-    List<DepNode.Edge[]> twoGrams = ShortestPath.ngrams(2, path);
-    for (DepNode.Edge[] ng : oneGrams) {
+    List<DepNode.Edge> wordPath = p.buildPath(parseAlph, true, false);
+    wordPath = ShortestPath.replaceDigits(wordPath);
+    List<DepNode.Edge> posPath = p.buildPath(parseAlph, false, true);
+    List<DepNode.Edge[]> w1grams = ShortestPath.ngrams(1, wordPath);
+    List<DepNode.Edge[]> w2grams = ShortestPath.ngrams(2, wordPath);
+    List<DepNode.Edge[]> w3grams = ShortestPath.ngrams(3, wordPath);
+    List<DepNode.Edge[]> p1grams = ShortestPath.ngrams(1, posPath);
+    List<DepNode.Edge[]> p2grams = ShortestPath.ngrams(2, posPath);
+    List<DepNode.Edge[]> p3grams = ShortestPath.ngrams(3, posPath);
+    for (DepNode.Edge[] ng : w1grams) {
       String feat = DepNode.Edge.ngramStr(ng);
       fs.add("p/" + feat);
     }
-    for (DepNode.Edge[] ng : twoGrams) {
+    for (DepNode.Edge[] ng : p1grams) {
+      String feat = DepNode.Edge.ngramStr(ng);
+      fs.add("P/" + feat);
+    }
+    for (DepNode.Edge[] ng : w2grams) {
       String feat = DepNode.Edge.ngramStr(ng);
       fs.add("q/" + feat);
     }
+    for (DepNode.Edge[] ng : p2grams) {
+      String feat = DepNode.Edge.ngramStr(ng);
+      fs.add("Q/" + feat);
+    }
+    for (DepNode.Edge[] ng : w3grams) {
+      String feat = DepNode.Edge.ngramStr(ng);
+      fs.add("t/" + feat);
+    }
+    for (DepNode.Edge[] ng : p3grams) {
+      String feat = DepNode.Edge.ngramStr(ng);
+      fs.add("T/" + feat);
+    }
+    int ps = wordPath.size();
+    fs.add("d/dpathlen=" + Math.min(12, ps));
+    fs.add("d/dpathlen4=" + (ps <= 4 ? "y" : "n"));
+    fs.add("d/dpathlen3=" + (ps <= 3 ? "y" : "n"));
+    fs.add("d/dpathlen2=" + (ps <= 2 ? "y" : "n"));
+    fs.add("d/dpathlen1=" + (ps <= 1 ? "y" : "n"));
+    fs.add("d/dir=" + (subjHead < objHead ? "l" : "r"));
     
-    // TODO POS dep trigrams?
     
+    // Depth of subjHead, objHead, and shallowest node in path
+    int[] depth = DepNode.depths(parse);
+    fs.add("a/subjDepth=" + depth[subjHead]);
+    fs.add("a/objDepth=" + depth[objHead]);
+    ArgMin<Integer> pathShallow = new ArgMin<>();
+    Set<Integer> entsAlongPath = null;
+    if (tok2ent != null)
+      entsAlongPath = new HashSet<>();
+    for (DepNode.Edge e : wordPath) {
+      int dh = e.headIdx < 0 ? -1 : depth[e.headIdx];
+      pathShallow.offer(e.headIdx, dh);
+      int dm = e.modIdx < 0 ? -1 : depth[e.modIdx];
+      pathShallow.offer(e.modIdx, dm);
+      
+      if (entsAlongPath != null) {
+        if (e.headIdx >= 0)
+          entsAlongPath.add(tok2ent[e.headIdx]);
+        if (e.modIdx >= 0)
+          entsAlongPath.add(tok2ent[e.modIdx]);
+      }
+    }
+    int shallow = pathShallow.get();
+    if (shallow < 0) {
+      fs.add("a/pathDepth=ROOT");
+      fs.add("a/pathShallow=ROOT");
+    } else {
+      fs.add("a/pathDepth=" + depth[shallow]);
+      fs.add("a/pathShallow=" + parseAlph.word(parse[shallow].word));
+      fs.add("a/pathShallow=" + parseAlph.pos(parse[shallow].pos));
+    }
+    if (entsAlongPath != null) {
+      entsAlongPath.remove(tok2ent[subjHead]);
+      entsAlongPath.remove(tok2ent[objHead]);
+      fs.add("a/entOnPath=" + Math.min(10, entsAlongPath.size()));
+    }
+    
+
     // TODO sub-nodes of subj/obj which don't match NNP*
     
     // TODO one edge off of dep path? e.g. neg(release,not) in "Mary did not release Knives with Journalism"
@@ -215,6 +304,7 @@ public class DistSupFact implements Serializable {
     for (int i = mid.start; i < mid.end; i++) {
       String w = a.word(parse[i].word);
       w = vwFeatureClean(w);
+      w = w.replaceAll("\\d", "0");
       fs.add(new Feat("m/" + w, 1));
     }
     fs.add(new Feat("m/w=" + Math.min(mid.width(), 10), 1));
@@ -238,6 +328,7 @@ public class DistSupFact implements Serializable {
     boolean hideEndpoints = true;
     boolean usePosInsteadOfWord = false;
     List<DepNode.Edge> path = p.buildPath(a, hideEndpoints, usePosInsteadOfWord);
+    path = ShortestPath.replaceDigits(path);
     List<DepNode.Edge[]> oneGrams = ShortestPath.ngrams(1, path);
     List<DepNode.Edge[]> twoGrams = ShortestPath.ngrams(2, path);
     for (DepNode.Edge[] ng : oneGrams) {
