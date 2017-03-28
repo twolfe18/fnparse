@@ -23,6 +23,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * Short for "efficient sentence"
@@ -146,7 +147,7 @@ public class EffSent implements Serializable {
    * I think a better key to dedup on is:
    *   <orderedMids> ++ <threeHighestIdfWordsInSentenceOrder>
    */
-  public static class DedupMaW3Iter implements Iterator<EffSent>, AutoCloseable {
+  public static class DedupMaW3Iter implements Iterator<Pair<EffSent, Integer>>, AutoCloseable {
     private Iter wrapped;
     private ComputeIdf df;
     private int numWords;
@@ -259,10 +260,11 @@ public class EffSent implements Serializable {
     }
 
     @Override
-    public EffSent next() {
+    public Pair<EffSent, Integer> next() {
+      int i = total-1;
       EffSent c = cur;
       advance();
-      return c;
+      return new Pair<>(c, i);
     }
   }
   

@@ -2,7 +2,6 @@ package edu.jhu.hlt.entsum;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -192,11 +191,11 @@ public class GillickFavre09Summarization {
     }
   }
   
-  private List<ConceptMention> occ;
+  private List<? extends ConceptMention> occ;
   private IntArrayList sentenceLengths;
   private double[] conceptUtilities;
   
-  public GillickFavre09Summarization(List<ConceptMention> occ, IntArrayList sentenceLengths, double[] conceptUtilities) {
+  public GillickFavre09Summarization(List<? extends ConceptMention> occ, IntArrayList sentenceLengths, double[] conceptUtilities) {
     this.occ = occ;
     this.sentenceLengths = sentenceLengths;
     this.conceptUtilities = conceptUtilities;
