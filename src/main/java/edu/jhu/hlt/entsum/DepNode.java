@@ -51,12 +51,33 @@ public class DepNode implements Serializable {
    * This allows you to have sentence[0] as the root, get children of root easily
    */
   
+  public static List<Edge> getEdgesLeavingSpan(Span span, DepNode[] parse, MultiAlphabet a) {
+    return getEdgesLeavingSpan(span.start, span.end, parse, a);
+  }
+  public static List<Edge> getEdgesLeavingSpan(int start, int end, DepNode[] parse, MultiAlphabet a) {
+    List<Edge> out = new ArrayList<>();
+    for (int i = 0; i < parse.length; i++) {
+      int h = parse[i].depParentNode;
+      boolean ic = start <= i && i < end;
+      boolean hc = start <= h && h < end;
+      if (hc != ic) {
+        String lab = a.dep(parse[i].depParentLabel);
+        String head = hc ? "SOURCE" : (h < 0 ? "ROOT" : a.word(h));
+        String mod = ic ? "SOURCE" : (i < 0 ? "ROOT" : a.word(i));
+        out.add(new Edge(lab, head, mod, h, i));
+      }
+    }
+    return out;
+  }
+  
   public static class ShortestPath {
     public final int source, target;
     public final DepNode[] parse;
     private int commonParent;
     
     public ShortestPath(int source, int target, DepNode[] parse) {
+      if (source < 0 || target < 0 || source >= parse.length || target >= parse.length)
+        throw new IllegalArgumentException("source=" + source + " target=" + target + " n=" + parse.length);
       this.source = source;
       this.target = target;
       this.parse = parse;
@@ -79,6 +100,8 @@ public class DepNode implements Serializable {
     /** t must be a grand*-parent of s */
     private List<Edge> pathHelper(int s, int t, MultiAlphabet a, IntFunction<String> showNode, boolean starTheEdges) {
       List<Edge> e = new ArrayList<>();
+      if (s == t)
+        return e;
       for (int p = s; p >= 0; p = parse[p].depParentNode) {
         int h = parse[p].depParentNode;
         int m = p;
@@ -116,6 +139,18 @@ public class DepNode implements Serializable {
       Collections.reverse(rev);
       path.addAll(rev);
       return path;
+    }
+    
+    public static List<Edge> replaceDigits(List<Edge> in) {
+      int n = in.size();
+      List<Edge> out = new ArrayList<>(n);
+      for (int i = 0; i < n; i++) {
+        Edge e = in.get(i);
+        String h = e.head.replaceAll("\\d", "0");
+        String m = e.mod.replaceAll("\\d", "0");
+        out.add(new Edge(e.label, h, m, e.headIdx, e.modIdx));
+      }
+      return out;
     }
     
     /*
@@ -162,7 +197,7 @@ public class DepNode implements Serializable {
     }
     
     // (Assembly.NNP decides.VBZ send.VB question.NN to.IN convention.NN held.VBN Augusta.NNP)
-    String[] foo = new String[] {
+    static final String[] foo = new String[] {
         "1	The	_	DET	DT	_	4	det	_	_",
         "2	Georgia	_	NOUN	NNP	_	4	nn	_	_",
         "3	General	_	NOUN	NNP	_	4	nn	_	_",

@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -20,7 +19,6 @@ import edu.jhu.hlt.entsum.GillickFavre09Summarization.ConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftSolution;
 import edu.jhu.hlt.entsum.ObservedArgTypes.Verb;
-import edu.jhu.hlt.entsum.SlotsAsConcepts.StreamingDistSupFeatEx.Fact;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
@@ -34,10 +32,12 @@ import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.list.IntArrayList;
+import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.MultiMap;
 import edu.jhu.util.UniqList;
+import gurobi.GRBException;
 
 /**
  * Produces a set of lexico-syntactic patterns which have high MI with
@@ -66,83 +66,12 @@ import edu.jhu.util.UniqList;
  */
 public class SlotsAsConcepts {
   // These are used on TRAIN where you have infobox facts and entity types for distant supervision training
-  public static final String INFOBOX_TRAIN_LOC_FILENAME =  "distsup-infobox.locations.txt";
-  public static final String INFOBOX_TRAIN_FEAT_FILENAME = "distsup-infobox.csoaa_ldf.yx";
+  public static final String INFOBOX_TRAIN_LOC_FILENAME =  "infobox-distsup.locations.txt";
+  public static final String INFOBOX_TRAIN_FEAT_FILENAME = "infobox-distsup.csoaa_ldf.yx";
   // These are used on DEV/TEST where you don't assume you know any infobox facts but you do have entity types
-  public static final String INFOBOX_PRED_LOC_FILENAME =  "distsup-typePlausible.locations.txt";
-  public static final String INFOBOX_PRED_FEAT_FILENAME = "distsup-typePlausible.csoaa_ldf.x";
-  public static final String INFOBOX_PRED_SCORE_FILENAME = "distsup-typePlausible.csoaa_ldf.yhat";
-  
-  public static class VwLdfInstance {
-    Fact loc;
-    List<String> labels;
-    DoubleArrayList scores;
-    
-    public int getSentenceIdx() {
-      return loc.sentIdx;
-    }
-    
-    public String getSubjMid(EffSent sent) {
-      return sent.mention(loc.subjMention).getFullMid();
-    }
-
-    public String getObjMid(EffSent sent) {
-      return sent.mention(loc.objMention).getFullMid();
-    }
-
-    public List<Pair<String, Double>> getMostLikelyLabels(int k) {
-      throw new RuntimeException("implement me");
-    }
-  }
-
-  public static class VwLdfReader implements AutoCloseable, Iterator<VwLdfInstance> {
-
-    private BufferedReader rScores;   // tells you the scores/costs assigned by the model
-    private BufferedReader rFeats;    // tells you what the labels are
-    private BufferedReader rLocs;     // tells you how to link these instances back to parses/mentions
-    private VwLdfInstance cur;
-    
-    public VwLdfReader(File scores, File features, File locations) throws IOException {
-      Log.info("scores=" + scores.getPath()
-          + " features=" + features.getPath()
-          + " locations=" + locations.getPath());
-      rScores = FileUtil.getReader(scores);
-      rFeats = FileUtil.getReader(features);
-      rLocs = FileUtil.getReader(locations);
-      advance();
-    }
-
-    private void advance() throws IOException {
-      String locStr = rLocs.readLine();
-      Fact loc = Fact.fromTsv(locStr);
-      for (String line = rScores.readLine(); line != null && !line.isEmpty(); line = rScores.readLine()) {
-        throw new RuntimeException("implement me");
-      }
-    }
-
-    @Override
-    public boolean hasNext() {
-      return cur != null;
-    }
-
-    @Override
-    public VwLdfInstance next() {
-      VwLdfInstance c = cur;
-      try {
-        advance();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-      return c;
-    }
-
-    @Override
-    public void close() throws IOException {
-      rScores.close();
-      rFeats.close();
-      rLocs.close();
-    }
-  }
+  public static final String INFOBOX_PRED_LOC_FILENAME =  "infobox-pred.locations.txt";
+  public static final String INFOBOX_PRED_FEAT_FILENAME = "infobox-pred.csoaa_ldf.x";
+  public static final String INFOBOX_PRED_SCORE_FILENAME = "infobox-pred.csoaa_ldf.yhat";
   
   /**
    * Input:
@@ -236,15 +165,17 @@ public class SlotsAsConcepts {
       return at;
     }
     
-    List<String> featurize(EffSent sent, int subjMention, int objMention) {
+    List<String> featurize(EffSent sent, int subjMention, int objMention, ComputeIdf df) {
       Mention subj = sent.mention(subjMention);
       Mention obj = sent.mention(objMention);
       List<String> subjTypes = entityTypesForMid(subj.getFullMid());
       List<String> objTypes = entityTypesForMid(obj.getFullMid());
+      int[] t2e = sent.buildToken2EntityMap();
       return DistSupFact.extractLexicoSyntacticFeats(
           subj.head, subj.span(), subjTypes,
           obj.head, obj.span(), objTypes,
-          sent.parse(), parseAlph);
+          t2e,
+          sent.parse(), parseAlph, df);
     }
     
     // TODO Investigate whether distsup is sensitive to the implementation of this method
@@ -348,19 +279,19 @@ public class SlotsAsConcepts {
           int sentIdx = sentI.get2();
           ec.increment("sentence");
           
-          if (debug) {
-            sent.showConllStyle(parseAlph);
-          }
+//          if (debug) {
+//            sent.showConllStyle(parseAlph);
+//          }
           
           // See what facts in the KB we can match up against this sentence
           List<Fact> fs = train
               ? findFacts(sentIdx, sent, debug)
               : findFactTest(sentIdx, sent);
 
-          if (debug) {
-            System.out.println();
-            System.out.println();
-          }
+//          if (debug) {
+//            System.out.println();
+//            System.out.println();
+//          }
 
           for (Fact f : fs) {
 
@@ -385,19 +316,26 @@ public class SlotsAsConcepts {
             wLoc.newLine();
             
             // Output lexico-syntactic features (VW-format)
-            List<String> fx = featurize(sent, f.subjMention, f.objMention);
-            wFeat.write("shared |");
-            for (String feat : fx) {
-              wFeat.write(' ');
-              wFeat.write(feat);
+            List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+            MultiMap<String, Feat> fxg = Feat.groupByNamespace(Feat.promote(1, fx), '/');
+            wFeat.write("shared");
+            for (String ns : fxg.keySet()) {
+              wFeat.write(" |" + ns);
+              for (Feat ff : fxg.get(ns))
+                wFeat.write(" " + vwSafety(ff.getName()));
             }
+//            wFeat.write("shared |");
+//            for (String feat : fx) {
+//              wFeat.write(' ');
+//              wFeat.write(vwSafety(feat));
+//            }
             wFeat.newLine();
             int yes = 0, all = 0;
             for (String y : ys) {
               ec.increment("fact/label");
               String yc = clean(y);
               String cost = "";
-              if (!train) {
+              if (train) {
                 if (f.verb.equals(y)) {
                   cost = ":0";
                   yes++;
@@ -411,6 +349,24 @@ public class SlotsAsConcepts {
             }
             wFeat.newLine();    // empty line for end of instance
             assert (!train || yes > 0) && all >= minPlausible : "yes=" + yes + " all=" + all;
+
+            // DEBUG: show what we're printing out
+            if (debug) {
+              sent.showChunkedStyle(parseAlph);
+              System.out.println("subj: " + sent.mention(f.subjMention).show(sent.parse(), parseAlph));
+              System.out.println("obj: " + sent.mention(f.objMention).show(sent.parse(), parseAlph));
+              for (String ns : fxg.keySet()) {
+                System.out.println("\t" + ns + ":");
+                for (Feat fxi : fxg.get(ns))
+                  System.out.println("\t\t" + fxi.getName());
+              }
+//              for (String fxi : fx)
+//                System.out.println("\tf=" + fxi);
+              System.out.println("y=" + f.verb);
+              for (String y : ys)
+                System.out.println("\tyhat=" + clean(y));
+              System.out.println();
+            }
           }
           
           if (tm.enoughTimePassed(3)) {
@@ -597,7 +553,13 @@ public class SlotsAsConcepts {
   public static String clean(String dbpediaUrl) {
     String x = dbpediaUrl.replace("http://", "");
     x = x.replaceAll("dbpedia.org/", "");
+//    x = x.replaceAll("\\|", "$");
     return x;
+  }
+  
+  public static String vwSafety(String feat) {
+    feat = feat.replaceAll(":", "-C-");
+    return feat;
   }
   
   
@@ -712,7 +674,7 @@ public class SlotsAsConcepts {
     List<Feat> fs = f.extractLexicoSyntacticFeats(fed);
     for (Feat feat : fs) {
       w.write(' ');
-      w.write(feat.getName());
+      w.write(vwSafety(feat.getName()));
       assert feat.getWeight() == 1d;
     }
     w.newLine();
@@ -750,12 +712,11 @@ public class SlotsAsConcepts {
       this.entityDir = entityDir;
     }
     
-    private List<Pair<EffSent, VwLdfInstance>> join() throws IOException {
+    private List<Pair<EffSent, VwLdfInstance>> join(MultiAlphabet a) throws IOException {
       Pair<EffSent, Integer> cur = new Pair<>(null, -1);
-      File relScoresF = new File(entityDir, INFOBOX_PRED_FEAT_FILENAME);
-      File relFeatsF = new File(entityDir, INFOBOX_TRAIN_FEAT_FILENAME);
+      File relScoresF = new File(entityDir, INFOBOX_PRED_SCORE_FILENAME);
+      File relFeatsF = new File(entityDir, INFOBOX_PRED_FEAT_FILENAME);
       File relLocsF = new File(entityDir, INFOBOX_PRED_LOC_FILENAME);       // gives sentence indices and subj/obj mentions
-      MultiAlphabet a = new MultiAlphabet();
       File parsesF = new File(entityDir, "parse.conll");
       File mentionLocsF = new File(entityDir, "mentionLocs.txt");
       List<Pair<EffSent, VwLdfInstance>> output = new ArrayList<>();
@@ -773,31 +734,61 @@ public class SlotsAsConcepts {
       return output;
     }
     
-    public void summarize() throws IOException {
+    private static <T> List<Pair<T, Double>> expVals(List<Pair<T, Double>> in) {
+      List<Pair<T, Double>> out = new ArrayList<>();
+      for (Pair<T, Double> i : in)
+        out.add(new Pair<>(i.get1(), Math.exp(i.get2())));
+      return out;
+    }
+    
+    /**
+     * @param parseAlph you can/should provide a new/empty one of these (passed in so it can be mutated and show these changes to the caller)
+     */
+    public List<EffSent> summarize(int numWords, MultiAlphabet parseAlph) throws IOException, GRBException {
+      boolean debug = true;
       
-      // TODO How to do groupingByLocation and pruning?
-      // => groupByLocation can be enforced at read time
-      // If we only take the top-5 predictions for every mention, are we likely to be OK?
-      // Previously I was taking top-10 verbs for 5k sentences, and it was very fast.
-      // dev average:
-      //   1167 facts/entity
-      //   5293 sentences/entity
-      
-      // Issue: $ENTITY/distsup-infobox.locations.txt is based on facts, not mentions
-      // Solution: Just create another pair of yx/locations files based on all mentions
-      //           This could be big... but we're not doing it on train data.
-
       Alphabet<String> concepts = new Alphabet<>();
       List<SoftConceptMention> occ = new ArrayList<>();
       IntArrayList sentenceLengths = new IntArrayList();
       
-      int maxVerbsPerInstance = 10;
-      for (Pair<EffSent, VwLdfInstance> x : join()) {
+      // Iterate over all the predictions (verb/relation costs) made over locations found by typePlausible.
+      // Store them in memory.
+      int maxVerbsPerInstance = 5;
+      IntObjectHashMap<EffSent> sents = new IntObjectHashMap<>();
+      List<Pair<EffSent, VwLdfInstance>> j = join(parseAlph);
+      for (Pair<EffSent, VwLdfInstance> x : j) {
         VwLdfInstance i = x.get2();
         EffSent s = x.get1();
         int sIdx = i.loc.sentIdx;
+        
+        Object old = sents.put(sIdx, s);
+        assert old == null || old == s;
+        if (old == null) {
+          sentenceLengths.add(s.parse().length);
+        }
+        
         String so = "v=" + i.getSubjMid(s) + "_o=" + i.getObjMid(s);
         List<Pair<String, Double>> verbs = x.get2().getMostLikelyLabels(maxVerbsPerInstance);
+        verbs = expVals(verbs);
+        
+        // Debug: show the predictions
+        if (debug) {
+          s.showChunkedStyle(parseAlph);
+          System.out.println("subj: " + s.mention(i.loc.subjMention).show(s.parse(), parseAlph));
+          System.out.println("obj: " + s.mention(i.loc.objMention).show(s.parse(), parseAlph));
+          for (Pair<String, Double> v : verbs) {
+            String sig = "";
+            if (v.get2() < 0.25)
+              sig = "***";
+            if (v.get2() < 0.5)
+              sig = "**";
+            if (v.get2() < 1)
+              sig = "*";
+            System.out.printf("\t%-20s %.2f sig=%s\n", v.get1(), v.get2(), sig);
+          }
+          System.out.println();
+        }
+        
         for (Pair<String, Double> v : verbs) {
           String conceptS = "v=" + v.get1() + "_" + so;
           int conceptI = concepts.lookupIndex(conceptS);
@@ -806,11 +797,19 @@ public class SlotsAsConcepts {
         }
       }
 
+      // TODO Revisit whether this is a good idea
       double[] conceptUtilities = new double[concepts.size()];
       for (ConceptMention c : occ)
         conceptUtilities[c.i] += 1.0;
 
       GillickFavre09Summarization sum = new GillickFavre09Summarization(occ, sentenceLengths, conceptUtilities);
+      SoftSolution keep = sum.solveSoft(numWords);
+      List<EffSent> keepS = new ArrayList<>();
+      for (int i = 0; i < keep.sentences.size(); i++) {
+        int sIdx = keep.sentences.get(i);
+        keepS.add(sents.get(sIdx));
+      }
+      return keepS;
     }
   }
   
@@ -1153,6 +1152,7 @@ public class SlotsAsConcepts {
 
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
+    File output;
     
     String m = config.getString("mode");
     switch (m) {
@@ -1163,8 +1163,7 @@ public class SlotsAsConcepts {
       boolean train = config.getBoolean("train");
       File obsArgTypes = config.getExistingFile("obsArgTypes");
       ObservedArgTypes oat = (ObservedArgTypes) FileUtil.deserialize(obsArgTypes);
-      File output = config.getFile("output");
-      File entityDir = output.getParentFile();
+      File entityDir = config.getExistingDir("entityDir");
       String mid = entityDir.getName().replaceAll("m.", "/m/");
       
       File dfF = config.getExistingFile("wordDocFreq");
@@ -1179,10 +1178,17 @@ public class SlotsAsConcepts {
 //      break;
 //    case "predict":           // makes tokenized-sentences/$ENTITY/distsup-infobox.csoaa_ldf.yhat
 //      break;
-//    case "summarize":         // makes summaries/$ENTITY/distsup-infobox/summary-100.txt
-//      break;
+    case "summarize":         // makes summaries/$ENTITY/distsup-infobox/summary-100.txt
+      int numWords = config.getInt("numWords");
+      output = config.getFile("output", new File("/tmp/summary-w" + numWords + ".effsent.jser"));
+      StreamingSummarizer sum = new StreamingSummarizer(config.getExistingDir("entityDir"));
+      MultiAlphabet a = new MultiAlphabet();
+      List<EffSent> sents = sum.summarize(numWords, a);
+      EffSent.showConllStyle(sents, a);
+      FileUtil.VERBOSE = true;
+      FileUtil.serialize(sents, output);
+      break;
     }
-    
     Log.info("done");
   }
 }

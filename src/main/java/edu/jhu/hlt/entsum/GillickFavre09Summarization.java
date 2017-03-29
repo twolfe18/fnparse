@@ -196,9 +196,20 @@ public class GillickFavre09Summarization {
   private double[] conceptUtilities;
   
   public GillickFavre09Summarization(List<? extends ConceptMention> occ, IntArrayList sentenceLengths, double[] conceptUtilities) {
+    Log.info("nOcc=" + occ.size() + " nSentence=" + sentenceLengths.size() + " nConcept=" + conceptUtilities.length);
     this.occ = occ;
     this.sentenceLengths = sentenceLengths;
     this.conceptUtilities = conceptUtilities;
+    
+    // check that all utilities are non-negative
+    for (int i = 0; i < conceptUtilities.length; i++) {
+      if (Double.isNaN(conceptUtilities[i]))
+        throw new IllegalArgumentException("nan");
+      if (Double.isInfinite(conceptUtilities[i]))
+        throw new IllegalArgumentException("inf");
+      if (conceptUtilities[i] < 0)
+        throw new IllegalArgumentException("neg");
+    }
   }
 
   static class SoftSolution {
@@ -313,7 +324,7 @@ public class GillickFavre09Summarization {
     return sol;
   }
   
-  public void setConceptObjective(GRBModel model, GRBVar[] c) throws GRBException {
+  private void setConceptObjective(GRBModel model, GRBVar[] c) throws GRBException {
     GRBLinExpr obj = new GRBLinExpr();
     for (int i = 0; i < c.length; i++) {
       assert conceptUtilities[i] >= 0;
@@ -323,7 +334,7 @@ public class GillickFavre09Summarization {
     model.setObjective(obj, GRB.MAXIMIZE);
   }
   
-  public void addLengthConstraint(GRBModel model, GRBVar[] s, int summaryLength) throws GRBException {
+  private void addLengthConstraint(GRBModel model, GRBVar[] s, int summaryLength) throws GRBException {
     GRBLinExpr solutionLength = new GRBLinExpr();
     for (int j = 0; j < s.length; j++)
       solutionLength.addTerm(this.sentenceLengths.get(j), s[j]);

@@ -15,14 +15,17 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import dk.ange.octave.util.StringUtil;
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.PrepareSentencesForParsey;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
+import edu.jhu.hlt.tutils.ArgMin;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -40,6 +43,12 @@ public class EffSent implements Serializable {
     public short head;   // token index
     public short start;  // inclusive token index
     public short end;    // exclusive token index
+    
+    public void setHead(int head) {
+      if (head > Short.MAX_VALUE || head < Short.MIN_VALUE)
+        throw new IllegalArgumentException();
+      this.head = (short) head;
+    }
     
     public void setSpan(Span s) {
       if (s.start > Short.MAX_VALUE || s.start < 0)
@@ -65,6 +74,15 @@ public class EffSent implements Serializable {
     public String toString() {
       return "(" + getFullMid() + " " + span().shortString() + " h=" + head + ")";
     }
+    
+    public String show(DepNode[] parse, MultiAlphabet a) {
+      List<String> toks = new ArrayList<>();
+      for (int i = start; i < end; i++)
+        toks.add(a.word(parse[i].word));
+      toks.add(span().shortString());
+      toks.add(getFullMid());
+      return StringUtils.join(" ", toks);
+    }
   }
   
   private DepNode[] parse;
@@ -81,8 +99,17 @@ public class EffSent implements Serializable {
     return parse[i];
   }
 
-  void setMentions(String mentionLine) {
+  void setMentions(String mentionLine, boolean computeHeads) {
     this.entities = parseMentions(mentionLine);
+    if (computeHeads) {
+      int[] depth = DepNode.depths(parse);
+      for (int i = 0; i < entities.length; i++) {
+        ArgMin<Integer> a = new ArgMin<>();
+        for (int j = entities[i].start; j < entities[i].end; j++)
+          a.offer(j, depth[j]);
+        entities[i].setHead(a.get());
+      }
+    }
   }
   
   public Mention mention(int i) {
@@ -95,6 +122,15 @@ public class EffSent implements Serializable {
   
   public Iterable<Mention> mentions() {
     return Arrays.asList(entities);
+  }
+  
+  public int[] buildToken2EntityMap() {
+    int[] m = new int[parse.length];
+    Arrays.fill(m, -1);
+    for (int i = 0; i < entities.length; i++)
+      for (int j = entities[i].start; j < entities[i].end; j++)
+        m[j] = i;
+    return m;
   }
   
   /**
@@ -131,9 +167,43 @@ public class EffSent implements Serializable {
           mids[j] += " *head";
       }
     }
-    
     for (int i = 0; i < parse.length; i++) {
       System.out.printf("% 4d  %-16s %s\n", i, a.word(parse[i].word), mids[i]);
+    }
+  }
+  
+  public void showChunkedStyle(MultiAlphabet a) {
+    String[] mids = new String[parse.length];
+    Arrays.fill(mids, "_");
+    for (int i = 0; i < entities.length; i++) {
+      for (int j = entities[i].start; j < entities[i].end; j++) {
+        mids[j] = entities[i].getFullMid();
+        if (j == entities[i].head)
+          mids[j] += " *head";
+      }
+    }
+    String prevMid = "_";
+    System.out.printf("% 3d", 0);
+    for (int i = 0; i < parse.length; i++) {
+      boolean n = i > 0 && !mids[i].equals(mids[i-1]);
+      if (n) {
+        System.out.println("\t" + prevMid);
+        prevMid = mids[i];
+        System.out.printf("% 3d", i);
+      }
+      System.out.printf(" %s", a.word(parse[i].word));
+    }
+    System.out.println("\t" + prevMid);
+  }
+  
+  public static void showConllStyle(List<EffSent> sentences, MultiAlphabet a) {
+    if (sentences.isEmpty())
+      Log.info("no sentences!");
+    int i = 0;
+    for (EffSent s : sentences) {
+      Log.info("sentence(" + (i++) + "):");
+      s.showConllStyle(a);
+      System.out.println();
     }
   }
 
@@ -290,7 +360,8 @@ public class EffSent implements Serializable {
       DepNode[] parse = iter.next();
       String ms = r.readLine();
       cur = new EffSent(parse);
-      cur.setMentions(ms);
+      boolean setHeads = true;
+      cur.setMentions(ms, setHeads);
     }
 
     @Override
@@ -396,7 +467,8 @@ public class EffSent implements Serializable {
           DepNode[] parse = iter.next();
           String ms = r.readLine();
           EffSent s = new EffSent(parse);
-          s.setMentions(ms);
+          boolean setHeads = true;
+          s.setMentions(ms, setHeads);
           sentences.add(s);
         }
       }
