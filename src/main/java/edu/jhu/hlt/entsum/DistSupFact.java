@@ -22,6 +22,7 @@ import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.util.UniqList;
 
 /**
  * A infobox fact mapped onto mentions in a sentence.
@@ -123,7 +124,8 @@ public class DistSupFact implements Serializable {
       int[] tok2ent,    // indexed by token, value of -1 means regular ^NNP* word, value >= 0 is a mention index
       DepNode[] parse, MultiAlphabet parseAlph, ComputeIdf df) {
     
-    List<String> fs = new ArrayList<>();
+//    List<String> fs = new ArrayList<>();
+    UniqList<String> fs = new UniqList<>();
 
     // (all) dbpedia entity types for subj/obj
     for (String type : subjTypes) {
@@ -255,7 +257,10 @@ public class DistSupFact implements Serializable {
       fs.add("a/ps=" + parseAlph.pos(parse[shallow].pos));
       
       // Children of shallowest node which aren't one the path
+      int prev = -1;
       for (int c = parse[shallow].depLeftChildNode; c >= 0; c = parse[c].depRightSibNode) {
+        assert c > prev;
+        prev = c;
         if (!tokensOnPath.get(c)) {
           DepNode.Edge e = new DepNode.Edge(shallow, c, parse, parseAlph);
           fs.add("A/sc=" + e);
@@ -271,7 +276,7 @@ public class DistSupFact implements Serializable {
       fs.add("a/ne=" + Math.min(10, entsAlongPath.size()));
     }
 
-    return fs;
+    return fs.getList();
   }
   
   /**
