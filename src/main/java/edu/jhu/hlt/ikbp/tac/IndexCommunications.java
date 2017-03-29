@@ -2173,10 +2173,14 @@ public class IndexCommunications implements AutoCloseable {
     };
     
     public static String showScore(List<Feat> features, int maxChars) {
+      return showScore(features, maxChars, Feat.BY_SCORE_DESC);
+    }
+    public static String showScore(List<Feat> features, int maxChars, Comparator<Feat> sort) {
       List<Feat> out = new ArrayList<>();
       for (Feat f : features)
         out.add(f);
-      Collections.sort(out, Feat.BY_SCORE_DESC);
+//      Collections.sort(out, Feat.BY_SCORE_DESC);
+      Collections.sort(out, sort);
       
       StringBuilder sb = new StringBuilder();
       sb.append(String.format("%+.2f", Feat.sum(features)));

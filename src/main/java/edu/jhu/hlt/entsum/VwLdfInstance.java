@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import edu.jhu.hlt.entsum.SlotsAsConcepts.StreamingDistSupFeatEx;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.tuple.Pair;
 
@@ -26,6 +27,13 @@ public class VwLdfInstance {
     this.loc = loc;
     this.labels = new ArrayList<>();
     this.scores = new DoubleArrayList();
+  }
+  
+  public double minCost() {
+    double m = scores.get(0);
+    for (int i = 1; i < scores.size(); i++)
+      m = Math.min(m, scores.get(i));
+    return m;
   }
   
   public void add(String y, double cost) {
@@ -75,6 +83,10 @@ public class VwLdfInstance {
   
   @Override
   public String toString() {
-    return "(VwLdf " + loc + " n=" + labels.size() + ")";
+    List<Feat> fs = new ArrayList<>();
+    for (int i = 0; i < labels.size(); i++)
+      fs.add(new Feat(labels.get(i), scores.get(i)));
+    return "(VwLdf " + loc + " " + Feat.showScore(fs, 160, Feat.BY_SCORE_ASC) + ")";
+//    return "(VwLdf " + loc + " n=" + labels.size() + ")";
   }
 }

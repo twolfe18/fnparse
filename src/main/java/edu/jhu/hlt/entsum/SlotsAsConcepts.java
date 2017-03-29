@@ -7,8 +7,10 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.Link;
@@ -30,6 +32,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.map.IntObjectHashMap;
@@ -40,6 +43,16 @@ import edu.jhu.util.UniqList;
 import gurobi.GRBException;
 
 /**
+ * NEW:
+ * Does all tasks related to summarization via "slots as concepts",
+ * including feature extraction {@link StreamingDistSupFeatEx} and
+ * summarization {@link StreamingSummarizer}. Intermediate tasks
+ * related to learning/prediction are handled by vowpal wabbit and
+ * you can find the appropriate commands in:
+ *   $FNPARSE/data/facc1-entsum/Makefile
+ * 
+ * 
+ * OLD:
  * Produces a set of lexico-syntactic patterns which have high MI with
  * dbpedia infobox relations. Treat each infobox relation as a concept,
  * building the Occ_{ij} matrix using these patterns.
@@ -71,7 +84,8 @@ public class SlotsAsConcepts {
   // These are used on DEV/TEST where you don't assume you know any infobox facts but you do have entity types
   public static final String INFOBOX_PRED_LOC_FILENAME =  "infobox-pred.locations.txt";
   public static final String INFOBOX_PRED_FEAT_FILENAME = "infobox-pred.csoaa_ldf.x";
-  public static final String INFOBOX_PRED_SCORE_FILENAME = "infobox-pred.csoaa_ldf.yhat";
+//  public static final String INFOBOX_PRED_SCORE_FILENAME = "infobox-pred.csoaa_ldf.model-2ndOrder-m-s1.yhat";
+  public static final String INFOBOX_PRED_SCORE_FILENAME_GLOB = "glob:**/infobox-pred.csoaa_ldf.*-m-*.yhat";
   
   /**
    * Input:
@@ -90,7 +104,6 @@ public class SlotsAsConcepts {
    */
   public static class StreamingDistSupFeatEx {
 
-//    private ObservedArgTypes verbTypes;
     private ObservedArgTypes.PlausibleMemoizer verbTypes;
     private File entityDir;
     private String entityMid;
@@ -250,6 +263,8 @@ public class SlotsAsConcepts {
     public void writeFeatures(ComputeIdf df) throws IOException {
       boolean debug = false;
       
+      Random rand = new Random(9001);
+      
       File parses = new File(entityDir, "parse.conll");
       File mentions = new File(entityDir, "mentionLocs.txt");
       File outLocs, outFeats;
@@ -309,7 +324,6 @@ public class SlotsAsConcepts {
               ec.increment("fact/skip");
               continue;
             }
-            ec.increment("fact");
 
             // Output location of this fact
             wLoc.write(f.tsv());
@@ -320,33 +334,85 @@ public class SlotsAsConcepts {
             MultiMap<String, Feat> fxg = Feat.groupByNamespace(Feat.promote(1, fx), '/');
             wFeat.write("shared");
             for (String ns : fxg.keySet()) {
+              assert !"y".equalsIgnoreCase(ns);
               wFeat.write(" |" + ns);
               for (Feat ff : fxg.get(ns))
                 wFeat.write(" " + vwSafety(ff.getName()));
             }
-//            wFeat.write("shared |");
-//            for (String feat : fx) {
-//              wFeat.write(' ');
-//              wFeat.write(vwSafety(feat));
-//            }
             wFeat.newLine();
+            
             int yes = 0, all = 0;
-            for (String y : ys) {
-              ec.increment("fact/label");
-              String yc = clean(y);
-              String cost = "";
-              if (train) {
-                if (f.verb.equals(y)) {
-                  cost = ":0";
-                  yes++;
-                } else {
-                  cost = ":1";
-                }
+            
+            // Alternative: print out all labels
+            // TODO: sample only k non-plausible
+            Alphabet<String> va = this.verbTypes.getWrapped().getVerbs();
+            Set<String> plausibleS = new HashSet<>(ys);
+            Set<String> implausibleS = null;
+            if (train) {
+              int nPlausible = 16;
+              int nImplausible = 15;  // 32 total
+              ReservoirSample<String> implausibleR = new ReservoirSample<>(nImplausible, rand);
+              for (int yi = 0; yi < va.size(); yi++) {
+                String y = va.lookupObject(yi);
+                if (f.verb.equals(y))
+                  continue;
+                if (plausibleS.contains(y))
+                  implausibleR.add(y);
               }
-              wFeat.write(yc + cost + " | " + yc);
+              implausibleS = new HashSet<>();
+              for (String s : implausibleR)
+                implausibleS.add(s);
+              ReservoirSample<String> plausibleR = new ReservoirSample<>(nPlausible, rand);
+              for (String y : ys)
+                plausibleR.add(y);
+              plausibleS.clear();
+              for (String y : plausibleR)
+                plausibleS.add(y);
+            }
+            for (int yi = 0; yi < va.size(); yi++) {
+              String y = va.lookupObject(yi);
+              String yc = vwSafety(clean(y));
+              String cost;
+              if (!train) {
+                ec.increment("fact/unlab");
+                cost = "";
+              } else if (f.verb.equals(y)) {
+                ec.increment("fact/yes");
+                cost = ":0";
+                yes++;
+              } else if (plausibleS.contains(y)) {
+                ec.increment("fact/plausible");
+                cost = ":1";
+              } else if (implausibleS.contains(y)) {
+                ec.increment("fact/implausible");
+                cost = ":2";
+              } else {
+                continue;
+              }
+              wFeat.write(yi + cost + " | " + yc);
               wFeat.newLine();
               all++;
             }
+            
+//            for (String y : ys) {
+//              ec.increment("fact/label");
+//              int yi = va.lookupIndex(y) + 1;
+////              String yc = clean(y);
+//              String yc = vwSafety(clean(y));
+//              String cost = "";
+//              if (train) {
+//                if (f.verb.equals(y)) {
+//                  cost = ":0";
+//                  yes++;
+//                } else {
+//                  cost = ":1";
+//                }
+//              }
+//              wFeat.write(yi + cost + " | " + yc);
+//              wFeat.newLine();
+//              all++;
+//            }
+
             wFeat.newLine();    // empty line for end of instance
             assert (!train || yes > 0) && all >= minPlausible : "yes=" + yes + " all=" + all;
 
@@ -553,12 +619,15 @@ public class SlotsAsConcepts {
   public static String clean(String dbpediaUrl) {
     String x = dbpediaUrl.replace("http://", "");
     x = x.replaceAll("dbpedia.org/", "");
-//    x = x.replaceAll("\\|", "$");
+    x = x.replaceAll("property/", "");
     return x;
   }
   
   public static String vwSafety(String feat) {
     feat = feat.replaceAll(":", "-C-");
+    feat = feat.replaceAll("\\|", "-P-");
+    assert feat.indexOf(' ') < 0;
+    assert feat.indexOf('|') < 0;
     return feat;
   }
   
@@ -714,13 +783,13 @@ public class SlotsAsConcepts {
     
     private List<Pair<EffSent, VwLdfInstance>> join(MultiAlphabet a) throws IOException {
       Pair<EffSent, Integer> cur = new Pair<>(null, -1);
-      File relScoresF = new File(entityDir, INFOBOX_PRED_SCORE_FILENAME);
-      File relFeatsF = new File(entityDir, INFOBOX_PRED_FEAT_FILENAME);
       File relLocsF = new File(entityDir, INFOBOX_PRED_LOC_FILENAME);       // gives sentence indices and subj/obj mentions
+      File relFeatsF = new File(entityDir, INFOBOX_PRED_FEAT_FILENAME);
+      List<File> relScoresF = FileUtil.find(entityDir, INFOBOX_PRED_SCORE_FILENAME_GLOB);
       File parsesF = new File(entityDir, "parse.conll");
       File mentionLocsF = new File(entityDir, "mentionLocs.txt");
       List<Pair<EffSent, VwLdfInstance>> output = new ArrayList<>();
-      try (VwLdfReader fiter = new VwLdfReader(relScoresF, relFeatsF, relLocsF);
+      try (VwLdfReader fiter = new VwLdfReader(relLocsF, relFeatsF, relScoresF);
           EffSent.Iter siter = new EffSent.Iter(parsesF, mentionLocsF, a)) {
         while (fiter.hasNext()) {
           VwLdfInstance inst = fiter.next();
@@ -771,11 +840,58 @@ public class SlotsAsConcepts {
         List<Pair<String, Double>> verbs = x.get2().getMostLikelyLabels(maxVerbsPerInstance);
         verbs = expVals(verbs);
         
-        // Debug: show the predictions
-        if (debug) {
+//        // Debug: show the predictions
+//        if (debug) {
+//          s.showChunkedStyle(parseAlph);
+//          System.out.println("subj: " + s.mention(i.loc.subjMention).show(s.parse(), parseAlph));
+//          System.out.println("obj: " + s.mention(i.loc.objMention).show(s.parse(), parseAlph));
+//          for (Pair<String, Double> v : verbs) {
+//            String sig = "";
+//            if (v.get2() < 0.25)
+//              sig = "***";
+//            if (v.get2() < 0.5)
+//              sig = "**";
+//            if (v.get2() < 1)
+//              sig = "*";
+//            System.out.printf("\t%-20s %.2f sig=%s\n", v.get1(), v.get2(), sig);
+//          }
+//          System.out.println();
+//        }
+        
+        for (Pair<String, Double> v : verbs) {
+          String conceptS = "v=" + v.get1() + "_" + so;
+          int conceptI = concepts.lookupIndex(conceptS);
+          double costOfEvokingConcept = v.get2();
+          occ.add(new SoftConceptMention(conceptI, sIdx, costOfEvokingConcept));
+        }
+      }
+      
+      // Show the most likely relation prediction
+      if (debug) {
+        // Sort by the lowest cost prediction for a given location
+        Collections.sort(j, new Comparator<Pair<EffSent, VwLdfInstance>>() {
+          @Override
+          public int compare(Pair<EffSent, VwLdfInstance> o1, Pair<EffSent, VwLdfInstance> o2) {
+            double s1 = o1.get2().minCost();
+            double s2 = o2.get2().minCost();
+            if (s1 < s2)
+              return -1;
+            if (s2 < s1)
+              return +1;
+            return 0;
+          }
+        });
+        int k = Math.min(20, j.size());
+        Log.info("showing the " + k + " most likely predictions...");
+        for (int i = 0; i < k; i++) {
+          Pair<EffSent, VwLdfInstance> p = j.get(i);
+          EffSent s = p.get1();
+          VwLdfInstance f = p.get2();
           s.showChunkedStyle(parseAlph);
-          System.out.println("subj: " + s.mention(i.loc.subjMention).show(s.parse(), parseAlph));
-          System.out.println("obj: " + s.mention(i.loc.objMention).show(s.parse(), parseAlph));
+          System.out.println("subj: " + s.mention(f.loc.subjMention).show(s.parse(), parseAlph));
+          System.out.println("obj: " + s.mention(f.loc.objMention).show(s.parse(), parseAlph));
+          List<Pair<String, Double>> verbs = f.getMostLikelyLabels(maxVerbsPerInstance);
+          verbs = expVals(verbs);
           for (Pair<String, Double> v : verbs) {
             String sig = "";
             if (v.get2() < 0.25)
@@ -787,13 +903,6 @@ public class SlotsAsConcepts {
             System.out.printf("\t%-20s %.2f sig=%s\n", v.get1(), v.get2(), sig);
           }
           System.out.println();
-        }
-        
-        for (Pair<String, Double> v : verbs) {
-          String conceptS = "v=" + v.get1() + "_" + so;
-          int conceptI = concepts.lookupIndex(conceptS);
-          double costOfEvokingConcept = v.get2();
-          occ.add(new SoftConceptMention(conceptI, sIdx, costOfEvokingConcept));
         }
       }
 
