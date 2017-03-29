@@ -248,7 +248,7 @@ public class SlotsAsConcepts {
      */
 
     public void writeFeatures(ComputeIdf df) throws IOException {
-      boolean debug = true;
+      boolean debug = false;
       
       File parses = new File(entityDir, "parse.conll");
       File mentions = new File(entityDir, "mentionLocs.txt");
@@ -317,11 +317,18 @@ public class SlotsAsConcepts {
             
             // Output lexico-syntactic features (VW-format)
             List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
-            wFeat.write("shared |");
-            for (String feat : fx) {
-              wFeat.write(' ');
-              wFeat.write(feat);
+            MultiMap<String, Feat> fxg = Feat.groupByNamespace(Feat.promote(1, fx), '/');
+            wFeat.write("shared");
+            for (String ns : fxg.keySet()) {
+              wFeat.write(" |" + ns);
+              for (Feat ff : fxg.get(ns))
+                wFeat.write(" " + vwSafety(ff.getName()));
             }
+//            wFeat.write("shared |");
+//            for (String feat : fx) {
+//              wFeat.write(' ');
+//              wFeat.write(vwSafety(feat));
+//            }
             wFeat.newLine();
             int yes = 0, all = 0;
             for (String y : ys) {
@@ -348,8 +355,13 @@ public class SlotsAsConcepts {
               sent.showChunkedStyle(parseAlph);
               System.out.println("subj: " + sent.mention(f.subjMention).show(sent.parse(), parseAlph));
               System.out.println("obj: " + sent.mention(f.objMention).show(sent.parse(), parseAlph));
-              for (String fxi : fx)
-                System.out.println("\tf=" + fxi);
+              for (String ns : fxg.keySet()) {
+                System.out.println("\t" + ns + ":");
+                for (Feat fxi : fxg.get(ns))
+                  System.out.println("\t\t" + fxi.getName());
+              }
+//              for (String fxi : fx)
+//                System.out.println("\tf=" + fxi);
               System.out.println("y=" + f.verb);
               for (String y : ys)
                 System.out.println("\tyhat=" + clean(y));
@@ -541,7 +553,13 @@ public class SlotsAsConcepts {
   public static String clean(String dbpediaUrl) {
     String x = dbpediaUrl.replace("http://", "");
     x = x.replaceAll("dbpedia.org/", "");
+//    x = x.replaceAll("\\|", "$");
     return x;
+  }
+  
+  public static String vwSafety(String feat) {
+    feat = feat.replaceAll(":", "-C-");
+    return feat;
   }
   
   
@@ -656,7 +674,7 @@ public class SlotsAsConcepts {
     List<Feat> fs = f.extractLexicoSyntacticFeats(fed);
     for (Feat feat : fs) {
       w.write(' ');
-      w.write(feat.getName());
+      w.write(vwSafety(feat.getName()));
       assert feat.getWeight() == 1d;
     }
     w.newLine();
@@ -1145,8 +1163,7 @@ public class SlotsAsConcepts {
       boolean train = config.getBoolean("train");
       File obsArgTypes = config.getExistingFile("obsArgTypes");
       ObservedArgTypes oat = (ObservedArgTypes) FileUtil.deserialize(obsArgTypes);
-      output = config.getFile("output");
-      File entityDir = output.getParentFile();
+      File entityDir = config.getExistingDir("entityDir");
       String mid = entityDir.getName().replaceAll("m.", "/m/");
       
       File dfF = config.getExistingFile("wordDocFreq");

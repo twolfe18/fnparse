@@ -6,6 +6,7 @@ import java.io.ObjectInputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -209,27 +210,33 @@ public class DistSupFact implements Serializable {
       fs.add("T/" + feat);
     }
     int ps = wordPath.size();
-    fs.add("d/dpathlen=" + Math.min(12, ps));
-    fs.add("d/dpathlen4=" + (ps <= 4 ? "y" : "n"));
-    fs.add("d/dpathlen3=" + (ps <= 3 ? "y" : "n"));
-    fs.add("d/dpathlen2=" + (ps <= 2 ? "y" : "n"));
-    fs.add("d/dpathlen1=" + (ps <= 1 ? "y" : "n"));
+    fs.add("d/dp=" + Math.min(12, ps));
+    fs.add("d/dp4=" + (ps <= 4 ? "y" : "n"));
+    fs.add("d/dp3=" + (ps <= 3 ? "y" : "n"));
+    fs.add("d/dp2=" + (ps <= 2 ? "y" : "n"));
+    fs.add("d/dp1=" + (ps <= 1 ? "y" : "n"));
     fs.add("d/dir=" + (subjHead < objHead ? "l" : "r"));
     
     
     // Depth of subjHead, objHead, and shallowest node in path
     int[] depth = DepNode.depths(parse);
-    fs.add("a/subjDepth=" + depth[subjHead]);
-    fs.add("a/objDepth=" + depth[objHead]);
+    fs.add("a/sd=" + depth[subjHead]);
+    fs.add("a/od=" + depth[objHead]);
     ArgMin<Integer> pathShallow = new ArgMin<>();
     Set<Integer> entsAlongPath = null;
     if (tok2ent != null)
       entsAlongPath = new HashSet<>();
+    BitSet tokensOnPath = new BitSet();
     for (DepNode.Edge e : wordPath) {
       int dh = e.headIdx < 0 ? -1 : depth[e.headIdx];
       pathShallow.offer(e.headIdx, dh);
       int dm = e.modIdx < 0 ? -1 : depth[e.modIdx];
       pathShallow.offer(e.modIdx, dm);
+      
+      if (e.headIdx >= 0)
+        tokensOnPath.set(e.headIdx);
+      if (e.modIdx >= 0)
+        tokensOnPath.set(e.modIdx);
       
       if (entsAlongPath != null) {
         if (e.headIdx >= 0)
@@ -240,23 +247,29 @@ public class DistSupFact implements Serializable {
     }
     int shallow = pathShallow.get();
     if (shallow < 0) {
-      fs.add("a/pathDepth=ROOT");
-      fs.add("a/pathShallow=ROOT");
+      fs.add("a/pd=ROOT");
+      fs.add("a/ps=ROOT");
     } else {
-      fs.add("a/pathDepth=" + depth[shallow]);
-      fs.add("a/pathShallow=" + parseAlph.word(parse[shallow].word));
-      fs.add("a/pathShallow=" + parseAlph.pos(parse[shallow].pos));
+      fs.add("a/pd=" + depth[shallow]);
+      fs.add("a/ps=" + parseAlph.word(parse[shallow].word));
+      fs.add("a/ps=" + parseAlph.pos(parse[shallow].pos));
+      
+      // Children of shallowest node which aren't one the path
+      for (int c = parse[shallow].depLeftChildNode; c >= 0; c = parse[c].depRightSibNode) {
+        if (!tokensOnPath.get(c)) {
+          DepNode.Edge e = new DepNode.Edge(shallow, c, parse, parseAlph);
+          fs.add("A/sc=" + e);
+          String h = parseAlph.pos(parse[shallow].pos);
+          String m = parseAlph.pos(parse[c].pos);
+          fs.add("A/sc=" + new DepNode.Edge(e.label, h, m));
+        }
+      }
     }
     if (entsAlongPath != null) {
       entsAlongPath.remove(tok2ent[subjHead]);
       entsAlongPath.remove(tok2ent[objHead]);
-      fs.add("a/entOnPath=" + Math.min(10, entsAlongPath.size()));
+      fs.add("a/ne=" + Math.min(10, entsAlongPath.size()));
     }
-    
-
-    // TODO sub-nodes of subj/obj which don't match NNP*
-    
-    // TODO one edge off of dep path? e.g. neg(release,not) in "Mary did not release Knives with Journalism"
 
     return fs;
   }
