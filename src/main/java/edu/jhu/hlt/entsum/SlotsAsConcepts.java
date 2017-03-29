@@ -66,12 +66,12 @@ import gurobi.GRBException;
  */
 public class SlotsAsConcepts {
   // These are used on TRAIN where you have infobox facts and entity types for distant supervision training
-  public static final String INFOBOX_TRAIN_LOC_FILENAME =  "distsup-infobox.locations.txt";
-  public static final String INFOBOX_TRAIN_FEAT_FILENAME = "distsup-infobox.csoaa_ldf.yx";
+  public static final String INFOBOX_TRAIN_LOC_FILENAME =  "infobox-distsup.locations.txt";
+  public static final String INFOBOX_TRAIN_FEAT_FILENAME = "infobox-distsup.csoaa_ldf.yx";
   // These are used on DEV/TEST where you don't assume you know any infobox facts but you do have entity types
-  public static final String INFOBOX_PRED_LOC_FILENAME =  "distsup-typePlausible.locations.txt";
-  public static final String INFOBOX_PRED_FEAT_FILENAME = "distsup-typePlausible.csoaa_ldf.x";
-  public static final String INFOBOX_PRED_SCORE_FILENAME = "distsup-typePlausible.csoaa_ldf.yhat";
+  public static final String INFOBOX_PRED_LOC_FILENAME =  "infobox-pred.locations.txt";
+  public static final String INFOBOX_PRED_FEAT_FILENAME = "infobox-pred.csoaa_ldf.x";
+  public static final String INFOBOX_PRED_SCORE_FILENAME = "infobox-pred.csoaa_ldf.yhat";
   
   /**
    * Input:
