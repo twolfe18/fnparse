@@ -18,12 +18,16 @@ import edu.jhu.prim.tuple.Pair;
  *
  * @author travis
  */
-public class VwLdfInstance {
+public class VwInstance {
   public StreamingDistSupFeatEx.Fact loc;
   public List<String> labels;
   public DoubleArrayList scores;
   
-  public VwLdfInstance(StreamingDistSupFeatEx.Fact loc) {
+  // TODO Could add fx:List<String> field for features
+  // ldf: these would be the shared features
+  // binary: only one sense of features
+  
+  public VwInstance(StreamingDistSupFeatEx.Fact loc) {
     this.loc = loc;
     this.labels = new ArrayList<>();
     this.scores = new DoubleArrayList();
