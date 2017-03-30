@@ -857,18 +857,22 @@ public class SlotsAsConcepts {
       this.entityDir = entityDir;
     }
     
-    private List<Pair<EffSent, VwLdfInstance>> join(MultiAlphabet a) throws IOException {
+    /**
+     * TODO Replace with {@link VwInstanceEffSentReader}
+     */
+    private List<Pair<EffSent, VwInstance>> ldfJoin(MultiAlphabet a) throws IOException {
       Pair<EffSent, Integer> cur = new Pair<>(null, -1);
       File relLocsF = new File(entityDir, INFOBOX_PRED_LOC_FILENAME);       // gives sentence indices and subj/obj mentions
       File relFeatsF = new File(entityDir, INFOBOX_PRED_FEAT_FILENAME);
       List<File> relScoresF = FileUtil.find(entityDir, INFOBOX_PRED_SCORE_FILENAME_GLOB);
       File parsesF = new File(entityDir, "parse.conll");
       File mentionLocsF = new File(entityDir, "mentionLocs.txt");
-      List<Pair<EffSent, VwLdfInstance>> output = new ArrayList<>();
-      try (VwLdfReader fiter = new VwLdfReader(relLocsF, relFeatsF, relScoresF);
+      List<Pair<EffSent, VwInstance>> output = new ArrayList<>();
+      boolean ldf = true;
+      try (VwInstanceReader fiter = new VwInstanceReader(relLocsF, relFeatsF, relScoresF, ldf);
           EffSent.Iter siter = new EffSent.Iter(parsesF, mentionLocsF, a)) {
         while (fiter.hasNext()) {
-          VwLdfInstance inst = fiter.next();
+          VwInstance inst = fiter.next();
           while (cur.get2() < inst.loc.sentIdx && siter.hasNext())
             cur = new Pair<>(siter.next(), cur.get2()+1);
           if (cur.get2() != inst.loc.sentIdx)
@@ -900,9 +904,9 @@ public class SlotsAsConcepts {
       // Store them in memory.
       int maxVerbsPerInstance = 5;
       IntObjectHashMap<EffSent> sents = new IntObjectHashMap<>();
-      List<Pair<EffSent, VwLdfInstance>> j = join(parseAlph);
-      for (Pair<EffSent, VwLdfInstance> x : j) {
-        VwLdfInstance i = x.get2();
+      List<Pair<EffSent, VwInstance>> j = ldfJoin(parseAlph);
+      for (Pair<EffSent, VwInstance> x : j) {
+        VwInstance i = x.get2();
         EffSent s = x.get1();
         int sIdx = i.loc.sentIdx;
         
@@ -945,9 +949,9 @@ public class SlotsAsConcepts {
       // Show the most likely relation prediction
       if (debug) {
         // Sort by the lowest cost prediction for a given location
-        Collections.sort(j, new Comparator<Pair<EffSent, VwLdfInstance>>() {
+        Collections.sort(j, new Comparator<Pair<EffSent, VwInstance>>() {
           @Override
-          public int compare(Pair<EffSent, VwLdfInstance> o1, Pair<EffSent, VwLdfInstance> o2) {
+          public int compare(Pair<EffSent, VwInstance> o1, Pair<EffSent, VwInstance> o2) {
             double s1 = o1.get2().minCost();
             double s2 = o2.get2().minCost();
             if (s1 < s2)
@@ -960,9 +964,9 @@ public class SlotsAsConcepts {
         int k = Math.min(20, j.size());
         Log.info("showing the " + k + " most likely predictions...");
         for (int i = 0; i < k; i++) {
-          Pair<EffSent, VwLdfInstance> p = j.get(i);
+          Pair<EffSent, VwInstance> p = j.get(i);
           EffSent s = p.get1();
-          VwLdfInstance f = p.get2();
+          VwInstance f = p.get2();
           s.showChunkedStyle(parseAlph);
           System.out.println("subj: " + s.mention(f.loc.subjMention).show(s.parse(), parseAlph));
           System.out.println("obj: " + s.mention(f.loc.objMention).show(s.parse(), parseAlph));
