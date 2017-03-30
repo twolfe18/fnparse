@@ -8,8 +8,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
@@ -231,42 +233,84 @@ public class SlotsAsConcepts {
 
       return vs.getList();
     }
-    
-    /*
-     * TODO Implement and __test__:
-     * <badIdea>
-     * aggressiveSentenceDedup=k means that each "slot" receives ceil(k/(numMidsInSlot-1)) sentences which can fall into that slot.
-     * A slot is an ordered list of mids which appear in a sentence, which is a robust proxy for the sentence itself.
-     * </badIdea>
-     * 
-     * The reason I want this is that there appears to be duplicates still getting through, e.g.
-     *   tokenized-sentences/dev/m.017kjq/sentences.txt
-     *   2000 ([FREEBASE mid=/m/0hsqf Seoul]Seoul[/FREEBASE]-[FREEBASE mid=/m/017kjq Yonhap News Agency]Yonhap News Agency[/FREEBASE]
-     *   2000 ([FREEBASE mid=/m/0hsqf Seoul]Seoul[/FREEBASE]-[FREEBASE mid=/m/017kjq Yonhap News Agency]Yonhap News Agency[/FREEBASE]).
-     *
-     * I think the key where I just have ordered-mids is not good enough, especially when there are only 2 mids for example.
-     * I think a better key to dedup on is:
-     *   <orderedMids> ++ <threeHighestIdfWordsInSentenceOrder>
-     *
-     * I had considered doing a __sample__ (e.g. reservoir) of all sentences which fall into a dedup key/bucket,
-     * which causes problems for streaming (can't implement an Iterator on top of reservoir sampling).
-     * HOWEVER, that dedup is fine grain, and doesn't require sampling.
-     * 
-     * Sampling could be used... but not to great effect.
-     * The other related thing I want to address is the "find the K easiest-to-predict instances for each relation",
-     * and throw out the remaining, which are likely to lack clear lexical evidence for the relation which we should
-     * be training on in the first place.
-     * 
-     * I'm going to implement dedup described above just to cut down on file sizes, should be good for a 30% speedup.
-     */
 
-    public void writeFeatures(ComputeIdf df) throws IOException {
+    /**
+     * Writes vw-formatted instances to
+     *    $ENTITY/infobox-binary/pos-$RELATION.vw
+     *    $ENTITY/infobox-binary/neg.vw
+     */
+    public void writeBinaryFeatures(ComputeIdf df) throws IOException {
+      boolean debug = false;
+      File p = new File(entityDir, "infobox-binary");
+      if (!p.isDirectory())
+        p.mkdirs();
+      Log.info("putting instances in " + p.getPath());
+      Map<String, BufferedWriter> v2w = new HashMap<>();
+      
+      TimeMarker tm = new TimeMarker();
+      Counts<String> ec = new Counts<>();
+      try (EffSent.DedupMaW3Iter diter = joinIter(df)) {
+        while (diter.hasNext()) {
+          Pair<EffSent, Integer> sentI = diter.next();
+          EffSent sent = sentI.get1();
+          int sentIdx = sentI.get2();
+
+          List<Fact> neg = new ArrayList<>();
+          List<Fact> pos = findFacts(sentIdx, sent, neg, debug);
+          
+          for (Fact f : pos) {
+            String yc = vwSafety(clean(f.verb));
+            ec.increment("pos");
+            ec.increment("pos/" + yc);
+            File ff = new File(p, "pos-" + yc + ".vw");
+            BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
+            List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+            writeVw(w, "1", fx);
+          }
+          for (Fact f : neg) {
+            ec.increment("neg");
+            File ff = new File(p, "neg.vw");
+            BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
+            List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+            writeVw(w, "0", fx);
+          }
+          
+          if (tm.enoughTimePassed(2))
+            Log.info(ec);
+        }
+      }
+      
+      System.out.println(ec);
+      Log.info("closing " + v2w.size() + " files");
+      for (BufferedWriter w : v2w.values())
+        w.close();
+    }
+    
+    private static void writeVw(BufferedWriter w, String label, List<String> fx) throws IOException {
+      MultiMap<String, Feat> fxg = Feat.groupByNamespace(Feat.promote(1, fx), '/');
+      w.write(label);
+      for (String ns : fxg.keySet()) {
+        assert !"y".equalsIgnoreCase(ns);
+        w.write(" |" + ns);
+        for (Feat fi : fxg.get(ns))
+          w.write(" " + vwSafety(fi.getName()));
+      }
+      w.newLine();
+    }
+    
+    public EffSent.DedupMaW3Iter joinIter(ComputeIdf df) throws IOException {
+      File parses = new File(entityDir, "parse.conll");
+      File mentions = new File(entityDir, "mentionLocs.txt");
+      EffSent.Iter iter = new EffSent.Iter(parses, mentions, parseAlph);
+      int numWordsInKey = 2;
+      return new EffSent.DedupMaW3Iter(iter, df, numWordsInKey);
+    }
+
+    public void writeCsoaaLdfFeatures(ComputeIdf df) throws IOException {
       boolean debug = false;
       
       Random rand = new Random(9001);
       
-      File parses = new File(entityDir, "parse.conll");
-      File mentions = new File(entityDir, "mentionLocs.txt");
       File outLocs, outFeats;
       if (train) {
         outLocs = new File(entityDir, INFOBOX_TRAIN_LOC_FILENAME);
@@ -283,9 +327,7 @@ public class SlotsAsConcepts {
       
       TimeMarker tm = new TimeMarker();
       Counts<String> ec = new Counts<>();
-      int numWordsInKey = 2;
-      try (EffSent.Iter iter = new EffSent.Iter(parses, mentions, parseAlph);
-          EffSent.DedupMaW3Iter diter = new EffSent.DedupMaW3Iter(iter, df, numWordsInKey);
+      try (EffSent.DedupMaW3Iter diter = joinIter(df);
           BufferedWriter wLoc = FileUtil.getWriter(outLocs);
           BufferedWriter wFeat = FileUtil.getWriter(outFeats)) {
         while (diter.hasNext()) {
@@ -294,19 +336,10 @@ public class SlotsAsConcepts {
           int sentIdx = sentI.get2();
           ec.increment("sentence");
           
-//          if (debug) {
-//            sent.showConllStyle(parseAlph);
-//          }
-          
           // See what facts in the KB we can match up against this sentence
           List<Fact> fs = train
-              ? findFacts(sentIdx, sent, debug)
+              ? findFacts(sentIdx, sent, null, debug)
               : findFactTest(sentIdx, sent);
-
-//          if (debug) {
-//            System.out.println();
-//            System.out.println();
-//          }
 
           for (Fact f : fs) {
 
@@ -331,15 +364,7 @@ public class SlotsAsConcepts {
             
             // Output lexico-syntactic features (VW-format)
             List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
-            MultiMap<String, Feat> fxg = Feat.groupByNamespace(Feat.promote(1, fx), '/');
-            wFeat.write("shared");
-            for (String ns : fxg.keySet()) {
-              assert !"y".equalsIgnoreCase(ns);
-              wFeat.write(" |" + ns);
-              for (Feat ff : fxg.get(ns))
-                wFeat.write(" " + vwSafety(ff.getName()));
-            }
-            wFeat.newLine();
+            writeVw(wFeat, "shared", fx);
             
             int yes = 0, all = 0;
             
@@ -394,6 +419,7 @@ public class SlotsAsConcepts {
               all++;
             }
             
+            // OLD WAY: write out all plausible verbs based on subj/obj type
 //            for (String y : ys) {
 //              ec.increment("fact/label");
 //              int yi = va.lookupIndex(y) + 1;
@@ -418,6 +444,7 @@ public class SlotsAsConcepts {
 
             // DEBUG: show what we're printing out
             if (debug) {
+              MultiMap<String, Feat> fxg = Feat.groupByNamespace(Feat.promote(1, fx), '/');
               sent.showChunkedStyle(parseAlph);
               System.out.println("subj: " + sent.mention(f.subjMention).show(sent.parse(), parseAlph));
               System.out.println("obj: " + sent.mention(f.objMention).show(sent.parse(), parseAlph));
@@ -426,8 +453,6 @@ public class SlotsAsConcepts {
                 for (Feat fxi : fxg.get(ns))
                   System.out.println("\t\t" + fxi.getName());
               }
-//              for (String fxi : fx)
-//                System.out.println("\tf=" + fxi);
               System.out.println("y=" + f.verb);
               for (String y : ys)
                 System.out.println("\tyhat=" + clean(y));
@@ -513,7 +538,7 @@ public class SlotsAsConcepts {
      * Look through the given {@link EffSent} for facts in facts-rel0-types.txt.
      * @param sentIdx is just for handing off to a returned {@link Fact}, has nothing to do with the impl of this method.
      */
-    public List<Fact> findFacts(int sentIdx, EffSent sent, boolean debug) {
+    public List<Fact> findFacts(int sentIdx, EffSent sent, List<Fact> negAddTo, boolean debug) {
       UniqList<Fact> fs = new UniqList<>();
       int n = sent.numMentions();
       for (int i = 0; i < n; i++) {
@@ -529,6 +554,9 @@ public class SlotsAsConcepts {
             continue;
 //          if (i == j)   // INCORRECT! If a mid appears twice in a sentence this breaks!
 //            continue;
+          
+          if (negAddTo != null)
+            negAddTo.add(new Fact(sentIdx, i, j, null));
 
           // All facts match mi's mid, enumerate mj's dbp and check dbp2fact
           for (String dbpJ : mid2dbp.get(mj.getFullMid())) {
@@ -603,7 +631,7 @@ public class SlotsAsConcepts {
       for (File ed : entityDirs) {
         String mid = ed.getName().replaceAll("m.", "/m/");
         StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, ed, mid, train);
-        f.writeFeatures(df);
+        f.writeCsoaaLdfFeatures(df);
       }
     }
   }
@@ -1279,14 +1307,11 @@ public class SlotsAsConcepts {
       ComputeIdf df = (ComputeIdf) FileUtil.deserialize(dfF);
       
       StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, entityDir, mid, train);
-      f.writeFeatures(df);
+      if (config.getBoolean("binary"))
+        f.writeBinaryFeatures(df);
+      else
+        f.writeCsoaaLdfFeatures(df);
       break;
-      // Other actions are carried out by Makefile and scripts in data/facc1-entsum/
-//    case "train":             // makes distsup-infobox/train.csoaa_ldf.yx
-//                              //   and distsup-infobox/model.vw
-//      break;
-//    case "predict":           // makes tokenized-sentences/$ENTITY/distsup-infobox.csoaa_ldf.yhat
-//      break;
     case "summarize":         // makes summaries/$ENTITY/distsup-infobox/summary-100.txt
       int numWords = config.getInt("numWords");
       output = config.getFile("output", new File("/tmp/summary-w" + numWords + ".effsent.jser"));

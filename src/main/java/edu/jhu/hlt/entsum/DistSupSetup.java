@@ -160,7 +160,7 @@ public class DistSupSetup {
         + "\t" + Describe.memoryUsage());
   }
   
-  private static BufferedWriter getOrOpen(String key, Map<String, BufferedWriter> open, File ifNotOpen) throws IOException {
+  public static BufferedWriter getOrOpen(String key, Map<String, BufferedWriter> open, File ifNotOpen) throws IOException {
     BufferedWriter w = open.get(key);
     if (w == null) {
       w = FileUtil.getWriter(ifNotOpen);

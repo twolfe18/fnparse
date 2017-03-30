@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+
+import sys, codecs, random
+
+in_pos, in_neg, out, neg_rate, seed = sys.argv[1:]
+neg_rate = int(neg_rate)
+seed = int(seed)
+
+r = random.Random(seed)
+
+sys.stderr.write("reading pos: " + in_pos + "\n")
+pos = codecs.open(in_pos, 'r', 'utf-8').readlines()
+random.shuffle(pos, r.random)
+
+sys.stderr.write("reading neg: " + in_neg + "\n")
+neg = codecs.open(in_neg, 'r', 'utf-8').readlines()
+random.shuffle(neg, r.random)
+
+neg_take = len(pos) * neg_rate
+sys.stderr.write("n_pos=%d n_neg=%d neg_rate=%d total_out=%d\n" % (len(pos), len(neg), neg_rate, neg_take+len(pos)))
+if len(neg) < neg_take:
+  sys.stderr.write("not enough negs\n")
+
+# Interleave neg with the pos while writing out
+sys.stderr.write("writing output: " + out + "\n")
+with codecs.open(out, 'w', 'utf-8') as outf:
+  for i in range(len(pos)):
+    outf.write(pos[i])
+    for j in range(neg_rate):
+      outf.write(neg[i * neg_rate + j])
+
+
