@@ -180,7 +180,7 @@ public class SlotsAsConcepts {
       return at;
     }
     
-    List<String> featurize(EffSent sent, int subjMention, int objMention, ComputeIdf df) {
+    List<String> featurize(EffSent sent, int subjMention, int objMention, ComputeIdf df, List<String> nonLexSyn) {
       Mention subj = sent.mention(subjMention);
       Mention obj = sent.mention(objMention);
       List<String> subjTypes = entityTypesForMid(subj.getFullMid());
@@ -190,7 +190,8 @@ public class SlotsAsConcepts {
           subj.head, subj.span(), subjTypes,
           obj.head, obj.span(), objTypes,
           t2e,
-          sent.parse(), parseAlph, df);
+          sent.parse(), parseAlph, df,
+          nonLexSyn);
     }
     
     // TODO Investigate whether distsup is sensitive to the implementation of this method
@@ -250,6 +251,12 @@ public class SlotsAsConcepts {
         negOut.add(f);
       return negOut;
     }
+    
+    public static List<String> nonLexSynFeatures(String mid, int sentIdx, Fact f) {
+      String midSent = mid + "/s=" + sentIdx;
+      String midSentMent = midSent + "/m=" + f.subjMention + "-" + f.objMention;
+      return Arrays.asList(mid, midSent, midSentMent);
+    }
 
     /**
      * Writes vw-formatted instances to
@@ -266,6 +273,7 @@ public class SlotsAsConcepts {
       Log.info("negsPerSentence=" + negsPerSentence + " train=" + train + " putting instances in " + p.getPath());
       Map<String, BufferedWriter> v2w = new HashMap<>();
       
+      String mid = getMidFromEntityDir(entityDir);
       Random rand = new Random(9001);
       TimeMarker tm = new TimeMarker();
       Counts<String> ec = new Counts<>();
@@ -278,10 +286,11 @@ public class SlotsAsConcepts {
           if (!train) {
             List<Fact> x = findFactTest(sentIdx, sent);
             for (Fact f : x) {
+              List<String> nonLexSynFx = nonLexSynFeatures(mid, sentIdx, f);
               ec.increment("unlab");
               File ff = new File(p, "unlab.x");
               BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
-              List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+              List<String> fx = featurize(sent, f.subjMention, f.objMention, df, nonLexSynFx);
               writeVw(w, "1", fx);
               File ff2 = new File(p, "unlab.location");
               BufferedWriter w2 = DistSupSetup.getOrOpen(ff2.getPath(), v2w, ff2);
@@ -300,7 +309,7 @@ public class SlotsAsConcepts {
               ec.increment("pos/" + yc);
               File ff = new File(p, "pos-" + yc + ".vw");
               BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
-              List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+              List<String> fx = featurize(sent, f.subjMention, f.objMention, df, nonLexSynFeatures(mid, sentIdx, f));
               writeVw(w, "1", fx);
               File ff2 = new File(p, "pos-" + yc + ".location");
               BufferedWriter w2 = DistSupSetup.getOrOpen(ff2.getPath(), v2w, ff2);
@@ -311,7 +320,7 @@ public class SlotsAsConcepts {
               ec.increment("neg");
               File ff = new File(p, "neg.vw");
               BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
-              List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+              List<String> fx = featurize(sent, f.subjMention, f.objMention, df, nonLexSynFeatures(mid, sentIdx, f));
               writeVw(w, "0", fx);
             }
           }
@@ -366,6 +375,7 @@ public class SlotsAsConcepts {
       Log.info("outLocs=" + outLocs.getPath());
       Log.info("outFeats=" + outFeats.getPath());
       
+      String mid = getMidFromEntityDir(entityDir);
       TimeMarker tm = new TimeMarker();
       Counts<String> ec = new Counts<>();
       try (EffSent.DedupMaW3Iter diter = joinIter(df);
@@ -404,7 +414,7 @@ public class SlotsAsConcepts {
             wLoc.newLine();
             
             // Output lexico-syntactic features (VW-format)
-            List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+            List<String> fx = featurize(sent, f.subjMention, f.objMention, df, nonLexSynFeatures(mid, sentIdx, f));
             writeVw(wFeat, "shared", fx);
             
             int yes = 0, all = 0;
@@ -677,11 +687,15 @@ public class SlotsAsConcepts {
       ComputeIdf df = (ComputeIdf) FileUtil.deserialize(dfF);
       
       for (File ed : entityDirs) {
-        String mid = ed.getName().replaceAll("m.", "/m/");
+        String mid = getMidFromEntityDir(ed);
         StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, ed, mid, train);
         f.writeCsoaaLdfFeatures(df);
       }
     }
+  }
+  
+  public static String getMidFromEntityDir(File entityDir) {
+    return entityDir.getName().replaceAll("m.", "/m/");
   }
   
 

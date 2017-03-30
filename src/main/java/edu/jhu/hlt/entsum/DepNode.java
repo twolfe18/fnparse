@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.IntFunction;
 
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
@@ -152,6 +153,18 @@ public class DepNode implements Serializable {
       }
       return out;
     }
+
+    public static List<Edge> mapHeadsAndMods(List<Edge> in, Function<String, String> f) {
+      int n = in.size();
+      List<Edge> out = new ArrayList<>(n);
+      for (int i = 0; i < n; i++) {
+        Edge e = in.get(i);
+        String h = f.apply(e.head);
+        String m = f.apply(e.mod);
+        out.add(new Edge(e.label, h, m, e.headIdx, e.modIdx));
+      }
+      return out;
+    }
     
     /*
      * Research idea: not all ngrams are created equal. Some are very frequent and
@@ -255,6 +268,10 @@ public class DepNode implements Serializable {
       this.mod = mod;
       this.headIdx = headIdx;
       this.modIdx = modIdx;
+    }
+    
+    public Edge mapHeadAndMod(Function<String, String> f) {
+      return new Edge(label, f.apply(head), f.apply(mod), headIdx, modIdx);
     }
 
     @Override

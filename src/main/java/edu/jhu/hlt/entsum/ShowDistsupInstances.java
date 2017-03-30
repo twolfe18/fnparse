@@ -33,7 +33,10 @@ public class ShowDistsupInstances {
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
 
-    File ed = new File("data/facc1-entsum/code-testing-data/tokenized-sentences/train/m.025k5p");
+//    File ed = new File("data/facc1-entsum/code-testing-data/tokenized-sentences/train/m.025k5p");
+//    File ed = new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev/m.01c49s"); // Ken Ham
+//    File ed = new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev/m.024shx");   // Lynn_Woolsey
+    File ed = new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev/m.0148vr");   // Rainier III of Monaco
     File loc = new File(ed, "infobox-binary/unlab.location");
     File x = new File(ed, "infobox-binary/unlab.x");
     File yhat = new File(ed, "infobox-binary/unlab.yhat");
@@ -59,11 +62,13 @@ public class ShowDistsupInstances {
     
     Log.info("showing the " + k + " highest scoring predictions");
     int m = config.getInt("m", 5);
+    int i = 0;
     while (b.size() > 0) {
       Pair<EffSent, VwInstance> p = b.pop();
       EffSent sent = p.get1();
       VwInstance fact = p.get2();
       
+      System.out.println(++i + "th best extraction:");
       sent.showChunkedStyle(a);
       System.out.println("subj: " + sent.mention(fact.loc.subjMention).show(sent.parse(), a));
       System.out.println("obj: " + sent.mention(fact.loc.objMention).show(sent.parse(), a));
