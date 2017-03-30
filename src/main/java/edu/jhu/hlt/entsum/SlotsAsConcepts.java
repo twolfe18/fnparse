@@ -233,20 +233,40 @@ public class SlotsAsConcepts {
 
       return vs.getList();
     }
+    
+    private static List<Fact> negSample(List<Fact> pos, List<Fact> neg, int negsTake, Random rand) {
+      // Prune out any locations which are covered by pos examples
+      Set<Fact> p = new HashSet<>();
+      for (Fact f : pos)
+        p.add(new Fact(f.sentIdx, f.subjMention, f.objMention, null));
+      
+      ReservoirSample<Fact> negKeep = new ReservoirSample<>(negsTake, rand);
+      for (Fact f : neg)
+        if (p.add(f))   // a.k.a "not a pos"
+          negKeep.add(f);
+      
+      List<Fact> negOut = new ArrayList<>();
+      for (Fact f : negKeep)
+        negOut.add(f);
+      return negOut;
+    }
 
     /**
      * Writes vw-formatted instances to
      *    $ENTITY/infobox-binary/pos-$RELATION.vw
      *    $ENTITY/infobox-binary/neg.vw
+     *
+     * @param negsPerSentence is only applicable for train, says how many neg to sample per sentence
      */
-    public void writeBinaryFeatures(ComputeIdf df) throws IOException {
+    public void writeBinaryFeatures(ComputeIdf df, int negsPerSentence) throws IOException {
       boolean debug = false;
       File p = new File(entityDir, "infobox-binary");
       if (!p.isDirectory())
         p.mkdirs();
-      Log.info("putting instances in " + p.getPath());
+      Log.info("negsPerSentence=" + negsPerSentence + " train=" + train + " putting instances in " + p.getPath());
       Map<String, BufferedWriter> v2w = new HashMap<>();
       
+      Random rand = new Random(9001);
       TimeMarker tm = new TimeMarker();
       Counts<String> ec = new Counts<>();
       try (EffSent.DedupMaW3Iter diter = joinIter(df)) {
@@ -255,24 +275,45 @@ public class SlotsAsConcepts {
           EffSent sent = sentI.get1();
           int sentIdx = sentI.get2();
 
-          List<Fact> neg = new ArrayList<>();
-          List<Fact> pos = findFacts(sentIdx, sent, neg, debug);
-          
-          for (Fact f : pos) {
-            String yc = vwSafety(clean(f.verb));
-            ec.increment("pos");
-            ec.increment("pos/" + yc);
-            File ff = new File(p, "pos-" + yc + ".vw");
-            BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
-            List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
-            writeVw(w, "1", fx);
-          }
-          for (Fact f : neg) {
-            ec.increment("neg");
-            File ff = new File(p, "neg.vw");
-            BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
-            List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
-            writeVw(w, "0", fx);
+          if (!train) {
+            List<Fact> x = findFactTest(sentIdx, sent);
+            for (Fact f : x) {
+              ec.increment("unlab");
+              File ff = new File(p, "unlab.x");
+              BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
+              List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+              writeVw(w, "1", fx);
+              File ff2 = new File(p, "unlab.location");
+              BufferedWriter w2 = DistSupSetup.getOrOpen(ff2.getPath(), v2w, ff2);
+              w2.write(f.tsv());
+              w2.newLine();
+            }
+          } else {
+//            List<Fact> neg = new ArrayList<>();
+//            List<Fact> pos = findFacts(sentIdx, sent, neg, debug);
+            List<Fact> neg = findFactTest(sentIdx, sent);
+            List<Fact> pos = findFacts(sentIdx, sent, null, debug);
+            neg = negSample(pos, neg, negsPerSentence, rand);
+            for (Fact f : pos) {
+              String yc = vwSafety(clean(f.verb));
+              ec.increment("pos");
+              ec.increment("pos/" + yc);
+              File ff = new File(p, "pos-" + yc + ".vw");
+              BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
+              List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+              writeVw(w, "1", fx);
+              File ff2 = new File(p, "pos-" + yc + ".location");
+              BufferedWriter w2 = DistSupSetup.getOrOpen(ff2.getPath(), v2w, ff2);
+              w2.write(f.tsv());
+              w2.newLine();
+            }
+            for (Fact f : neg) {
+              ec.increment("neg");
+              File ff = new File(p, "neg.vw");
+              BufferedWriter w = DistSupSetup.getOrOpen(ff.getPath(), v2w, ff);
+              List<String> fx = featurize(sent, f.subjMention, f.objMention, df);
+              writeVw(w, "0", fx);
+            }
           }
           
           if (tm.enoughTimePassed(2))
@@ -518,7 +559,14 @@ public class SlotsAsConcepts {
       
       @Override
       public int hashCode() {
-        return Hash.mix(sentIdx, subjMention, objMention, verb.hashCode());
+        int hv = verb == null ? 9001 : verb.hashCode();
+        return Hash.mix(sentIdx, subjMention, objMention, hv);
+      }
+      
+      public static boolean safeEq(Object a, Object b) {
+        if (a == null)
+          return a == b;
+        return a.equals(b);
       }
       
       @Override
@@ -528,7 +576,7 @@ public class SlotsAsConcepts {
           return sentIdx == f.sentIdx
               && subjMention == f.subjMention
               && objMention == f.objMention
-              && verb.equals(f.verb);
+              && safeEq(verb, f.verb);
         }
         return false;
       }
@@ -1307,10 +1355,11 @@ public class SlotsAsConcepts {
       ComputeIdf df = (ComputeIdf) FileUtil.deserialize(dfF);
       
       StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, entityDir, mid, train);
-      if (config.getBoolean("binary"))
-        f.writeBinaryFeatures(df);
-      else
+      if (config.getBoolean("binary")) {
+        f.writeBinaryFeatures(df, config.getInt("negsPerSentence", 10));
+      } else {
         f.writeCsoaaLdfFeatures(df);
+      }
       break;
     case "summarize":         // makes summaries/$ENTITY/distsup-infobox/summary-100.txt
       int numWords = config.getInt("numWords");
