@@ -13,10 +13,20 @@ pos = codecs.open(in_pos, 'r', 'utf-8').readlines()
 random.shuffle(pos, r.random)
 
 sys.stderr.write("reading neg: " + in_neg + "\n")
-neg = codecs.open(in_neg, 'r', 'utf-8').readlines()
-random.shuffle(neg, r.random)
-
+#neg = codecs.open(in_neg, 'r', 'utf-8').readlines()
+#random.shuffle(neg, r.random)
+# Take a reservoir sample of the negs since they wont fit in memory
+neg = []
 neg_take = len(pos) * neg_rate
+with codecs.open(in_neg, 'r', 'utf-8') as negs:
+  for n, ex in enumerate(negs):
+    if len(neg) < neg_take:
+      neg.add(ex)
+    else:
+      i = r.randint(0, n)
+      if i < len(neg):
+        neg[i] = ex
+
 sys.stderr.write("n_pos=%d n_neg=%d neg_rate=%d total_out=%d\n" % (len(pos), len(neg), neg_rate, neg_take+len(pos)))
 if len(neg) < neg_take:
   sys.stderr.write("not enough negs\n")
