@@ -32,6 +32,13 @@ public class VwInstance {
     this.labels = new ArrayList<>();
     this.scores = new DoubleArrayList();
   }
+
+  public double maxScore() {
+    double m = scores.get(0);
+    for (int i = 1; i < scores.size(); i++)
+      m = Math.max(m, scores.get(i));
+    return m;
+  }
   
   public double minCost() {
     double m = scores.get(0);

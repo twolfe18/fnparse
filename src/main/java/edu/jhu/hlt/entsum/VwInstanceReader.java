@@ -20,7 +20,7 @@ import edu.jhu.hlt.tutils.Log;
  *
  * @author travis
  */
-public class VwReader implements AutoCloseable, Iterator<VwInstance> {
+public class VwInstanceReader implements AutoCloseable, Iterator<VwInstance> {
   
   /**
    * Reads lines of the form <hashOfLabel>:<cost> where instances are separated
@@ -105,7 +105,11 @@ public class VwReader implements AutoCloseable, Iterator<VwInstance> {
   private boolean ldf;
   private VwInstance cur;
   
-  public VwReader(File locations, File features, List<File> scores, boolean ldf) throws IOException {
+  public VwInstanceReader(File locations, File features, File scores, boolean ldf) throws IOException {
+    this(locations, features, Arrays.asList(scores), ldf);
+  }
+
+  public VwInstanceReader(File locations, File features, List<File> scores, boolean ldf) throws IOException {
     List<String> fs = new ArrayList<>();
     for (File f : scores) fs.add(f.getPath());
     Log.info("ldf=" + ldf
@@ -181,7 +185,7 @@ public class VwReader implements AutoCloseable, Iterator<VwInstance> {
     File x = new File(p, "infobox-pred.csoaa_ldf.x");
     List<File> yhat = FileUtil.find(p, "glob:**/infobox-pred.csoaa_*.yhat");
     int read = 0;
-    try (VwReader r = new VwReader(locations, x, yhat, true)) {
+    try (VwInstanceReader r = new VwInstanceReader(locations, x, yhat, true)) {
       while (r.hasNext()) {
         VwInstance inst = r.next();
         System.out.println(inst);
@@ -199,7 +203,7 @@ public class VwReader implements AutoCloseable, Iterator<VwInstance> {
     File x = new File(p, "infobox-binary/unlab.x");
     List<File> yhat = Arrays.asList(new File(p, "infobox-binary/unlab.yhat"));
     int read = 0;
-    try (VwReader r = new VwReader(locations, x, yhat, false)) {
+    try (VwInstanceReader r = new VwInstanceReader(locations, x, yhat, false)) {
       while (r.hasNext()) {
         VwInstance inst = r.next();
         System.out.println(inst);

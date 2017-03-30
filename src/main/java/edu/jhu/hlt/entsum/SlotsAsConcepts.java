@@ -857,6 +857,9 @@ public class SlotsAsConcepts {
       this.entityDir = entityDir;
     }
     
+    /**
+     * TODO Replace with {@link VwInstanceEffSentReader}
+     */
     private List<Pair<EffSent, VwInstance>> ldfJoin(MultiAlphabet a) throws IOException {
       Pair<EffSent, Integer> cur = new Pair<>(null, -1);
       File relLocsF = new File(entityDir, INFOBOX_PRED_LOC_FILENAME);       // gives sentence indices and subj/obj mentions
@@ -866,7 +869,7 @@ public class SlotsAsConcepts {
       File mentionLocsF = new File(entityDir, "mentionLocs.txt");
       List<Pair<EffSent, VwInstance>> output = new ArrayList<>();
       boolean ldf = true;
-      try (VwReader fiter = new VwReader(relLocsF, relFeatsF, relScoresF, ldf);
+      try (VwInstanceReader fiter = new VwInstanceReader(relLocsF, relFeatsF, relScoresF, ldf);
           EffSent.Iter siter = new EffSent.Iter(parsesF, mentionLocsF, a)) {
         while (fiter.hasNext()) {
           VwInstance inst = fiter.next();
