@@ -182,7 +182,7 @@ public class EffSent implements Serializable {
           mids[j] += " *head";
       }
     }
-    String prevMid = "_";
+    String prevMid = entities[0].start > 0 ? "_" : mids[0];
     System.out.printf("% 3d", 0);
     for (int i = 0; i < parse.length; i++) {
       boolean n = i > 0 && !mids[i].equals(mids[i-1]);

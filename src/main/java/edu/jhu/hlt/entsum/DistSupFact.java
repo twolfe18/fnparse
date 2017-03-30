@@ -118,11 +118,28 @@ public class DistSupFact implements Serializable {
     return "(DSFact s=" + subj + " v=" + verb + " o=" + obj + ")";
   }
   
+  public static String unk(String w, String pos, ComputeIdf df) {
+    String wn = w.replaceAll("\\d", "0");
+    boolean num = !wn.equals(w);
+    w = wn;
+    if (!num) {
+      int c = df.freq(w);
+      if (c <= 4)
+        w = pos == null ? "unk4" : "unk4-" + pos;
+      else if (c <= 8)
+        w = pos == null ? "unk8" : "unk8-" + pos;
+      else if (c < 16)
+        w = pos == null ? "unk16" : "unk16-" + pos;
+    }
+    return w;
+  }
+  
   public static List<String> extractLexicoSyntacticFeats(
       int subjHead, Span subjSpan, List<String> subjTypes,
       int objHead, Span objSpan, List<String> objTypes,
       int[] tok2ent,    // indexed by token, value of -1 means regular ^NNP* word, value >= 0 is a mention index
-      DepNode[] parse, MultiAlphabet parseAlph, ComputeIdf df) {
+      DepNode[] parse, MultiAlphabet parseAlph, ComputeIdf df,
+      List<String> meta) {    // meta are (un-namespaced/prefixed) features which aren't lexico-syntactic
     
 //    List<String> fs = new ArrayList<>();
     UniqList<String> fs = new UniqList<>();
@@ -136,7 +153,7 @@ public class DistSupFact implements Serializable {
     // Edges leaving subj
     List<DepNode.Edge> subjL = DepNode.getEdgesLeavingSpan(subjSpan, parse, parseAlph);
     for (DepNode.Edge e : subjL)
-      fs.add("S/" + e);
+      fs.add("S/" + e.mapHeadAndMod(w -> unk(w, null, df)));
     fs.add("S/n=" + Math.min(10, subjL.size()));
     for (String type : objTypes) {
       type = urlClean(type);
@@ -145,7 +162,7 @@ public class DistSupFact implements Serializable {
     }
     List<DepNode.Edge> objL = DepNode.getEdgesLeavingSpan(objSpan, parse, parseAlph);
     for (DepNode.Edge e : objL)
-      fs.add("O/" + e);
+      fs.add("O/" + e.mapHeadAndMod(w -> unk(w, null, df)));
     fs.add("O/n=" + Math.min(10, objL.size()));
     
     // Words between
@@ -168,7 +185,11 @@ public class DistSupFact implements Serializable {
       }
       String w = parseAlph.word(parse[i].word);
       w = vwFeatureClean(w);
-      w = w.replaceAll("\\d", "0");
+      String pos = parseAlph.pos(parse[i].pos);
+      pos = vwFeatureClean(pos);
+
+      w = unk(w, pos, df);
+
       if (uniq.add(w))
         fs.add("m/" + w);
     }
@@ -179,7 +200,8 @@ public class DistSupFact implements Serializable {
     // Dependency path ngrams
     ShortestPath p = new ShortestPath(subjHead, objHead, parse);
     List<DepNode.Edge> wordPath = p.buildPath(parseAlph, true, false);
-    wordPath = ShortestPath.replaceDigits(wordPath);
+//    wordPath = ShortestPath.replaceDigits(wordPath);
+    wordPath = ShortestPath.mapHeadsAndMods(wordPath, w -> unk(w, null, df));
     List<DepNode.Edge> posPath = p.buildPath(parseAlph, false, true);
     List<DepNode.Edge[]> w1grams = ShortestPath.ngrams(1, wordPath);
     List<DepNode.Edge[]> w2grams = ShortestPath.ngrams(2, wordPath);
@@ -252,9 +274,11 @@ public class DistSupFact implements Serializable {
       fs.add("a/pd=ROOT");
       fs.add("a/ps=ROOT");
     } else {
+      String sw = parseAlph.word(parse[shallow].word);
+      String sp = parseAlph.pos(parse[shallow].pos);
       fs.add("a/pd=" + depth[shallow]);
-      fs.add("a/ps=" + parseAlph.word(parse[shallow].word));
-      fs.add("a/ps=" + parseAlph.pos(parse[shallow].pos));
+      fs.add("a/ps=" + unk(sw, sp, df));
+      fs.add("a/ps=" + sp);
       
       // Children of shallowest node which aren't one the path
       int prev = -1;
@@ -263,6 +287,7 @@ public class DistSupFact implements Serializable {
         prev = c;
         if (!tokensOnPath.get(c)) {
           DepNode.Edge e = new DepNode.Edge(shallow, c, parse, parseAlph);
+          e = e.mapHeadAndMod(w -> unk(w, null, df));
           fs.add("A/sc=" + e);
           String h = parseAlph.pos(parse[shallow].pos);
           String m = parseAlph.pos(parse[c].pos);
@@ -274,6 +299,11 @@ public class DistSupFact implements Serializable {
       entsAlongPath.remove(tok2ent[subjHead]);
       entsAlongPath.remove(tok2ent[objHead]);
       fs.add("a/ne=" + Math.min(10, entsAlongPath.size()));
+    }
+    
+    if (meta != null) {
+      for (String m : meta)
+        fs.add("w/" + m);
     }
 
     return fs.getList();
