@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import sys, codecs, random
+import sys, codecs, random, time
 
 in_pos, in_neg, out, neg_rate, seed = sys.argv[1:]
 neg_rate = int(neg_rate)
@@ -10,6 +10,7 @@ r = random.Random(seed)
 
 sys.stderr.write("reading pos: " + in_pos + "\n")
 pos = codecs.open(in_pos, 'r', 'utf-8').readlines()
+sys.stderr.write("read %d pos instances\n" % (len(pos),))
 random.shuffle(pos, r.random)
 
 sys.stderr.write("reading neg: " + in_neg + "\n")
@@ -18,14 +19,22 @@ sys.stderr.write("reading neg: " + in_neg + "\n")
 # Take a reservoir sample of the negs since they wont fit in memory
 neg = []
 neg_take = len(pos) * neg_rate
+t0 = time.time()
 with codecs.open(in_neg, 'r', 'utf-8') as negs:
+  sys.stderr.write("\ttaking reservoir sample for %d instances\n" % (neg_take,))
   for n, ex in enumerate(negs):
     if len(neg) < neg_take:
-      neg.add(ex)
+      neg.append(ex)
     else:
       i = r.randint(0, n)
       if i < len(neg):
         neg[i] = ex
+    if n % 50000 == 0:
+      sys.stderr.write("\tread %dk neg in %.1f sec\n" % (n/1000, time.time()-t0))
+
+      # TODO Remove, for debugging
+      #if n > 5000000:
+      #  break
 
 sys.stderr.write("n_pos=%d n_neg=%d neg_rate=%d total_out=%d\n" % (len(pos), len(neg), neg_rate, neg_take+len(pos)))
 if len(neg) < neg_take:
