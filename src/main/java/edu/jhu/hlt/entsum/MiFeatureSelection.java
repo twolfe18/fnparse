@@ -129,17 +129,50 @@ public class MiFeatureSelection {
       this.mifs = new MiFeatureSelection();
     }
     
-    public void add(String y, File yx) throws IOException {
+    /**
+     * @param linesAsInstances if false, union all the lines and add a single instance
+     * (as in one instance per entity rather than per extraction location).
+     */
+    public void add(String y, File yx, boolean linesAsInstances) throws IOException {
       Log.info("y=" + y + " yx=" + yx.getPath());
       if (!yx.isFile()) {
         Log.info("warning: not a file");
         return;
       }
+
+      Set<String>[] ns2fs = null;
+      if (!linesAsInstances)
+        ns2fs = new Set[256];
       try (BufferedReader r = FileUtil.getReader(yx)) {
-        for (String line = r.readLine(); line != null; line = r.readLine())
-          add(y, new VwLine(line));
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          VwLine vw = new VwLine(line);
+          if (linesAsInstances) {
+            add(y, vw);
+          } else {
+            for (Namespace ns : vw.x) {
+              if (ns2fs[ns.name] == null)
+                ns2fs[ns.name] = new HashSet<>();
+              ns2fs[ns.name].addAll(ns.features);
+            }
+          }
+        }
+      }
+      if (!linesAsInstances) {
+        int yi = alphY.lookupIndex(y);
+        IntArrayList x = new IntArrayList();
+        for (int i = 0; i < ns2fs.length; i++) {
+          if (ns2fs[i] == null)
+            continue;
+          for (String xs : ns2fs[i]) {
+            int xi = alphX.lookupIndex(xs);
+            xi = xi * 256 + i;
+            x.add(xi);
+          }
+        }
+        mifs.addInstance(yi, x.toNativeArray());
       }
     }
+
     public void add(String y, VwLine yx) {
       int yi = alphY.lookupIndex(y);
       IntArrayList x = new IntArrayList();
@@ -179,12 +212,16 @@ public class MiFeatureSelection {
 //    List<File> ibs = FileUtil.find(entityDirParent, "glob:**/infobox-binary");
     List<File> ibs = FileUtil.findDirs(entityDirParent, "glob:**/infobox-binary");
     Log.info("found " + ibs.size() + " entity directories");
+    
+    boolean extractionsAsInstances = config.getBoolean("extractionsAsInstances", false);
+    Log.info("extractionsAsInstances=" + extractionsAsInstances);
+
     Adapater a = new Adapater();
     int n = 0;
     for (File ib : ibs) {
-      a.add("neg", new File(ib, "neg.vw"));
+      a.add("neg", new File(ib, "neg.vw"), extractionsAsInstances);
       for (File f : ib.listFiles(f -> f.getName().matches("pos-\\S+.vw")))
-        a.add(f.getName(), f);
+        a.add(f.getName(), f, extractionsAsInstances);
       
       System.out.println("after " + (++n) + " entities:");
       Map<String, List<Feat>> pmi = a.argTopPmiAllLabels(10);
