@@ -36,26 +36,31 @@ public class MiFeatureSelection {
   private IntObjectHashMap<IntArrayList> label2instance;      // values are sorted, uniq, ascending lists/sets
   private IntObjectHashMap<IntArrayList> feature2instance;    // values are sorted, uniq, ascending lists/sets
   private int numInstances;
+  private long nnz;
   
   public MiFeatureSelection() {
     label2instance = new IntObjectHashMap<>();
     feature2instance = new IntObjectHashMap<>();
     numInstances = 0;
+    nnz = 0;
   }
   
   public void addInstance(int y, int... x) {
     int instance = numInstances++;
     getOrNew(y, label2instance).add(instance);
     Set<Integer> seen = new HashSet<>();
-    for (int i = 0; i < x.length; i++)
-      if (seen.add(x[i]))
+    for (int i = 0; i < x.length; i++) {
+      if (seen.add(x[i])) {
         getOrNew(x[i], feature2instance).add(instance);
+        nnz++;
+      }
+    }
   }
   
   private static IntArrayList getOrNew(int key, IntObjectHashMap<IntArrayList> map) {
     IntArrayList val = map.get(key);
     if (val == null) {
-      val = new IntArrayList();
+      val = new IntArrayList(2);
       map.put(key, val);
     }
     return val;
@@ -340,11 +345,9 @@ public class MiFeatureSelection {
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     File entityDirParent = config.getExistingDir("entityDirParent");
-//    List<File> ibs = FileUtil.find(entityDirParent, "glob:**/infobox-binary");
     List<File> ibs = FileUtil.findDirs(entityDirParent, "glob:**/infobox-binary");
     Log.info("found " + ibs.size() + " entity directories");
     
-//    File output = config.getOrMakeDir("output");
     File output = config.getFile("output");
     Log.info("writing output to " + output.getPath());
     
@@ -361,7 +364,9 @@ public class MiFeatureSelection {
     
     Set<String> skipRels = new HashSet<>();
     skipRels.add("neg");
-    int topFeats = 20;
+
+    int topFeats = config.getInt("topFeats", 30);
+    Log.info("topFeats=" + topFeats);
 
     int n = 0;
     int ncur = 0;
@@ -377,8 +382,12 @@ public class MiFeatureSelection {
       if (ncur == thresh) {
         thresh *= 1.6;
         System.out.println("n=" + n + " N=" + ibs.size() + " nextThresh=" + thresh + "\t" + Describe.memoryUsage());
-//        System.out.println("alphY.size=" + a.alphY.size() + " alphX.size=" + a.alphX.size());
-        System.out.println("alphY.size=" + a.alphY.size() + " good=" + a.goodFeats.size() + " inverse=" + a.inverseFeatHashForGoodFeats.numEntries());
+        System.out.println("alphY.size=" + a.alphY.size()
+            + " good=" + a.goodFeats.size()
+            + " inverse=" + a.inverseFeatHashForGoodFeats.numEntries()
+            + " nYX=" + a.mifs.nnz
+            + " nY=" + a.mifs.label2instance.size()
+            + " nX=" + a.mifs.feature2instance.size());
         System.out.println("TIMER: " + a.t);
         ncur = 0;
         Map<String, List<LabeledPmi<String, String>>> m = a.argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount, true);
@@ -397,7 +406,6 @@ public class MiFeatureSelection {
               w.write('\t');
               w.write("" + n);
               w.newLine();
-//              w.write(rel + "\t" + feat.getName() + "\t" + feat.getWeight());
             }
           }
         }
