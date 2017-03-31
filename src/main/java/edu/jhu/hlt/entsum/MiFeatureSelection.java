@@ -24,6 +24,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.map.IntObjectHashMap;
@@ -147,8 +148,8 @@ public class MiFeatureSelection {
    * @param pmiFreqDiscount the higher this number is the more rare features are penalized. 0 means no penalty.
    */
   public List<Pmi> argTopByPmi(int label, int k, double pmiFreqDiscount) {
-    int approxY = 10;
-    int approxX = 4;
+    int approxY = 5;
+    int approxX = 3;
     List<Pmi> p = new ArrayList<>();
     double logN = Math.log(numInstances);
     IntArrayList instancesWithLabel = label2instance.get(label);
@@ -205,7 +206,10 @@ public class MiFeatureSelection {
     private MultiMap<Integer, String> inverseFeatHashForGoodFeats;
     private boolean inverseHashingVerbose = false;
     
-    public Adapater() {
+    private Shard shard;
+    
+    public Adapater(Shard shard) {
+      this.shard = shard;
       this.alphY = new Alphabet<>();
 //      this.alphX = new Alphabet<>();
       this.mifs = new MiFeatureSelection();
@@ -241,7 +245,11 @@ public class MiFeatureSelection {
             for (Namespace ns : vw.x) {
               if (ns2fs[ns.name] == null)
                 ns2fs[ns.name] = new HashSet<>();
-              ns2fs[ns.name].addAll(ns.features);
+              for (String f : ns.features) {
+                int h = f.hashCode();
+                if (shard.matches(h))
+                  ns2fs[ns.name].addAll(ns.features);
+              }
             }
           }
         }
@@ -281,6 +289,9 @@ public class MiFeatureSelection {
       IntArrayList x = new IntArrayList();
       for (Namespace ns : yx.x) {
         for (String xs : ns.features) {
+          int h = xs.hashCode();
+          if (!shard.matches(h))
+            continue;
           int xi = lookupFeatIndex(ns.name, xs);
 //          int xi = alphX.lookupIndex(xs);
 //          xi = xi * 256 + ns.name;
@@ -312,7 +323,7 @@ public class MiFeatureSelection {
         if (fns.isEmpty()) {
           feature = "?" + p.feature;
         } else {
-          feature = StringUtils.join("-OR-", fns);
+          feature = StringUtils.join("~OR~", fns);
         }
 
         out.add(new LabeledPmi<>(label, y, feature, p.feature, p.pmi, p.nCooc));
@@ -340,8 +351,32 @@ public class MiFeatureSelection {
       }
       return out;
     }
+    
+    public void writeout(File output, Set<String> skipRels, int topFeats, double pmiFreqDiscount, int n) {
+      Map<String, List<LabeledPmi<String, String>>> m = argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount, true);
+      try (BufferedWriter w = FileUtil.getWriter(output)) {
+        for (String rel : m.keySet()) {
+          for (LabeledPmi<String, String> feat : m.get(rel)) {
+            w.write(feat.label);
+            w.write('\t');
+            w.write(feat.feature);
+            w.write('\t');
+            w.write("" + feat.pmi);
+            w.write('\t');
+            w.write("" + feat.getFrequencyDiscountedPmi(pmiFreqDiscount));
+            w.write('\t');
+            w.write("" + feat.nCooc);
+            w.write('\t');
+            w.write("" + n);
+            w.newLine();
+          }
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
   }
-  
+
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     File entityDirParent = config.getExistingDir("entityDirParent");
@@ -354,8 +389,6 @@ public class MiFeatureSelection {
     boolean extractionsAsInstances = config.getBoolean("extractionsAsInstances", false);
     Log.info("extractionsAsInstances=" + extractionsAsInstances);
 
-    Adapater a = new Adapater();
-
     boolean addNeg = config.getBoolean("addNeg", false);
     Log.info("addNeg=" + addNeg);
     
@@ -367,6 +400,11 @@ public class MiFeatureSelection {
 
     int topFeats = config.getInt("topFeats", 30);
     Log.info("topFeats=" + topFeats);
+    
+    Shard shard = config.getShard();
+    Log.info("feature shard=" + shard);
+
+    Adapater a = new Adapater(shard);
 
     int n = 0;
     int ncur = 0;
@@ -380,7 +418,7 @@ public class MiFeatureSelection {
       n++;
       ncur++;
       if (ncur == thresh) {
-        thresh *= 1.6;
+        thresh = (int) (1.4 * thresh + 1);
         System.out.println("n=" + n + " N=" + ibs.size() + " nextThresh=" + thresh + "\t" + Describe.memoryUsage());
         System.out.println("alphY.size=" + a.alphY.size()
             + " good=" + a.goodFeats.size()
@@ -390,27 +428,12 @@ public class MiFeatureSelection {
             + " nX=" + a.mifs.feature2instance.size());
         System.out.println("TIMER: " + a.t);
         ncur = 0;
-        Map<String, List<LabeledPmi<String, String>>> m = a.argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount, true);
-        try (BufferedWriter w = FileUtil.getWriter(output)) {
-          for (String rel : m.keySet()) {
-            for (LabeledPmi<String, String> feat : m.get(rel)) {
-              w.write(feat.label);
-              w.write('\t');
-              w.write(feat.feature);
-              w.write('\t');
-              w.write("" + feat.pmi);
-              w.write('\t');
-              w.write("" + feat.getFrequencyDiscountedPmi(pmiFreqDiscount));
-              w.write('\t');
-              w.write("" + feat.nCooc);
-              w.write('\t');
-              w.write("" + n);
-              w.newLine();
-            }
-          }
-        }
+        a.writeout(output, skipRels, topFeats, pmiFreqDiscount, ncur);
         System.out.println();
       }
     }
+    Log.info("last time writing out");
+    a.writeout(output, skipRels, topFeats, pmiFreqDiscount, ncur);
+    Log.info("done");
   }
 }
