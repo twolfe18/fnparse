@@ -134,15 +134,45 @@ public class DistSupFact implements Serializable {
     return w;
   }
   
+  public static String relCleanup(String id) {
+    id = id.replace("http://dbpedia.org/property/", "dbp/");
+    return id;
+  }
+  public static List<String> relCleanup(List<String> id) {
+    List<String> out = new ArrayList<>();
+    for (String s : id)
+      out.add(relCleanup(s));
+    return out;
+  }
+  public static String idCleanup(String id) {
+    id = id.replace("http://dbpedia.org/resource/", "dbp/");
+    return id;
+  }
+  public static List<String> idCleanup(List<String> id) {
+    List<String> out = new ArrayList<>();
+    for (String s : id)
+      out.add(idCleanup(s));
+    return out;
+  }
+  
   public static List<String> extractLexicoSyntacticFeats(
-      int subjHead, Span subjSpan, List<String> subjTypes,
-      int objHead, Span objSpan, List<String> objTypes,
+      int subjHead, Span subjSpan, List<String> subjTypes, List<String> subjIds,
+      int objHead, Span objSpan, List<String> objTypes, List<String> objIds,
       int[] tok2ent,    // indexed by token, value of -1 means regular ^NNP* word, value >= 0 is a mention index
       DepNode[] parse, MultiAlphabet parseAlph, ComputeIdf df,
       List<String> meta) {    // meta are (un-namespaced/prefixed) features which aren't lexico-syntactic
     
 //    List<String> fs = new ArrayList<>();
     UniqList<String> fs = new UniqList<>();
+    
+    // IDs are either mids or dbpedia ids.
+    // For some relations this will be terrible (e.g. where arg2 is another named entity from an unbounded class),
+    // but for some relations this will help. E.g. religion(person,r) will have a small set that r is drawn from,
+    // and in a lot of cases that is the only way that you can get an instance like this right.
+    for (String i : subjIds)
+      fs.add("i/s=" + idCleanup(i));
+    for (String i : objIds)
+      fs.add("i/o=" + idCleanup(i));
 
     // (all) dbpedia entity types for subj/obj
     for (String type : subjTypes) {

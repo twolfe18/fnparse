@@ -529,7 +529,7 @@ public class TopDownClustering {
     }
   }
 
-  private static void intersectSortedLists(IntArrayList sourceA, IntArrayList sourceB, IntArrayList dest) {
+  public static void intersectSortedLists(IntArrayList sourceA, IntArrayList sourceB, IntArrayList dest) {
     int aptr = 0;
     int bptr = 0;
     int na = sourceA.size();
