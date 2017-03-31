@@ -1,6 +1,8 @@
 package edu.jhu.hlt.entsum;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -10,8 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import edu.jhu.hlt.ikbp.tac.TopDownClustering;
+import edu.jhu.hlt.entsum.VwLine.Namespace;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.ikbp.tac.TopDownClustering;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -126,13 +129,30 @@ public class MiFeatureSelection {
       this.mifs = new MiFeatureSelection();
     }
     
-    public void add(String y, File yx) {
-      throw new RuntimeException("implement me");
+    public void add(String y, File yx) throws IOException {
+      Log.info("y=" + y + " yx=" + yx.getPath());
+      if (!yx.isFile()) {
+        Log.info("warning: not a file");
+        return;
+      }
+      try (BufferedReader r = FileUtil.getReader(yx)) {
+        for (String line = r.readLine(); line != null; line = r.readLine())
+          add(y, new VwLine(line));
+      }
     }
     public void add(String y, VwLine yx) {
-      throw new RuntimeException("implement me");
+      int yi = alphY.lookupIndex(y);
+      IntArrayList x = new IntArrayList();
+      for (Namespace ns : yx.x) {
+        for (String xs : ns.features) {
+          int xi = alphX.lookupIndex(xs);
+          xi = xi * 256 + ns.name;
+          x.add(xi);
+        }
+      }
+      mifs.addInstance(yi, x.toNativeArray());
     }
-    
+
     public List<Feat> argTopPmi(String label, int k) {
       int y = alphY.lookupIndex(label, false);
       List<Pmi> pmi = mifs.argTopByPmi(y, k);
@@ -156,7 +176,8 @@ public class MiFeatureSelection {
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     File entityDirParent = config.getExistingDir("entityDirParent");
-    List<File> ibs = FileUtil.find(entityDirParent, "glob:**/infobox-binary");
+//    List<File> ibs = FileUtil.find(entityDirParent, "glob:**/infobox-binary");
+    List<File> ibs = FileUtil.findDirs(entityDirParent, "glob:**/infobox-binary");
     Log.info("found " + ibs.size() + " entity directories");
     Adapater a = new Adapater();
     int n = 0;
