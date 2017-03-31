@@ -180,15 +180,26 @@ public class SlotsAsConcepts {
       return at;
     }
     
+    List<String> entityIds(EffSent sent, int mention) {
+      List<String> a = new ArrayList<>();
+      Mention m = sent.mention(mention);
+      a.add(m.getAbbrMid());
+      for (String dbp : mid2dbp.get(m.getFullMid()))
+        a.add(dbp);
+      return a;
+    }
+    
     List<String> featurize(EffSent sent, int subjMention, int objMention, ComputeIdf df, List<String> nonLexSyn) {
       Mention subj = sent.mention(subjMention);
       Mention obj = sent.mention(objMention);
       List<String> subjTypes = entityTypesForMid(subj.getFullMid());
       List<String> objTypes = entityTypesForMid(obj.getFullMid());
+      List<String> subjIds = entityIds(sent, subjMention);
+      List<String> objIds = entityIds(sent, objMention);
       int[] t2e = sent.buildToken2EntityMap();
       return DistSupFact.extractLexicoSyntacticFeats(
-          subj.head, subj.span(), subjTypes,
-          obj.head, obj.span(), objTypes,
+          subj.head, subj.span(), subjTypes, subjIds,
+          obj.head, obj.span(), objTypes, objIds,
           t2e,
           sent.parse(), parseAlph, df,
           nonLexSyn);
@@ -341,6 +352,7 @@ public class SlotsAsConcepts {
       w.write(label);
       for (String ns : fxg.keySet()) {
         assert !"y".equalsIgnoreCase(ns);
+        assert ns.equals(vwSafety(ns));
         w.write(" |" + ns);
         for (Feat fi : fxg.get(ns))
           w.write(" " + vwSafety(fi.getName()));
