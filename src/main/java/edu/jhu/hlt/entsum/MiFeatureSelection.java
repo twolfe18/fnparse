@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.entsum.VwLine.Namespace;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.TopDownClustering;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -190,17 +191,28 @@ public class MiFeatureSelection {
       int y = alphY.lookupIndex(label, false);
       List<Pmi> pmi = mifs.argTopByPmi(y, k);
       List<Feat> out = new ArrayList<>();
-      for (Pmi p : pmi)
-        out.add(new Feat(alphX.lookupObject(p.feature), p.pmi));
+      for (Pmi p : pmi) {
+        char ns = (char) (p.feature % 256);
+        int x = p.feature / 256;
+        out.add(new Feat(ns + "/" + alphX.lookupObject(x), p.pmi));
+      }
       return out;
     }
     
     public Map<String, List<Feat>> argTopPmiAllLabels(int k) {
+      return argTopPmiAllLabels(k, false);
+    }
+    public Map<String, List<Feat>> argTopPmiAllLabels(int k, boolean show) {
       Map<String, List<Feat>> out = new HashMap<>();
       for (int i = 0; i < alphY.size(); i++) {
         String label = alphY.lookupObject(i);
-        Object old = out.put(label, argTopPmi(label, k));
+        List<Feat> at = argTopPmi(label, k);
+        Object old = out.put(label, at);
         assert old == null;
+        if (show) {
+          for (Feat f : at)
+            System.out.printf("%-24s %-24s %.3f\n", label, f.getName(), f.getWeight());
+        }
       }
       return out;
     }
@@ -217,17 +229,29 @@ public class MiFeatureSelection {
     Log.info("extractionsAsInstances=" + extractionsAsInstances);
 
     Adapater a = new Adapater();
+
+    boolean addNeg = config.getBoolean("addNeg", false);
+    Log.info("addNeg=" + addNeg);
+
+    int interval = config.getInt("interval", 10);
+    Log.info("interval=" + interval);
+
     int n = 0;
     for (File ib : ibs) {
-      a.add("neg", new File(ib, "neg.vw"), extractionsAsInstances);
+      if (addNeg)
+        a.add("neg", new File(ib, "neg.vw"), extractionsAsInstances);
       for (File f : ib.listFiles(f -> f.getName().matches("pos-\\S+.vw")))
         a.add(f.getName(), f, extractionsAsInstances);
       
-      System.out.println("after " + (++n) + " entities:");
-      Map<String, List<Feat>> pmi = a.argTopPmiAllLabels(10);
-      for (String label : pmi.keySet())
-        System.out.printf("%-30s %s\n", label, pmi.get(label));
-      System.out.println();
+      n++;
+      if (n % interval == 0) {
+        System.out.println("after " + n + " entities: " + Describe.memoryUsage());
+        a.argTopPmiAllLabels(20, true);
+        //Map<String, List<Feat>> pmi = a.argTopPmiAllLabels(10);
+        //for (String label : pmi.keySet())
+        //  System.out.printf("%-30s %s\n", label, pmi.get(label));
+        System.out.println();
+      }
     }
   }
 }
