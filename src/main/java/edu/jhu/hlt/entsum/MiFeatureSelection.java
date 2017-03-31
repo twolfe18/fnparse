@@ -1,8 +1,10 @@
 package edu.jhu.hlt.entsum;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -12,16 +14,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.google.common.hash.HashFunction;
+import com.google.common.hash.Hashing;
+
 import edu.jhu.hlt.entsum.VwLine.Namespace;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.ikbp.tac.TopDownClustering;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.map.IntObjectHashMap;
+import edu.jhu.prim.set.IntHashSet;
 import edu.jhu.util.Alphabet;
+import edu.jhu.util.MultiMap;
 
 public class MiFeatureSelection {
   
@@ -59,30 +67,39 @@ public class MiFeatureSelection {
     return dest;
   }
 
-  public double pmi(int label, int feature) {
+//  public double pmi(int label, int feature) {
+  public Pmi pmi(int label, int feature) {
     IntArrayList instancesWithLabel = label2instance.get(label);
     IntArrayList instancesWithFeature = feature2instance.get(feature);
     double logN = Math.log(numInstances);
-    return pmi(instancesWithLabel, instancesWithFeature, logN);
+    Pmi p = pmi(instancesWithLabel, instancesWithFeature, logN);
+    return new Pmi(label, feature, p.pmi, p.nCooc);
   }
   
-  private double pmi(IntArrayList instancesWithLabel, IntArrayList instancesWithFeature, double logN) {
+//  private double pmi(IntArrayList instancesWithLabel, IntArrayList instancesWithFeature, double logN) {
+  private Pmi pmi(IntArrayList instancesWithLabel, IntArrayList instancesWithFeature, double logN) {
     IntArrayList instancesWithBoth = intersectSortedLists(instancesWithLabel, instancesWithFeature);
     double logPxy = Math.log(instancesWithBoth.size()) - logN;
     double logPy = Math.log(instancesWithLabel.size()) - logN;
     double logPx = Math.log(instancesWithFeature.size()) - logN;
-    return logPxy - (logPy + logPx);
+    return new Pmi(-1, -1, logPxy - (logPy + logPx), instancesWithBoth.size());
   }
   
   public static class Pmi {
     public final int label;
     public final int feature;
     public final double pmi;
+    public final int nCooc;
     
-    public Pmi(int label, int feature, double pmi) {
+    public Pmi(int label, int feature, double pmi, int nCooc) {
+      if (Double.isNaN(pmi))
+        throw new IllegalArgumentException("pmi=nan");
+//      if (Double.isInfinite(pmi))
+//        throw new IllegalArgumentException("pmi=" + pmi);
       this.label = label;
       this.feature = feature;
       this.pmi = pmi;
+      this.nCooc = nCooc;
     }
     
     public static final Comparator<Pmi> BY_PMI_DESC = new Comparator<Pmi>() {
@@ -95,21 +112,58 @@ public class MiFeatureSelection {
         return 0;
       }
     };
+    
+    public double getFrequencyDiscountedPmi(double lambda) {
+      double r = pmi * (nCooc / (nCooc + lambda));
+      assert !Double.isNaN(r);
+      return r;
+    }
+    public static Comparator<Pmi> byFrequencyDiscountedPmi(double lambda) {
+      return new Comparator<Pmi>() {
+        @Override
+        public int compare(Pmi o1, Pmi o2) {
+          double s1 = o1.getFrequencyDiscountedPmi(lambda);
+          double s2 = o2.getFrequencyDiscountedPmi(lambda);
+          assert !Double.isNaN(s1);
+          assert !Double.isNaN(s2);
+          assert Double.isFinite(s1);
+          assert Double.isFinite(s2);
+          if (s1 > s2)
+            return -1;
+          if (s2 > s1)
+            return +1;
+          return 0;
+        }
+      };
+    }
   }
   
-  public List<Pmi> argTopByPmi(int label, int k) {
+  /**
+   * @param pmiFreqDiscount the higher this number is the more rare features are penalized. 0 means no penalty.
+   */
+  public List<Pmi> argTopByPmi(int label, int k, double pmiFreqDiscount) {
+    int approxY = 10;
+    int approxX = 4;
     List<Pmi> p = new ArrayList<>();
     double logN = Math.log(numInstances);
     IntArrayList instancesWithLabel = label2instance.get(label);
+    if (instancesWithLabel.size() < approxY)
+      return Collections.emptyList();
     IntObjectHashMap<IntArrayList>.Iterator iter = feature2instance.iterator();
     while (iter.hasNext()) {
       iter.advance();
       int feature = iter.key();
       IntArrayList instancesWithFeature = iter.value();
-      double pmi = pmi(instancesWithLabel, instancesWithFeature, logN);
-      p.add(new Pmi(label, feature, pmi));
+      if (instancesWithFeature.size() < approxX)
+        continue;
+      Pmi pmi = pmi(instancesWithLabel, instancesWithFeature, logN);
+      if (pmi.nCooc > 0)
+        p.add(new Pmi(label, feature, pmi.pmi, pmi.nCooc));
     }
-    Collections.sort(p, Pmi.BY_PMI_DESC);
+    if (pmiFreqDiscount <= 0)
+      Collections.sort(p, Pmi.BY_PMI_DESC);
+    else
+      Collections.sort(p, Pmi.byFrequencyDiscountedPmi(pmiFreqDiscount));
     if (k > 0 && p.size() > k) {
       List<Pmi> p2 = new ArrayList<>();
       for (int i = 0; i < k; i++)
@@ -119,21 +173,49 @@ public class MiFeatureSelection {
     return p;
   }
   
+  public static class LabeledPmi<Y, X> extends Pmi {
+    public final Y label;
+    public final X feature;
+    public LabeledPmi(Y label, int labelIdx, X feature, int featureIdx, double pmi, int nCooc) {
+      super(labelIdx, featureIdx, pmi, nCooc);
+      this.label = label;
+      this.feature = feature;
+    }
+    
+    public String toString() {
+      return String.format("(PMI y=%s x=%s pmi=%.3f cooc=%d)", label, feature, pmi, nCooc);
+    }
+  }
+  
   static class Adapater {
+    public static final Charset UTF8 = Charset.forName("UTF8");
+
     private Alphabet<String> alphY;
-    private Alphabet<String> alphX;
+//    private Alphabet<String> alphX;
     private MiFeatureSelection mifs;
+    private MultiTimer t;
+    
+    private HashFunction hash;
+    private IntHashSet goodFeats;
+    private MultiMap<Integer, String> inverseFeatHashForGoodFeats;
+    private boolean inverseHashingVerbose = false;
     
     public Adapater() {
       this.alphY = new Alphabet<>();
-      this.alphX = new Alphabet<>();
+//      this.alphX = new Alphabet<>();
       this.mifs = new MiFeatureSelection();
+      this.t = new MultiTimer();
+      
+      this.hash = Hashing.murmur3_32(42);
+      this.goodFeats = new IntHashSet();
+      this.inverseFeatHashForGoodFeats = new MultiMap<>();
     }
     
     /**
      * @param linesAsInstances if false, union all the lines and add a single instance
      * (as in one instance per entity rather than per extraction location).
      */
+    @SuppressWarnings("unchecked")
     public void add(String y, File yx, boolean linesAsInstances) throws IOException {
       Log.info("y=" + y + " yx=" + yx.getPath());
       if (!yx.isFile()) {
@@ -141,6 +223,7 @@ public class MiFeatureSelection {
         return;
       }
 
+      t.start("addFile/" + y);
       Set<String>[] ns2fs = null;
       if (!linesAsInstances)
         ns2fs = new Set[256];
@@ -165,13 +248,27 @@ public class MiFeatureSelection {
           if (ns2fs[i] == null)
             continue;
           for (String xs : ns2fs[i]) {
-            int xi = alphX.lookupIndex(xs);
-            xi = xi * 256 + i;
+            int xi = lookupFeatIndex((char) i, xs);
+//            int xi = alphX.lookupIndex(xs);
+//            xi = xi * 256 + i;
             x.add(xi);
           }
         }
         mifs.addInstance(yi, x.toNativeArray());
       }
+      t.stop("addFile/" + y);
+    }
+    
+    private int lookupFeatIndex(char ns, String feat) {
+      String xs = ns + "/" + feat;
+      int xi = hash.hashString(xs, UTF8).asInt();
+      if (goodFeats.contains(xi)) {
+        // Store the int<->string mapping for later
+        if (inverseHashingVerbose)
+          Log.info("storing good feat inverse mapping " + xs + ":" + xi);
+        inverseFeatHashForGoodFeats.addIfNotPresent(xi, xs);
+      }
+      return xi;
     }
 
     public void add(String y, VwLine yx) {
@@ -179,39 +276,61 @@ public class MiFeatureSelection {
       IntArrayList x = new IntArrayList();
       for (Namespace ns : yx.x) {
         for (String xs : ns.features) {
-          int xi = alphX.lookupIndex(xs);
-          xi = xi * 256 + ns.name;
+          int xi = lookupFeatIndex(ns.name, xs);
+//          int xi = alphX.lookupIndex(xs);
+//          xi = xi * 256 + ns.name;
           x.add(xi);
         }
       }
       mifs.addInstance(yi, x.toNativeArray());
     }
 
-    public List<Feat> argTopPmi(String label, int k) {
+    public List<LabeledPmi<String, String>> argTopPmi(String label, int k, double pmiFreqDiscount) {
+      t.start("argTopPmi/" + label);
       int y = alphY.lookupIndex(label, false);
-      List<Pmi> pmi = mifs.argTopByPmi(y, k);
-      List<Feat> out = new ArrayList<>();
+      List<Pmi> pmi = mifs.argTopByPmi(y, k, pmiFreqDiscount);
+      List<LabeledPmi<String, String>> out = new ArrayList<>();
       for (Pmi p : pmi) {
-        char ns = (char) (p.feature % 256);
-        int x = p.feature / 256;
-        out.add(new Feat(ns + "/" + alphX.lookupObject(x), p.pmi));
+        
+        // Maybe add to good features
+        if (p.getFrequencyDiscountedPmi(pmiFreqDiscount) > 1d) {
+          if (inverseHashingVerbose)
+            Log.info("adding good feat: " + p.feature);
+          goodFeats.add(p.feature);
+        }
+
+//        char ns = (char) (p.feature % 256);
+//        int x = p.feature / 256;
+//        String feature = ns + "/" + alphX.lookupObject(x);
+        List<String> fns = inverseFeatHashForGoodFeats.get(p.feature);
+        String feature;
+        if (fns.isEmpty()) {
+          feature = "?" + p.feature;
+        } else {
+          feature = StringUtils.join("-OR-", fns);
+        }
+
+        out.add(new LabeledPmi<>(label, y, feature, p.feature, p.pmi, p.nCooc));
       }
+      t.stop("argTopPmi/" + label);
       return out;
     }
     
-    public Map<String, List<Feat>> argTopPmiAllLabels(int k) {
-      return argTopPmiAllLabels(k, false);
+    public Map<String, List<LabeledPmi<String, String>>> argTopPmiAllLabels(Set<String> skip, int k, double pmiFreqDiscount) {
+      return argTopPmiAllLabels(skip, k, pmiFreqDiscount, false);
     }
-    public Map<String, List<Feat>> argTopPmiAllLabels(int k, boolean show) {
-      Map<String, List<Feat>> out = new HashMap<>();
+    public Map<String, List<LabeledPmi<String, String>>> argTopPmiAllLabels(Set<String> skip, int k, double pmiFreqDiscount, boolean show) {
+      Map<String, List<LabeledPmi<String, String>>> out = new HashMap<>();
       for (int i = 0; i < alphY.size(); i++) {
         String label = alphY.lookupObject(i);
-        List<Feat> at = argTopPmi(label, k);
+        if (skip.contains(label))
+          continue;
+        List<LabeledPmi<String, String>> at = argTopPmi(label, k, pmiFreqDiscount);
         Object old = out.put(label, at);
         assert old == null;
         if (show) {
-          for (Feat f : at)
-            System.out.printf("%-24s %-24s %.3f\n", label, f.getName(), f.getWeight());
+          for (LabeledPmi<String, String> pmi : at)
+            System.out.println(pmi);
         }
       }
       return out;
@@ -225,6 +344,10 @@ public class MiFeatureSelection {
     List<File> ibs = FileUtil.findDirs(entityDirParent, "glob:**/infobox-binary");
     Log.info("found " + ibs.size() + " entity directories");
     
+//    File output = config.getOrMakeDir("output");
+    File output = config.getFile("output");
+    Log.info("writing output to " + output.getPath());
+    
     boolean extractionsAsInstances = config.getBoolean("extractionsAsInstances", false);
     Log.info("extractionsAsInstances=" + extractionsAsInstances);
 
@@ -232,11 +355,17 @@ public class MiFeatureSelection {
 
     boolean addNeg = config.getBoolean("addNeg", false);
     Log.info("addNeg=" + addNeg);
-
-    int interval = config.getInt("interval", 10);
-    Log.info("interval=" + interval);
+    
+    double pmiFreqDiscount = config.getDouble("pmiFreqDiscount", 2d);
+    Log.info("pmiFreqDiscount=" + pmiFreqDiscount);
+    
+    Set<String> skipRels = new HashSet<>();
+    skipRels.add("neg");
+    int topFeats = 20;
 
     int n = 0;
+    int ncur = 0;
+    int thresh = 1;
     for (File ib : ibs) {
       if (addNeg)
         a.add("neg", new File(ib, "neg.vw"), extractionsAsInstances);
@@ -244,12 +373,34 @@ public class MiFeatureSelection {
         a.add(f.getName(), f, extractionsAsInstances);
       
       n++;
-      if (n % interval == 0) {
-        System.out.println("after " + n + " entities: " + Describe.memoryUsage());
-        a.argTopPmiAllLabels(20, true);
-        //Map<String, List<Feat>> pmi = a.argTopPmiAllLabels(10);
-        //for (String label : pmi.keySet())
-        //  System.out.printf("%-30s %s\n", label, pmi.get(label));
+      ncur++;
+      if (ncur == thresh) {
+        thresh *= 1.6;
+        System.out.println("n=" + n + " N=" + ibs.size() + " nextThresh=" + thresh + "\t" + Describe.memoryUsage());
+//        System.out.println("alphY.size=" + a.alphY.size() + " alphX.size=" + a.alphX.size());
+        System.out.println("alphY.size=" + a.alphY.size() + " good=" + a.goodFeats.size() + " inverse=" + a.inverseFeatHashForGoodFeats.numEntries());
+        System.out.println("TIMER: " + a.t);
+        ncur = 0;
+        Map<String, List<LabeledPmi<String, String>>> m = a.argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount, true);
+        try (BufferedWriter w = FileUtil.getWriter(output)) {
+          for (String rel : m.keySet()) {
+            for (LabeledPmi<String, String> feat : m.get(rel)) {
+              w.write(feat.label);
+              w.write('\t');
+              w.write(feat.feature);
+              w.write('\t');
+              w.write("" + feat.pmi);
+              w.write('\t');
+              w.write("" + feat.getFrequencyDiscountedPmi(pmiFreqDiscount));
+              w.write('\t');
+              w.write("" + feat.nCooc);
+              w.write('\t');
+              w.write("" + n);
+              w.newLine();
+//              w.write(rel + "\t" + feat.getName() + "\t" + feat.getWeight());
+            }
+          }
+        }
         System.out.println();
       }
     }
