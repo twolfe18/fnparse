@@ -6,7 +6,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -299,7 +298,7 @@ public class MiFeatureSelection {
               for (String f : ns.features) {
                 int h = f.hashCode();
                 if (shard.matches(h))
-                  ns2fs[ns.name].addAll(ns.features);
+                  ns2fs[ns.name].add(f);
               }
             }
           }
@@ -313,8 +312,6 @@ public class MiFeatureSelection {
             continue;
           for (String xs : ns2fs[i]) {
             int xi = lookupFeatIndex((char) i, xs);
-//            int xi = alphX.lookupIndex(xs);
-//            xi = xi * 256 + i;
             x.add(xi);
           }
         }
@@ -344,8 +341,6 @@ public class MiFeatureSelection {
           if (!shard.matches(h))
             continue;
           int xi = lookupFeatIndex(ns.name, xs);
-//          int xi = alphX.lookupIndex(xs);
-//          xi = xi * 256 + ns.name;
           x.add(xi);
         }
       }
