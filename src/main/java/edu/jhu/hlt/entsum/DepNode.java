@@ -192,15 +192,19 @@ public class DepNode implements Serializable {
      * if you base it on counting.
      */
     public static List<Edge[]> ngrams(int n, List<Edge> path) {
+//      return ngrams(n, path, true);
+      return ngrams(n, path, false);
+    }
+    public static List<Edge[]> ngrams(int n, List<Edge> path, boolean includePadding) {
       int x = path.size();
-      int pad = n-1;
+      int pad = includePadding ? n-1 : 0;
       Edge[] all = new Edge[x + 2*pad];
       for (int i = 0; i < pad; i++) {
         all[i] = Edge.BEFORE;
         all[all.length-(i+1)] = Edge.AFTER;
       }
       for (int i = 0; i < x; i++)
-        all[i+(n-1)] = path.get(i);
+        all[i+pad] = path.get(i);
       List<Edge[]> ng = new ArrayList<>();
       for (int i = 0; i < all.length-(n-1); i++) {
         Edge[] nn = Arrays.copyOfRange(all, i, i+n);
@@ -512,7 +516,14 @@ public class DepNode implements Serializable {
     System.out.println("path: " + p);
 
     for (int n = 1; n <= 3; n++) {
-      for (Edge[] ng : ShortestPath.ngrams(n, p))
+      
+//      List<Edge[]> ngOld = ShortestPath.ngrams(n, p);
+//      List<Edge[]> ngNew = ShortestPath.ngrams(n, p, true);
+//      assert ngOld.size() == ngNew.size();
+//      for (int i = 0; i < ngOld.size(); i++)
+//        assert Arrays.equals(ngOld.get(i), ngNew.get(i));
+      
+      for (Edge[] ng : ShortestPath.ngrams(n, p, false))
         System.out.println(n + "g: " + Edge.ngramStr(ng));
       System.out.println();
     }
