@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -92,8 +93,8 @@ public class MiFeatureSelection {
   }
   
   public static class Pmi {
-    public final int label;
-    public final int feature;
+    public final int labelIdx;
+    public final int featureIdx;
     public final double pmi;
     public final int nCooc;
     
@@ -102,8 +103,8 @@ public class MiFeatureSelection {
         throw new IllegalArgumentException("pmi=nan");
 //      if (Double.isInfinite(pmi))
 //        throw new IllegalArgumentException("pmi=" + pmi);
-      this.label = label;
-      this.feature = feature;
+      this.labelIdx = label;
+      this.featureIdx = feature;
       this.pmi = pmi;
       this.nCooc = nCooc;
     }
@@ -220,6 +221,56 @@ public class MiFeatureSelection {
       this.inverseFeatHashForGoodFeats = new MultiMap<>();
     }
     
+    public void addToGoodFeatures(Iterable<Integer> gf) {
+      int g = goodFeats.size();
+      int n = 0;
+      for (int i : gf) {
+        n++;
+        goodFeats.add(i);
+      }
+      Log.info("added " + n + " features, goodFeats.size: " + g + " => " + goodFeats.size());
+    }
+    
+    public Set<Integer> goodFeaturesWithMissingNames() {
+      Set<Integer> missing = new HashSet<>();
+      for (int g : goodFeats.toNativeArray())
+        missing.add(g);
+      for (int f : inverseFeatHashForGoodFeats.keySet())
+        missing.remove(f);
+      return missing;
+    }
+    
+    /**
+     * Find all feature hashes in goodFeats which aren't in inverseFeatHashingForGoodFeats
+     * in the given feature files and add them.
+     */
+    public void resolveAllGoodFeatures(List<File> yx) throws IOException {
+      Set<Integer> missing = goodFeaturesWithMissingNames();
+      int lf = missing.size();
+      Log.info("looking for " + lf + " missing features in " + yx.size() + " files");
+      int nf = 0, nl = 0;
+      for (File y : yx) {
+        nf++;
+        try (BufferedReader r = FileUtil.getReader(y)) {
+          for (String line = r.readLine(); line != null; line = r.readLine()) {
+            nl++;
+            VwLine vw = new VwLine(line);
+            for (Namespace ns : vw.x) {
+              for (String f : ns.features) {
+                int i = lookupFeatIndex(ns.name, f);
+                missing.remove(i);
+                if (missing.isEmpty()) {
+                  Log.info("found all " + lf + " missing features after looking through " + nf + " files and " + nl + " lines");
+                  return;
+                }
+              }
+            }
+          }
+        }
+      }
+      Log.info("warning: failed to find " + missing.size() + " after looking through " + nf + " files and " + nl + " lines");
+    }
+    
     /**
      * @param linesAsInstances if false, union all the lines and add a single instance
      * (as in one instance per entity rather than per extraction location).
@@ -311,27 +362,33 @@ public class MiFeatureSelection {
         // Maybe add to good features
         if (p.getFrequencyDiscountedPmi(pmiFreqDiscount) > 1d) {
           if (inverseHashingVerbose)
-            Log.info("adding good feat: " + p.feature);
-          goodFeats.add(p.feature);
+            Log.info("adding good feat: " + p.featureIdx);
+          goodFeats.add(p.featureIdx);
         }
 
-//        char ns = (char) (p.feature % 256);
-//        int x = p.feature / 256;
-//        String feature = ns + "/" + alphX.lookupObject(x);
-        List<String> fns = inverseFeatHashForGoodFeats.get(p.feature);
-        String feature;
-        if (fns.isEmpty()) {
-          feature = "?" + p.feature;
-        } else {
-          feature = StringUtils.join("~OR~", fns);
-        }
+        String feature = getFeatureName(p.featureIdx);
 
-        out.add(new LabeledPmi<>(label, y, feature, p.feature, p.pmi, p.nCooc));
+        out.add(new LabeledPmi<>(label, y, feature, p.featureIdx, p.pmi, p.nCooc));
       }
       t.stop("argTopPmi/" + label);
       return out;
     }
     
+    String getFeatureName(int i) {
+      List<String> fns = inverseFeatHashForGoodFeats.get(i);
+      String feature;
+      if (fns.isEmpty()) {
+        if (goodFeats.contains(i)) {
+          feature = "?" + Integer.toHexString(i);
+        } else {
+          feature = "!" + Integer.toHexString(i);
+        }
+      } else {
+        feature = StringUtils.join("~OR~", fns);
+      }
+      return feature;
+    }
+
     public Map<String, List<LabeledPmi<String, String>>> argTopPmiAllLabels(Set<String> skip, int k, double pmiFreqDiscount) {
       return argTopPmiAllLabels(skip, k, pmiFreqDiscount, false);
     }
@@ -352,7 +409,7 @@ public class MiFeatureSelection {
       return out;
     }
     
-    public void writeout(File output, Set<String> skipRels, int topFeats, double pmiFreqDiscount, int n) {
+    public void writeoutWithComputeMi(File output, Set<String> skipRels, int topFeats, double pmiFreqDiscount, int n) {
       Map<String, List<LabeledPmi<String, String>>> m = argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount, true);
       try (BufferedWriter w = FileUtil.getWriter(output)) {
         for (String rel : m.keySet()) {
@@ -375,7 +432,38 @@ public class MiFeatureSelection {
         e.printStackTrace();
       }
     }
+
+    
+    public void writeout(Map<String, List<LabeledPmi<String, String>>> m, File output, double pmiFreqDiscount, int numInstance, boolean resolveFeatureNames) {
+      try (BufferedWriter w = FileUtil.getWriter(output)) {
+        for (String rel : m.keySet()) {
+          for (LabeledPmi<String, String> feat : m.get(rel)) {
+            w.write(feat.label);
+            w.write('\t');
+            if (resolveFeatureNames)
+              w.write(getFeatureName(feat.featureIdx));
+            else
+              w.write(feat.feature);
+            w.write('\t');
+            w.write("" + feat.pmi);
+            w.write('\t');
+            w.write("" + feat.getFrequencyDiscountedPmi(pmiFreqDiscount));
+            w.write('\t');
+            w.write("" + feat.nCooc);
+            w.write('\t');
+            w.write("" + numInstance);
+            w.newLine();
+          }
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
   }
+  
+  /*
+   * I need a better way to ensure that we get all the feature string<->int mappings?
+   */
 
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -409,11 +497,14 @@ public class MiFeatureSelection {
     int n = 0;
     int ncur = 0;
     int thresh = 1;
+    List<File> allPos = new ArrayList<>();
     for (File ib : ibs) {
       if (addNeg)
         a.add("neg", new File(ib, "neg.vw"), extractionsAsInstances);
-      for (File f : ib.listFiles(f -> f.getName().matches("pos-\\S+.vw")))
+      for (File f : ib.listFiles(f -> f.getName().matches("pos-\\S+.vw"))) {
         a.add(f.getName(), f, extractionsAsInstances);
+        allPos.add(f);
+      }
       
       n++;
       ncur++;
@@ -427,13 +518,30 @@ public class MiFeatureSelection {
             + " nY=" + a.mifs.label2instance.size()
             + " nX=" + a.mifs.feature2instance.size());
         System.out.println("TIMER: " + a.t);
-        ncur = 0;
-        a.writeout(output, skipRels, topFeats, pmiFreqDiscount, ncur);
+        a.writeoutWithComputeMi(output, skipRels, topFeats, pmiFreqDiscount, n);
         System.out.println();
+        ncur = 0;
       }
+      if (n > 40)
+        break;
     }
-    Log.info("last time writing out");
-    a.writeout(output, skipRels, topFeats, pmiFreqDiscount, ncur);
+    
+    Log.info("computing MI for the last time");
+    Map<String, List<LabeledPmi<String, String>>> m = a.argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount);
+    a.addToGoodFeatures(getTopFeats(m));
+    a.resolveAllGoodFeatures(allPos);
+    boolean resolveFeatureNames = true;
+    a.writeout(m, output, pmiFreqDiscount, n, resolveFeatureNames);
+
     Log.info("done");
   }
+  
+  public static Set<Integer> getTopFeats(Map<String, List<LabeledPmi<String, String>>> m) {
+    Set<Integer> tf = new HashSet<>();
+    for (List<LabeledPmi<String, String>> lp : m.values())
+      for (LabeledPmi<?, ?> p : lp)
+        tf.add(p.featureIdx);
+    return tf;
+  }
+  
 }
