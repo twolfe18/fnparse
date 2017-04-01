@@ -517,8 +517,6 @@ public class MiFeatureSelection {
         System.out.println();
         ncur = 0;
       }
-      if (n > 40)
-        break;
     }
     
     Log.info("computing MI for the last time");
