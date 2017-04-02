@@ -32,14 +32,14 @@ import edu.jhu.prim.set.IntHashSet;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.MultiMap;
 
-public class MiFeatureSelection {
+public class PmiFeatureSelection {
   
   private IntObjectHashMap<IntArrayList> label2instance;      // values are sorted, uniq, ascending lists/sets
   private IntObjectHashMap<IntArrayList> feature2instance;    // values are sorted, uniq, ascending lists/sets
   private int numInstances;
   private long nnz;
   
-  public MiFeatureSelection() {
+  public PmiFeatureSelection() {
     label2instance = new IntObjectHashMap<>();
     feature2instance = new IntObjectHashMap<>();
     numInstances = 0;
@@ -198,7 +198,7 @@ public class MiFeatureSelection {
 
     private Alphabet<String> alphY;
 //    private Alphabet<String> alphX;
-    private MiFeatureSelection mifs;
+    private PmiFeatureSelection mifs;
     private MultiTimer t;
     
     private HashFunction hash;
@@ -212,7 +212,7 @@ public class MiFeatureSelection {
       this.shard = shard;
       this.alphY = new Alphabet<>();
 //      this.alphX = new Alphabet<>();
-      this.mifs = new MiFeatureSelection();
+      this.mifs = new PmiFeatureSelection();
       this.t = new MultiTimer();
       
       this.hash = Hashing.murmur3_32(42);

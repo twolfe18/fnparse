@@ -23,6 +23,7 @@ import edu.jhu.hlt.entsum.GillickFavre09Summarization.ConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftSolution;
 import edu.jhu.hlt.entsum.ObservedArgTypes.Verb;
+import edu.jhu.hlt.entsum.VwLine.Namespace;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
@@ -32,6 +33,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
@@ -864,6 +866,96 @@ public class SlotsAsConcepts {
     assert ny > 0;
     w.newLine();
     return out;
+  }
+  
+  /*
+   * TODO I need to have a way to make predictions based on featsel-mi instead of distsup
+   * Before I had VW just output scores to
+   *    $ENTITY/distsup-infobox.csoaa_ldf.yhat or
+   *    $ENTITY/infobox-binary/unlab.yhat
+   * Now I need to iterate over the same input file:
+   *    $ENTITY/distsup-infobox.csoaa_ldf.x or
+   *    $ENTITY/infobox-binary/unlab.x
+   * And output the same format?
+   * Could I loose anything as opposed to doing something more ad-hoc?
+   * 
+   * I should use the csoaa_ldf format for making predictions.
+   */
+  
+  /**
+   * Reads in the output of {@link PmiFeatureSelection}, a bunch of (relation, lexSynFeature, score)
+   * instances, which are used to make predictions given new lexSynFeatures.
+   */
+  public static class PmiSlotPredictor {
+    private MultiMap<String, Feat> feat2relMi;
+    
+    public PmiSlotPredictor() {
+      feat2relMi = new MultiMap<>();
+    }
+    
+    public void add(File pmiFeatSelOutput) throws IOException {
+      Log.info("reading " + pmiFeatSelOutput.getPath());
+      int n = 0;
+      try (BufferedReader r = FileUtil.getReader(pmiFeatSelOutput)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          n++;
+          String[] ar = line.split("\t");
+          String rel = ar[0];
+          String feat = ar[1];
+          double discountedPmi = Double.parseDouble(ar[3]);
+          feat2relMi.add(feat, new Feat(rel, discountedPmi));
+        }
+      }
+      Log.info("read " + n + " lines");
+    }
+    
+    public List<Feat> predict(VwLine x) {
+      List<Feat> ys = new ArrayList<>();
+      for (Namespace ns : x.x) {
+        for (String f : ns.features) {
+          String feat = ns.name + "/" + f;
+          for (Feat rel : feat2relMi.get(feat))
+            ys.add(rel);
+        }
+      }
+      ys = Feat.dedup(ys);
+      Collections.sort(ys, Feat.BY_SCORE_DESC);
+      return ys;
+    }
+    
+    /**
+     * format unclear: input is vw-features per line (not ldf) and output is:
+     *   pred := <relation> <space> <cost>
+     *   line := <pred> (<tab> <pred>)*
+     *   
+     * Get the features from:
+     *   tokenized-sentences/dev/$ENTITY/infobox-binary/unlab.x
+     */
+    public static void predictOne(ExperimentProperties config) throws IOException {
+      List<File> pmiFiles = config.getFileGlob("pmiFiles");
+      File vwFeatures = config.getExistingFile("vwFeatures");
+      File outputPredictions = config.getExistingFile("outputPredictions");
+//      boolean ldf = config.getBoolean("ldf");
+//      if (!ldf)
+//        throw new RuntimeException("implement me");
+
+      PmiSlotPredictor model = new PmiSlotPredictor();
+      for (File f : pmiFiles)
+        model.add(f);
+      
+      try (BufferedReader r = FileUtil.getReader(vwFeatures);
+          BufferedWriter w = FileUtil.getWriter(outputPredictions)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          VwLine features = new VwLine(line);
+          List<Feat> relations = model.predict(features);
+          List<String> toks = new ArrayList<>();
+          for (Feat f : relations)
+            toks.add(f.getName() + " " + f.getWeight());
+          w.write(StringUtils.join("\t", toks));
+          w.newLine();
+        }
+      }
+    }
   }
   
   /**
