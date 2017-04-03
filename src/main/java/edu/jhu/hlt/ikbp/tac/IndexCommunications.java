@@ -2063,11 +2063,23 @@ public class IndexCommunications implements AutoCloseable {
       return fs;
     }
   
-    public static List<Feat> collapse(List<Feat> mayContainRepeatedKeysWithSameValue) {
+    public static List<Feat> aggregateSum(List<Feat> mayContainRepeatedKeysWithSameValue) {
       Map<String, Double> seen = new HashMap<>();
       for (Feat f : mayContainRepeatedKeysWithSameValue) {
         double p = seen.getOrDefault(f.getName(), 0d);
         seen.put(f.getName(), p + f.getWeight());
+      }
+      List<Feat> fs = new ArrayList<>();
+      for (String f : seen.keySet())
+        fs.add(new Feat(f, seen.get(f)));
+      return fs;
+    }
+
+    public static List<Feat> aggregateMax(List<Feat> mayContainRepeatedKeysWithSameValue) {
+      Map<String, Double> seen = new HashMap<>();
+      for (Feat f : mayContainRepeatedKeysWithSameValue) {
+        double p = seen.getOrDefault(f.getName(), Double.NEGATIVE_INFINITY);
+        seen.put(f.getName(), Math.max(p, f.getWeight()));
       }
       List<Feat> fs = new ArrayList<>();
       for (String f : seen.keySet())

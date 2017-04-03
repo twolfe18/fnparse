@@ -952,11 +952,17 @@ public class SlotsAsConcepts {
       for (Namespace ns : x.x) {
         for (String f : ns.features) {
           String feat = ns.name + "/" + f;
-          for (Feat rel : feat2relMi.get(feat))
+          for (Feat rel : feat2relMi.get(feat)) {
+
+//            // DEBUG
+//            if (rel.getName().equals("pos-themeMusicComposer.vw"))
+//              System.out.println("verb=" + rel + " feat=" + feat);
+
             ys.add(rel);
+          }
         }
       }
-      ys = Feat.collapse(ys);
+      ys = Feat.aggregateSum(ys);
       Collections.sort(ys, Feat.BY_SCORE_DESC);
       return ys;
     }
@@ -1096,7 +1102,7 @@ public class SlotsAsConcepts {
       List<File> pmiFiles = config.getFileGlob("pmiFiles");
       for (File f : pmiFiles)
         pmi.add(f);
-      int k = config.getInt("topFeats", 20);
+      int k = config.getInt("topFeats", 30);
       pmi.topKPrune(k);
       
 //      boolean ldf = true;
@@ -1149,16 +1155,26 @@ public class SlotsAsConcepts {
           sentenceLengths.add(s.parse().length);
         }
         
-//        String so = "s=" + i.getSubjMid(s) + "_o=" + i.getObjMid(s);
-        List<Feat> verbs = x.get2().getMostLikelyLabels(maxVerbsPerInstance);
         
+        // TODO Have a notion of "backoff concepts"
+        // e.g. if "ceo(subj,ACME)" is a concept, with an associated utility and e_ij variable,
+        // ensure that its utility includes the utility for the "backoff concept": "ceo(subj,*)"
+        // You don't need to add new e_ij variables, just ensure that p_ij is computed by summing
+        // the utilities for all backoffs of the ij^{th} concept.
+        // Use the same counting method for computing utility of backoff concepts as terminal/leaf concepts.
+        
+        
+        List<Feat> verbs = x.get2().getMostLikelyLabels(maxVerbsPerInstance);
+//        verbs = Feat.aggregateSum(verbs);
+        verbs = Feat.aggregateMax(verbs);
+        
+        String so = "s=" + i.getSubjMid(s) + "_o=" + i.getObjMid(s);
         for (Feat v : verbs) {
-//          String conceptS = "v=" + v.getName() + "_" + so;
-          String conceptS = "v=" + v.getName();
+          String conceptS = "v=" + v.getName() + "_" + so;
+//          String conceptS = "v=" + v.getName();
           int conceptI = concepts.lookupIndex(conceptS);
           double costOfEvokingConcept = v.getWeight();
           SoftConceptMention scm = new SoftConceptMention(conceptI, sIdx, costOfEvokingConcept);
-          System.out.println("addingOcc: " + scm + " v=" + v);
           occ.add(scm);
         }
       }
@@ -1597,16 +1613,19 @@ public class SlotsAsConcepts {
       PmiSlotPredictor.predictOne(config);
       break;
     case "summarize":
-      int numWords = config.getInt("numWords");
       StreamingSummarizer sum = new StreamingSummarizer(config.getExistingDir("entityDir"));
-      output = new File(sum.entityDir, "summary/infobox.w" + numWords + ".jser");
-      if (!output.getParentFile().isDirectory())
-        output.getParentFile().mkdirs();
-      MultiAlphabet a = new MultiAlphabet();
-      Summary s = sum.summarize(numWords, a);
-      s.show(a);
-      FileUtil.VERBOSE = true;
-      FileUtil.serialize(s, output);
+      File outputDir = config.getOrMakeDir("outputDir");
+      for (String nws : config.getString("numWords", "40,80,160,320").split("\\D+")) {
+        int numWords = Integer.parseInt(nws);
+        assert numWords > 0;
+        output = new File(outputDir, "infobox.w" + numWords + ".jser");
+        Log.info("numWords=" + numWords + " output=" + output.getPath());
+        MultiAlphabet a = new MultiAlphabet();
+        Summary s = sum.summarize(numWords, a);
+        s.show(a);
+        FileUtil.VERBOSE = true;
+        FileUtil.serialize(s, output);
+      }
       break;
     default:
       throw new RuntimeException("unknown mode: " + m);

@@ -132,14 +132,21 @@ public class TrainFactExplore {
       return ((double) fs.size()) / objEnts.numNonZero();
     }
     public double customScore() {
-      if (relNice.equalsIgnoreCase("religion"))
-        return Double.POSITIVE_INFINITY;
+//      if (relNice.equalsIgnoreCase("religion"))
+//        return Double.POSITIVE_INFINITY;
       double a = Math.sqrt(factsPerObj());
-      double b = Math.log(fs.size());
+      double b = 0; //Math.log(fs.size());
       double c = subjEnts.hIndex();
       double d = objEnts.hIndex();
       double e = mids.hIndex();
-      return (1+a) * (1+b) * (1+c) * (1+d) * (1+e);
+      double prod = 0;
+      prod += Math.log(1 + a);
+      prod += Math.log(1 + b);
+      prod += Math.log(1 + c);
+      prod += Math.log(1 + d);
+      prod += Math.log(1 + e);
+      return prod;
+//      return (1+a) * (1+b) * (1+c) * (1+d) * (1+e);
     }
     public List<String> sampleObj(int k) {
       ReservoirSample<String> r = new ReservoirSample<>(k, RAND);
@@ -177,7 +184,7 @@ public class TrainFactExplore {
     };
   }
 
-  public void foo() {
+  public Map<String, Double> scoreVerbs(Boolean verbose) {
     List<Relation> rs = new ArrayList<>();
     Counts<String> ec = new Counts<>();
     for (String rel : byRelation.keySet()) {
@@ -207,31 +214,35 @@ public class TrainFactExplore {
         rs.add(r);
       }
     }
-//    Collections.sort(rs, Relation.BY_FPO_DESC);
     Collections.sort(rs, desc(Relation::customScore)); 
-    for (int i = 0; i < Math.min(64, rs.size()); i++) {
+    Map<String, Double> verbScores = new HashMap<>();
+//    for (int i = 0; i < Math.min(64, rs.size()); i++) {
+    for (int i = 0; i < rs.size(); i++) {
       Relation r = rs.get(i);
-//      System.out.printf("%-30s nObj=% 4d  facts=% 6d  subj.h=% 3d  obj.h=% 3d  factsPerObj=% 8.2f  subj=%s  obj=%s\n",
-//          r.relNice, r.objEnts.numNonZero(), r.fs.size(), r.subjEnts.hIndex(), r.objEnts.hIndex(), r.factsPerObj(),
-//          idCleanup(r.sampleSubj(5)),
-//          idCleanup(r.sampleObj(5)));
-      System.out.printf("%-20s nObj=% 4d  entFacts=% 6d  subjEnts.h=% 3d  objEnts.h=% 3d  factsPerObj=% 8.2f  factExs=% 8d  factExs.h=% 4d\n",
-          r.relNice, r.objEnts.numNonZero(), r.fs.size(), r.subjEnts.hIndex(), r.objEnts.hIndex(), r.factsPerObj(),
-          r.mids.getTotalCount(), r.mids.hIndex());
-      System.out.printf("%ssubj=%s\n", rep(' ', 21), idCleanup(r.sampleSubj(20)));
-      System.out.printf("%sobj=%s\n", rep(' ', 22), idCleanup(r.sampleObj(20)));
-      System.out.println();
+      double score = r.customScore();
+      Object old = verbScores.put(r.rel, score);
+      assert old == null;
+      if (verbose) {
+        System.out.printf("%-20s score=%.2f  nObj=% 4d  entFacts=% 6d  subjEnts.h=% 3d  objEnts.h=% 3d  factsPerObj=% 8.2f  factExs=% 8d  factExs.h=% 4d\n",
+            r.relNice, score, r.objEnts.numNonZero(), r.fs.size(), r.subjEnts.hIndex(), r.objEnts.hIndex(), r.factsPerObj(),
+            r.mids.getTotalCount(), r.mids.hIndex());
+        System.out.printf("%ssubj=%s\n", rep(' ', 21), idCleanup(r.sampleSubj(20)));
+        System.out.printf("%sobj=%s\n", rep(' ', 22), idCleanup(r.sampleObj(20)));
+        System.out.println();
+      }
     }
-    List<Integer> ts = Arrays.asList(2, 3, 5, 8, 13);
-    for (Relation r : rs) {
-      double fpo = r.factsPerObj();
-      for (int t : ts)
-        if (fpo > t)
-          ec.increment(String.format("relation/fpo>%02d", t));
+    if (verbose) {
+      List<Integer> ts = Arrays.asList(2, 3, 5, 8, 13);
+      for (Relation r : rs) {
+        double fpo = r.factsPerObj();
+        for (int t : ts)
+          if (fpo > t)
+            ec.increment(String.format("relation/fpo>%02d", t));
+      }
+      for (String key : ec.getKeysSorted())
+        System.out.printf("%-30s % 6d\n", key, ec.getCount(key));
     }
-//    Log.info(ec);
-    for (String k : ec.getKeysSorted())
-      System.out.printf("%-30s % 6d\n", k, ec.getCount(k));
+    return verbScores;
   }
   
   public static String rep(char c, int len) {
@@ -258,6 +269,7 @@ public class TrainFactExplore {
         new File("data/facc1-entsum/all-train-facts.txt"),
         new File("data/facc1-entsum/all-train-mid2dbp.txt"),
         new File("data/facc1-entsum/all-train-fact-distsup.counts.txt"));
-    t.foo();
+    boolean verbose = true;
+    t.scoreVerbs(verbose);
   }
 }
