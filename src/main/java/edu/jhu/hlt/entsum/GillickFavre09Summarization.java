@@ -3,12 +3,15 @@ package edu.jhu.hlt.entsum;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.EntityMentionRanker.ScoredPassage;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.MultiMap;
@@ -161,10 +164,27 @@ public class GillickFavre09Summarization {
       this.i = concept;
       this.j = sentence;
     }
+    
+    public int sentence() { return j; }
+    public int concept() { return i; }
 
     @Override
     public String toString() {
       return "(concept=" + i + " sentence=" + j + ")";
+    }
+    
+    @Override
+    public int hashCode() {
+      return Hash.mix(i, j);
+    }
+    
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof ConceptMention) {
+        ConceptMention cm = (ConceptMention) other;
+        return i == cm.i && j == cm.j;
+      }
+      return false;
     }
     
     public static final Comparator<ConceptMention> BY_CONCEPT = new Comparator<ConceptMention>() {
@@ -188,6 +208,20 @@ public class GillickFavre09Summarization {
     @Override
     public String toString() {
       return "(concept=" + i + " sentence=" + j + " cost=" + costOfEvokingConcept + ")";
+    }
+    
+    @Override
+    public int hashCode() {
+      return Hash.mix(super.hashCode(), j);
+    }
+    
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof SoftConceptMention) {
+        SoftConceptMention cm = (SoftConceptMention) other;
+        return super.equals(other) && costOfEvokingConcept == cm.costOfEvokingConcept;
+      }
+      return false;
     }
   }
   
@@ -224,6 +258,14 @@ public class GillickFavre09Summarization {
       concepts = new IntArrayList();
       mentions = new ArrayList<>();
       this.summaryLengthLimit = summaryLengthLim;
+    }
+    
+    public List<SoftConceptMention> mentionsIn(int sentenceIdx) {
+      List<SoftConceptMention> l = new ArrayList<>();
+      for (SoftConceptMention m : mentions)
+        if (m.sentence() == sentenceIdx)
+          l.add(m);
+      return l;
     }
     
     public void addSentence(int sentenceIndex, int sentenceLength) {
@@ -266,18 +308,39 @@ public class GillickFavre09Summarization {
     GRBVar[] s = new GRBVar[sentenceLengths.size()];
     for (int j = 0; j < s.length; j++)
       s[j] = model.addVar(0, 1, 0, GRB.BINARY, null);
+
+    // First half of objective: concept utility
+    GRBLinExpr obj = new GRBLinExpr();
+    for (int i = 0; i < c.length; i++) {
+      assert conceptUtilities[i] >= 0;
+      if (conceptUtilities[i] != 0)
+        obj.addTerm(conceptUtilities[i], c[i]);
+    }
     
     // Create all e_{ij} ...
+    // AND second half of objective: evoking costs
     MultiMap<Integer, GRBVar> e_i = new MultiMap<>();
     MultiMap<Integer, GRBVar> e_j = new MultiMap<>();
+    Map<ConceptMention, GRBVar> c2e = new HashMap<>();
+    int nnz = 0;
     for (ConceptMention cm : occ) {
       SoftConceptMention scm = (SoftConceptMention) cm;
-      GRBVar var = model.addVar(0, 1, 0, GRB.BINARY, null);
-      e_i.add(scm.i, var);
-      e_j.add(scm.j, var);
+      GRBVar e_ij = model.addVar(0, 1, 0, GRB.BINARY, null);
+      e_i.add(scm.i, e_ij);
+      e_j.add(scm.j, e_ij);
+      
+      assert scm.costOfEvokingConcept >= 0;
+      if (scm.costOfEvokingConcept > 0)
+        nnz++;
+      obj.addTerm(-scm.costOfEvokingConcept, e_ij);
+      
+      c2e.put(cm, e_ij);
     }
+    Log.info("nOcc=" + occ.size() + " nOccWithPosCost=" + nnz);
 
-    setConceptObjective(model, c);
+    model.setObjective(obj, GRB.MAXIMIZE);
+
+//    setConceptObjective(model, c);
     addLengthConstraint(model, s, summaryLength);
     
     // sum_j e_ij >= c_i
@@ -317,6 +380,13 @@ public class GillickFavre09Summarization {
       if (c_i > 0)
         sol.concepts.add(i);
     }
+    for (ConceptMention cm : occ) {
+      GRBVar e_ij = c2e.get(cm);
+      double e_ij_val = e_ij.get(GRB.DoubleAttr.X);
+      assert 0 <= e_ij_val && e_ij_val <= 1;
+      if (e_ij_val > 0)
+        sol.mentions.add((SoftConceptMention) cm);
+    }
     
     model.dispose();
     env.dispose();
@@ -336,8 +406,11 @@ public class GillickFavre09Summarization {
   
   private void addLengthConstraint(GRBModel model, GRBVar[] s, int summaryLength) throws GRBException {
     GRBLinExpr solutionLength = new GRBLinExpr();
-    for (int j = 0; j < s.length; j++)
-      solutionLength.addTerm(this.sentenceLengths.get(j), s[j]);
+    for (int j = 0; j < s.length; j++) {
+      int n = this.sentenceLengths.get(j);
+      assert n > 0;
+      solutionLength.addTerm(n, s[j]);
+    }
     model.addConstr(summaryLength, GRB.GREATER_EQUAL, solutionLength, null);
   }
 
@@ -433,6 +506,33 @@ public class GillickFavre09Summarization {
     System.out.println("tokensInSummary=" + words);
   }
   
+  public static void softTest0() throws Exception {
+    
+    // John loves Mary.
+    // Mary is the CEO of Exxon Mobil.
+    // One time Mary went to the market on a Saturday afternoon.
+    IntArrayList sentenceLengths = new IntArrayList();
+    sentenceLengths.add(3);
+    sentenceLengths.add(7);
+    sentenceLengths.add(11);
+    // loves, loves-arg1, ceo, coe-arg0, go, go-arg0
+    double[] conceptUtilities = new double[] {
+        1d, 0.75d,        10d, 12d,     0.1d, 0.25d,
+    };
+    List<SoftConceptMention> occ = new ArrayList<>();
+    occ.add(new SoftConceptMention(0, 0, 1)); // loves
+    occ.add(new SoftConceptMention(1, 0, 1)); // loves-arg0
+    occ.add(new SoftConceptMention(2, 1, 1)); // ceo
+    occ.add(new SoftConceptMention(3, 1, 1)); // ceo-arg0
+    occ.add(new SoftConceptMention(4, 2, 1)); // loves
+    occ.add(new SoftConceptMention(5, 2, 1)); // loves-arg0
+
+    GillickFavre09Summarization s = new GillickFavre09Summarization(occ, sentenceLengths, conceptUtilities);
+    SoftSolution sol = s.solveSoft(10);
+    System.out.println(sol);
+    System.out.println("e_ij: " + sol.mentions);
+  }
+  
   public static void main(String[] args) throws Exception {
     Log.info("starting...");
     
@@ -449,7 +549,8 @@ public class GillickFavre09Summarization {
 //    m.dispose();
 //    e.dispose();
     
-    buildPkbSummary();
+//    buildPkbSummary();
+    softTest0();
 
     Log.info("done");
   }

@@ -2,6 +2,7 @@ package edu.jhu.util;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 
@@ -18,6 +19,11 @@ public class MultiMap<K, V> {
   
   public MultiMap() {
     map = new HashMap<>();
+  }
+  
+  public void sortValues(Comparator<V> c) {
+    for (List<V> l : map.values())
+      Collections.sort(l, c);
   }
   
   public int numKeys() {

@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -23,16 +24,19 @@ import edu.jhu.hlt.entsum.GillickFavre09Summarization.ConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftConceptMention;
 import edu.jhu.hlt.entsum.GillickFavre09Summarization.SoftSolution;
 import edu.jhu.hlt.entsum.ObservedArgTypes.Verb;
+import edu.jhu.hlt.entsum.SlotsAsConcepts.StreamingDistSupFeatEx.Fact;
 import edu.jhu.hlt.entsum.VwLine.Namespace;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
@@ -893,6 +897,40 @@ public class SlotsAsConcepts {
       feat2relMi = new MultiMap<>();
     }
     
+    /** Keep the top k features for every relation (sorted by discounted PMI) */
+    public void topKPrune(int k) {
+      Log.info("k=" + k);
+      
+      // Prune
+      int before = 0;
+      Map<String, Beam<Feat>> top = new HashMap<>();
+      for (String feat : feat2relMi.keySet()) {
+        for (Feat rel : feat2relMi.get(feat)) {
+          Beam<Feat> b = top.get(rel.getName());
+          if (b == null) {
+            b = Beam.getMostEfficientImpl(k);
+            top.put(rel.getName(), b);
+          }
+          b.push(new Feat(feat, rel.getWeight()), rel.getWeight());
+          before++;
+        }
+      }
+      
+      // Re-build the index
+      feat2relMi = new MultiMap<>();
+      int after = 0;
+      for (String rel : top.keySet()) {
+        Beam<Feat> b = top.get(rel);
+        while (b.size() > 0) {
+          Feat f = b.pop();
+          feat2relMi.add(f.getName(), new Feat(rel, f.getWeight()));
+          after++;
+        }
+      }
+      feat2relMi.sortValues(Feat.BY_SCORE_DESC);
+      Log.info("pruned " + before + " entries down to " + after);
+    }
+    
     public void add(File pmiFeatSelOutput) throws IOException {
       Log.info("reading " + pmiFeatSelOutput.getPath());
       int n = 0;
@@ -906,7 +944,7 @@ public class SlotsAsConcepts {
           feat2relMi.add(feat, new Feat(rel, discountedPmi));
         }
       }
-      Log.info("read " + n + " lines");
+//      Log.info("read " + n + " lines");
     }
     
     public List<Feat> predict(VwLine x) {
@@ -918,7 +956,7 @@ public class SlotsAsConcepts {
             ys.add(rel);
         }
       }
-      ys = Feat.dedup(ys);
+      ys = Feat.collapse(ys);
       Collections.sort(ys, Feat.BY_SCORE_DESC);
       return ys;
     }
@@ -932,17 +970,18 @@ public class SlotsAsConcepts {
      *   tokenized-sentences/dev/$ENTITY/infobox-binary/unlab.x
      */
     public static void predictOne(ExperimentProperties config) throws IOException {
-      List<File> pmiFiles = config.getFileGlob("pmiFiles");
-      File vwFeatures = config.getExistingFile("vwFeatures");
-      File outputPredictions = config.getExistingFile("outputPredictions");
-//      boolean ldf = config.getBoolean("ldf");
-//      if (!ldf)
-//        throw new RuntimeException("implement me");
+      File entityDir = config.getExistingDir("entityDir");
+      File vwFeatures = new File(entityDir, "infobox-binary/unlab.x");
+      File outputPredictions = new File(entityDir, "infobox-binary/unlab-pmiPredictions.yhat");
+
+      Log.info("entityDir=" + entityDir.getPath());
 
       PmiSlotPredictor model = new PmiSlotPredictor();
+      List<File> pmiFiles = config.getFileGlob("pmiFiles");
       for (File f : pmiFiles)
         model.add(f);
       
+      Log.info("features=" + vwFeatures.getPath() + " output=" + outputPredictions.getPath());
       try (BufferedReader r = FileUtil.getReader(vwFeatures);
           BufferedWriter w = FileUtil.getWriter(outputPredictions)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
@@ -954,6 +993,64 @@ public class SlotsAsConcepts {
           w.write(StringUtils.join("\t", toks));
           w.newLine();
         }
+      }
+    }
+    
+    // TODO
+    class OnTheFlyPredictor implements Iterator<VwInstance>, AutoCloseable {
+      private BufferedReader rFeatures;
+      private BufferedReader rLocs;
+      private VwInstance cur;
+      private Counts<String> ec;
+      
+      // TODO Find an automatic way to set this; for long summaries, if this value is set too high, the summary will be needlessly short
+      private double costNumerator = 1;
+      
+      public OnTheFlyPredictor(File features, File locations) throws IOException {
+        rFeatures = FileUtil.getReader(features);
+        rLocs = FileUtil.getReader(locations);
+        ec = new Counts<>();
+        advance();
+      }
+      
+      private void advance() throws IOException {
+        String fLine = rFeatures.readLine();
+        if (fLine == null) {
+          cur = null;
+          return;
+        }
+        String lLine = rLocs.readLine();
+        VwLine feats = new VwLine(fLine);
+        List<Feat> verbs = predict(feats);
+        ec.increment("pred");
+        if (verbs.isEmpty())
+          ec.increment("pred/none");
+        cur = new VwInstance(Fact.fromTsv(lLine));
+        for (Feat f : verbs)
+          if (f.getWeight() > 0)
+            cur.add(f.getName(), costNumerator / f.getWeight());
+      }
+
+      @Override
+      public boolean hasNext() {
+        return cur != null;
+      }
+
+      @Override
+      public VwInstance next() {
+        VwInstance c = cur;
+        try {
+          advance();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+        return c;
+      }
+
+      @Override
+      public void close() throws IOException {
+        rFeatures.close();
+        rLocs.close();
       }
     }
   }
@@ -975,19 +1072,37 @@ public class SlotsAsConcepts {
       this.entityDir = entityDir;
     }
     
+    public String getMid() {
+      return entityDir.getName().replace("m.", "/m/");
+    }
+    
     /**
      * TODO Replace with {@link VwInstanceEffSentReader}
      */
     private List<Pair<EffSent, VwInstance>> ldfJoin(MultiAlphabet a) throws IOException {
       Pair<EffSent, Integer> cur = new Pair<>(null, -1);
-      File relLocsF = new File(entityDir, INFOBOX_PRED_LOC_FILENAME);       // gives sentence indices and subj/obj mentions
-      File relFeatsF = new File(entityDir, INFOBOX_PRED_FEAT_FILENAME);
-      List<File> relScoresF = FileUtil.find(entityDir, INFOBOX_PRED_SCORE_FILENAME_GLOB);
+//      File relLocsF = new File(entityDir, INFOBOX_PRED_LOC_FILENAME);       // gives sentence indices and subj/obj mentions
+//      File relFeatsF = new File(entityDir, INFOBOX_PRED_FEAT_FILENAME);
+//      List<File> relScoresF = FileUtil.find(entityDir, INFOBOX_PRED_SCORE_FILENAME_GLOB);
+      File relLocsF = new File(entityDir, "infobox-binary/unlab.location");
+      File relScoresF = new File(entityDir, "infobox-binary/unlab-pmiPredictions.yhat");
       File parsesF = new File(entityDir, "parse.conll");
       File mentionLocsF = new File(entityDir, "mentionLocs.txt");
       List<Pair<EffSent, VwInstance>> output = new ArrayList<>();
-      boolean ldf = true;
-      try (VwInstanceReader fiter = new VwInstanceReader(relLocsF, relFeatsF, relScoresF, ldf);
+      
+      File relFeatsF = new File(entityDir, "infobox-binary/unlab.x");
+      PmiSlotPredictor pmi = new PmiSlotPredictor();
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      List<File> pmiFiles = config.getFileGlob("pmiFiles");
+      for (File f : pmiFiles)
+        pmi.add(f);
+      int k = config.getInt("topFeats", 20);
+      pmi.topKPrune(k);
+      
+//      boolean ldf = true;
+//      try (VwInstanceReader fiter = new VwInstanceReader(relLocsF, relFeatsF, relScoresF, ldf);
+//      try (PmiFeatureSelection.InstanceIter fiter = new PmiFeatureSelection.InstanceIter(relScoresF, relLocsF);
+      try (PmiSlotPredictor.OnTheFlyPredictor fiter = pmi.new OnTheFlyPredictor(relFeatsF, relLocsF);
           EffSent.Iter siter = new EffSent.Iter(parsesF, mentionLocsF, a)) {
         while (fiter.hasNext()) {
           VwInstance inst = fiter.next();
@@ -1011,7 +1126,7 @@ public class SlotsAsConcepts {
     /**
      * @param parseAlph you can/should provide a new/empty one of these (passed in so it can be mutated and show these changes to the caller)
      */
-    public List<EffSent> summarize(int numWords, MultiAlphabet parseAlph) throws IOException, GRBException {
+    public Summary summarize(int numWords, MultiAlphabet parseAlph) throws IOException, GRBException {
       boolean debug = true;
       
       Alphabet<String> concepts = new Alphabet<>();
@@ -1034,33 +1149,17 @@ public class SlotsAsConcepts {
           sentenceLengths.add(s.parse().length);
         }
         
-        String so = "v=" + i.getSubjMid(s) + "_o=" + i.getObjMid(s);
-        List<Pair<String, Double>> verbs = x.get2().getMostLikelyLabels(maxVerbsPerInstance);
-        verbs = expVals(verbs);
+//        String so = "s=" + i.getSubjMid(s) + "_o=" + i.getObjMid(s);
+        List<Feat> verbs = x.get2().getMostLikelyLabels(maxVerbsPerInstance);
         
-//        // Debug: show the predictions
-//        if (debug) {
-//          s.showChunkedStyle(parseAlph);
-//          System.out.println("subj: " + s.mention(i.loc.subjMention).show(s.parse(), parseAlph));
-//          System.out.println("obj: " + s.mention(i.loc.objMention).show(s.parse(), parseAlph));
-//          for (Pair<String, Double> v : verbs) {
-//            String sig = "";
-//            if (v.get2() < 0.25)
-//              sig = "***";
-//            if (v.get2() < 0.5)
-//              sig = "**";
-//            if (v.get2() < 1)
-//              sig = "*";
-//            System.out.printf("\t%-20s %.2f sig=%s\n", v.get1(), v.get2(), sig);
-//          }
-//          System.out.println();
-//        }
-        
-        for (Pair<String, Double> v : verbs) {
-          String conceptS = "v=" + v.get1() + "_" + so;
+        for (Feat v : verbs) {
+//          String conceptS = "v=" + v.getName() + "_" + so;
+          String conceptS = "v=" + v.getName();
           int conceptI = concepts.lookupIndex(conceptS);
-          double costOfEvokingConcept = v.get2();
-          occ.add(new SoftConceptMention(conceptI, sIdx, costOfEvokingConcept));
+          double costOfEvokingConcept = v.getWeight();
+          SoftConceptMention scm = new SoftConceptMention(conceptI, sIdx, costOfEvokingConcept);
+          System.out.println("addingOcc: " + scm + " v=" + v);
+          occ.add(scm);
         }
       }
       
@@ -1079,7 +1178,7 @@ public class SlotsAsConcepts {
             return 0;
           }
         });
-        int k = Math.min(20, j.size());
+        int k = Math.min(16, j.size());
         Log.info("showing the " + k + " most likely predictions...");
         for (int i = 0; i < k; i++) {
           Pair<EffSent, VwInstance> p = j.get(i);
@@ -1088,17 +1187,10 @@ public class SlotsAsConcepts {
           s.showChunkedStyle(parseAlph);
           System.out.println("subj: " + s.mention(f.loc.subjMention).show(s.parse(), parseAlph));
           System.out.println("obj: " + s.mention(f.loc.objMention).show(s.parse(), parseAlph));
-          List<Pair<String, Double>> verbs = f.getMostLikelyLabels(maxVerbsPerInstance);
-          verbs = expVals(verbs);
-          for (Pair<String, Double> v : verbs) {
-            String sig = "";
-            if (v.get2() < 0.25)
-              sig = "***";
-            if (v.get2() < 0.5)
-              sig = "**";
-            if (v.get2() < 1)
-              sig = "*";
-            System.out.printf("\t%-20s %.2f sig=%s\n", v.get1(), v.get2(), sig);
+          List<Feat> verbs = f.getMostLikelyLabels(maxVerbsPerInstance);
+          for (Feat v : verbs) {
+            String sig = ShowDistsupInstances.sigCost(v.getWeight());
+            System.out.printf("\t%-20s %.2f sig=%s\n", v.getName(), v.getWeight(), sig);
           }
           System.out.println();
         }
@@ -1108,15 +1200,33 @@ public class SlotsAsConcepts {
       double[] conceptUtilities = new double[concepts.size()];
       for (ConceptMention c : occ)
         conceptUtilities[c.i] += 1.0;
+      Beam<Feat> bestConcepts = Beam.getMostEfficientImpl(16);
+      for (int i = 0; i < conceptUtilities.length; i++) {
+        if (conceptUtilities[i] > 0)
+          bestConcepts.push(new Feat(concepts.lookupObject(i), conceptUtilities[i]), conceptUtilities[i]);
+      }
+      int ci = 0;
+      while (bestConcepts.size() > 0) {
+        Feat f = bestConcepts.pop();
+        ci++;
+        System.out.printf("% 3dth best concept: %-65s utility=%.2f\n", ci, f.getName(), f.getWeight());
+      }
+      System.out.println();
 
       GillickFavre09Summarization sum = new GillickFavre09Summarization(occ, sentenceLengths, conceptUtilities);
       SoftSolution keep = sum.solveSoft(numWords);
-      List<EffSent> keepS = new ArrayList<>();
+      Log.info("keep: " + keep);
+      Summary s = new Summary(getMid());
       for (int i = 0; i < keep.sentences.size(); i++) {
         int sIdx = keep.sentences.get(i);
-        keepS.add(sents.get(sIdx));
+        s.sentences.add(sents.get(sIdx));
+        for (SoftConceptMention m : keep.mentionsIn(sIdx)) {
+          String cs = concepts.lookupObject(m.concept());
+          s.addConcept(i, Span.nullSpan, cs, conceptUtilities[m.concept()], m.costOfEvokingConcept);
+        }
       }
-      return keepS;
+      return s.orderSentencesByUtility();
+//      return s;
     }
   }
   
@@ -1483,16 +1593,23 @@ public class SlotsAsConcepts {
         f.writeCsoaaLdfFeatures(df);
       }
       break;
-    case "summarize":         // makes summaries/$ENTITY/distsup-infobox/summary-100.txt
-      int numWords = config.getInt("numWords");
-      output = config.getFile("output", new File("/tmp/summary-w" + numWords + ".effsent.jser"));
-      StreamingSummarizer sum = new StreamingSummarizer(config.getExistingDir("entityDir"));
-      MultiAlphabet a = new MultiAlphabet();
-      List<EffSent> sents = sum.summarize(numWords, a);
-      EffSent.showConllStyle(sents, a);
-      FileUtil.VERBOSE = true;
-      FileUtil.serialize(sents, output);
+    case "pmiPrediction":
+      PmiSlotPredictor.predictOne(config);
       break;
+    case "summarize":
+      int numWords = config.getInt("numWords");
+      StreamingSummarizer sum = new StreamingSummarizer(config.getExistingDir("entityDir"));
+      output = new File(sum.entityDir, "summary/infobox.w" + numWords + ".jser");
+      if (!output.getParentFile().isDirectory())
+        output.getParentFile().mkdirs();
+      MultiAlphabet a = new MultiAlphabet();
+      Summary s = sum.summarize(numWords, a);
+      s.show(a);
+      FileUtil.VERBOSE = true;
+      FileUtil.serialize(s, output);
+      break;
+    default:
+      throw new RuntimeException("unknown mode: " + m);
     }
     Log.info("done");
   }

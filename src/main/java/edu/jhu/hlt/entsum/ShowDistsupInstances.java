@@ -2,6 +2,7 @@ package edu.jhu.hlt.entsum;
 
 import java.io.File;
 
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
@@ -72,9 +73,9 @@ public class ShowDistsupInstances {
       sent.showChunkedStyle(a);
       System.out.println("subj: " + sent.mention(fact.loc.subjMention).show(sent.parse(), a));
       System.out.println("obj: " + sent.mention(fact.loc.objMention).show(sent.parse(), a));
-      for (Pair<String, Double> v : fact.getMostLikelyLabels(m)) {
-        String sig = sigScore(v.get2());
-        System.out.printf("\t%-20s %.2f sig=%s\n", v.get1(), v.get2(), sig);
+      for (Feat v : fact.getMostLikelyLabels(m)) {
+        String sig = sigScore(v.getWeight());
+        System.out.printf("\t%-20s %.2f sig=%s\n", v.getName(), v.getWeight(), sig);
       }
       System.out.println();
     }

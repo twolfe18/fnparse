@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,6 +18,7 @@ import java.util.Set;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
+import edu.jhu.hlt.entsum.SlotsAsConcepts.StreamingDistSupFeatEx.Fact;
 import edu.jhu.hlt.entsum.VwLine.Namespace;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.TopDownClustering;
@@ -456,12 +458,58 @@ public class PmiFeatureSelection {
     }
   }
   
-  /*
-   * I need a better way to ensure that we get all the feature string<->int mappings?
-   */
+  public static class InstanceIter implements Iterator<VwInstance>, AutoCloseable {
+    private BufferedReader rScores;
+    private BufferedReader rLocs;
+    private VwInstance cur;
+    
+    public InstanceIter(File scores, File locations) throws IOException {
+      this.rScores = FileUtil.getReader(scores);
+      this.rLocs = FileUtil.getReader(locations);
+      advance();
+    }
+    
+    private void advance() throws IOException {
+      String lScores = rScores.readLine();
+      if (lScores == null) {
+        cur = null;
+        return;
+      }
+      String lLocs = rLocs.readLine();
+      cur = new VwInstance(Fact.fromTsv(lLocs));
+      String[] a = lScores.split("\\s+");
+      assert a.length % 2 == 0;
+      for (int i = 0; i < a.length; i += 2) {
+        double cost = 100d / Double.parseDouble(a[i+1]);
+        if (cost > 0)
+          cur.add(a[i], cost);
+      }
+    }
 
-  public static void main(String[] args) throws Exception {
-    ExperimentProperties config = ExperimentProperties.init(args);
+    @Override
+    public void close() throws IOException {
+      rScores.close();
+      rLocs.close();
+    }
+
+    @Override
+    public boolean hasNext() {
+      return cur != null;
+    }
+
+    @Override
+    public VwInstance next() {
+      VwInstance c = cur;
+      try {
+        advance();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+      return c;
+    }
+  }
+  
+  public static void computeHighPmiFeatures(ExperimentProperties config) throws IOException {
     File entityDirParent = config.getExistingDir("entityDirParent");
     List<File> ibs = FileUtil.findDirs(entityDirParent, "glob:**/infobox-binary");
     Log.info("found " + ibs.size() + " entity directories");
@@ -537,4 +585,8 @@ public class PmiFeatureSelection {
     return tf;
   }
   
+  public static void main(String[] args) throws Exception {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    computeHighPmiFeatures(config);
+  }
 }

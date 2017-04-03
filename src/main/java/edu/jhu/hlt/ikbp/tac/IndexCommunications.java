@@ -2015,6 +2015,14 @@ public class IndexCommunications implements AutoCloseable {
     
     public static boolean SHOW_REASON_IN_TOSTRING = true;
     
+    public static List<Feat> take(int n, List<Feat> in) {
+      n = Math.min(n, in.size());
+      List<Feat> out = new ArrayList<>(n);
+      for (int i = 0; i < n; i++)
+        out.add(in.get(i));
+      return out;
+    }
+    
     public static List<Feat> exp(List<Feat> in) {
       List<Feat> out = new ArrayList<>(in.size());
       for (Feat i : in)
@@ -2039,6 +2047,7 @@ public class IndexCommunications implements AutoCloseable {
       return m;
     }
     
+    /** expects duplicates will have the same weight, only removes duplicates rather than summing their weights */
     public static List<Feat> dedup(List<Feat> mayContainRepeatedKeysWithSameValue) {
       List<Feat> fs = new ArrayList<>();
       Map<String, Double> seen = new HashMap<>();
@@ -2051,6 +2060,18 @@ public class IndexCommunications implements AutoCloseable {
           assert p == f.getWeight();
         }
       }
+      return fs;
+    }
+  
+    public static List<Feat> collapse(List<Feat> mayContainRepeatedKeysWithSameValue) {
+      Map<String, Double> seen = new HashMap<>();
+      for (Feat f : mayContainRepeatedKeysWithSameValue) {
+        double p = seen.getOrDefault(f.getName(), 0d);
+        seen.put(f.getName(), p + f.getWeight());
+      }
+      List<Feat> fs = new ArrayList<>();
+      for (String f : seen.keySet())
+        fs.add(new Feat(f, seen.get(f)));
       return fs;
     }
   
