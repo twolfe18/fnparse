@@ -113,6 +113,10 @@ distsup-infobox/models: distsup-infobox/featex-shuf-train
 			tokenized-sentences/train distsup-infobox/model-2ndOrder-mc-s1.vw "--csoaa_ldf mc -b 22 -q ::" 1
 	touch $@
 
+feature-selection: distsup-infobox/binary-featex-train
+	mkdir $@
+	$(FNPARSE)/data/facc1-entsum/featsel-mi-jobs.sh
+
 distsup-infobox/predictions-%: distsup-infobox/models
 	$(FNPARSE)/data/facc1-entsum/distsup-prediction-jobs.sh tokenized-sentences/$* distsup-infobox/model-1stOrder-m-s1.vw
 	$(FNPARSE)/data/facc1-entsum/distsup-prediction-jobs.sh tokenized-sentences/$* distsup-infobox/model-2ndOrder-m-s1.vw
@@ -120,6 +124,8 @@ distsup-infobox/predictions-%: distsup-infobox/models
 	$(FNPARSE)/data/facc1-entsum/distsup-prediction-jobs.sh tokenized-sentences/$* distsup-infobox/model-2ndOrder-mc-s1.vw
 	#touch $@
 
+summaries/infobox-%: distsup-infobox/binary-featex-% feature-selection
+	$(FNPARSE)/data/facc1-entsum/summarize-pmi.sh tokenized-sentences/$* fnparse.jar
 
 # Summaries will go inline with the rest of the data
 # $ENTITY/summary/slot-w100.txt 		a 100-word summary using slots-as-concepts
