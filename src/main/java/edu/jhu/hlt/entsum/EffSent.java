@@ -15,7 +15,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-import dk.ange.octave.util.StringUtil;
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.PrepareSentencesForParsey;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.tutils.ArgMin;
@@ -119,6 +118,9 @@ public class EffSent implements Serializable {
   public int numMentions() {
     return entities.length;
   }
+  public int numTokens() {
+    return parse.length;
+  }
   
   public Iterable<Mention> mentions() {
     return Arrays.asList(entities);
@@ -205,6 +207,30 @@ public class EffSent implements Serializable {
       s.showConllStyle(a);
       System.out.println();
     }
+  }
+  
+  public String showWithMidHighlighted(String mid, MultiAlphabet a) {
+    boolean[] open = new boolean[parse.length];
+    boolean[] close = new boolean[parse.length];
+    for (int i = 0; i < entities.length; i++) {
+      if (mid.equals(entities[i].getFullMid())) {
+        assert !open[entities[i].start];
+        assert !close[entities[i].end-1];
+        open[entities[i].start] = true;
+        close[entities[i].end-1] = true;
+      }
+    }
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < parse.length; i++) {
+      if (i > 0)
+        sb.append(' ');
+      if (open[i])
+        sb.append("<span class=\"subj\">");
+      sb.append(a.word(parse[i].word));
+      if (close[i])
+        sb.append("</span>");
+    }
+    return sb.toString();
   }
 
   /**

@@ -49,6 +49,8 @@ import edu.jhu.util.MultiMap;
  * 2) for each, extract all those sentences, put them into a separate file/DB
  * 3) for each entity file, parse and tag them with PMP
  * 4) TODO loop through each entity, lookup sentences, re-rank them
+ * 
+ * NOTE: This implements the steps before {@link DistSupSetup}
  *
  * @author travis
  */
@@ -629,6 +631,8 @@ public class CluewebLinkedPreprocess {
    * Reads in all the parses for sentences in a cluster like rare4 at construction.
    * Has a method to read the sentences in a given mid -> list of mentions file
    * and re-rank them.
+   * 
+   * @deprecated
    */
   public static class EntityMentionRanker {
     

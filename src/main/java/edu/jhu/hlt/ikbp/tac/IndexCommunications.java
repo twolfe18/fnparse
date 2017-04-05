@@ -5449,7 +5449,7 @@ public class IndexCommunications implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() throws IOException {
       if (iter != null)
         iter.close();
     }

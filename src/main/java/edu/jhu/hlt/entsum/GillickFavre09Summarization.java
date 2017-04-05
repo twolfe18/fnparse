@@ -2,6 +2,7 @@ package edu.jhu.hlt.entsum;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -9,10 +10,13 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.EntityMentionRanker.ScoredPassage;
+import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.prim.list.IntArrayList;
+import edu.jhu.prim.map.IntIntHashMap;
+import edu.jhu.prim.set.IntHashSet;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.MultiMap;
 import gurobi.GRB;
@@ -165,6 +169,10 @@ public class GillickFavre09Summarization {
       this.j = sentence;
     }
     
+    public ConceptMention changeSentence(int newSentence) {
+      return new ConceptMention(concept(), newSentence);
+    }
+    
     public int sentence() { return j; }
     public int concept() { return i; }
 
@@ -205,6 +213,12 @@ public class GillickFavre09Summarization {
       super(concept, sentence);
       this.costOfEvokingConcept = costOfEvokingConcept;
     }
+    
+    @Override
+    public SoftConceptMention changeSentence(int newSentence) {
+      return new SoftConceptMention(concept(), newSentence, costOfEvokingConcept);
+    }
+
     @Override
     public String toString() {
       return "(concept=" + i + " sentence=" + j + " cost=" + costOfEvokingConcept + ")";
@@ -245,7 +259,58 @@ public class GillickFavre09Summarization {
         throw new IllegalArgumentException("neg");
     }
   }
+  
+  /* NOTE: This doesn't seem to work...
+   * 
+   * Returns a mapping from the new sentence indices (used by the pruned problem) to the original indices.
+   * Concept indices are not modified.
+  public IntIntHashMap pruneBySentence(int topSentences) {
+    // Compute the MAX possible utility supported by any sentence
+    double[] maxU = new double[sentenceLengths.size()];
+    for (ConceptMention cm : occ)
+      maxU[cm.sentence()] += conceptUtilities[cm.concept()];
+    Beam<Integer> keep = Beam.getMostEfficientImpl(topSentences);
+    double totalU = 0;
+    for (int i = 0; i < maxU.length; i++) {
+      keep.push(i, maxU[i]);
+      totalU += maxU[i];
+    }
+    double keptU = 0;
+    IntHashSet keepS = new IntHashSet();
+    while (keep.size() > 0) {
+      Beam.Item<Integer> i = keep.popItem();
+      keepS.add(i.getItem());
+      keptU += i.getScore();
+    }
+    Log.info("kept=" + topSentences + " all=" + sentenceLengths.size() + " keptU=" + (100d*keptU)/totalU + "%");
 
+    IntIntHashMap old2new = new IntIntHashMap();
+    IntIntHashMap new2old = new IntIntHashMap();
+    List<ConceptMention> occNew = new ArrayList<>();
+    IntArrayList sentLenNew = new IntArrayList();
+    for (ConceptMention cm : occ) {
+      if (!keepS.contains(cm.sentence()))
+        continue;
+      int newSent = old2new.getWithDefault(cm.sentence(), -1);
+      if (newSent < 0) {
+        newSent = old2new.size();
+        old2new.put(cm.sentence(), newSent);
+        new2old.put(newSent, cm.sentence());
+        sentLenNew.add(sentenceLengths.get(cm.sentence()));
+      }
+      occNew.add(cm.changeSentence(newSent));
+    }
+    assert keepS.size() == sentLenNew.size();
+    Log.info("nOccBefore=" + occ.size() + " nOccAfter=" + occNew.size());
+    this.occ = occNew;
+    this.sentenceLengths = sentLenNew;
+
+    assert old2new.size() == new2old.size();
+//    return old2new;
+    return new2old;
+  }
+   */
+  
   static class SoftSolution {
     IntArrayList sentences;   // TODO IntArrayList b/c of extreme sparsity
     IntArrayList concepts;
@@ -347,7 +412,8 @@ public class GillickFavre09Summarization {
     for (int i = 0; i < c.length; i++) {
       GRBLinExpr sum_j = new GRBLinExpr();
       List<GRBVar> ee = e_i.get(i);
-      assert ee.size() > 0;
+      if (ee.isEmpty())
+        continue;
       for (GRBVar v : ee)
         sum_j.addTerm(1, v);
       model.addConstr(sum_j, GRB.GREATER_EQUAL, c[i], null);

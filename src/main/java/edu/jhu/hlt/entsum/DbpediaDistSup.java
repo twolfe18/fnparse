@@ -61,6 +61,10 @@ import edu.jhu.util.MultiMap;
   The reason being that many of these textual co-occurrences are junk
   Need to be filtered via a "related entity" step or something of the like
   I think it would in general be difficult to put lexical/syntactic qualifications on what makes a "non-junk sentence"
+  
+ *
+ * @deprecated
+ * @see DistSupSetup
  *
  * @author travis
  */

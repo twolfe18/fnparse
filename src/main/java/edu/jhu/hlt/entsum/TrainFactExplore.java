@@ -22,6 +22,14 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.util.MultiMap;
 
+/**
+ * This class is to run experiments to answer the following questions:
+ * 1) which if any relations would benefit from subj/obj identity features?
+ * 2) which relations have a lot of training data?
+ * 3) which relations are 'common' (in the pruning sense of Universal Schemas work, e.g. 'relation must have 10 distinct subj/obj')
+ *
+ * @author travis
+ */
 public class TrainFactExplore {
   public static final Random RAND = new Random(9001);
   
