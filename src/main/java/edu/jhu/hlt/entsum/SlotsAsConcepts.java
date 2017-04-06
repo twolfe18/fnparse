@@ -1093,43 +1093,6 @@ public class SlotsAsConcepts {
       FileUtil.serialize(a, f);
     }
     
-    /**
-     * TODO Replace with {@link VwInstanceEffSentReader}
-     */
-    private List<Pair<EffSent, VwInstance>> relationExtractionJoin(MultiAlphabet a, PmiSlotPredictor pmi) throws IOException {
-//      File relLocsF = new File(entityDir, INFOBOX_PRED_LOC_FILENAME);       // gives sentence indices and subj/obj mentions
-//      File relFeatsF = new File(entityDir, INFOBOX_PRED_FEAT_FILENAME);
-//      List<File> relScoresF = FileUtil.find(entityDir, INFOBOX_PRED_SCORE_FILENAME_GLOB);
-//      File relScoresF = new File(entityDir, "infobox-binary/unlab-pmiPredictions.yhat");
-      File relLocsF = new File(entityDir, "infobox-binary/unlab.location");
-      File relFeatsF = new File(entityDir, "infobox-binary/unlab.x");
-      if (!relLocsF.isFile() || !relFeatsF.isFile()) {
-        Log.info("WARNING: there were no binary features extracted for entityDir=" + entityDir.getPath());
-        return null;
-      }
-      
-      File parsesF = new File(entityDir, "parse.conll");
-      File mentionLocsF = new File(entityDir, "mentionLocs.txt");
-      List<Pair<EffSent, VwInstance>> output = new ArrayList<>();
-      
-//      boolean ldf = true;
-//      try (VwInstanceReader fiter = new VwInstanceReader(relLocsF, relFeatsF, relScoresF, ldf);
-//      try (PmiFeatureSelection.InstanceIter fiter = new PmiFeatureSelection.InstanceIter(relScoresF, relLocsF);
-      try (PmiSlotPredictor.OnTheFlyPredictor fiter = pmi.new OnTheFlyPredictor(relFeatsF, relLocsF);
-          EffSent.Iter siter = new EffSent.Iter(parsesF, mentionLocsF, a)) {
-        Pair<EffSent, Integer> cur = new Pair<>(null, -1);
-        while (fiter.hasNext()) {
-          VwInstance inst = fiter.next();
-          while (cur.get2() < inst.loc.sentIdx && siter.hasNext())
-            cur = new Pair<>(siter.next(), cur.get2()+1);
-          if (cur.get2() != inst.loc.sentIdx)
-            continue;
-          output.add(new Pair<>(cur.get1(), inst));
-        }
-      }
-      return output;
-    }
-
     private List<Pair<EffSent, List<VwInstance>>> relationExtractionJoin2(MultiAlphabet a, PmiSlotPredictor pmi) throws IOException {
       File relLocsF = new File(entityDir, "infobox-binary/unlab.location");
       File relFeatsF = new File(entityDir, "infobox-binary/unlab.x");
@@ -1165,22 +1128,17 @@ public class SlotsAsConcepts {
       return output;
     }
     
-    private static <T> List<Pair<T, Double>> expVals(List<Pair<T, Double>> in) {
-      List<Pair<T, Double>> out = new ArrayList<>();
-      for (Pair<T, Double> i : in)
-        out.add(new Pair<>(i.get1(), Math.exp(i.get2())));
-      return out;
-    }
-    
     public static class Options {
       boolean entities;
       boolean slots;
       NgramCounts ngrams;
+      double sentenceCostWeight;
       
-      public Options(boolean entities, boolean slots, NgramCounts ngrams) {
+      public Options(boolean entities, boolean slots, NgramCounts ngrams, double sentenceCostWeight) {
         this.entities = entities;
         this.slots = slots;
         this.ngrams = ngrams;
+        this.sentenceCostWeight = sentenceCostWeight;
       }
 
       public String desc() {
@@ -1224,12 +1182,6 @@ public class SlotsAsConcepts {
       List<Pair<EffSent, List<VwInstance>>> out = new ArrayList<>();
       for (Pair<EffSent, List<VwInstance>> p : in) {
         EffSent s = p.get1();
-//        int nc = s.numContentWords(a);
-//        boolean countEndOfSentPunc = false;
-//        double nr = ((double) s.numNuisanceWords(a, countEndOfSentPunc)) / s.numTokens();
-//        double ai = s.averageIdf(a, df);
-//        if (nc >= 5 && nr <= 0.35 && s.containsVerb(a))
-//        if (ai > 3 && s.containsVerb(a))
         if (s.containsVerb(a))
           out.add(p);
       }
@@ -1240,11 +1192,15 @@ public class SlotsAsConcepts {
 
     public Summary summarize2(int numWords, MultiAlphabet parseAlph, PmiSlotPredictor pmi,
         ComputeIdf df,
+        OddSentenceScore odd,
         Options options, boolean debug) throws IOException, GRBException {
       Log.info("options=" + options);
       Alphabet<String> concepts = new Alphabet<>();
       List<SoftConceptMention> occ = new ArrayList<>();
       IntArrayList sentenceLengths = new IntArrayList();
+      DoubleArrayList sentenceCosts = null;
+      if (options.sentenceCostWeight > 0)
+        sentenceCosts = new DoubleArrayList();
       
       int maxVerbsPerInstance = 5;
       String thisMid = this.getMid();
@@ -1259,6 +1215,10 @@ public class SlotsAsConcepts {
         List<VwInstance> facts = j2.get(sIdx).get2();
         EffSent sent = j2.get(sIdx).get1();
         sentenceLengths.add(sent.parse().length);
+        if (options.sentenceCostWeight > 0) {
+          double sentCost = odd.cost(sent, parseAlph, false);
+          sentenceCosts.add(options.sentenceCostWeight * sentCost);
+        }
         
         if (options.entities) {
           int nm = sent.numMentions();
@@ -1362,7 +1322,7 @@ public class SlotsAsConcepts {
       }
       System.out.println();
 
-      GillickFavre09Summarization sum = new GillickFavre09Summarization(occ, sentenceLengths, conceptUtilities);
+      GillickFavre09Summarization sum = new GillickFavre09Summarization(occ, sentenceLengths, sentenceCosts, conceptUtilities);
 //      IntIntHashMap newSent2oldSent = sum.pruneBySentence(numWords * 2);
 
       SoftSolution keep = sum.solveSoft(numWords);
@@ -1613,7 +1573,8 @@ public class SlotsAsConcepts {
       for (ConceptMention c : occ)
         conceptUtilities[c.i] += 1.0;
 
-      GillickFavre09Summarization gf = new GillickFavre09Summarization(occ, sentenceLengths, conceptUtilities);
+      DoubleArrayList sentenceCosts = null;
+      GillickFavre09Summarization gf = new GillickFavre09Summarization(occ, sentenceLengths, sentenceCosts, conceptUtilities);
 
 //      IntArrayList s = gf.solve(wordBudget);
       SoftSolution s = gf.solveSoft(wordBudget);
@@ -1893,7 +1854,15 @@ public class SlotsAsConcepts {
       } else {
         Log.info("disregarding ngram concepts");
       }
-      Options opt = new Options(entities, slots, ngrams);
+      double sentCostWeight = config.getDouble("sentenceCostWeight");
+      Log.info("sentenceCostWeight=" + sentCostWeight);
+      Options opt = new Options(entities, slots, ngrams, sentCostWeight);
+      
+      OddSentenceScore odd = null;
+      if (sentCostWeight > 0) {
+        File oddF = config.getExistingFile("oddSentenceScores", new File("/tmp/odd.jser"));
+        odd = (OddSentenceScore) FileUtil.deserialize(oddF);
+      }
 
       //      for (String nws : config.getString("numWords", "40,80,160,320").split("\\D+")) {
       for (String nws : config.getString("numWords", "100").split("\\D+")) {
@@ -1904,7 +1873,7 @@ public class SlotsAsConcepts {
         File jserOutput = new File(jserOutputP, opt.desc() + ".jser");
         Log.info("numWords=" + numWords + " output=" + jserOutput.getPath());
 
-        Summary s = sum.summarize2(numWords, a, pmi, df, opt, debug);
+        Summary s = sum.summarize2(numWords, a, pmi, df, odd, opt, debug);
 
         if (s != null) {
           s.show(a);

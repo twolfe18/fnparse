@@ -2,7 +2,6 @@ package edu.jhu.hlt.entsum;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -10,13 +9,11 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.EntityMentionRanker.ScoredPassage;
-import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.list.IntArrayList;
-import edu.jhu.prim.map.IntIntHashMap;
-import edu.jhu.prim.set.IntHashSet;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.MultiMap;
 import gurobi.GRB;
@@ -145,7 +142,8 @@ public class GillickFavre09Summarization {
       
       Log.info("nOcc=" + occ.size() + " nSent=" + sentenceLengths.size() + " nConcept=" + conceptAlph.size());
       try {
-        GillickFavre09Summarization solver = new GillickFavre09Summarization(occ, sentenceLengths, conceptUtilities);
+        DoubleArrayList sentenceCosts = null;
+        GillickFavre09Summarization solver = new GillickFavre09Summarization(occ, sentenceLengths, sentenceCosts, conceptUtilities);
         IntArrayList keep = solver.solve(summaryLength);
         
         List<ScoredPassage> out = new ArrayList<>(keep.size());
@@ -241,12 +239,16 @@ public class GillickFavre09Summarization {
   
   private List<? extends ConceptMention> occ;
   private IntArrayList sentenceLengths;
+  private DoubleArrayList sentenceCosts;  // may be null
   private double[] conceptUtilities;
   
-  public GillickFavre09Summarization(List<? extends ConceptMention> occ, IntArrayList sentenceLengths, double[] conceptUtilities) {
+  public GillickFavre09Summarization(List<? extends ConceptMention> occ, IntArrayList sentenceLengths, DoubleArrayList sentenceCosts, double[] conceptUtilities) {
+    if (sentenceCosts != null && sentenceCosts.size() != sentenceLengths.size())
+      throw new IllegalArgumentException();
     Log.info("nOcc=" + occ.size() + " nSentence=" + sentenceLengths.size() + " nConcept=" + conceptUtilities.length);
     this.occ = occ;
     this.sentenceLengths = sentenceLengths;
+    this.sentenceCosts = sentenceCosts;
     this.conceptUtilities = conceptUtilities;
     
     // check that all utilities are non-negative
@@ -314,7 +316,7 @@ public class GillickFavre09Summarization {
   static class SoftSolution {
     IntArrayList sentences;   // TODO IntArrayList b/c of extreme sparsity
     IntArrayList concepts;
-    List<SoftConceptMention> mentions;
+    List<SoftConceptMention> mentions;  // vars set to 1 in solution
     int summaryLength;
     int summaryLengthLimit;
     
@@ -402,7 +404,17 @@ public class GillickFavre09Summarization {
       c2e.put(cm, e_ij);
     }
     Log.info("nOcc=" + occ.size() + " nOccWithPosCost=" + nnz);
-
+    
+    if (this.sentenceCosts != null) {
+      Log.info("adding sentence costs");
+      for (int j = 0; j < s.length; j++) {
+        double sc = sentenceCosts.get(j);
+        assert sc >= 0;
+        if (sc > 0)
+          obj.addTerm(-sc, s[j]);
+      }
+    }
+    
     model.setObjective(obj, GRB.MAXIMIZE);
 
 //    setConceptObjective(model, c);
@@ -593,7 +605,8 @@ public class GillickFavre09Summarization {
     occ.add(new SoftConceptMention(4, 2, 1)); // loves
     occ.add(new SoftConceptMention(5, 2, 1)); // loves-arg0
 
-    GillickFavre09Summarization s = new GillickFavre09Summarization(occ, sentenceLengths, conceptUtilities);
+    DoubleArrayList sentenceCosts = null;
+    GillickFavre09Summarization s = new GillickFavre09Summarization(occ, sentenceLengths, sentenceCosts, conceptUtilities);
     SoftSolution sol = s.solveSoft(10);
     System.out.println(sol);
     System.out.println("e_ij: " + sol.mentions);

@@ -205,6 +205,7 @@ public class OddSentenceScore implements Serializable {
 //    File entityDirParent = new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev");
     File entityDirParent = config.getExistingDir("entityDirParent");
     List<File> conll = FileUtil.find(entityDirParent, "glob:**/parse.conll");
+    Log.info("found " + conll.size() + " entities to train/count on");
     boolean debug = config.getBoolean("debug", false);
     ReservoirSample<EffSent> show = new ReservoirSample<>(50, new Random(9001));
     TimeMarker tm = new TimeMarker();
@@ -225,10 +226,13 @@ public class OddSentenceScore implements Serializable {
         }
         if (debug || tm.enoughTimePassed(5))
           Log.info("nf=" + nf + " feats=" + odd.numFeatures() + " vals=" + odd.numEntries() + "\t" + Describe.memoryUsage());
+      } catch (Exception e) {
+        e.printStackTrace();
+        Log.info("skipping");
       }
     }
     
-    int minCount = config.getInt("minCount", 10);
+    int minCount = config.getInt("minCount", 30);
     odd.prune(minCount);
 
     if (debug) {
