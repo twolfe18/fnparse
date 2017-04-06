@@ -1,0 +1,56 @@
+<style type="text/css">
+  span.subj { color: blue; font-weight: bold; }
+  span.query { color: green; font-weight: bold; }
+</style>
+
+<div class="panel-body">
+<p>You will be given three summaries of <span class="query">${entityName}</span>.</p>
+<p>Read each of them and judge how <b>informative</b> each summary is,
+  and then fill in your <b>ranking</b> using the pull-down menus.
+  You should use each pull-down option only <b>once</b> (no ties allowed).</p>
+</div>
+
+<center>
+<table border="1" cellpadding="10" width="100%">
+<tr>
+  <td width="85%">${sum1text}</td>
+  <td>
+  <fieldset>
+    <select class="form-control" name="sum1rank">
+      <option selected="selected" value="select one">- select one -</option>
+      <option value="Best">Best (most informative)</option>
+      <option value="Middle">Middle</option>
+      <option value="Worst">Worst (least informative)</option>
+    </select>
+  </fieldset>
+  </td>
+</tr>
+<tr>
+  <td>${sum2text}</td>
+  <td>
+  <fieldset>
+    <select class="form-control" name="sum2rank">
+      <option selected="selected" value="select one">- select one -</option>
+      <option value="Best">Best (most informative)</option>
+      <option value="Middle">Middle</option>
+      <option value="Worst">Worst (least informative)</option>
+    </select>
+  </fieldset>
+  </td>
+</tr>
+<tr>
+  <td>${sum3text}</td>
+  <td>
+  <fieldset>
+    <select class="form-control" name="sum3rank">
+      <option selected="selected" value="select one">- select one -</option>
+      <option value="Best">Best (most informative)</option>
+      <option value="Middle">Middle</option>
+      <option value="Worst">Worst (least informative)</option>
+    </select>
+  </fieldset>
+  </td>
+</tr>
+</table>
+</center>
+
