@@ -12,10 +12,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 
+import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
@@ -189,12 +191,25 @@ public class OddSentenceScore implements Serializable {
   }
 
   public static void main(String[] args) throws IOException {
-    MultiAlphabet a = new MultiAlphabet();
+    ExperimentProperties config = ExperimentProperties.init(args);
+    
+    File outputJser = config.getFile("outputJser");
+    Log.info("outputJser=" + outputJser.getPath());
+
     OddSentenceScore odd = new OddSentenceScore();
-    File dfF = new File("data/idf/cms/df-cms-simpleaccumulo-twolfe-cag1-nhash12-logb20.jser");  // config.getExistingFile("wordDocFreq");
+
+//    File dfF = new File("data/idf/cms/df-cms-simpleaccumulo-twolfe-cag1-nhash12-logb20.jser");
+    File dfF = config.getExistingFile("wordDocFreq");
     ComputeIdf df = (ComputeIdf) FileUtil.deserialize(dfF);
-    List<File> conll = FileUtil.find(new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev"), "glob:**/parse.conll");
+
+//    File entityDirParent = new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev");
+    File entityDirParent = config.getExistingDir("entityDirParent");
+    List<File> conll = FileUtil.find(entityDirParent, "glob:**/parse.conll");
+    boolean debug = config.getBoolean("debug", false);
     ReservoirSample<EffSent> show = new ReservoirSample<>(50, new Random(9001));
+    TimeMarker tm = new TimeMarker();
+
+    MultiAlphabet a = new MultiAlphabet();
     int nf = 0;
     for (File f : conll) {
       nf++;
@@ -205,23 +220,34 @@ public class OddSentenceScore implements Serializable {
         while (diter.hasNext()) {
           EffSent sent = diter.next().get1();
           odd.observe(sent, a);
-          show.add(sent);
+          if (debug)
+            show.add(sent);
         }
-        Log.info("nf=" + nf + " feats=" + odd.numFeatures() + " vals=" + odd.numEntries() + "\t" + Describe.memoryUsage());
+        if (debug || tm.enoughTimePassed(5))
+          Log.info("nf=" + nf + " feats=" + odd.numFeatures() + " vals=" + odd.numEntries() + "\t" + Describe.memoryUsage());
       }
     }
-    odd.prune(10);
-    List<EffSent> r = new ArrayList<>();
-    for (EffSent s : show) r.add(s);
-    Collections.sort(r, odd.byOddnessDesc(a));
-    int i = 0;
-    for (EffSent s : r) {
-      i++;
-      System.out.println(i + "th most costly sentence:");
-      s.showConllStyle(a);
-      odd.cost(s, a, true);
+    
+    int minCount = config.getInt("minCount", 10);
+    odd.prune(minCount);
+
+    if (debug) {
+      List<EffSent> r = new ArrayList<>();
+      for (EffSent s : show) r.add(s);
+      Collections.sort(r, odd.byOddnessDesc(a));
+      int i = 0;
+      for (EffSent s : r) {
+        i++;
+        System.out.println(i + "th most costly sentence:");
+        s.showConllStyle(a);
+        odd.cost(s, a, true);
+      }
     }
-    FileUtil.serialize(odd, new File("/tmp/odd.jser"));
+
+    FileUtil.VERBOSE = true;
+//    FileUtil.serialize(odd, new File("/tmp/odd.jser"));
+    FileUtil.serialize(odd, outputJser);
+
     Log.info("done");
   }
 }
