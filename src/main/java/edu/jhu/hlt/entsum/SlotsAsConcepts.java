@@ -29,6 +29,7 @@ import edu.jhu.hlt.entsum.VwLine.Namespace;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
+import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -1132,13 +1133,15 @@ public class SlotsAsConcepts {
       boolean entities;
       boolean slots;
       NgramCounts ngrams;
-      double sentenceCostWeight;
+      double sentenceCostOdd;
+      double sentenceCostTopicality;
       
-      public Options(boolean entities, boolean slots, NgramCounts ngrams, double sentenceCostWeight) {
+      public Options(boolean entities, boolean slots, NgramCounts ngrams, double sentenceCostOdd, double sentenceCostTopicality) {
         this.entities = entities;
         this.slots = slots;
         this.ngrams = ngrams;
-        this.sentenceCostWeight = sentenceCostWeight;
+        this.sentenceCostOdd = sentenceCostOdd;
+        this.sentenceCostTopicality = sentenceCostTopicality;
       }
 
       public String desc() {
@@ -1199,10 +1202,10 @@ public class SlotsAsConcepts {
       List<SoftConceptMention> occ = new ArrayList<>();
       IntArrayList sentenceLengths = new IntArrayList();
       DoubleArrayList sentenceCosts = null;
-      if (options.sentenceCostWeight > 0)
+      if (options.sentenceCostOdd > 0)
         sentenceCosts = new DoubleArrayList();
       
-      int maxVerbsPerInstance = 5;
+      int maxSlotsPerInstance = 5;
       String thisMid = this.getMid();
       IntDoubleHashVector relatedEntityConceptCounts = new IntDoubleHashVector();
       IntDoubleHashVector slotConceptCounts = new IntDoubleHashVector();
@@ -1215,10 +1218,15 @@ public class SlotsAsConcepts {
         List<VwInstance> facts = j2.get(sIdx).get2();
         EffSent sent = j2.get(sIdx).get1();
         sentenceLengths.add(sent.parse().length);
-        if (options.sentenceCostWeight > 0) {
-          double sentCost = odd.cost(sent, parseAlph, false);
-          sentenceCosts.add(options.sentenceCostWeight * sentCost);
-        }
+        
+        // Cost
+        double tc = topicalityCost(sent, thisMid);
+        double oc = 0;
+        if (options.sentenceCostOdd > 0)
+          oc = odd.cost(sent, parseAlph, false);
+        double sentCost = options.sentenceCostOdd * oc
+            + options.sentenceCostTopicality * tc;
+        sentenceCosts.add(sentCost);
         
         if (options.entities) {
           int nm = sent.numMentions();
@@ -1230,21 +1238,19 @@ public class SlotsAsConcepts {
             int c = concepts.lookupIndex(cs);
             double cost = 0;
             occ.add(new SoftConceptMention(c, sIdx, cost));
-//            relatedEntityConcepts.increment(cs);
             relatedEntityConceptCounts.add(c, 1);
           }
         }
         
         if (options.slots) {
           for (VwInstance f : facts) {
-            List<Feat> verbs = f.getMostLikelyLabels(maxVerbsPerInstance);
-            for (Feat verb : verbs) {
-              String cs = "s/" + verb.getName();
+            List<Feat> slots = f.getMostLikelyLabels(maxSlotsPerInstance);
+            for (Feat slot : slots) {
+              String cs = "s/" + slot.getName();
               int c = concepts.lookupIndex(cs);
-              double costOfEvokingConcept = verb.getWeight();
+              double costOfEvokingConcept = slot.getWeight();
               SoftConceptMention scm = new SoftConceptMention(c, sIdx, costOfEvokingConcept);
               occ.add(scm);
-//              slotConcepts.increment(cs);
               slotConceptCounts.add(c, 1);
             }
           }
@@ -1269,7 +1275,6 @@ public class SlotsAsConcepts {
             if (c < 8 || c > 1e5)
               continue;
             double lc = logD - Math.log(c + 4);
-//            double lc = 1;
             int concept = concepts.lookupIndex(NgramCounts.join(ng));
             occ.add(new SoftConceptMention(concept, sIdx, 0));
             ngramConceptCounts.add(concept, lc);
@@ -1332,6 +1337,7 @@ public class SlotsAsConcepts {
         int sIdx = keep.sentences.get(i);
 //        sIdx = newSent2oldSent.get(sIdx);
         s.sentences.add(j2.get(sIdx).get1());
+        s.sentenceCosts.add(sentenceCosts.get(sIdx));
         for (SoftConceptMention m : keep.mentionsIn(sIdx)) {
           String cs = concepts.lookupObject(m.concept());
           s.addConcept(i, Span.nullSpan, cs, conceptUtilities[m.concept()], m.costOfEvokingConcept);
@@ -1341,6 +1347,24 @@ public class SlotsAsConcepts {
 //      return s;
     }
     
+    public static double topicalityCost(EffSent sent, String subject) {
+      int n = sent.numTokens();
+      int shallow = n;
+      int firstTok = n;
+      int[] depth = DepNode.depths(sent.parse());
+      for (int i = 0; i < sent.numMentions(); i++) {
+        Mention m = sent.mention(i);
+        if (subject.equals(m.getFullMid())) {
+          for (int j = m.start; j < m.end; j++) {
+            if (j < firstTok) firstTok = j;
+            if (depth[j] < shallow) shallow = depth[j];
+          }
+        }
+      }
+      assert shallow >= 0;
+      assert firstTok >= 0;
+      return shallow + (2d*firstTok)/n;
+    }
     
     /*
      * @param parseAlph you can/should provide a new/empty one of these (passed in so it can be mutated and show these changes to the caller)
@@ -1854,12 +1878,14 @@ public class SlotsAsConcepts {
       } else {
         Log.info("disregarding ngram concepts");
       }
-      double sentCostWeight = config.getDouble("sentenceCostWeight");
-      Log.info("sentenceCostWeight=" + sentCostWeight);
-      Options opt = new Options(entities, slots, ngrams, sentCostWeight);
+      double sentCostOdd = config.getDouble("sentCostOdd");
+      Log.info("sentCostOdd=" + sentCostOdd);
+      double sentCostTopicality = config.getDouble("sentCostTopicality");
+      Log.info("sentCostTopicality=" + sentCostTopicality);
+      Options opt = new Options(entities, slots, ngrams, sentCostOdd, sentCostTopicality);
       
       OddSentenceScore odd = null;
-      if (sentCostWeight > 0) {
+      if (sentCostOdd > 0) {
         File oddF = config.getExistingFile("oddSentenceScores", new File("/tmp/odd.jser"));
         odd = (OddSentenceScore) FileUtil.deserialize(oddF);
       }
