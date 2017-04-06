@@ -13,6 +13,8 @@ FNPARSE=/home/hltcoe/twolfe/fnparse-build/fnparse
 FACC1 = /export/projects/tto8/ClueWeb/clueweb09-freebase-annotation/extractedAnnotation
 DBPEDIA = /export/projects/twolfe/data/dbpedia
 
+DF = /export/projects/twolfe/sit-search/idf/cms/df-cms-simpleaccumulo-twolfe-cag1-nhash12-logb20.jser
+
 entities:
 	rsync -avz --delete $(GRID):$(SPLIT)/rare4/ $@
 
@@ -127,11 +129,21 @@ distsup-infobox/predictions-%: distsup-infobox/models
 summaries/infobox-%: distsup-infobox/binary-featex-% feature-selection
 	$(FNPARSE)/data/facc1-entsum/summarize-pmi.sh tokenized-sentences/$* fnparse.jar
 
-# Summaries will go inline with the rest of the data
-# $ENTITY/summary/slot-w100.txt 		a 100-word summary using slots-as-concepts
-# $ENTITY/summary/related-w100.txt
-# $ENTITY/summary/vanilla-w100.txt
-#### For now, these files will all just be "as they should appear in the HIT"
-#### TODO Consider what a good intermediate format would be so that we can present the info multiple ways
+# This has to be run AFTER the summaries are created on my laptop with gurobi.
+# This step just converts jser to one csv file (with the fields needed for the hit).
+summaries/hit-unlab-%.csv: summaries/infobox-%
+	java -ea -server -cp fnparse.jar \
+		edu.jhu.hlt.entsum.Summary \
+			summary true \
+			hit true \
+			entityDirParent tokenized-sentences/$$ \
+			outputCsv $@
 
+odd-sentence-score.jser:
+	java -ea -server -Xmx6G -cp fnparse.jar \
+		edu.jhu.hlt.entsum.OddSentenceScore \
+			outputJser $@ \
+			wordDocFreq $(DF) \
+			entityDirParent tokenized-sentences/train \
+			minCount 30
 
