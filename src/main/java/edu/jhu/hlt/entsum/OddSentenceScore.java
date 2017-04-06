@@ -192,6 +192,7 @@ public class OddSentenceScore implements Serializable {
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
+    FileUtil.VERBOSE = true;
     
     File outputJser = config.getFile("outputJser");
     Log.info("outputJser=" + outputJser.getPath());
@@ -209,7 +210,9 @@ public class OddSentenceScore implements Serializable {
     boolean debug = config.getBoolean("debug", false);
     ReservoirSample<EffSent> show = new ReservoirSample<>(50, new Random(9001));
     TimeMarker tm = new TimeMarker();
+    TimeMarker tm2 = new TimeMarker();
 
+    int mins = 1;
     MultiAlphabet a = new MultiAlphabet();
     int nf = 0;
     for (File f : conll) {
@@ -230,6 +233,13 @@ public class OddSentenceScore implements Serializable {
         e.printStackTrace();
         Log.info("skipping");
       }
+      
+      // Save early
+      if (tm2.enoughTimePassed(mins * 60)) {
+        File outputJserTemp = new File(outputJser.getPath() + ".temp");
+        FileUtil.serialize(odd, outputJserTemp);
+        mins++;
+      }
     }
     
     int minCount = config.getInt("minCount", 30);
@@ -248,7 +258,6 @@ public class OddSentenceScore implements Serializable {
       }
     }
 
-    FileUtil.VERBOSE = true;
 //    FileUtil.serialize(odd, new File("/tmp/odd.jser"));
     FileUtil.serialize(odd, outputJser);
 
