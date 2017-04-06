@@ -18,6 +18,7 @@ import java.util.Set;
 import edu.jhu.hlt.entsum.CluewebLinkedPreprocess.PrepareSentencesForParsey;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.tutils.ArgMin;
+import edu.jhu.hlt.tutils.Average;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -135,6 +136,66 @@ public class EffSent implements Serializable {
     return m;
   }
   
+  public boolean containsVerb(MultiAlphabet a) {
+    for (int i = 0; i < parse.length; i++) {
+      String pos = a.pos(parse[i].pos);
+      if (pos.startsWith("V"))
+        return true;
+    }
+    return false;
+  }
+  
+  public int numContentWords(MultiAlphabet a) {
+    int c = 0;
+    for (int i = 0; i < parse.length; i++) {
+      String pos = a.pos(parse[i].pos);
+      if (pos.startsWith("V")
+          || pos.startsWith("N")
+          || pos.startsWith("R")
+          || pos.startsWith("J")) {
+        c++;
+      }
+    }
+    return c;
+  }
+
+  public int numNuisanceWords(MultiAlphabet a, boolean countEndOfSentPunc) {
+    int c = 0;
+    int n = parse.length;
+    if (!countEndOfSentPunc)
+      n--;
+    for (int i = 0; i < n; i++) {
+      String pos = a.pos(parse[i].pos);
+      if (pos.isEmpty()
+          || pos.equals("NFP")
+          || pos.equals("HYPH")
+          || pos.equals("LS")
+          || pos.equals("UH")
+          || pos.equals("-LRB-")
+          || pos.equals("-RRB-")
+          || pos.equals(":")
+          || pos.equals(",")
+          || pos.equals(".")
+          || pos.equals("``")
+          || pos.equals("''")
+          || pos.equals("SYM")) {
+        c++;
+      }
+    }
+    return c;
+  }
+  
+  public double averageIdf(MultiAlphabet a, ComputeIdf df) {
+    assert parse.length > 0;
+    double u = 0;
+    for (int i = 0; i < parse.length; i++) {
+      String w = a.word(parse[i].word);
+      u += df.idf(w);
+    }
+    double b = 1;
+    return (u + b) / (parse.length + b);
+  }
+  
   /**
    * Reads the format created by {@link PrepareSentencesForParsey},
    * namely: (<midWithSlashMSlash> <mentionSpanStart>-<mentionSpanEnd>)*
@@ -170,7 +231,8 @@ public class EffSent implements Serializable {
       }
     }
     for (int i = 0; i < parse.length; i++) {
-      System.out.printf("% 4d  %-16s %s\n", i, a.word(parse[i].word), mids[i]);
+      System.out.printf("% 4d  %-16s  %-6s  %s\n",
+          i, a.word(parse[i].word), a.pos(parse[i].pos), mids[i]);
     }
   }
   
@@ -251,6 +313,9 @@ public class EffSent implements Serializable {
     private EffSent cur;
     private int total, skipped;
     
+    /**
+     * @param numWordsInKey 2 works well
+     */
     public DedupMaW3Iter(Iter wrapped, ComputeIdf df, int numWordsInKey) {
       this.wrapped = wrapped;
       this.df = df;

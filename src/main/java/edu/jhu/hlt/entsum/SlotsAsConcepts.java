@@ -1216,8 +1216,30 @@ public class SlotsAsConcepts {
       }
       return m;
     }
+    
+    public static List<Pair<EffSent, List<VwInstance>>> filterOutNoVerb(
+        List<Pair<EffSent, List<VwInstance>>> in, MultiAlphabet a, ComputeIdf df) {
+      if (in == null)
+        return null;
+      List<Pair<EffSent, List<VwInstance>>> out = new ArrayList<>();
+      for (Pair<EffSent, List<VwInstance>> p : in) {
+        EffSent s = p.get1();
+//        int nc = s.numContentWords(a);
+//        boolean countEndOfSentPunc = false;
+//        double nr = ((double) s.numNuisanceWords(a, countEndOfSentPunc)) / s.numTokens();
+//        double ai = s.averageIdf(a, df);
+//        if (nc >= 5 && nr <= 0.35 && s.containsVerb(a))
+//        if (ai > 3 && s.containsVerb(a))
+        if (s.containsVerb(a))
+          out.add(p);
+      }
+      double k = (100d*out.size()) / in.size();
+      Log.info("in.size=" + in.size() + " out.size=" + out.size() + " %keep=" + k);
+      return out;
+    }
 
     public Summary summarize2(int numWords, MultiAlphabet parseAlph, PmiSlotPredictor pmi,
+        ComputeIdf df,
         Options options, boolean debug) throws IOException, GRBException {
       Log.info("options=" + options);
       Alphabet<String> concepts = new Alphabet<>();
@@ -1230,7 +1252,7 @@ public class SlotsAsConcepts {
       IntDoubleHashVector slotConceptCounts = new IntDoubleHashVector();
       IntDoubleHashVector ngramConceptCounts = new IntDoubleHashVector();
 
-      List<Pair<EffSent, List<VwInstance>>> j2 = relationExtractionJoin2(parseAlph, pmi);
+      List<Pair<EffSent, List<VwInstance>>> j2 = filterOutNoVerb(relationExtractionJoin2(parseAlph, pmi), parseAlph, df);
       if (j2 == null)
         return null;
       for (int sIdx = 0; sIdx < j2.size(); sIdx++) {
@@ -1815,7 +1837,9 @@ public class SlotsAsConcepts {
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     File output;
-
+    File dfF;
+    ComputeIdf df;
+    
     String m = config.getString("mode");
     switch (m) {
     case "extractFeatures":   // makes tokenized-sentences/$ENTITY/distsup-infobox.csoaa_ldf.yx
@@ -1828,8 +1852,8 @@ public class SlotsAsConcepts {
       File entityDir = config.getExistingDir("entityDir");
       String mid = entityDir.getName().replaceAll("m.", "/m/");
 
-      File dfF = config.getExistingFile("wordDocFreq");
-      ComputeIdf df = (ComputeIdf) FileUtil.deserialize(dfF);
+      dfF = config.getExistingFile("wordDocFreq");
+      df = (ComputeIdf) FileUtil.deserialize(dfF);
 
       StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, entityDir, mid, train);
       if (config.getBoolean("binary")) {
@@ -1852,6 +1876,9 @@ public class SlotsAsConcepts {
         pmi.add(ff);
       int k = config.getInt("topFeats", 30);
       pmi.topKPrune(k);
+      
+      dfF = config.getExistingFile("wordDocFreq");
+      df = (ComputeIdf) FileUtil.deserialize(dfF);
 
       boolean debug = config.getBoolean("debug", true);
 
@@ -1877,7 +1904,7 @@ public class SlotsAsConcepts {
         File jserOutput = new File(jserOutputP, opt.desc() + ".jser");
         Log.info("numWords=" + numWords + " output=" + jserOutput.getPath());
 
-        Summary s = sum.summarize2(numWords, a, pmi, opt, debug);
+        Summary s = sum.summarize2(numWords, a, pmi, df, opt, debug);
 
         if (s != null) {
           s.show(a);

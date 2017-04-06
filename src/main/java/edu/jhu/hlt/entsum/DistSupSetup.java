@@ -42,6 +42,7 @@ import edu.jhu.util.MultiMap;
  * (3) is split up into:
  *   a) a pass which spits out un-grounded facts (filter),  e.g. m.0gly1/fact-types.txt    (bag of triples)
  *   b) (TODO) a pass which aligns facts to sentences,      e.g. m.0gly1/fact-mentions.txt (same lines as mentions.txt)
+ *      @see SlotsAsConcepts.StreamingDistSupFeatEx is the module that does fact alignment.
  *
  * TODO: The distsup training code extraction need to look at [parsed.conll, mentions.txt, facts.txt] for all entities.
  * 

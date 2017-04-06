@@ -7,11 +7,15 @@ class Row:
   def __init__(self, dict_reader_row):
     self.dict_reader_row = dict_reader_row
     for k, v in dict_reader_row.iteritems():
+      if k.startswith('Input.'):
+        k = k[len('Input.'):]
+      if k.startswith('Answer.'):
+        k = k[len('Answer.'):]
       self.__dict__[k.replace('.', '_')] = v 
 
-    self.sum1rank = 'Middle'
-    self.sum2rank = 'Best'
-    self.sum3rank = 'Worst'
+    #self.sum1rank = 'Middle'
+    #self.sum2rank = 'Best'
+    #self.sum3rank = 'Worst'
 
   @property
   def hit(self):
@@ -51,19 +55,24 @@ def instances(filename):
       #print subj, tag, entity
       yield Row(row)
 
-source = 'code-testing-data/summaries/hit-unlab-dev.sample40.csv'
+if len(sys.argv) != 2:
+  print 'please provide a hit results csv'
+  sys.exit(1)
+source = sys.argv[1]
+#source = 'code-testing-data/summaries/hit-unlab-dev.sample40.csv'
 inst = list(instances(source))
 #keyfunc = lambda r: r.tag
 keyfunc = lambda r: r.tag2
 inst = sorted(inst, key=keyfunc)
-for tag, instances in itertools.groupby(inst, key=keyfunc):
+for tag, cur_inst in itertools.groupby(inst, key=keyfunc):
   print 'working on tag', tag
 
   env = trueskill.TrueSkill()
   rmemo = collections.defaultdict(env.create_rating)
 
-  for r in instances:
-    print r.subj, r.tag, r.entityName
+  cur_inst = list(cur_inst)
+  for r in cur_inst:
+    #print r.subj, r.tag, r.entityName
 
     # This is wrong!
     # If I make [(es,e), (s), (w)],
@@ -94,6 +103,7 @@ for tag, instances in itertools.groupby(inst, key=keyfunc):
     for r, s in zip(new_rat, sys):
       rmemo[s] = r[0]
 
+  print 'based on', len(cur_inst), 'instances:'
   sys = sorted(rmemo.keys(), key=lambda s: rmemo[s].mu, reverse=True)
   for s in sys:
     print "%-12s %s" % (s, rmemo[s])

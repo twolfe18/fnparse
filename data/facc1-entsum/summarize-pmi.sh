@@ -32,7 +32,7 @@ java -ea -server -cp $JAR edu.jhu.hlt.entsum.SlotsAsConcepts \
   entities $E \
   slots $S \
   ngrams $W \
-  numWords "40,80,160,320"
+  numWords "20,40,80,160"
 done
 done
 done
