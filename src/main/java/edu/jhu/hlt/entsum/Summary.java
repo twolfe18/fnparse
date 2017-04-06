@@ -24,6 +24,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.util.MultiMap;
 
 public class Summary implements Serializable {
@@ -82,12 +83,14 @@ public class Summary implements Serializable {
 
   public String subject;            // e.g. a mid
   public String system;             // which produced this summary
+  public DoubleArrayList sentenceCosts;
   public List<EffSent> sentences;
   public List<Concept> concepts;
   
   public Summary(String subject, String system) {
     this.subject = subject;
     this.system = system;
+    this.sentenceCosts = new DoubleArrayList();
     this.sentences = new ArrayList<>();
     this.concepts = new ArrayList<>();
   }
@@ -95,12 +98,14 @@ public class Summary implements Serializable {
   public Summary(String subject, String system, List<EffSent> sentences) {
     this.subject = subject;
     this.system = system;
+    this.sentenceCosts = new DoubleArrayList();
     this.sentences = sentences;
     this.concepts = new ArrayList<>();
   }
   
   private static class Sent implements Comparable<Sent> {
     double score;
+    double sentenceCost = Double.NaN;
     int oldIdx;
     EffSent sent;
     List<Concept> concepts;
@@ -115,6 +120,8 @@ public class Summary implements Serializable {
   }
   private void add(Sent si, int[] old2newSentIdx) {
     sentences.add(si.sent);
+    if (!Double.isNaN(si.sentenceCost))
+      sentenceCosts.add(si.sentenceCost);
     for (Concept ci : si.concepts)
       concepts.add(ci.changeSentence(old2newSentIdx[ci.sentence]));
   }
@@ -123,6 +130,8 @@ public class Summary implements Serializable {
     for (int i = 0; i < sentences.size(); i++) {
       Sent si = new Sent();
       si.oldIdx = i;
+      if (sentenceCosts != null)
+        si.sentenceCost = sentenceCosts.get(i);
       si.sent = sentences.get(i);
       si.concepts = conceptsIn(i);
       for (Concept c : si.concepts)
@@ -162,6 +171,7 @@ public class Summary implements Serializable {
   public void show(MultiAlphabet a) {
     for (int i = 0; i < sentences.size(); i++) {
       EffSent s = sentences.get(i);
+      double sc = sentenceCosts.get(i);
       List<Concept> ci = conceptsIn(i);
       Collections.sort(ci, Concept.BY_BANG_FOR_BUCK_DESC);
       System.out.println("sentence=" + i + " nWord=" + s.parse().length + " nConcept=" + ci.size());
@@ -171,6 +181,7 @@ public class Summary implements Serializable {
         String loc = c.tokens == Span.nullSpan ? "?" : c.tokens.shortString();
         System.out.printf("  [%s u=%.2f c=%.2f @%s]", c.name, c.utility, c.mentionCost, loc);
       }
+      System.out.printf("\nsentenceCost: %.3f\n", sc);
       System.out.println("\n");
     }
   }
