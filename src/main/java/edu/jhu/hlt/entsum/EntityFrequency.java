@@ -39,7 +39,7 @@ public class EntityFrequency implements Serializable {
   }
   
   public static Pair<String, Integer> parseLine(String line) {
-    String[] a = line.split("\\s+");
+    String[] a = line.trim().split("\\s+");
     assert a.length == 2;
     int count = Integer.parseUnsignedInt(a[0]);
     return new Pair<>(a[1], count);
@@ -195,7 +195,7 @@ public class EntityFrequency implements Serializable {
     Log.info("outputJser=" + outputJser.getPath());
     File countsRoot = config.getExistingDir("countsRoot");
     Log.info("countsRoot=" + countsRoot.getPath());
-    String countsGlob = config.getString("countsGlob", "glob:**/*.gz");
+    String countsGlob = config.getString("countsGlob", "glob:**/*.txt");
     List<File> fs = FileUtil.find(countsRoot, countsGlob);
     int nShard = config.getInt("nShard", 16);   // 438M nLines (>nEnt) / 16 shards * (10 chars * 2 bytes/char + 4 bytes/int) * 1.5 = 940MB
     int nhash = config.getInt("nhash", 12);
