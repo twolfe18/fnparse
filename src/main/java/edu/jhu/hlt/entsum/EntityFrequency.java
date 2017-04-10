@@ -14,7 +14,6 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.tuple.Pair;
-import edu.jhu.util.CountMinSketch.StringCountMinSketch;
 import edu.jhu.util.MaxMinSketch.StringMaxMinSketch;
 
 public class EntityFrequency {
@@ -61,6 +60,7 @@ public class EntityFrequency {
     List<File> files;
     
     public Builder(List<File> fs, int nShards, int nhash, int logb) {
+      Log.info("nFiles=" + fs.size() + " nShard=" + nShards);
       this.curShard = 0;
       this.nShard = nShards;
       this.files = fs;
@@ -112,8 +112,11 @@ public class EntityFrequency {
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
     File outputJser = config.getFile("outputJser");
+    Log.info("outputJser=" + outputJser.getPath());
     File countsRoot = config.getExistingDir("countsRoot");
-    List<File> fs = FileUtil.find(countsRoot, "*.gz");
+    Log.info("countsRoot=" + countsRoot.getPath());
+    String countsGlob = config.getString("countsGlob", "glob:**/*.gz");
+    List<File> fs = FileUtil.find(countsRoot, countsGlob);
     int nShard = config.getInt("nShard", 16);   // 438M nLines (>nEnt) / 16 shards * (10 chars * 2 bytes/char + 4 bytes/int) * 1.5 = 940MB
     int nhash = config.getInt("nhash", 12);
     int logb = config.getInt("logb", 20);

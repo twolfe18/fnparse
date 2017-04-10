@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # Launch one job for every entity to make infobox/relation prediction
+# DEPRECATED: This is for the old vowpal wabbit pipeline.
+
 set -eu
 ENT_DIR_PARENT=$1
 MODEL=$2

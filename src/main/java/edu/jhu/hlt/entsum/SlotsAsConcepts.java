@@ -1004,7 +1004,6 @@ public class SlotsAsConcepts {
       }
     }
     
-    // TODO
     class OnTheFlyPredictor implements Iterator<VwInstance>, AutoCloseable {
       private BufferedReader rFeatures;
       private BufferedReader rLocs;
@@ -1160,6 +1159,9 @@ public class SlotsAsConcepts {
       }
     }
     
+    /**
+     * Rounds to 0 any weight which is not in the top-k.
+     */
     public static IntDoubleHashVector prune(IntDoubleHashVector weights, int k, String tag) {
       if (weights.getNumImplicitEntries() <= k) {
         Log.info(tag + ": no pruning needed " + weights.getNumImplicitEntries() + " < " + k);
@@ -1206,6 +1208,7 @@ public class SlotsAsConcepts {
         sentenceCosts = new DoubleArrayList();
       
       int maxSlotsPerInstance = 5;
+      int maxSlotsPerSentence = 5;
       String thisMid = this.getMid();
       IntDoubleHashVector relatedEntityConceptCounts = new IntDoubleHashVector();
       IntDoubleHashVector slotConceptCounts = new IntDoubleHashVector();
@@ -1214,6 +1217,7 @@ public class SlotsAsConcepts {
       List<Pair<EffSent, List<VwInstance>>> j2 = filterOutNoVerb(relationExtractionJoin2(parseAlph, pmi), parseAlph, df);
       if (j2 == null)
         return null;
+      Log.info("computing occurrences and utilities for " + j2.size() + " sentences");
       for (int sIdx = 0; sIdx < j2.size(); sIdx++) {
         List<VwInstance> facts = j2.get(sIdx).get2();
         EffSent sent = j2.get(sIdx).get1();
@@ -1222,8 +1226,10 @@ public class SlotsAsConcepts {
         // Cost
         double tc = topicalityCost(sent, thisMid);
         double oc = 0;
-        if (options.sentenceCostOdd > 0)
+        if (options.sentenceCostOdd > 0) {
           oc = odd.cost(sent, parseAlph, false);
+          oc = Math.min(1000, Math.exp(oc));
+        }
         double sentCost = options.sentenceCostOdd * oc
             + options.sentenceCostTopicality * tc;
         sentenceCosts.add(sentCost);
@@ -1243,15 +1249,45 @@ public class SlotsAsConcepts {
         }
         
         if (options.slots) {
-          for (VwInstance f : facts) {
-            List<Feat> slots = f.getMostLikelyLabels(maxSlotsPerInstance);
-            for (Feat slot : slots) {
-              String cs = "s/" + slot.getName();
-              int c = concepts.lookupIndex(cs);
-              double costOfEvokingConcept = slot.getWeight();
-              SoftConceptMention scm = new SoftConceptMention(c, sIdx, costOfEvokingConcept);
+          // BEFORE: take the top-K facts per pair of entities in a sentence
+          // PROBLEM: sentences which have very long lists of entities can introduce a ton of possible slots
+          // AFTER: take the top-K facts per sentence so that no sentence can introduce a huge number of slots
+          boolean fix = true;
+          if (fix) {
+            Map<String, Pair<String, SoftConceptMention>> minCostForSlots = new HashMap<>();
+            for (VwInstance f : facts) {
+              List<Feat> slots = f.getMostLikelyLabels(maxSlotsPerInstance);
+              for (Feat slot : slots) {
+                String cs = "s/" + slot.getName();
+                double costOfEvokingConcept = slot.getWeight();
+                Pair<String, SoftConceptMention> curCost = minCostForSlots.get(cs);
+                if (curCost == null || curCost.get2().costOfEvokingConcept > costOfEvokingConcept) {
+                  minCostForSlots.put(cs, new Pair<>(cs, new SoftConceptMention(-1, sIdx, costOfEvokingConcept)));
+                }
+              }
+            }
+            Beam<Pair<String, SoftConceptMention>> minCosts = Beam.getMostEfficientImpl(maxSlotsPerSentence);
+            for (Pair<String, SoftConceptMention> p : minCostForSlots.values()) {
+              minCosts.push(p, -p.get2().costOfEvokingConcept);
+            }
+            while (minCosts.size() > 0) {
+              Pair<String, SoftConceptMention> p = minCosts.pop();
+              int c = concepts.lookupIndex(p.get1());
+              SoftConceptMention scm = new SoftConceptMention(c, sIdx, p.get2().costOfEvokingConcept);
               occ.add(scm);
               slotConceptCounts.add(c, 1);
+            }
+          } else {
+            for (VwInstance f : facts) {
+              List<Feat> slots = f.getMostLikelyLabels(maxSlotsPerInstance);
+              for (Feat slot : slots) {
+                String cs = "s/" + slot.getName();
+                int c = concepts.lookupIndex(cs);
+                double costOfEvokingConcept = slot.getWeight();
+                SoftConceptMention scm = new SoftConceptMention(c, sIdx, costOfEvokingConcept);
+                occ.add(scm);
+                slotConceptCounts.add(c, 1);
+              }
             }
           }
         }
@@ -1283,14 +1319,22 @@ public class SlotsAsConcepts {
       }
       
       // Compute utitilies for each concept
+      Log.info("concept counts: slots=" + slotConceptCounts.size()
+        + " entities=" + relatedEntityConceptCounts.size()
+        + " ngrams=" + ngramConceptCounts.size()
+        + " all=" + concepts.size());
       double[] conceptUtilities = new double[concepts.size()];
       
       int nConceptKeepPerType = (int) (25 * Math.sqrt(numWords) + 0.5);
+//      int nConceptKeepPerType = 99999;
+      Log.info("nConceptKeepPerType=" + nConceptKeepPerType);
 
       slotConceptCounts = prune(slotConceptCounts, nConceptKeepPerType, "slots");
       slotConceptCounts.forEach(ide -> {
         assert conceptUtilities[ide.index()] == 0;
-        conceptUtilities[ide.index()] = ide.get();
+//        conceptUtilities[ide.index()] = ide.get();
+        conceptUtilities[ide.index()] = Math.log1p(ide.get());
+        assert conceptUtilities[ide.index()] > 0;
       });
 
       relatedEntityConceptCounts = prune(relatedEntityConceptCounts, nConceptKeepPerType, "entities");
@@ -1842,7 +1886,7 @@ public class SlotsAsConcepts {
 
       StreamingDistSupFeatEx f = new StreamingDistSupFeatEx(oat, entityDir, mid, train);
       if (config.getBoolean("binary")) {
-        f.writeBinaryFeatures(df, config.getInt("negsPerSentence", 10));
+        f.writeBinaryFeatures(df, config.getInt("negsPerSentence", 20));
       } else {
         f.writeCsoaaLdfFeatures(df);
       }
@@ -1859,7 +1903,8 @@ public class SlotsAsConcepts {
       List<File> pmiFiles = config.getFileGlob("pmiFiles");
       for (File ff : pmiFiles)
         pmi.add(ff);
-      int k = config.getInt("topFeats", 30);
+//      int k = config.getInt("topFeats", 30);
+      int k = config.getInt("topFeats", 10);
       pmi.topKPrune(k);
       
       dfF = config.getExistingFile("wordDocFreq");
