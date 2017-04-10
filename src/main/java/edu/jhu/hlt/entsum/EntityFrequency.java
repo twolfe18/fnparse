@@ -10,6 +10,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Random;
 
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -17,9 +18,15 @@ import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.MaxMinSketch.StringMaxMinSketch;
 
+/**
+ * @deprecated Not needed, use {@link CluewebLinkedPreprocess.EntCounts} instead!
+ *
+ * @author travis
+ */
 public class EntityFrequency implements Serializable {
   private static final long serialVersionUID = -8500795613001170677L;
 
@@ -56,7 +63,7 @@ public class EntityFrequency implements Serializable {
    * Implements an iterator which returns a pointer to the {@link EntityFrequency} after
    * all mids from shard i have been added. The last one returned is complete.
    *
-   * There are 438M entities in FACC1.
+   * There are 438M lines of entity counts in FACC1 (real cardinality depends on mention overlap between files).
    * If each one only took one byte (mids are at least 5, counts another 1-4), that would still be too much.
    * One option is to filter to only the relevant entities, but this requires a pass to figure out what those are, may be too big anyway.
    * Other option is count-min-sketch route.
@@ -176,7 +183,8 @@ public class EntityFrequency implements Serializable {
   }
   
   public static List<Pair<String, String>> debugMids() {
-    File p = new File("/export/projects/twolfe/entity-summarization/clueweb-linked");
+//    File p = new File("/export/projects/twolfe/entity-summarization/clueweb-linked");
+    File p = new File("data/facc1-entsum");
     if (!p.isDirectory()) {
       Log.info("WARNING: not a dir, skipping debug: " + p.getPath());
       return Collections.emptyList();
@@ -203,6 +211,9 @@ public class EntityFrequency implements Serializable {
     Log.info("countsRoot=" + countsRoot.getPath());
     String countsGlob = config.getString("countsGlob", "glob:**/*.txt");
     List<File> fs = FileUtil.find(countsRoot, countsGlob);
+    
+    fs = ReservoirSample.sample(fs, 500, new Random(9001));
+
     int nShard = config.getInt("nShard", 16);   // 438M nLines (>nEnt) / 16 shards * (10 chars * 2 bytes/char + 4 bytes/int) * 1.5 = 940MB
     int nhash = config.getInt("nhash", 12);
     int logb = config.getInt("logb", 20);

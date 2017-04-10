@@ -51,6 +51,7 @@ public class DepNode implements Serializable {
    * TODO Have a new method which uses 1-indexing with n+1 Token's per sentence?
    * This allows you to have sentence[0] as the root, get children of root easily
    */
+
   
   public static List<Edge> getEdgesLeavingSpan(Span span, DepNode[] parse, MultiAlphabet a) {
     return getEdgesLeavingSpan(span.start, span.end, parse, a);
