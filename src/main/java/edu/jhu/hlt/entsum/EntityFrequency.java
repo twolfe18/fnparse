@@ -2,6 +2,9 @@ package edu.jhu.hlt.entsum;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -10,14 +13,16 @@ import java.util.Map.Entry;
 
 import edu.jhu.hlt.concrete.simpleaccumulo.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.MaxMinSketch.StringMaxMinSketch;
 
-public class EntityFrequency {
-  
+public class EntityFrequency implements Serializable {
+  private static final long serialVersionUID = -8500795613001170677L;
+
   // Keys are mid strings like "/m/02b17t"
   private StringMaxMinSketch midFreq;
   
@@ -59,6 +64,34 @@ public class EntityFrequency {
     int nShard;
     List<File> files;
     
+    // Keep an exact count for the dev entities, tells you how bad the approximation is
+    Map<String, Integer> debugMidFreqExact;
+    Map<String, String> debugMid2Tag;
+    void buildDebugMidSet() {
+      debugMid2Tag = new HashMap<>();
+      debugMidFreqExact = new HashMap<>();
+      for (Pair<String, String> p : debugMids()) {
+        String tag = p.get1();
+        String mid = p.get2();
+        Object old = debugMid2Tag.put(mid, tag);
+        assert old == null;
+        debugMidFreqExact.put(mid, 0);
+      }
+      Log.info("storing exact counts for " + debugMidFreqExact.size());
+    }
+    public List<Feat> getDebugCountErrors() {
+      List<Feat> err = new ArrayList<>();
+      for (String mid : debugMid2Tag.keySet()) {
+        int ce = debugMidFreqExact.get(mid);
+        int ca = approxAll.getCount(mid);
+//        String tag = debugMid2Tag.get(mid);
+//        err.add(new Feat(tag + "-" + mid, ce - ca));
+        err.add(new Feat(mid, ce - ca));
+      }
+      Collections.sort(err, Feat.BY_SCORE_MAG_DESC);
+      return err;
+    }
+    
     public Builder(List<File> fs, int nShards, int nhash, int logb) {
       Log.info("nFiles=" + fs.size() + " nShard=" + nShards);
       this.curShard = 0;
@@ -92,6 +125,12 @@ public class EntityFrequency {
               exactSome.put(p.get1(), p.get2() + oldCount);
             }
             
+            if (debugMidFreqExact != null) {
+              Integer ce = debugMidFreqExact.get(p.get1());
+              if (ce != null)
+                debugMidFreqExact.put(p.get1(), ce + p.get2());
+            }
+            
             if (tm.enoughTimePassed(4)) {
               Log.info("nf=" + nf + " nl=" + nl + " exact.size=" + exactSome.size() + " curFile=" + f.getPath() + "\t" + Describe.memoryUsage());
             }
@@ -104,9 +143,50 @@ public class EntityFrequency {
       for (Entry<String, Integer> e : exactSome.entrySet())
         approxAll.put(e.getKey(), e.getValue());
       exactSome.clear();
+      
+      if (debugMidFreqExact != null) {
+        Log.info("top 10 errors: ");
+        List<Feat> errAll = getDebugCountErrors();
+        int i = 0, te = 0;
+        for (Feat m : errAll) {
+          int diff = (int) m.getWeight();
+          if (i < 10) {
+            String mid = m.getName();
+            String tag = debugMid2Tag.get(mid);
+            int actual = debugMidFreqExact.get(mid);
+            int approx = approxAll.getCount(mid);
+            System.out.printf("t=%-12s  m=%-12s  actual=% 6d  approx=% 6d  diff=% 4d\n",
+                tag, mid, actual, approx, diff);
+          }
+          i++;
+          te += diff;
+        }
+        Log.info("average diff: " + (((double) te)/errAll.size()));
+      }
+      
       curShard++;
       return approxAll;
     }
+  }
+  
+  public static List<Pair<String, String>> debugMids() {
+    File p = new File("/export/projects/twolfe/entity-summarization/clueweb-linked");
+    if (!p.isDirectory()) {
+      Log.info("WARNING: not a dir, skipping debug: " + p.getPath());
+      return Collections.emptyList();
+    }
+    List<Pair<String, String>> all = new ArrayList<>();
+    for (int i = 7; i >= 3; i--) {
+      String tag = "rare" + i + "/dev";
+      File f = new File(p, "train-dev-test/rare" + i + "/mids.dev.txt");
+      if (!f.isFile()) {
+        Log.info("WARNING: wrong path? " + f.getPath());
+        continue;
+      }
+      for (String mid : FileUtil.getLines(f))
+        all.add(new Pair<>(tag, mid));
+    }
+    return all;
   }
   
   public static void main(String[] args) {
@@ -121,6 +201,11 @@ public class EntityFrequency {
     int nhash = config.getInt("nhash", 12);
     int logb = config.getInt("logb", 20);
     Builder b = new Builder(fs, nShard, nhash, logb);
+    
+    if (config.getBoolean("debug", true)) {
+      b.buildDebugMidSet();
+    }
+    
     int iter = 0;
     while (b.hasNext()) {
       EntityFrequency c = b.next();
