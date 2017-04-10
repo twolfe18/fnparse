@@ -40,7 +40,11 @@ public class EntityFrequency implements Serializable {
   
   public static Pair<String, Integer> parseLine(String line) {
     String[] a = line.trim().split("\\s+");
-    assert a.length == 2;
+    if (a.length != 2) {
+      System.out.println("warning, bad line: " + line);
+      return null;
+    }
+//    assert a.length == 2 : "line=" + line;
     int count = Integer.parseUnsignedInt(a[0]);
     return new Pair<>(a[1], count);
   }
@@ -77,7 +81,7 @@ public class EntityFrequency implements Serializable {
         assert old == null;
         debugMidFreqExact.put(mid, 0);
       }
-      Log.info("storing exact counts for " + debugMidFreqExact.size());
+      Log.info("storing exact counts for " + debugMidFreqExact.size() + " mids");
     }
     public List<Feat> getDebugCountErrors() {
       List<Feat> err = new ArrayList<>();
@@ -117,8 +121,10 @@ public class EntityFrequency implements Serializable {
         nf++;
         try (BufferedReader r = FileUtil.getReader(f)) {
           for (String line = r.readLine(); line != null; line = r.readLine()) {
-            nl++;
             Pair<String, Integer> p = parseLine(line);
+            if (p == null)
+              continue;
+            nl++;
             int h = p.get1().hashCode();
             if (Math.floorMod(h, nShard) == curShard) {
               int oldCount = exactSome.getOrDefault(p.get1(), 0);
@@ -131,7 +137,7 @@ public class EntityFrequency implements Serializable {
                 debugMidFreqExact.put(p.get1(), ce + p.get2());
             }
             
-            if (tm.enoughTimePassed(4)) {
+            if (tm.enoughTimePassed(5)) {
               Log.info("nf=" + nf + " nl=" + nl + " exact.size=" + exactSome.size() + " curFile=" + f.getPath() + "\t" + Describe.memoryUsage());
             }
           }
