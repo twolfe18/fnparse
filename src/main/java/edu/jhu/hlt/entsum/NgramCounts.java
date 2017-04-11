@@ -66,9 +66,7 @@ public class NgramCounts extends StringCountMinSketch {
     File parent = new File("/home/travis/code/data/fetch-comms-cache");
     File out = new File("data/facc1-entsum/code-testing-data/bigram-counts.nhash11-logb22.jser");
     File out2 = new File("data/facc1-entsum/code-testing-data/bigram-counts.nhash16-logb25.jser");
-//    NgramCounts ng = new NgramCounts(11, 22);
     NgramCounts ng = new NgramCounts(12, 21);
-//    NgramCounts ng2 = new NgramCounts(20, 25);
     NgramCounts ng2 = new NgramCounts(20, 24);
     int n = 2;
     List<String[]> sample = Arrays.asList(
@@ -101,7 +99,6 @@ public class NgramCounts extends StringCountMinSketch {
     Log.info("found " + fs.length + " files to read through");
     int nf = 0;
     for (File f : fs) {
-//      ng.addCountsFromConcreteTgz(f, n);
       Communication c = ConcreteUtil.readOneComm(f);
       ng.addCountsFromCommunication(c, n);
       ng2.addCountsFromCommunication(c, n);

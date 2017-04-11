@@ -74,6 +74,10 @@ public class CluewebLinkedPreprocess {
       nMidObservations = 0;
     }
     
+    public int getCount(String mid) {
+      return midCounts.apply(mid, false);
+    }
+    
     public void observe(CluewebLinkedSentence sent) {
       int n = sent.numLinks();
       for (int i = 0; i < n; i++) {

@@ -45,6 +45,7 @@ import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.map.IntIntHashMap;
+import edu.jhu.prim.set.IntHashSet;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleHashVector;
 import edu.jhu.util.Alphabet;
@@ -1163,6 +1164,10 @@ public class SlotsAsConcepts {
      * Rounds to 0 any weight which is not in the top-k.
      */
     public static IntDoubleHashVector prune(IntDoubleHashVector weights, int k, String tag) {
+      if (k <= 0) {
+        Log.info("k=0, no pruning");
+        return weights;
+      }
       if (weights.getNumImplicitEntries() <= k) {
         Log.info(tag + ": no pruning needed " + weights.getNumImplicitEntries() + " < " + k);
         return weights;
@@ -1194,10 +1199,53 @@ public class SlotsAsConcepts {
       Log.info("in.size=" + in.size() + " out.size=" + out.size() + " %keep=" + k);
       return out;
     }
+  
+    public static final Set<String> NGRAM_POS_EXCLUDE;
+    static {
+      NGRAM_POS_EXCLUDE = new HashSet<>();
+      NGRAM_POS_EXCLUDE.add("``");
+      NGRAM_POS_EXCLUDE.add(",");
+      NGRAM_POS_EXCLUDE.add(":");
+      NGRAM_POS_EXCLUDE.add(".");
+      NGRAM_POS_EXCLUDE.add("''");
+      NGRAM_POS_EXCLUDE.add("$");
+      NGRAM_POS_EXCLUDE.add("ADD");
+      NGRAM_POS_EXCLUDE.add("FW");
+      NGRAM_POS_EXCLUDE.add("GW");
+      NGRAM_POS_EXCLUDE.add("HYPH");
+      NGRAM_POS_EXCLUDE.add("-LRB-");
+      NGRAM_POS_EXCLUDE.add("LS");
+      NGRAM_POS_EXCLUDE.add("NFP");
+      NGRAM_POS_EXCLUDE.add("-RRB-");
+      NGRAM_POS_EXCLUDE.add("SYM");
+    }
+
+      
+    public static List<SoftConceptMention> pruneBySentence(List<SoftConceptMention> occ, double[] conceptUtilities) {
+      // Lets prune based on sentences with the highest utility
+      IntDoubleHashVector sentUpperUtilityBound = new IntDoubleHashVector();
+      for (SoftConceptMention cm : occ)
+        sentUpperUtilityBound.add(cm.sentence(), conceptUtilities[cm.concept()]);
+      int sentKeep = 1024;
+      Beam<Integer> b = Beam.getMostEfficientImpl(sentKeep);
+      sentUpperUtilityBound.forEach(ide -> {
+        b.push(ide.index(), ide.get());
+      });
+      IntHashSet s = new IntHashSet(b.size());
+      while (b.size() > 0)
+        s.add(b.pop());
+      List<SoftConceptMention> keep = new ArrayList<>();
+      for (SoftConceptMention cm : occ)
+        if (s.contains(cm.sentence()))
+          keep.add(cm);
+      Log.info("occOld=" + occ.size() + " occNew=" + keep.size() + " sentKeep=" + sentKeep);
+      return keep;
+    }
 
     public Summary summarize2(int numWords, MultiAlphabet parseAlph, PmiSlotPredictor pmi,
         ComputeIdf df,
         OddSentenceScore odd,
+        CluewebLinkedPreprocess.EntCounts entCounts,
         Options options, boolean debug) throws IOException, GRBException {
       Log.info("options=" + options);
       Alphabet<String> concepts = new Alphabet<>();
@@ -1213,8 +1261,11 @@ public class SlotsAsConcepts {
       IntDoubleHashVector relatedEntityConceptCounts = new IntDoubleHashVector();
       IntDoubleHashVector slotConceptCounts = new IntDoubleHashVector();
       IntDoubleHashVector ngramConceptCounts = new IntDoubleHashVector();
+      
+      double logD_ent = Math.log(entCounts.numMidObservations());
 
-      List<Pair<EffSent, List<VwInstance>>> j2 = filterOutNoVerb(relationExtractionJoin2(parseAlph, pmi), parseAlph, df);
+      List<Pair<EffSent, List<VwInstance>>> j2 =
+          filterOutNoVerb(relationExtractionJoin2(parseAlph, pmi), parseAlph, df);
       if (j2 == null)
         return null;
       Log.info("computing occurrences and utilities for " + j2.size() + " sentences");
@@ -1222,6 +1273,9 @@ public class SlotsAsConcepts {
         List<VwInstance> facts = j2.get(sIdx).get2();
         EffSent sent = j2.get(sIdx).get1();
         sentenceLengths.add(sent.parse().length);
+        
+        if (sIdx % 2000 == 0)
+          Log.info(sIdx + " sentences in...");
         
         // Cost
         double tc = topicalityCost(sent, thisMid);
@@ -1240,11 +1294,18 @@ public class SlotsAsConcepts {
             String mid = sent.mention(i).getFullMid();
             if (thisMid.equals(mid))
               continue;
+            
+            int count = entCounts.getCount(mid);
+            double idf = logD_ent - Math.log(count);
+//            System.out.println("count(" + mid + ")=" + count);
+//            System.out.println("idf(" + mid + ")=" + idf);
+            
             String cs = "r/" + mid;
             int c = concepts.lookupIndex(cs);
             double cost = 0;
             occ.add(new SoftConceptMention(c, sIdx, cost));
-            relatedEntityConceptCounts.add(c, 1);
+//            relatedEntityConceptCounts.add(c, 1);
+            relatedEntityConceptCounts.add(c, idf/10d);
           }
         }
         
@@ -1253,7 +1314,7 @@ public class SlotsAsConcepts {
           // PROBLEM: sentences which have very long lists of entities can introduce a ton of possible slots
           // AFTER: take the top-K facts per sentence so that no sentence can introduce a huge number of slots
           boolean fix = true;
-          if (fix) {
+          if (fix) {  // AFTER
             Map<String, Pair<String, SoftConceptMention>> minCostForSlots = new HashMap<>();
             for (VwInstance f : facts) {
               List<Feat> slots = f.getMostLikelyLabels(maxSlotsPerInstance);
@@ -1277,7 +1338,7 @@ public class SlotsAsConcepts {
               occ.add(scm);
               slotConceptCounts.add(c, 1);
             }
-          } else {
+          } else {    // BEFORE
             for (VwInstance f : facts) {
               List<Feat> slots = f.getMostLikelyLabels(maxSlotsPerInstance);
               for (Feat slot : slots) {
@@ -1297,14 +1358,22 @@ public class SlotsAsConcepts {
           int n = sent.parse().length;
           String[] words = new String[n];
           for (int i = 0; i < n; i++)
-            words[i] = parseAlph.word(sent.parse()[i].word);
+            words[i] = parseAlph.word(sent.parse(i).word);
           int[] mentions = sent.buildToken2EntityMap();
           double logD = Math.log(options.ngrams.numIncrements());
           words:
           for (int i = 0; i < n - ng.length; i++) {
             for (int j = 0; j < ng.length; j++) {
+              
+              // Skip this ngram if it overlaps with an entity mention
               if (mentions[i+j] >= 0)
                 continue words;
+              
+              // Skip this ngram if it contains some sort of junk
+              String pos = parseAlph.pos(sent.parse(i+j).pos);
+              if (NGRAM_POS_EXCLUDE.contains(pos))
+                continue words;
+
               ng[j] = words[i+j];
             }
             int c = options.ngrams.getCount(ng);
@@ -1325,8 +1394,16 @@ public class SlotsAsConcepts {
         + " all=" + concepts.size());
       double[] conceptUtilities = new double[concepts.size()];
       
-      int nConceptKeepPerType = (int) (25 * Math.sqrt(numWords) + 0.5);
-//      int nConceptKeepPerType = 99999;
+//      int nConceptKeepPerType = (int) (2 * Math.sqrt(numWords) + 0.5);    // 39s on dev/m.08w4pm
+//      int nConceptKeepPerType = (int) (5 * Math.sqrt(numWords) + 0.5);    // 37s on dev/m.08w4pm
+//      int nConceptKeepPerType = (int) (12 * Math.sqrt(numWords) + 0.5);    // 37s on dev/m.08w4pm
+//      int nConceptKeepPerType = (int) (25 * Math.sqrt(numWords) + 0.5);     // 172s on dev/m.08w4pm
+
+//      int nConceptKeepPerType = (int) (Math.sqrt(numWords) * Math.log1p(sentenceLengths.size()) + 10);    // 80s on dev/m.08w4pm
+//      int nConceptKeepPerType = (int) (0.5 * Math.sqrt(numWords) * Math.log1p(sentenceLengths.size()) + 10);    // 96s on dev/m.08w4pm
+//      int nConceptKeepPerType = (int) (2 * Math.log1p(numWords) * Math.log1p(sentenceLengths.size()) + 10);    // 83s on dev/m.08w4pm
+//      int nConceptKeepPerType = (int) (Math.log1p(numWords) * Math.log1p(sentenceLengths.size()) + 10);    // 105s on dev/m.08w4pm
+      int nConceptKeepPerType = 0;
       Log.info("nConceptKeepPerType=" + nConceptKeepPerType);
 
       slotConceptCounts = prune(slotConceptCounts, nConceptKeepPerType, "slots");
@@ -1348,6 +1425,8 @@ public class SlotsAsConcepts {
         assert conceptUtilities[ide.index()] == 0;
         conceptUtilities[ide.index()] = ide.get() * (3d / j2.size());
       });
+      
+      occ = pruneBySentence(occ, conceptUtilities);
 
       {
       List<SoftConceptMention> occKeep = new ArrayList<>();
@@ -1934,6 +2013,11 @@ public class SlotsAsConcepts {
         File oddF = config.getExistingFile("oddSentenceScores", new File("/tmp/odd.jser"));
         odd = (OddSentenceScore) FileUtil.deserialize(oddF);
       }
+      
+//      File entCountsF = new File("data/facc1-entsum/train-dev-test/freebase-mid-mention-frequency.cms.jser");
+      File entCountsF = config.getExistingFile("entCounts");
+      Log.info("reading from entCounts=" + entCountsF);
+      CluewebLinkedPreprocess.EntCounts entCounts = (CluewebLinkedPreprocess.EntCounts) FileUtil.deserialize(entCountsF);
 
       //      for (String nws : config.getString("numWords", "40,80,160,320").split("\\D+")) {
       for (String nws : config.getString("numWords", "100").split("\\D+")) {
@@ -1944,7 +2028,7 @@ public class SlotsAsConcepts {
         File jserOutput = new File(jserOutputP, opt.desc() + ".jser");
         Log.info("numWords=" + numWords + " output=" + jserOutput.getPath());
 
-        Summary s = sum.summarize2(numWords, a, pmi, df, odd, opt, debug);
+        Summary s = sum.summarize2(numWords, a, pmi, df, odd, entCounts, opt, debug);
 
         if (s != null) {
           s.show(a);
