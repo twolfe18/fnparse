@@ -64,8 +64,8 @@ public class DepNode implements Serializable {
       boolean hc = start <= h && h < end;
       if (hc != ic) {
         String lab = a.dep(parse[i].depParentLabel);
-        String head = hc ? "SOURCE" : (h < 0 ? "ROOT" : a.word(h));
-        String mod = ic ? "SOURCE" : (i < 0 ? "ROOT" : a.word(i));
+        String head = hc ? "SOURCE" : (h < 0 ? "ROOT" : a.word(parse[h].word));
+        String mod = ic ? "SOURCE" : (i < 0 ? "ROOT" : a.word(parse[i].word));
         out.add(new Edge(lab, head, mod, h, i));
       }
     }
