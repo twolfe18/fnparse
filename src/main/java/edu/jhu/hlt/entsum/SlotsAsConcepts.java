@@ -326,7 +326,7 @@ public class SlotsAsConcepts {
             List<Fact> pos = findFacts(sentIdx, sent, null, debug);
             neg = negSample(pos, neg, negsPerSentence, rand);
             for (Fact f : pos) {
-              String yc = vwSafety(clean(f.verb));
+              String yc = fileSystemSafe(vwSafety(clean(f.verb)));
               ec.increment("pos");
               ec.increment("pos/" + yc);
               File ff = new File(p, "pos-" + yc + ".vw");
@@ -744,6 +744,10 @@ public class SlotsAsConcepts {
     assert feat.indexOf(' ') < 0;
     assert feat.indexOf('|') < 0;
     return feat;
+  }
+  
+  public static String fileSystemSafe(String s) {
+    return s.replaceAll("/", "_");
   }
   
   
