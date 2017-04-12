@@ -508,16 +508,21 @@ public class CluewebLinkedPreprocess {
       outputMarkup.newLine();
       
       // Mention Locations
+      boolean first = true;
       for (int i = 0; i < tx.size(); i++) {
-        if (i > 0)
-          outputMentionLocs.write('\t');
         SegmentedTextAroundLink txi = tx.get(i);
         if (txi.hasLink()) {
           String mid = txi.getLink().getMid(sent.getMarkup());
           IntPair tokLoc = txi.getTokLoc();
 //          assert 0 <= tokLoc.first && tokLoc.first < tokLoc.second : "tokLoc=" + tokLoc + " txi=" + txi;
-          if (!(0 <= tokLoc.first && tokLoc.first < tokLoc.second))
+          if (!(0 <= tokLoc.first && tokLoc.first < tokLoc.second)) {
             Log.info("WARNING: tokLoc=" + tokLoc + " txi=" + txi);
+            ec.increment("mention/bogus");
+            continue;
+          }
+          if (!first)
+            outputMentionLocs.write('\t');
+          first = false;
           outputMentionLocs.write(mid + " " + tokLoc.first + "-" + tokLoc.second);
           ec.increment("mention/output");
         }

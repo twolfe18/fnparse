@@ -285,9 +285,10 @@ public class DistSupSetup {
   
   public static void buildFactTypesAndEntityTypes(ExperimentProperties config) throws Exception {
     // 1) Read in (a possible large amount of) mid's from mention files
-    File mentionsParent = config.getExistingDir("mentionsParent", new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev"));
-    String mentionsGlob = config.getString("mentionsGlob", "glob:**/mentionLocs.txt");
-    List<File> mentions = FileUtil.find(mentionsParent, mentionsGlob);
+    File mentionsParent = config.getExistingDir("mentionsParent");  //, new File("data/facc1-entsum/code-testing-data/tokenized-sentences/dev"));
+//    String mentionsGlob = config.getString("mentionsGlob", "glob:**/mentionLocs.txt");
+//    List<File> mentions = FileUtil.find(mentionsParent, mentionsGlob);
+    List<File> mentions = FileUtil.execFind(mentionsParent, "-type", "f", "-name", "mentionLocs.txt");
     Log.info("found " + mentions.size() + " mentions files");
     if (mentions.isEmpty())
       return;
