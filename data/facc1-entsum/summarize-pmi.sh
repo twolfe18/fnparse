@@ -4,7 +4,9 @@ set -eu
 
 ENTITY_DIR_PARENT=$1
 PMI_FEAT_PARENT=$2
-JAR=$3
+WORD_DOC_FREQ=$3
+ENT_COUNTS=$4           # train-dev-test/freebase-mid-mention-frequency.cms.jser
+JAR=$5
 
 #export GUROBI_HOME=/home/hltcoe/twolfe/gurobi/gurobi702/linux64
 #export LD_LIBRARY_PATH=/home/hltcoe/twolfe/gurobi/gurobi702/linux64/lib
@@ -26,6 +28,10 @@ fi
 
 java -ea -server -cp $JAR edu.jhu.hlt.entsum.SlotsAsConcepts \
   mode summarize \
+  sentCostOdd 0.01 \
+  sentCostTopicality 0.0 \
+  entCounts $ENT_COUNTS \
+  wordDocFreq $WORD_DOC_FREQ \
   pmiFiles "$PMI_FEAT_PARENT/**/mi-withNeg-entityInst-shard*-of16.txt" \
   entityDir $ENT_DIR \
   outputDir $ENT_DIR/summary \

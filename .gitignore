@@ -50,3 +50,5 @@ conll2012-dataset-counts-check.txt
 jar-to-grid.sh
 mvn-deploy-deps.sh
 semdiff-search-logs/
+/.sw*
+/feb*-backup
