@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -14,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+
+import com.typesafe.config.impl.Parseable;
 
 import edu.jhu.hlt.entsum.CluewebLinkedSentence.Link;
 import edu.jhu.hlt.entsum.DbpediaDistSup.FeatExData;
@@ -29,7 +32,6 @@ import edu.jhu.hlt.entsum.VwLine.Namespace;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.ikbp.tac.ComputeIdf;
 import edu.jhu.hlt.ikbp.tac.IndexCommunications.Feat;
-import edu.jhu.hlt.tutils.ArgMax;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -44,7 +46,6 @@ import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.list.DoubleArrayList;
 import edu.jhu.prim.list.IntArrayList;
-import edu.jhu.prim.map.IntIntHashMap;
 import edu.jhu.prim.set.IntHashSet;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleHashVector;
@@ -115,7 +116,7 @@ public class SlotsAsConcepts {
    */
   public static class StreamingDistSupFeatEx {
 
-    private ObservedArgTypes.PlausibleMemoizer verbTypes;
+    private ObservedArgTypes.PlausibleMemoizer verbTypes;   // not used for binary features
     private File entityDir;
     private String entityMid;
     private MultiMap<String, String> mid2dbp;           // tokenized-sentences/$ENTITY/mid2dbp-rel*.txt
@@ -128,7 +129,8 @@ public class SlotsAsConcepts {
       Log.info("mid=" + entityMid + " dir=" + entityDir.getPath() + " train=" + train);
       this.train = train;
       this.parseAlph = new MultiAlphabet();
-      this.verbTypes = new ObservedArgTypes.PlausibleMemoizerA(verbTypes);
+      if (verbTypes != null)
+        this.verbTypes = new ObservedArgTypes.PlausibleMemoizerA(verbTypes);
       this.entityDir = entityDir;
       this.entityMid = entityMid;
 
@@ -540,7 +542,9 @@ public class SlotsAsConcepts {
       Log.info("done, " + ec + "\t" + Describe.memoryUsage());
     }
     
-    public static class Fact {
+    public static class Fact implements Serializable {
+      private static final long serialVersionUID = 1707370011840909975L;
+
       int sentIdx;
       int subjMention;
       int objMention;
@@ -1033,7 +1037,7 @@ public class SlotsAsConcepts {
         ec.increment("pred");
         if (verbs.isEmpty())
           ec.increment("pred/none");
-        cur = new VwInstance(Fact.fromTsv(lLine));
+        cur = new VwInstance(Fact.fromTsv(lLine), feats);
         for (Feat f : verbs)
           if (f.getWeight() > 0)
             cur.add(f.getName(), costNumerator / f.getWeight());
@@ -1133,8 +1137,10 @@ public class SlotsAsConcepts {
       boolean entities;
       boolean slots;
       NgramCounts ngrams;
+      boolean ngrams_excludeMentions = false;
       double sentenceCostOdd;
       double sentenceCostTopicality;
+      int prune_sentKeepFactor = 128;
       
       public Options(boolean entities, boolean slots, NgramCounts ngrams, double sentenceCostOdd, double sentenceCostTopicality) {
         this.entities = entities;
@@ -1189,14 +1195,23 @@ public class SlotsAsConcepts {
         List<Pair<EffSent, List<VwInstance>>> in, MultiAlphabet a, ComputeIdf df) {
       if (in == null)
         return null;
+      int nv = 0, v0 = 0;
       List<Pair<EffSent, List<VwInstance>>> out = new ArrayList<>();
       for (Pair<EffSent, List<VwInstance>> p : in) {
         EffSent s = p.get1();
-        if (s.containsVerb(a))
-          out.add(p);
+        if (!s.containsVerb(a)) {
+          nv++;
+          continue;
+        }
+        String pos0 = a.pos(s.parse(0).pos);
+        if (pos0.startsWith("V")) {
+          v0++;
+          continue;
+        }
+        out.add(p);
       }
       double k = (100d*out.size()) / in.size();
-      Log.info("in.size=" + in.size() + " out.size=" + out.size() + " %keep=" + k);
+      Log.info("in.size=" + in.size() + " out.size=" + out.size() + " %keep=" + k + " nv=" + nv + " v0=" + v0);
       return out;
     }
   
@@ -1221,12 +1236,11 @@ public class SlotsAsConcepts {
     }
 
       
-    public static List<SoftConceptMention> pruneBySentence(List<SoftConceptMention> occ, double[] conceptUtilities) {
+    public static List<SoftConceptMention> pruneBySentence(List<SoftConceptMention> occ, double[] conceptUtilities, int sentKeep) {
       // Lets prune based on sentences with the highest utility
       IntDoubleHashVector sentUpperUtilityBound = new IntDoubleHashVector();
       for (SoftConceptMention cm : occ)
         sentUpperUtilityBound.add(cm.sentence(), conceptUtilities[cm.concept()]);
-      int sentKeep = 1024;
       Beam<Integer> b = Beam.getMostEfficientImpl(sentKeep);
       sentUpperUtilityBound.forEach(ide -> {
         b.push(ide.index(), ide.get());
@@ -1366,7 +1380,7 @@ public class SlotsAsConcepts {
             for (int j = 0; j < ng.length; j++) {
               
               // Skip this ngram if it overlaps with an entity mention
-              if (mentions[i+j] >= 0)
+              if (options.ngrams_excludeMentions && mentions[i+j] >= 0)
                 continue words;
               
               // Skip this ngram if it contains some sort of junk
@@ -1377,7 +1391,7 @@ public class SlotsAsConcepts {
               ng[j] = words[i+j];
             }
             int c = options.ngrams.getCount(ng);
-            if (c < 8 || c > 1e5)
+            if (c < 8)
               continue;
             double lc = logD - Math.log(c + 4);
             int concept = concepts.lookupIndex(NgramCounts.join(ng));
@@ -1426,7 +1440,8 @@ public class SlotsAsConcepts {
         conceptUtilities[ide.index()] = ide.get() * (3d / j2.size());
       });
       
-      occ = pruneBySentence(occ, conceptUtilities);
+      int sentKeep = (int) (options.prune_sentKeepFactor * (1 + Math.log1p(numWords)) + 0.5);
+      occ = pruneBySentence(occ, conceptUtilities, sentKeep);
 
       {
       List<SoftConceptMention> occKeep = new ArrayList<>();
@@ -1437,7 +1452,7 @@ public class SlotsAsConcepts {
       occ = occKeep;
       }
       
-      Beam<Feat> bestConcepts = Beam.getMostEfficientImpl(16);
+      Beam<Feat> bestConcepts = Beam.getMostEfficientImpl(32);
       for (int i = 0; i < conceptUtilities.length; i++) {
         if (conceptUtilities[i] > 0)
           bestConcepts.push(new Feat(concepts.lookupObject(i), conceptUtilities[i]), conceptUtilities[i]);
@@ -1461,6 +1476,7 @@ public class SlotsAsConcepts {
 //        sIdx = newSent2oldSent.get(sIdx);
         s.sentences.add(j2.get(sIdx).get1());
         s.sentenceCosts.add(sentenceCosts.get(sIdx));
+        s.conceptPredictions = j2.get(sIdx).get2();
         for (SoftConceptMention m : keep.mentionsIn(sIdx)) {
           String cs = concepts.lookupObject(m.concept());
           s.addConcept(i, Span.nullSpan, cs, conceptUtilities[m.concept()], m.costOfEvokingConcept);
@@ -1955,8 +1971,14 @@ public class SlotsAsConcepts {
       break;
     case "extractFeaturesForOneEntity":
       boolean train = config.getBoolean("train");
-      File obsArgTypes = config.getExistingFile("obsArgTypes");
-      ObservedArgTypes oat = (ObservedArgTypes) FileUtil.deserialize(obsArgTypes);
+      String obsArgTypes = config.getString("obsArgTypes");
+      ObservedArgTypes oat;
+      if ("none".equalsIgnoreCase(obsArgTypes)) {
+        Log.info("no obsArgTypes");
+        oat = null;
+      } else {
+        oat = (ObservedArgTypes) FileUtil.deserialize(new File(obsArgTypes));
+      }
       File entityDir = config.getExistingDir("entityDir");
       String mid = entityDir.getName().replaceAll("m.", "/m/");
 
@@ -1983,7 +2005,7 @@ public class SlotsAsConcepts {
       for (File ff : pmiFiles)
         pmi.add(ff);
 //      int k = config.getInt("topFeats", 30);
-      int k = config.getInt("topFeats", 10);
+      int k = config.getInt("topFeats", 20);
       pmi.topKPrune(k);
       
       dfF = config.getExistingFile("wordDocFreq");
@@ -2007,6 +2029,8 @@ public class SlotsAsConcepts {
       double sentCostTopicality = config.getDouble("sentCostTopicality");
       Log.info("sentCostTopicality=" + sentCostTopicality);
       Options opt = new Options(entities, slots, ngrams, sentCostOdd, sentCostTopicality);
+      opt.ngrams_excludeMentions = config.getBoolean("ngrams_excludeMentions", false);
+      Log.info("ngrams_excludeMentions=" + opt.ngrams_excludeMentions);
       
       OddSentenceScore odd = null;
       if (sentCostOdd > 0) {
@@ -2018,6 +2042,7 @@ public class SlotsAsConcepts {
       File entCountsF = config.getExistingFile("entCounts");
       Log.info("reading from entCounts=" + entCountsF);
       CluewebLinkedPreprocess.EntCounts entCounts = (CluewebLinkedPreprocess.EntCounts) FileUtil.deserialize(entCountsF);
+      
 
       //      for (String nws : config.getString("numWords", "40,80,160,320").split("\\D+")) {
       for (String nws : config.getString("numWords", "100").split("\\D+")) {

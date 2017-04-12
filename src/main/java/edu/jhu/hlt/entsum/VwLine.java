@@ -1,11 +1,15 @@
 package edu.jhu.hlt.entsum;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
-public class VwLine {
-  
-  public static class Namespace {
+public class VwLine implements Serializable {
+  private static final long serialVersionUID = 3475667650409936816L;
+
+  public static class Namespace implements Serializable {
+    private static final long serialVersionUID = -4469507818509671225L;
+
     public final char name;
     public List<String> features;
     

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.entsum;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -16,7 +17,9 @@ import edu.jhu.prim.list.DoubleArrayList;
  *
  * @author travis
  */
-public class VwInstance {
+public class VwInstance implements Serializable {
+  private static final long serialVersionUID = 1502000850452735623L;
+
   public StreamingDistSupFeatEx.Fact loc;
   public List<String> labels;
   public DoubleArrayList scores;
@@ -24,8 +27,18 @@ public class VwInstance {
   // TODO Could add fx:List<String> field for features
   // ldf: these would be the shared features
   // binary: only one sense of features
+  public VwLine fx;
   
-  public VwInstance(StreamingDistSupFeatEx.Fact loc) {
+  public VwInstance mapSentenceIndex(int newSentenceIdx) {
+    StreamingDistSupFeatEx.Fact newLoc = new StreamingDistSupFeatEx.Fact(newSentenceIdx, loc.subjMention, loc.objMention, loc.verb);
+    VwInstance i = new VwInstance(newLoc, fx);
+    i.labels = labels;
+    i.scores = scores;
+    return i;
+  }
+  
+  public VwInstance(StreamingDistSupFeatEx.Fact loc, VwLine fx) {
+    this.fx = fx;
     this.loc = loc;
     this.labels = new ArrayList<>();
     this.scores = new DoubleArrayList();

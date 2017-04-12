@@ -129,11 +129,12 @@ public class VwInstanceReader implements AutoCloseable, Iterator<VwInstance> {
       return;
     }
     StreamingDistSupFeatEx.Fact loc = Fact.fromTsv(locStr);
-    cur = new VwInstance(loc);
 
     // ldf: shared | feature+
     // binary: feature+
-    rFeats.readLine();    // TODO when VwLdfInstance stores features, capture them here
+    String fs = rFeats.readLine();
+    VwLine fx = new VwLine(fs);
+    cur = new VwInstance(loc, fx);
 
     if (!ldf) {
       // If binary labels, then just read one line of (scores, features, locations) and return

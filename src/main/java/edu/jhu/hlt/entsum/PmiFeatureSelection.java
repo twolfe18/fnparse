@@ -476,7 +476,7 @@ public class PmiFeatureSelection {
         return;
       }
       String lLocs = rLocs.readLine();
-      cur = new VwInstance(Fact.fromTsv(lLocs));
+      cur = new VwInstance(Fact.fromTsv(lLocs), null);
       String[] a = lScores.split("\\s+");
       assert a.length % 2 == 0;
       for (int i = 0; i < a.length; i += 2) {
@@ -509,9 +509,28 @@ public class PmiFeatureSelection {
     }
   }
   
-  public static void computeHighPmiFeatures(ExperimentProperties config) throws IOException {
+  /*
+  caligula code-testing-data $ mkdir -p testing/one/a
+  caligula code-testing-data $ mkdir -p testing/one/b
+  caligula code-testing-data $ mkdir -p testing/one/c
+  caligula code-testing-data $ mkdir -p testing/two/a
+  caligula code-testing-data $ mkdir -p testing/two/b
+  caligula code-testing-data $ mkdir -p testing/two/c
+  caligula code-testing-data $ for f in testing/STAR/STAR; do echo "world" >$f/hello.txt; done
+  */
+//  public static void test0() {
+//    File parent = new File("data/facc1-entsum/code-testing-data/testing");
+//    List<File> fs = FileUtil.find(parent, "glob:**/b/*.txt");
+//    for (File f : fs)
+//      System.out.println(f.getPath());
+//  }
+  
+  public static void computeHighPmiFeatures(ExperimentProperties config) throws Exception {
+    // TODO These should be re-named to something like "relationBinaryFeatureParent" etc
     File entityDirParent = config.getExistingDir("entityDirParent");
-    List<File> ibs = FileUtil.findDirs(entityDirParent, "glob:**/infobox-binary");
+//    String entityDirGlob = config.getString("entityDirGlob", "glob:**/infobox-binary");
+//    List<File> ibs = FileUtil.findDirs(entityDirParent, entityDirGlob);
+    List<File> ibs = FileUtil.execFind(entityDirParent, "-path", "*/train/*", "-type", "d", "-name", "infobox-binary");
     Log.info("found " + ibs.size() + " entity directories");
     
     File output = config.getFile("output");
@@ -529,7 +548,7 @@ public class PmiFeatureSelection {
     Set<String> skipRels = new HashSet<>();
     skipRels.add("neg");
 
-    int topFeats = config.getInt("topFeats", 30);
+    int topFeats = config.getInt("topFeats", 60);
     Log.info("topFeats=" + topFeats);
     
     Shard shard = config.getShard();
@@ -573,8 +592,6 @@ public class PmiFeatureSelection {
     a.resolveAllGoodFeatures(allPos);
     boolean resolveFeatureNames = true;
     a.writeout(m, output, pmiFreqDiscount, n, resolveFeatureNames);
-
-    Log.info("done");
   }
   
   public static Set<Integer> getTopFeats(Map<String, List<LabeledPmi<String, String>>> m) {
@@ -588,5 +605,6 @@ public class PmiFeatureSelection {
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     computeHighPmiFeatures(config);
+    Log.info("done");
   }
 }

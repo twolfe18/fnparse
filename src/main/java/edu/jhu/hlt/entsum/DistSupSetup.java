@@ -306,7 +306,7 @@ public class DistSupSetup {
     File infobox = config.getExistingFile("infobox", new File("data/dbpedia/infobox_properties_en.ttl.gz"));
     j.scanInfoboxFacts(infobox);
     //    b) a pass which aligns facts to sentences,             e.g. m.0gly1/fact-rel0-mentions.txt (same lines as mentions.txt)
-    // TODO
+    // NOTE: This is done as a part of the feature extraction step, see SlotsAsConcepts
     
     // 4) O(1) memory scan of dbpedia types
     //    Produces m.0gly1/types.txt

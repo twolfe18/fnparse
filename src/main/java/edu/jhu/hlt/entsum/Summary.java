@@ -86,6 +86,8 @@ public class Summary implements Serializable {
   public DoubleArrayList sentenceCosts;
   public List<EffSent> sentences;
   public List<Concept> concepts;
+  public List<VwInstance> conceptPredictions;
+  
   
   public Summary(String subject, String system) {
     this.subject = subject;
@@ -93,6 +95,7 @@ public class Summary implements Serializable {
     this.sentenceCosts = new DoubleArrayList();
     this.sentences = new ArrayList<>();
     this.concepts = new ArrayList<>();
+    this.conceptPredictions = new ArrayList<>();
   }
 
   public Summary(String subject, String system, List<EffSent> sentences) {
@@ -101,6 +104,7 @@ public class Summary implements Serializable {
     this.sentenceCosts = new DoubleArrayList();
     this.sentences = sentences;
     this.concepts = new ArrayList<>();
+    this.conceptPredictions = new ArrayList<>();
   }
   
   private static class Sent implements Comparable<Sent> {
@@ -150,7 +154,14 @@ public class Summary implements Serializable {
     Summary sn = new Summary(subject, system);
     for (Sent si : s)
       sn.add(si, old2new);
-
+    
+    // These VwInstances have bogus sentence indices.
+    // I believe they are global indices (in full set of sentences to choose from when summarizing).
+    // These indices DO NOT correspond to a local index in this.sentences.
+    // For now I'm just wiping it out and hoping I don't need it.
+    for (VwInstance i : conceptPredictions)
+      sn.conceptPredictions.add(i.mapSentenceIndex(-1));
+    
     return sn;
   }
   
@@ -233,18 +244,20 @@ public class Summary implements Serializable {
       return sb.toString();
     }
   
-    public String keyFunc(Summary s) {
+    public String keyFunc(Summary s, boolean includeConcepts) {
       Hasher h = hf.newHasher();
       h.putInt(s.sentences.size());
-      h.putInt(s.concepts.size());
       for (EffSent sent : s.sentences)
         for (DepNode d : sent.parse())
           h.putInt(d.word);
-      for (Concept c : s.concepts) {
-        h.putString(c.name, UTF8);
-        h.putInt(c.sentence);
-        h.putInt(c.tokens.start);
-        h.putInt(c.tokens.end);
+      if (includeConcepts) {
+        h.putInt(s.concepts.size());
+        for (Concept c : s.concepts) {
+          h.putString(c.name, UTF8);
+          h.putInt(c.sentence);
+          h.putInt(c.tokens.start);
+          h.putInt(c.tokens.end);
+        }
       }
       return h.hash().toString();
     }
@@ -270,8 +283,9 @@ public class Summary implements Serializable {
 
       // Group the summaries (find duplicates)
       MultiMap<String, Summary> dups = new MultiMap<>();
+      boolean includeConcepts = false;
       for (Summary s : summaries)
-        dups.add(keyFunc(s), s);
+        dups.add(keyFunc(s, includeConcepts), s);
       int nshow = 3;
       if (dups.numKeys() < nshow) {
         Log.info("there aren't enough distinct summaries, skipping");
@@ -409,6 +423,7 @@ public class Summary implements Serializable {
     }
   }
   
+  /** Just cat together a bunch of CSV files */
   public static void buildHitForAllEntities(ExperimentProperties config) throws IOException {
     File outputCsv = config.getFile("outputCsv");
     File entityDirParent = config.getExistingDir("entityDirParent");

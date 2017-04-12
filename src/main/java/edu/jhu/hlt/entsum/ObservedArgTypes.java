@@ -264,7 +264,7 @@ public class ObservedArgTypes implements Serializable {
         vo.apply(voKey(verb, objType), false));
   }
   
-  // TODO Iterate over every ($ENTITY/facts-rel1-types.txt, $ENTITY/entity-types-rel1.txt) pair and add to this instance
+  // Iterate over every ($ENTITY/facts-rel1-types.txt, $ENTITY/entity-types-rel1.txt) pair and add to this instance
   public static void main(String[] args) throws Exception {
     ExperimentProperties config = ExperimentProperties.init(args);
     File output = config.getFile("output");
