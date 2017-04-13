@@ -198,7 +198,7 @@ public class DbpediaTtl implements Serializable {
     }
   }
   
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
     String a = "<http://dbpedia.org/resource/Autism> <http://dbpedia.org/property/field> <http://dbpedia.org/resource/Psychiatry> .";
     String b = "<http://dbpedia.org/resource/Autism> <http://dbpedia.org/property/diseasesdb> \"1142\"^^<http://www.w3.org/2001/XMLSchema#integer> .";
     String c = "<http://dbpedia.org/resource/Autism> <http://dbpedia.org/property/icd> \"F84.0\"@en .";
@@ -211,5 +211,13 @@ public class DbpediaTtl implements Serializable {
     System.out.println(new DbpediaTtl(a, false));
     System.out.println(new DbpediaTtl(b, false));
     System.out.println(new DbpediaTtl(c, false));
+    
+    File f = new File("/tmp/facts-rel0-types.txt");
+    try (LineIterator iter = new LineIterator(f, true)) {
+      while (iter.hasNext()) {
+        DbpediaTtl i = iter.next();
+        System.out.println(i);
+      }
+    }
   }
 }

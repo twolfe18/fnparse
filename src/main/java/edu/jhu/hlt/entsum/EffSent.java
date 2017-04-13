@@ -448,8 +448,12 @@ public class EffSent implements Serializable {
     }
 
     private void advance() throws IOException {
-      DepNode[] parse = iter.next();
       String ms = r.readLine();
+      if (ms == null) {
+        assert !iter.hasNext();
+        return;
+      }
+      DepNode[] parse = iter.next();
       cur = new EffSent(parse);
       boolean setHeads = true;
       cur.setMentions(ms, setHeads);

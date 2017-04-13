@@ -50,8 +50,8 @@ public class DbpediaToken {
       int close = source.indexOf('"', start+1);
 //      while (source.charAt(close-1) == '\\')
 //        close = source.indexOf('"', close+1);
+      assert close > start : "start=" + start + " close=" + close;
       value = source.substring(start+1, close);
-      assert close > start;
       if (source.startsWith(INT_TYPE_STR, close+1)) {
         this.type = Type.INTEGER;
         this.end = close + INT_TYPE_STR.length() + 1;
