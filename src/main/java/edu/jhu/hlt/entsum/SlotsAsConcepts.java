@@ -903,9 +903,28 @@ public class SlotsAsConcepts {
    */
   public static class PmiSlotPredictor {
     private MultiMap<String, Feat> feat2relMi;
+    private Set<String> nsToKeep;
     
     public PmiSlotPredictor() {
       feat2relMi = new MultiMap<>();
+    }
+    
+    public void keepPreciseFeatures() {
+      keepNamespace("m");
+      keepNamespace("p");
+      keepNamespace("q");
+      keepNamespace("t");
+      keepNamespace("A");
+    }
+    
+    /**
+     * For namespace definitions, see {@link DistSupFact#extractLexicoSyntacticFeats(FeatExData)}
+     */
+    public void keepNamespace(String ns) {
+      Log.info("only keeping ns=" + ns);
+      if (nsToKeep == null)
+        nsToKeep = new HashSet<>();
+      nsToKeep.add(ns);
     }
     
     /** Keep the top k features for every relation (sorted by discounted PMI) */
@@ -943,19 +962,33 @@ public class SlotsAsConcepts {
     }
     
     public void add(File pmiFeatSelOutput) throws IOException {
-      Log.info("reading " + pmiFeatSelOutput.getPath());
-      int n = 0;
+//      Log.info("reading " + pmiFeatSelOutput.getPath());
+      int n = 0, ig = 0;
       try (BufferedReader r = FileUtil.getReader(pmiFeatSelOutput)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
           n++;
           String[] ar = line.split("\t");
           String rel = ar[0];
           String feat = ar[1];
+
+          if (nsToKeep != null) {
+            int s = feat.indexOf('/');
+            if (s > 0) {
+              String ns = feat.substring(0, s);
+              if (!nsToKeep.contains(ns)) {
+                ig++;
+                continue;
+              }
+            } else {
+              System.out.println("no namespace? " + feat);
+            }
+          }
+          
           double discountedPmi = Double.parseDouble(ar[3]);
           feat2relMi.add(feat, new Feat(rel, discountedPmi));
         }
       }
-//      Log.info("read " + n + " lines");
+      Log.info("read " + n + " lines, ignored " + ig + " features, from " + pmiFeatSelOutput.getPath());
     }
     
     public List<Feat> predict(VwLine x) {
@@ -969,11 +1002,14 @@ public class SlotsAsConcepts {
 //            if (rel.getName().equals("pos-themeMusicComposer.vw"))
 //              System.out.println("verb=" + rel + " feat=" + feat);
 
+//            System.out.printf("using: %-64s for %s\n", feat, rel);
+
             ys.add(rel);
           }
         }
       }
-      ys = Feat.aggregateSum(ys);
+//      ys = Feat.aggregateSum(ys);
+      ys = Feat.aggregateMax(ys);
       Collections.sort(ys, Feat.BY_SCORE_DESC);
       return ys;
     }
@@ -2006,6 +2042,8 @@ public class SlotsAsConcepts {
 
       PmiSlotPredictor pmi = new PmiSlotPredictor();
       List<File> pmiFiles = config.getFileGlob("pmiFiles");
+      if (config.getBoolean("onlyPreciseFeats", true))
+        pmi.keepPreciseFeatures();
       for (File ff : pmiFiles)
         pmi.add(ff);
 //      int k = config.getInt("topFeats", 30);

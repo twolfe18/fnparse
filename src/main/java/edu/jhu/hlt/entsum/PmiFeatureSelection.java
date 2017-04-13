@@ -557,7 +557,7 @@ public class PmiFeatureSelection {
     Set<String> skipRels = new HashSet<>();
     skipRels.add("neg");
 
-    int topFeats = config.getInt("topFeats", 60);
+    int topFeats = config.getInt("topFeats", 300);
     Log.info("topFeats=" + topFeats);
     
     Shard shard = config.getShard();
