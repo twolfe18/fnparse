@@ -61,9 +61,19 @@ public class DistSupSetup {
   private MultiMap<String, String> mid2dbpedia;
   private MultiMap<String, String> dbpedia2mid;
   
-  public DistSupSetup() {
+  // These are huge! And not currently used!
+  // On rare5:
+  //    15M   du -sch $(find tokenized-sentences/ -name 'facts-rel0-types.txt')
+  //   767M   du -sch $(find tokenized-sentences/ -name 'parse.conll')
+  // 47000M   du -sch $(find tokenized-sentences/ -name 'facts-rel1-types.txt')
+  // 51000M   du -sh tokenized-sentences/
+  public boolean outputRel1Facts;
+  
+  public DistSupSetup(boolean outputRel1Facts) {
+    Log.info("outputRel1Facts=" + outputRel1Facts);
     mid2wdRel0 = new HashMap<>();
     mid2wdRel1 = new MultiMap<>();
+    this.outputRel1Facts = outputRel1Facts;
   }
   
   /**
@@ -181,17 +191,16 @@ public class DistSupSetup {
     }
   }
 
-  // TODO Should this be mutually exclusive, as in you either write out to a rel0 file or a rel1 file?
   List<File> minRelDbpF(String dbp) {
     List<File> rel1 = new ArrayList<>();
     for (String mid : dbpedia2mid.get(dbp)) {
       File wd0 = mid2wdRel0.get(mid);
-      if (wd0 != null) {
-//        return Arrays.asList(new File(wd0, "facts-rel0-types.txt"));
+      if (wd0 != null)
         rel1.add(new File(wd0, "facts-rel0-types.txt"));
+      if (outputRel1Facts) {
+        for (File wd : mid2wdRel1.get(mid))
+          rel1.add(new File(wd, "facts-rel1-types.txt"));
       }
-      for (File wd : mid2wdRel1.get(mid))
-        rel1.add(new File(wd, "facts-rel1-types.txt"));
     }
     return rel1;
   }
@@ -292,7 +301,8 @@ public class DistSupSetup {
     Log.info("found " + mentions.size() + " mentions files");
     if (mentions.isEmpty())
       return;
-    DistSupSetup j = new DistSupSetup();
+    boolean outputRel1Facts = config.getBoolean("outputRel1Facts", false);
+    DistSupSetup j = new DistSupSetup(outputRel1Facts);
     for (File m : mentions) {
       String mid = getMidFromMentionFile(m);
       j.addMentions(mid, m);
