@@ -1,5 +1,7 @@
 package edu.jhu.hlt.entsum;
 
+import java.io.File;
+
 import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
@@ -44,7 +46,7 @@ public class DbpediaToken {
     if (s == '<') {
       type = Type.DBPEDIA_ENTITY;
       this.end = source.indexOf('>', start+1)+1;
-      assert this.end > start;
+      assert this.end > start : "start=" + start + " end=" + this.end;
       value = source.substring(start+1, this.end-1);
     } else if (s == '"') {
       int close = source.indexOf('"', start+1);
@@ -99,9 +101,16 @@ public class DbpediaToken {
     return false;
   }
   
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
     String a = "\\\"\"";
     System.out.println(a);
     System.out.println(a.indexOf("[^\"]\""));
+    
+    File f = new File("/tmp/facts-rel0-types.txt");
+    try (DbpediaTtl.LineIterator iter = new DbpediaTtl.LineIterator(f, true)) {
+      while (iter.hasNext()) {
+        DbpediaTtl t = iter.next();
+      }
+    }
   }
 }
