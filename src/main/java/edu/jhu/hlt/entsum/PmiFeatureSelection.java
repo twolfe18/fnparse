@@ -530,7 +530,7 @@ public class PmiFeatureSelection {
     File entityDirParent = config.getExistingDir("entityDirParent");
 //    String entityDirGlob = config.getString("entityDirGlob", "glob:**/infobox-binary");
 //    List<File> ibs = FileUtil.findDirs(entityDirParent, entityDirGlob);
-    List<File> ibs = FileUtil.execFind(entityDirParent, "-path", "*/train/*", "-type", "d", "-name", "infobox-binary");
+    List<File> ibs = FileUtil.execFind(entityDirParent, "-path", "*/train/*", "-not", "-path", "*entsum-data*", "-type", "d", "-name", "infobox-binary");
     Log.info("found " + ibs.size() + " entity directories");
     
     File output = config.getFile("output");
