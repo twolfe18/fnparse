@@ -290,7 +290,16 @@ public class PmiFeatureSelection {
         ns2fs = new Set[256];
       try (BufferedReader r = FileUtil.getReader(yx)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
-          VwLine vw = new VwLine(line);
+          VwLine vw;
+          try {
+            // I have not found any bugs, but sometimes there are errors on disk.
+            // e.g. a file which hasn't been flushed ends on "|" will make this crash.
+            vw = new VwLine(line);
+          } catch (Exception e) {
+            System.err.println("error while reading " + yx.getPath());
+            e.printStackTrace();
+            continue;
+          }
           if (linesAsInstances) {
             add(y, vw);
           } else {
