@@ -25,11 +25,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.MultiTimer;
-import edu.jhu.hlt.tutils.MultiTimer.TB;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
-import edu.jhu.hlt.tutils.rand.ReservoirSample;
-import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.set.IntHashSet;
@@ -185,6 +181,10 @@ public class PmiUpgrades {
       obsPosYX = BloomFilter.create(new IntPairFunnel(), obsPosYXSize);
     }
     
+    public int numInstances() {
+      return n;
+    }
+    
     static IntArrayList getOrNew(int key, IntObjectHashMap<IntArrayList> map) {
       IntArrayList val = map.get(key);
       if (val == null) {
@@ -334,7 +334,14 @@ public class PmiUpgrades {
     }
     
     static void addAll(IntArrayList x, IntHashSet ux, IntArrayList lx) {
-      
+      int n = x.size();
+      for (int i = 0; i < n; i++) {
+        int v = x.get(i);
+        if (!ux.contains(v)) {
+          ux.add(v);
+          lx.add(v);
+        }
+      }
     }
     
     public void addPos(String label, File vwFeatures) throws IOException {
@@ -398,9 +405,10 @@ public class PmiUpgrades {
             w.write('\t');
             w.write("" + feat.nCooc);
             w.write('\t');
-            w.write("" + n);
+            w.write("" + this.pmi.numInstances());
             w.newLine();
           }
+          w.flush();
         }
       }
     }
@@ -458,7 +466,8 @@ public class PmiUpgrades {
     ExperimentProperties config = ExperimentProperties.init(args);
     
     File entityDirParent = config.getExistingDir("entityDirParent");
-    File output = config.getOrMakeDir("output");
+//    File output = config.getOrMakeDir("output");
+    File output = config.getFile("output");
     DataSource ds = new DataSource(entityDirParent, output);
     
     double pmiFreqDiscount = config.getDouble("pmiFreqDiscount", 2d);
@@ -467,7 +476,7 @@ public class PmiUpgrades {
     int topFeats = config.getInt("topFeats", 300);
     Log.info("topFeats=" + topFeats);
 
-    boolean extractionsAsInstances = config.getBoolean("extractionsAsInstances", true);
+    boolean extractionsAsInstances = config.getBoolean("extractionsAsInstances");
     Log.info("extractionsAsInstances=" + extractionsAsInstances);
     
     Shard shard = config.getShard();
@@ -482,8 +491,10 @@ public class PmiUpgrades {
       File f = ds.next();
       String rel = getRelation(f);
 
-      if (ds.posF.isEmpty() && ds.negDone() == 1)
-        a.writeoutPmi(new File(output, "after-pos.pmi"), topFeats, pmiFreqDiscount);
+      if (ds.posF.isEmpty() && ds.negDone() == 1) {
+        File ff = new File(output.getPath() + ".afterPos");
+        a.writeoutPmi(ff, topFeats, pmiFreqDiscount);
+      }
 
       c.increment(rel == null ? "neg" : rel);
 //      ta.start();
@@ -524,10 +535,12 @@ public class PmiUpgrades {
       // One after all pos, then log spaced buckets thereafter
       int nd = ds.negDone();
       if (nd >= 8 && isPosPowerOfTwo(nd)) {
-        a.writeoutPmi(new File(output, "after-pos-and-neg" + ds.nNeg + ".pmi"), topFeats, pmiFreqDiscount);
+        String suf = String.format(".afterPosAndNeg%05d", nd);
+        File ff = new File(output.getPath() + suf);
+        a.writeoutPmi(ff, topFeats, pmiFreqDiscount);
       }
     }
-    a.writeoutPmi(new File(output, "final.pmi"), topFeats, pmiFreqDiscount);
+    a.writeoutPmi(output, topFeats, pmiFreqDiscount);
     Log.info("done");
   }
 }

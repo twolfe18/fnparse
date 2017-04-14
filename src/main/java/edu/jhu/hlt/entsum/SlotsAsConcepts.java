@@ -902,6 +902,7 @@ public class SlotsAsConcepts {
    * instances, which are used to make predictions given new lexSynFeatures.
    */
   public static class PmiSlotPredictor {
+    public static final List<String> PRECISE_FEATURE_NAMESPACES = Arrays.asList("m", "p", "q", "t", "A");
     private MultiMap<String, Feat> feat2relMi;
     private Set<String> nsToKeep;
     
@@ -910,11 +911,13 @@ public class SlotsAsConcepts {
     }
     
     public void keepPreciseFeatures() {
-      keepNamespace("m");
-      keepNamespace("p");
-      keepNamespace("q");
-      keepNamespace("t");
-      keepNamespace("A");
+//      keepNamespace("m");
+//      keepNamespace("p");
+//      keepNamespace("q");
+//      keepNamespace("t");
+//      keepNamespace("A");
+      for (String ns : PRECISE_FEATURE_NAMESPACES)
+        keepNamespace(ns);
     }
     
     /**

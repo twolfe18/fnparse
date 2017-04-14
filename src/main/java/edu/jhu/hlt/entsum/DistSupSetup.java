@@ -269,20 +269,28 @@ public class DistSupSetup {
    */
   public void scanDbpediaTypes(File instanceTypes) throws Exception {
     Log.info("reading " + instanceTypes.getPath());
+    TimeMarker tm = new TimeMarker();
     Map<String, BufferedWriter> open = new HashMap<>();
+    int lineOut = 0, lineIn = 0;
     boolean keepLines = true;
     try (DbpediaTtl.LineIterator iter = new DbpediaTtl.LineIterator(instanceTypes, keepLines)) {
       while (iter.hasNext()) {
+        lineIn++;
         DbpediaTtl x = iter.next();
         assert x.subject().type == Type.DBPEDIA_ENTITY;
         String subj = x.subject().getValue();
         for (File f : getTypeFiles(subj)) {
+          lineOut++;
           BufferedWriter w = getOrOpen(f.getPath(), open, f);
           w.write(x.line);
           w.newLine();
         }
+        
+        if (tm.enoughTimePassed(4))
+          Log.info("lineIn=" + lineIn + " lineOut=" + lineOut);
       }
     }
+    Log.info("done, lineIn=" + lineIn + " lineOut=" + lineOut);
     closeAll(open);
   }
   

@@ -4,8 +4,10 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -13,6 +15,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import com.google.common.hash.HashFunction;
@@ -28,13 +31,163 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.set.IntHashSet;
+import edu.jhu.prim.vector.IntIntHashVector;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.MultiMap;
 
 public class PmiFeatureSelection {
+  
+  /*
+   * This class needs serious cleanup.
+   * 
+   * Another algorithm-ignorant method of doing this is to
+   * 1) find all pos and neg files first
+   * 2) count all the pos files first
+   * 3) write out PMI values after [2**i - 1 for i in range(12)] neg files have been read
+   * 
+   * If I track all of these writes, then i=0 will be withoutNeg and
+   * lim_{i->inf} will be withNeg.
+   * This halves the number of jobs and gives incremental results.
+   */
+  
+  /**
+   * VDL = "Van Durme and Lall"
+   * https://www.cs.jhu.edu/~vandurme/papers/VanDurmeLallNIPS09.pdf
+   *
+   * @author travis
+   */
+  static class VDL {
+    // 100M f(x) values * 10 chars/feat * 2 bytes/char = 2G in just keys
+    // say we store top k=10 lists for each fx, then we need 
+    
+    static class TopPmis {
+      int cx;
+      byte[] compact;             // sequence of (y:int, cyx:short) pairs
+      IntIntHashVector buffer;    // temporary map from y -> cyx
+      
+      public TopPmis(int k) {
+        cx = 0;
+        compact = new byte[k * (4 + 2)];
+      }
+      
+      public void add(int y) {
+        cx++;
+        if (buffer == null)
+          buffer = new IntIntHashVector();
+        buffer.add(y, 1);
+      }
+      
+      public void compress(int k, IntIntHashVector cy, int n) {
+        // Add the history of counts from compact to the buffer
+        ByteBuffer bb = ByteBuffer.wrap(compact);
+        for (int i = 0; i < k; i++) {
+          int y = bb.getInt();
+          int cyx = bb.getShort();
+          buffer.add(y, cyx);
+        }
+        // Take the top-k
+        List<Pmi> top = new ArrayList<>(buffer.size());
+        buffer.forEach(ide -> {
+          int nCooc = ide.get();
+          int label = ide.index();
+          int cyi = cy.getWithDefault(label, 0);
+          assert nCooc <= cyi;
+          assert nCooc <= cx;
+          if (nCooc > 0) {
+            int feature = -1; // const
+            double pmi = Math.log(((double) n * nCooc) / (cyi * cx));
+            top.add(new Pmi(label, feature, pmi, nCooc));
+          }
+        });
+        Collections.sort(top, Pmi.BY_PMI_DESC);
+        // Compress the top-k
+        bb.position(0);
+        for (int i = 0; i < k; i++) {
+          Pmi p = top.get(i);
+          assert p.nCooc <= Short.MAX_VALUE;
+          bb.putInt(p.labelIdx);
+          bb.putShort((short) p.nCooc);
+        }
+        buffer = null;
+      }
+      
+      public void getTopPmis(int k, int n, int x, IntIntHashVector cy, List<Pmi> addTo) {
+        ByteBuffer bb = ByteBuffer.wrap(compact);
+        for (int i = 0; i < k; i++) {
+          int y = bb.getInt();
+          int cyx = bb.getShort();
+          if (cyx == 0)
+            continue;
+          double pmi = Math.log(((double) cyx*n) / (cy.get(y) * cx));
+          addTo.add(new Pmi(y, x, pmi, cyx));
+        }
+      }
+    }
+
+    IntObjectHashMap<TopPmis> x2tops;   // pruned and compacted representation of cyx and cx
+    IntIntHashVector cy;
+    int n;
+    int k;
+    int maxCyxBufSize;
+    
+    // e.g k=10, maxCyxBufSize=256
+    public VDL(int k, int maxCyxBufSize) {
+      this.n = 0;
+      this.k = k;
+      this.x2tops = new IntObjectHashMap<>();
+      this.cy = new IntIntHashVector();
+      this.maxCyxBufSize = maxCyxBufSize;
+    }
+    
+    public void addInstance(int[] ys, int[] xs) {
+      n++;
+      for (int i = 0; i < ys.length; i++) {
+        n--;
+        addInstance(ys[i], xs);
+      }
+    }
+    public void addInstance(int y, int... xs) {
+      cy.add(y, 1);
+      n++;
+
+      // Sort for uniq
+      int[] xss = Arrays.copyOf(xs, xs.length);
+      Arrays.sort(xss);
+      for (int i = 0; i < xss.length; i++) {
+        if (i > 0 && xss[i] == xss[i-1])
+          continue;   // dup
+        
+        // cyx++
+        TopPmis xc = x2tops.get(xss[i]);
+        if (xc == null) {
+          xc = new TopPmis(k);
+          x2tops.put(xss[i], xc);
+        }
+        xc.add(y);
+        
+        // compress IntIntHashVector into top-k so memory doesn't grow unboundedly
+        if (xc.buffer.size() > maxCyxBufSize)
+          xc.compress(k, cy, n);
+      }
+    }
+
+    /** returns all PMIs which are known about */
+    public List<Pmi> getTopPmi(double pmiFreqDiscount) {
+      List<Pmi> all = new ArrayList<>();
+      IntObjectHashMap<TopPmis>.Iterator iter = x2tops.iterator();
+      while (iter.hasNext()) {
+        iter.advance();
+        int x = iter.key();
+        TopPmis cyxs = iter.value();
+        cyxs.getTopPmis(k, n, x, cy, all);
+      }
+      return all;
+    }
+  }
   
   private IntObjectHashMap<IntArrayList> label2instance;      // values are sorted, uniq, ascending lists/sets
   private IntObjectHashMap<IntArrayList> feature2instance;    // values are sorted, uniq, ascending lists/sets
@@ -69,7 +222,7 @@ public class PmiFeatureSelection {
     return val;
   }
   
-  private static IntArrayList intersectSortedLists(IntArrayList a, IntArrayList b) {
+  static IntArrayList intersectSortedLists(IntArrayList a, IntArrayList b) {
     IntArrayList dest = new IntArrayList();
     TopDownClustering.intersectSortedLists(a, b, dest);
     return dest;
@@ -100,8 +253,10 @@ public class PmiFeatureSelection {
     public final int nCooc;
     
     public Pmi(int label, int feature, double pmi, int nCooc) {
-      if (Double.isNaN(pmi))
-        throw new IllegalArgumentException("pmi=nan");
+      if (Double.isNaN(pmi)) {
+//        throw new IllegalArgumentException("pmi=nan");
+        Log.info("pmi=nan! label=" + label + " feature=" + feature + " nCooc=" + nCooc);
+      }
 //      if (Double.isInfinite(pmi))
 //        throw new IllegalArgumentException("pmi=" + pmi);
       this.labelIdx = label;
@@ -201,6 +356,9 @@ public class PmiFeatureSelection {
     private Alphabet<String> alphY;
 //    private Alphabet<String> alphX;
     private PmiFeatureSelection mifs;
+    private VDL mifsApprox;
+    boolean transposeApprox = false;
+
     private MultiTimer t;
     
     private HashFunction hash;
@@ -210,11 +368,16 @@ public class PmiFeatureSelection {
     
     private Shard shard;
     
-    public Adapater(Shard shard) {
+    public Adapater(Shard shard, boolean exact, boolean approx) {
       this.shard = shard;
       this.alphY = new Alphabet<>();
 //      this.alphX = new Alphabet<>();
-      this.mifs = new PmiFeatureSelection();
+
+      if (exact)
+        this.mifs = new PmiFeatureSelection();
+      if (approx)
+        this.mifsApprox = new VDL(16, 128);
+
       this.t = new MultiTimer();
       
       this.hash = Hashing.murmur3_32(42);
@@ -277,11 +440,17 @@ public class PmiFeatureSelection {
      * (as in one instance per entity rather than per extraction location).
      */
     @SuppressWarnings("unchecked")
-    public void add(String y, File yx, boolean linesAsInstances) throws IOException {
+    public void add(String y, File yx, boolean linesAsInstances, boolean onlyPreciseFeatures) throws IOException {
       Log.info("y=" + y + " yx=" + yx.getPath());
       if (!yx.isFile()) {
         Log.info("warning: not a file");
         return;
+      }
+      
+      Set<String> keepNS = null;
+      if (onlyPreciseFeatures) {
+        keepNS = new HashSet<>();
+        keepNS.addAll(SlotsAsConcepts.PmiSlotPredictor.PRECISE_FEATURE_NAMESPACES);
       }
 
       t.start("addFile/" + y);
@@ -300,6 +469,10 @@ public class PmiFeatureSelection {
             e.printStackTrace();
             continue;
           }
+          
+          if (onlyPreciseFeatures)
+            vw.pruneByNamespace(keepNS);
+          
           if (linesAsInstances) {
             add(y, vw);
           } else {
@@ -326,15 +499,28 @@ public class PmiFeatureSelection {
             x.add(xi);
           }
         }
-        mifs.addInstance(yi, x.toNativeArray());
+        int[] xs = x.toNativeArray();
+        if (mifs != null)
+          mifs.addInstance(yi, xs);
+        if (mifsApprox != null) {
+          if (transposeApprox) {
+            // Use approx to store the transpose.
+            // |Y| is small, so use those as keys and store them exactly.
+            // |X| is huge, and we are sharding them, but mifsApprox still only gets an approx top-k
+            mifsApprox.addInstance(xs, new int[] {yi});
+          } else {
+            mifsApprox.addInstance(yi, xs);
+          }
+        }
       }
       t.stop("addFile/" + y);
     }
     
     private int lookupFeatIndex(char ns, String feat) {
+      boolean keepAll = true;
       String xs = ns + "/" + feat;
       int xi = hash.hashString(xs, UTF8).asInt();
-      if (goodFeats.contains(xi)) {
+      if (keepAll || goodFeats.contains(xi)) {
         // Store the int<->string mapping for later
         if (inverseHashingVerbose)
           Log.info("storing good feat inverse mapping " + xs + ":" + xi);
@@ -381,6 +567,9 @@ public class PmiFeatureSelection {
     }
     
     String getFeatureName(int i) {
+      return getFeatureName(i, false);
+    }
+    String getFeatureName(int i, boolean add) {
       List<String> fns = inverseFeatHashForGoodFeats.get(i);
       String feature;
       if (fns.isEmpty()) {
@@ -388,6 +577,8 @@ public class PmiFeatureSelection {
           feature = "?" + Integer.toHexString(i);
         } else {
           feature = "!" + Integer.toHexString(i);
+          if (add)
+            goodFeats.add(i);
         }
       } else {
         feature = StringUtils.join("~OR~", fns);
@@ -416,13 +607,18 @@ public class PmiFeatureSelection {
     }
     
     public void writeoutWithComputeMi(File output, Set<String> skipRels, int topFeats, double pmiFreqDiscount, int n) {
-      Map<String, List<LabeledPmi<String, String>>> m = argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount, true);
+      
+      if ((mifs == null) == (mifsApprox == null))
+        Log.info("warning: mifs==null:" + (mifs==null) + " mifsApprox==null:" + (mifsApprox==null));
+      
       try (BufferedWriter w = FileUtil.getWriter(output)) {
-        for (String rel : m.keySet()) {
-          for (LabeledPmi<String, String> feat : m.get(rel)) {
-            w.write(feat.label);
+        
+        if (mifsApprox != null) {
+          List<Pmi> pmi = mifsApprox.getTopPmi(pmiFreqDiscount);
+          for (Pmi feat : pmi) {
+            w.write(alphY.lookupObject(feat.labelIdx));
             w.write('\t');
-            w.write(feat.feature);
+            w.write(getFeatureName(feat.featureIdx));
             w.write('\t');
             w.write("" + feat.pmi);
             w.write('\t');
@@ -434,6 +630,26 @@ public class PmiFeatureSelection {
             w.newLine();
           }
         }
+        
+        if (mifs != null) {
+          Map<String, List<LabeledPmi<String, String>>> m = argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount, false);
+          for (String rel : m.keySet()) {
+            for (LabeledPmi<String, String> feat : m.get(rel)) {
+              w.write(feat.label);
+              w.write('\t');
+              w.write(feat.feature);
+              w.write('\t');
+              w.write("" + feat.pmi);
+              w.write('\t');
+              w.write("" + feat.getFrequencyDiscountedPmi(pmiFreqDiscount));
+              w.write('\t');
+              w.write("" + feat.nCooc);
+              w.write('\t');
+              w.write("" + n);
+              w.newLine();
+            }
+          }
+        }
       } catch (IOException e) {
         e.printStackTrace();
       }
@@ -441,15 +657,18 @@ public class PmiFeatureSelection {
 
     
     public void writeout(Map<String, List<LabeledPmi<String, String>>> m, File output, double pmiFreqDiscount, int numInstance, boolean resolveFeatureNames) {
+      
+      if ((mifs == null) == (mifsApprox == null))
+        Log.info("warning: mifs==null:" + (mifs==null) + " mifsApprox==null:" + (mifsApprox==null));
+
       try (BufferedWriter w = FileUtil.getWriter(output)) {
-        for (String rel : m.keySet()) {
-          for (LabeledPmi<String, String> feat : m.get(rel)) {
-            w.write(feat.label);
+        
+        if (mifsApprox != null) {
+          List<Pmi> pmi = mifsApprox.getTopPmi(pmiFreqDiscount);
+          for (Pmi feat : pmi) {
+            w.write(alphY.lookupObject(feat.labelIdx));
             w.write('\t');
-            if (resolveFeatureNames)
-              w.write(getFeatureName(feat.featureIdx));
-            else
-              w.write(feat.feature);
+            w.write(getFeatureName(feat.featureIdx));
             w.write('\t');
             w.write("" + feat.pmi);
             w.write('\t');
@@ -459,6 +678,28 @@ public class PmiFeatureSelection {
             w.write('\t');
             w.write("" + numInstance);
             w.newLine();
+          }
+        }
+
+        if (mifs != null) {
+          for (String rel : m.keySet()) {
+            for (LabeledPmi<String, String> feat : m.get(rel)) {
+              w.write(feat.label);
+              w.write('\t');
+              if (resolveFeatureNames)
+                w.write(getFeatureName(feat.featureIdx));
+              else
+                w.write(feat.feature);
+              w.write('\t');
+              w.write("" + feat.pmi);
+              w.write('\t');
+              w.write("" + feat.getFrequencyDiscountedPmi(pmiFreqDiscount));
+              w.write('\t');
+              w.write("" + feat.nCooc);
+              w.write('\t');
+              w.write("" + numInstance);
+              w.newLine();
+            }
           }
         }
       } catch (IOException e) {
@@ -542,6 +783,9 @@ public class PmiFeatureSelection {
     List<File> ibs = FileUtil.execFind(entityDirParent, "-path", "*/train/*", "-not", "-path", "*entsum-data*", "-type", "d", "-name", "infobox-binary");
     Log.info("found " + ibs.size() + " entity directories");
     
+//    // DEBUG: prune dirs
+//    ibs = ReservoirSample.sample(ibs, 100, new Random(9001));
+    
     File output = config.getFile("output");
     Log.info("writing output to " + output.getPath());
     
@@ -563,7 +807,10 @@ public class PmiFeatureSelection {
     Shard shard = config.getShard();
     Log.info("feature shard=" + shard);
 
-    Adapater a = new Adapater(shard);
+    boolean onlyPreciseFeatures = true;
+    boolean exact = true;
+    boolean approx = false;   // This is not complete...
+    Adapater a = new Adapater(shard, exact, approx);
 
     int n = 0;
     int ncur = 0;
@@ -571,23 +818,49 @@ public class PmiFeatureSelection {
     List<File> allPos = new ArrayList<>();
     for (File ib : ibs) {
       if (addNeg)
-        a.add("neg", new File(ib, "neg.vw"), extractionsAsInstances);
+        a.add("neg", new File(ib, "neg.vw"), extractionsAsInstances, onlyPreciseFeatures);
       for (File f : ib.listFiles(f -> f.getName().matches("pos-\\S+.vw"))) {
-        a.add(f.getName(), f, extractionsAsInstances);
+        a.add(f.getName(), f, extractionsAsInstances, onlyPreciseFeatures);
         allPos.add(f);
       }
       
       n++;
       ncur++;
       if (ncur == thresh) {
-        thresh = (int) (1.4 * thresh + 1);
+        thresh = (int) (1.6 * thresh + 1);
         System.out.println("n=" + n + " N=" + ibs.size() + " nextThresh=" + thresh + "\t" + Describe.memoryUsage());
-        System.out.println("alphY.size=" + a.alphY.size()
-            + " good=" + a.goodFeats.size()
-            + " inverse=" + a.inverseFeatHashForGoodFeats.numEntries()
-            + " nYX=" + a.mifs.nnz
-            + " nY=" + a.mifs.label2instance.size()
-            + " nX=" + a.mifs.feature2instance.size());
+
+        if (exact) {
+          System.out.println("alphY.size=" + a.alphY.size()
+              + " good=" + a.goodFeats.size()
+              + " inverse=" + a.inverseFeatHashForGoodFeats.numEntries()
+              + " nYX=" + a.mifs.nnz
+              + " nY=" + a.mifs.label2instance.size()
+              + " nX=" + a.mifs.feature2instance.size());
+        }
+        
+        if (approx) {
+          List<Pmi> approxAll = a.mifsApprox.getTopPmi(pmiFreqDiscount);
+          Log.info("approx has " + approxAll.size() + " PMIs");
+          Collections.sort(approxAll, Pmi.BY_PMI_DESC);
+          int k = Math.min(60, approxAll.size());
+          for (int i = 0; i < k; i++) {
+            Pmi p = approxAll.get(i);
+            // These are switched on purpose
+            int y,x;
+            if (a.transposeApprox) {
+              y = p.featureIdx;
+              x = p.labelIdx;
+            } else {
+              y = p.labelIdx;
+              x = p.featureIdx;
+            }
+            System.out.printf("approx.best(%d): y=%-36s x=%-36s p=%.3f cyx=% 3d\n",
+                i, a.alphY.lookupObject(y), a.getFeatureName(x, true), p.pmi, p.nCooc);
+          }
+          System.out.println();
+        }
+        
         System.out.println("TIMER: " + a.t);
         a.writeoutWithComputeMi(output, skipRels, topFeats, pmiFreqDiscount, n);
         System.out.println();
@@ -596,11 +869,13 @@ public class PmiFeatureSelection {
     }
     
     Log.info("computing MI for the last time");
-    Map<String, List<LabeledPmi<String, String>>> m = a.argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount);
-    a.addToGoodFeatures(getTopFeats(m));
-    a.resolveAllGoodFeatures(allPos);
-    boolean resolveFeatureNames = true;
-    a.writeout(m, output, pmiFreqDiscount, n, resolveFeatureNames);
+    if (exact) {
+      Map<String, List<LabeledPmi<String, String>>> m = a.argTopPmiAllLabels(skipRels, topFeats, pmiFreqDiscount);
+      a.addToGoodFeatures(getTopFeats(m));
+      a.resolveAllGoodFeatures(allPos);
+      boolean resolveFeatureNames = true;
+      a.writeout(m, output, pmiFreqDiscount, n, resolveFeatureNames);
+    }
   }
   
   public static Set<Integer> getTopFeats(Map<String, List<LabeledPmi<String, String>>> m) {
