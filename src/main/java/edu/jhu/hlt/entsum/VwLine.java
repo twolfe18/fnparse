@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import edu.jhu.hlt.tutils.FileUtil;
 
@@ -38,6 +39,21 @@ public class VwLine implements Serializable {
         cur.features.add(ar[i]);
       }
     }
+  }
+  
+  /** does feature = nameSpace + "/" + feat */
+  public void extractAllFeatures(List<String> addTo) {
+    for (Namespace ns : x)
+      for (String feat : ns.features)
+        addTo.add(ns.name + "/" + feat);
+  }
+  
+  public void pruneByNamespace(Set<String> nsKeep) {
+    List<Namespace> keep = new ArrayList<>();
+    for (Namespace ns : x)
+      if (nsKeep.contains(ns.name + ""))
+        keep.add(ns);
+    x = keep;
   }
   
   private Namespace newNs(String nsToken) {
