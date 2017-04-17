@@ -41,6 +41,14 @@ public class VwLine implements Serializable {
     }
   }
   
+  public Namespace remove(char namespace) {
+    int n = x.size();
+    for (int i = 0; i < n; i++)
+      if (namespace == x.get(i).name)
+        return x.remove(i);
+    return null;
+  }
+  
   /** does feature = nameSpace + "/" + feat */
   public void extractAllFeatures(List<String> addTo) {
     for (Namespace ns : x)

@@ -26,6 +26,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.set.IntHashSet;
@@ -139,6 +140,23 @@ public class PmiUpgrades {
     return (n & (n - 1)) == 0;
   }
 
+  public static IntArrayList getOrNewL(int key, IntObjectHashMap<IntArrayList> map) {
+    IntArrayList val = map.get(key);
+    if (val == null) {
+      val = new IntArrayList();
+      map.put(key, val);
+    }
+    return val;
+  }
+  public static IntHashSet getOrNewS(int key, IntObjectHashMap<IntHashSet> map) {
+    IntHashSet val = map.get(key);
+    if (val == null) {
+      val = new IntHashSet();
+      map.put(key, val);
+    }
+    return val;
+  }
+
   /*
    * Before:
    * - shard fx
@@ -166,32 +184,24 @@ public class PmiUpgrades {
     private IntObjectHashMap<IntArrayList> y2posI;
     private IntObjectHashMap<IntArrayList> x2posI;
     // Counts of features on negative instances
-    private IntIntHashVector x2negI;
+    private IntIntHashVector x2negICounts;
     // Total number of instances
     private int n;
     
     private BloomFilter<IntPair> obsPosYX;
     private int obsPosYXSize;
+    public boolean disableBF = true;
     
     public PosNegPmi() {
       y2posI = new IntObjectHashMap<>();
       x2posI = new IntObjectHashMap<>();
-      x2negI = new IntIntHashVector();
+      x2negICounts = new IntIntHashVector();
       obsPosYXSize = 4096;
       obsPosYX = BloomFilter.create(new IntPairFunnel(), obsPosYXSize);
     }
     
     public int numInstances() {
       return n;
-    }
-    
-    static IntArrayList getOrNew(int key, IntObjectHashMap<IntArrayList> map) {
-      IntArrayList val = map.get(key);
-      if (val == null) {
-        val = new IntArrayList();
-        map.put(key, val);
-      }
-      return val;
     }
     
     /** ys and xs should either be sorted or uniq */
@@ -201,33 +211,35 @@ public class PmiUpgrades {
       for (int i = 0; i < ny; i++) {
         if (i > 0 && ys.get(i) == ys.get(i-1))
           continue;
-        getOrNew(ys.get(i), y2posI).add(instance);
+        getOrNewL(ys.get(i), y2posI).add(instance);
       }
       int nx = xs.size();
       for (int i = 0; i < nx; i++) {
         if (i > 0 && xs.get(i) == xs.get(i-1))
           continue;
-        getOrNew(xs.get(i), x2posI).add(instance);
+        getOrNewL(xs.get(i), x2posI).add(instance);
       }
       
-      
+
       // Update bloom filter for observed features
-      for (int i = 0; i < ny; i++) {
-        if (i > 0 && ys.get(i) == ys.get(i-1))
-          continue;
-        for (int j = 0; j < nx; j++) {
-          if (j > 0 && xs.get(j) == xs.get(j-1))
+      if (!disableBF) {
+        for (int i = 0; i < ny; i++) {
+          if (i > 0 && ys.get(i) == ys.get(i-1))
             continue;
-          
-          if (obsPosYX.expectedFpp() > 0.0001d) {
-            obsPosYXSize *= 2;
-            Log.info("allocating yx bloom filter with size=" + obsPosYXSize);
-            // TODO This technically could be a bug: I should be copying over the
-            // values in the old set to the new one. Otherwise we could get a false
-            // negative and have a broken optimization on what to skip over.
-            obsPosYX = BloomFilter.create(new IntPairFunnel(), obsPosYXSize);
+          for (int j = 0; j < nx; j++) {
+            if (j > 0 && xs.get(j) == xs.get(j-1))
+              continue;
+
+            if (obsPosYX.expectedFpp() > 0.0001d) {
+              obsPosYXSize *= 2;
+              Log.info("allocating yx bloom filter with size=" + obsPosYXSize);
+              // TODO This technically could be a bug: I should be copying over the
+              // values in the old set to the new one. Otherwise we could get a false
+              // negative and have a broken optimization on what to skip over.
+              obsPosYX = BloomFilter.create(new IntPairFunnel(), obsPosYXSize);
+            }
+            obsPosYX.put(new IntPair(ys.get(i), xs.get(j)));
           }
-          obsPosYX.put(new IntPair(ys.get(i), xs.get(j)));
         }
       }
     }
@@ -239,7 +251,7 @@ public class PmiUpgrades {
       for (int i = 0; i < nx; i++) {
         if (i > 0 && xs.get(i) == xs.get(i-1))
           continue;
-        x2negI.add(xs.get(i), 1);
+        x2negICounts.add(xs.get(i), 1);
       }
     }
     
@@ -250,28 +262,47 @@ public class PmiUpgrades {
     }
     
     public Pmi getPmi(int y, IntArrayList iy, int x, IntArrayList ix) {
+      if (iy == null)
+        return null;
+      if (ix == null)
+        return null;
       IntArrayList iyx = PmiFeatureSelection.intersectSortedLists(iy, ix);
       if (iyx.size() == 0)
         return null;
-      int cx = ix.size() + x2negI.getWithDefault(x, 0);
-      double num = ((double) n) * iyx.size();
-      double denom = ((double) iy.size()) * cx;
-      double pmi = Math.log(num / denom);
+      int cx = ix.size() + x2negICounts.getWithDefault(x, 0);
+      
+//      long num = ((long) n) * iyx.size();
+//      long denom = ((long) iy.size()) * cx;
+//      double pmi = 2*Math.log(num) - Math.log(denom);
+
+      double num1 = ((double) n) * iyx.size();
+      double denom1 = ((double) iy.size()) * cx;
+      double pmi1 = Math.log(num1 / denom1);
+
+      long num2 = ((long) n) * iyx.size();
+      long denom2 = ((long) iy.size()) * cx;
+      double pmi2 = Math.log(num2) - Math.log(denom2);
+      
+      double pmi = pmi2;
+      double d = Math.min(Math.abs(pmi1), Math.abs(pmi2));
+      assert d < 1e-10 || Math.abs(pmi1 - pmi2) / d < 0.01;
+      assert Math.abs(pmi1 - pmi2) < 1e-6;
+
       if (Double.isNaN(pmi)) {
         Log.info("wat: n=" + n
             + " iyx.size=" + iyx.size()
             + " iy.size=" + iy.size()
             + " ix.size=" + ix.size()
             + " cx=" + cx
-            + " num=" + num
-            + " denom=" + denom
-            + " frac=" + (num/denom));
+            + " num=" + num2
+            + " denom=" + denom2
+            + " frac=" + (num1/denom1));
         return null;
       }
       return new Pmi(y, x, pmi, iyx.size());
     }
     
-    public List<Pmi> pmiForLabel(int y) {
+    public List<Pmi> pmiForLabel(int y, double pmiFreqDiscount) {
       IntArrayList iy = y2posI.get(y);
       if (iy == null)
         return Collections.emptyList();
@@ -282,14 +313,12 @@ public class PmiUpgrades {
         iter.advance();
         int x = iter.key();
         IntPair yx = new IntPair(y, x);
-        if (!obsPosYX.mightContain(yx)) {
+        if (!disableBF && !obsPosYX.mightContain(yx)) {
           skip++;
           continue;
         }
         keep++;
         IntArrayList ix = iter.value();
-        if (ix == null)
-          continue;
         Pmi p = getPmi(y, iy, x, ix);
         if (p != null)
           a.add(p);
@@ -300,7 +329,10 @@ public class PmiUpgrades {
           + " skip=" + skip
           + " keep=" + keep
           + " keepAndGood=" + a.size());
-      Collections.sort(a, Pmi.BY_PMI_DESC);
+      if (pmiFreqDiscount <= 0)
+        Collections.sort(a, Pmi.BY_PMI_DESC);
+      else
+        Collections.sort(a, Pmi.byFrequencyDiscountedPmi(pmiFreqDiscount));
       return a;
     }
   }
@@ -318,11 +350,11 @@ public class PmiUpgrades {
    * Maps from strings to ints.
    */
   static class DumbAdapter {
-    private Alphabet<String> alphY;
-    private Alphabet<String> alphX;
-    private PosNegPmi pmi;
-    private Shard shard;
-    private boolean linesAsInstances;
+    Alphabet<String> alphY;
+    Alphabet<String> alphX;
+    PosNegPmi pmi;
+    Shard shard;
+    boolean linesAsInstances;
     
     public DumbAdapter(Shard shard, boolean linesAsInstances) {
       Log.info("shard=" + shard);
@@ -376,10 +408,26 @@ public class PmiUpgrades {
         pmi.addNeg(lx);
     }
     
-    public List<LabeledPmi<String, String>> getPmi(int y) {
+    public LabeledPmi<String, String> getPmi(String y, String x) {
+      int yi = alphY.lookupIndex(y, false);
+      int xi = alphX.lookupIndex(x, false);
+      if (yi < 0 || xi < 0)
+        return null;
+      Pmi p = pmi.getPmi(yi, xi);
+      if (p == null)
+        return null;
+      return new LabeledPmi<String, String>(y, yi, x, xi, p.pmi, p.nCooc);
+    }
+
+    public List<LabeledPmi<String, String>> getPmis(String y, double pmiFreqDiscount) {
+      int yi = alphY.lookupIndex(y, false);
+      return getPmis(yi, pmiFreqDiscount);
+    }
+    
+    public List<LabeledPmi<String, String>> getPmis(int y, double pmiFreqDiscount) {
       String ys = alphY.lookupObject(y);
       List<LabeledPmi<String, String>> a = new ArrayList<>();
-      for (Pmi p : pmi.pmiForLabel(y)) {
+      for (Pmi p : pmi.pmiForLabel(y, pmiFreqDiscount)) {
         assert p.labelIdx == y;
         String xs = alphX.lookupObject(p.featureIdx);
         a.add(new LabeledPmi<>(ys, y, xs, p.featureIdx, p.pmi, p.nCooc));
@@ -388,10 +436,11 @@ public class PmiUpgrades {
     }
 
     public void writeoutPmi(File dest, int k, double pmiFreqDiscount) throws IOException {
+      Log.info("k=" + k + " pmiFreqDiscount=" + pmiFreqDiscount + " dest=" + dest.getPath());
       try (BufferedWriter w = FileUtil.getWriter(dest)) {
         int n = alphY.size();
         for (int y = 0; y < n; y++) {
-          List<LabeledPmi<String, String>> pmi = getPmi(y);
+          List<LabeledPmi<String, String>> pmi = getPmis(y, pmiFreqDiscount);
           int kk = Math.min(k, pmi.size());
           for (int i = 0; i < kk; i++) {
             Pmi feat = pmi.get(i);
@@ -452,13 +501,18 @@ public class PmiUpgrades {
   }
 
   public static String getRelation(File f) {
-    if (f.getName().equals("neg.vw")) {
+    String fn = f.getName();
+//    if (f.getName().equals("neg.vw")) {
+    if (fn.endsWith("neg.vw")) {
       return null;
     } else {
       String pre = "pos-";
       String suf = ".vw";
-      assert f.getName().startsWith(pre) && f.getName().endsWith(suf) : "f=" + f.getName();
-      return f.getName().substring(pre.length(), f.getName().length()-suf.length());
+//      assert fn.startsWith(pre) && fn.endsWith(suf) : "fn=" + fn;
+//      return fn.substring(pre.length(), fn.length()-suf.length());
+      int p = fn.indexOf(pre);
+      String rel = fn.substring(p + pre.length(), fn.length()-suf.length());
+      return rel;
     }
   }
   
@@ -482,10 +536,6 @@ public class PmiUpgrades {
     Shard shard = config.getShard();
     DumbAdapter a = new DumbAdapter(shard, extractionsAsInstances);
     
-//    Timer ta = new Timer();
-//    Timer tw = new Timer();
-//    int nw = 0;
-    
     Counts<String> c = new Counts<>();
     while (ds.hasNext()) {
       File f = ds.next();
@@ -497,18 +547,17 @@ public class PmiUpgrades {
       }
 
       c.increment(rel == null ? "neg" : rel);
-//      ta.start();
       if (rel == null) {
         a.addNeg(f);
       } else {
         a.addPos(rel, f);
       }
-//      ta.stop();
       
       Log.info("nPos=" + ds.nPos
           + " posDone=" + ds.posDone()
           + " nNeg=" + ds.nNeg
           + " negDone=" + ds.negDone()
+          + " nInst=" + a.pmi.n
           + "\t" + Describe.memoryUsage());
       
       // "Number of files" based
@@ -538,8 +587,12 @@ public class PmiUpgrades {
         String suf = String.format(".afterPosAndNeg%05d", nd);
         File ff = new File(output.getPath() + suf);
         a.writeoutPmi(ff, topFeats, pmiFreqDiscount);
+        System.out.println("relCounts: " + c);
+        System.out.println(Describe.memoryUsage());
       }
     }
+    System.out.println("relCounts: " + c);
+    System.out.println(Describe.memoryUsage());
     a.writeoutPmi(output, topFeats, pmiFreqDiscount);
     Log.info("done");
   }
