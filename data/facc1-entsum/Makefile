@@ -1,6 +1,6 @@
 
-#GRID = test2b
-GRID = test2
+GRID = test2b
+#GRID = test2
 SPLIT = /export/projects/twolfe/entity-summarization/clueweb-linked/train-dev-test
 
 #FNPARSE=/home/travis/code/fnparse
@@ -14,6 +14,12 @@ FACC1 = /export/projects/tto8/ClueWeb/clueweb09-freebase-annotation/extractedAnn
 DBPEDIA = /export/projects/twolfe/data/dbpedia
 
 DF = /export/projects/twolfe/sit-search/idf/cms/df-cms-simpleaccumulo-twolfe-cag1-nhash12-logb20.jser
+
+train-dev-test:
+	rsync -avz --delete $(GRID):$(SPLIT)/ $@
+
+entity-mention-counts:
+	rsync -avz --delete $(GRID):$(SPLIT)/../$@/ $@
 
 entities:
 	rsync -avz --delete $(GRID):$(SPLIT)/rare4/ $@

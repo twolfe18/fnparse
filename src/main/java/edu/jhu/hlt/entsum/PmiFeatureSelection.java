@@ -231,7 +231,11 @@ public class PmiFeatureSelection {
 //  public double pmi(int label, int feature) {
   public Pmi pmi(int label, int feature) {
     IntArrayList instancesWithLabel = label2instance.get(label);
+    if (instancesWithLabel == null)
+      return null;
     IntArrayList instancesWithFeature = feature2instance.get(feature);
+    if (instancesWithFeature == null)
+      return null;
     double logN = Math.log(numInstances);
     Pmi p = pmi(instancesWithLabel, instancesWithFeature, logN);
     return new Pmi(label, feature, p.pmi, p.nCooc);
@@ -265,12 +269,27 @@ public class PmiFeatureSelection {
       this.nCooc = nCooc;
     }
     
+    @Override
+    public String toString() {
+      return "(PMI y=" + labelIdx + " x=" + featureIdx + " nCooc=" + nCooc + " pmi=" + pmi + ")";
+    }
+    
     public static final Comparator<Pmi> BY_PMI_DESC = new Comparator<Pmi>() {
       @Override
       public int compare(Pmi o1, Pmi o2) {
         if (o1.pmi > o2.pmi)
           return -1;
         if (o2.pmi > o1.pmi)
+          return +1;
+        return 0;
+      }
+    };
+    public static final Comparator<Pmi> BY_NCOOC_DESC = new Comparator<Pmi>() {
+      @Override
+      public int compare(Pmi o1, Pmi o2) {
+        if (o1.nCooc > o2.nCooc)
+          return -1;
+        if (o2.nCooc > o1.nCooc)
           return +1;
         return 0;
       }
@@ -305,8 +324,10 @@ public class PmiFeatureSelection {
    * @param pmiFreqDiscount the higher this number is the more rare features are penalized. 0 means no penalty.
    */
   public List<Pmi> argTopByPmi(int label, int k, double pmiFreqDiscount) {
-    int approxY = 5;
-    int approxX = 3;
+//    int approxY = 5;
+//    int approxX = 3;
+    int approxY = 0;
+    int approxX = 0;
     List<Pmi> p = new ArrayList<>();
     double logN = Math.log(numInstances);
     IntArrayList instancesWithLabel = label2instance.get(label);
@@ -363,7 +384,7 @@ public class PmiFeatureSelection {
     
     private HashFunction hash;
     private IntHashSet goodFeats;
-    private MultiMap<Integer, String> inverseFeatHashForGoodFeats;
+    MultiMap<Integer, String> inverseFeatHashForGoodFeats;
     private boolean inverseHashingVerbose = false;
     
     private Shard shard;
@@ -488,6 +509,19 @@ public class PmiFeatureSelection {
           }
         }
       }
+
+      /*
+       * TODO This is WRONG
+       * This creates one instance per infobox-binary/*.vw file, not one instance per entity.
+       * 
+       * 
+       * 
+       * 
+       * I can use the 'w' namespace to fix this.
+       * TODO use int(sha1("w//m/02_wxh/s=22/m=2-1")) as my instance index.
+       * TODO requires me to sort my inverted indices after building
+       */
+
       if (!linesAsInstances) {
         int yi = alphY.lookupIndex(y);
         IntArrayList x = new IntArrayList();
@@ -517,6 +551,8 @@ public class PmiFeatureSelection {
     }
     
     private int lookupFeatIndex(char ns, String feat) {
+      if ("of".equals(feat))
+        Log.info("checkme");
       boolean keepAll = true;
       String xs = ns + "/" + feat;
       int xi = hash.hashString(xs, UTF8).asInt();
@@ -542,6 +578,15 @@ public class PmiFeatureSelection {
         }
       }
       mifs.addInstance(yi, x.toNativeArray());
+    }
+    
+    public LabeledPmi<String, String> getPmi(String y, String x) {
+      int yi = alphY.lookupIndex(y);
+      int xi = hash.hashString(x, UTF8).asInt();
+      Pmi p = mifs.pmi(yi, xi);
+      if (p == null || p.nCooc == 0)
+        return null;
+      return new LabeledPmi<>(y, yi, x, xi, p.pmi, p.nCooc);
     }
 
     public List<LabeledPmi<String, String>> argTopPmi(String label, int k, double pmiFreqDiscount) {
@@ -780,7 +825,11 @@ public class PmiFeatureSelection {
     File entityDirParent = config.getExistingDir("entityDirParent");
 //    String entityDirGlob = config.getString("entityDirGlob", "glob:**/infobox-binary");
 //    List<File> ibs = FileUtil.findDirs(entityDirParent, entityDirGlob);
-    List<File> ibs = FileUtil.execFind(entityDirParent, "-path", "*/train/*", "-not", "-path", "*entsum-data*", "-type", "d", "-name", "infobox-binary");
+    List<File> ibs = FileUtil.execFind(entityDirParent,
+        "-path", "*/train/*",
+        "-not", "-path", "*entsum-data*",
+        "-type", "d",
+        "-name", "infobox-binary");
     Log.info("found " + ibs.size() + " entity directories");
     
 //    // DEBUG: prune dirs
