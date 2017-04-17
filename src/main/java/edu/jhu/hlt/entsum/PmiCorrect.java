@@ -13,6 +13,7 @@ import java.util.Random;
 import edu.jhu.hlt.entsum.PmiFeatureSelection.Pmi;
 import edu.jhu.hlt.entsum.VwLine.Namespace;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -82,7 +83,7 @@ public class PmiCorrect {
 //      posI = new IntHashSet();
     }
     
-    public List<Pmi> topPmiForLabel(int y) {
+    public List<Pmi> topPmiForLabel(int y, int minCx) {
       List<Pmi> ps = new ArrayList<>();
       IntArrayList iy = y2posI.get(y);
       double logN = Math.log(numInstances);
@@ -94,6 +95,8 @@ public class PmiCorrect {
         iter.advance();
         IntArrayList ix = iter.value();
         assert ix.size() <= numInstances;
+        if (ix.size() < minCx)
+          continue;
         IntArrayList iyx = PmiFeatureSelection.intersectSortedLists(iy, ix);
         int nCooc = iyx.size();
         if (nCooc > 0) {
@@ -236,9 +239,12 @@ public class PmiCorrect {
 
       double pmiFreqDiscount = config.getDouble("pmiFreqDiscount", 1d);
       Log.info("pmiFreqDiscount=" + pmiFreqDiscount);
+      
+      int minCx = config.getInt("minCx", 4);
+      Log.info("minCx=" + minCx);
 
-      int topFeats = config.getInt("topFeats", 300);
-      Log.info("topFeats=" + topFeats);
+      int topFeatsPerNs = config.getInt("topFeatsPerNs", 100);
+      Log.info("topFeatsPerNs=" + topFeatsPerNs);
       
       // DEBUG
 //      ibs = ReservoirSample.sample(ibs, 10, new Random(9001));
@@ -255,7 +261,7 @@ public class PmiCorrect {
         be.update(c, addPos, addNeg);
         bes.add(be);
       }
-      writeoutPmi(new File(output.getPath() + ".afterPos"), c, topFeats, pmiFreqDiscount);
+      writeoutPmi(new File(output.getPath() + ".afterPos"), c, topFeatsPerNs, pmiFreqDiscount, minCx);
 
       // Add neg with only feats from pos
       int nneg = 0;
@@ -266,32 +272,47 @@ public class PmiCorrect {
         nneg++;
         if (nneg >= 16 && PmiUpgrades.isPosPowerOfTwo(nneg)) {
           String suf = String.format(".afterPosAndNeg%05d", nneg);
-          writeoutPmi(new File(output.getPath() + suf), c, topFeats, pmiFreqDiscount);
+          writeoutPmi(new File(output.getPath() + suf), c, topFeatsPerNs, pmiFreqDiscount, minCx);
         }
       }
 
       // Compute PMI
-      writeoutPmi(output, c, topFeats, pmiFreqDiscount);
+      writeoutPmi(output, c, topFeatsPerNs, pmiFreqDiscount, minCx);
     }
   }
   
-  public static void writeoutPmi(File output, PmiCounts c, int topFeats, double pmiFreqDiscount) throws IOException {
+  /**
+   * Output format is:
+   *   [label, feature, pmi, pmiDiscounted, iyx.size, iy.size, ixPos.size, ixNeg.size]
+   */
+  public static void writeoutPmi(File output, PmiCounts c, int topFeats, double pmiFreqDiscount, int minCx) throws IOException {
     Log.info("pmiFreqDiscount=" + pmiFreqDiscount + " output=" + output.getPath());
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       int Y = c.alphY.size();
       for (int y = 0; y < Y; y++) {
         String ys = c.alphY.lookupObject(y);
         System.out.print("computing top " + topFeats + " feats for " + ys + "...");
-        List<Pmi> ps = c.topPmiForLabel(y);
+        List<Pmi> ps = c.topPmiForLabel(y, minCx);
+
         System.out.print(" writing to file...");
+        Counts<String> cNs = new Counts<>();
         int niy = c.y2posI.get(y).size();
-        int k = Math.min(topFeats, ps.size());
-        for (int i = 0; i < k; i++) {
-          Pmi p = ps.get(i);
+//        int k = Math.min(topFeats, ps.size());
+//        for (int i = 0; i < k; i++) {
+//          Pmi p = ps.get(i);
+        for (Pmi p : ps) {
           String xs = c.alphX.lookupObject(p.featureIdx);
+          
+          String ns = xs.substring(0, xs.indexOf('/'));
+          if (cNs.getCount(ns) >= topFeats)
+            continue;
+          cNs.increment(ns);
+          
 //          System.out.printf("y=%-32s  niy=% 4d  %-48s  %.3f\t%d\n", ys, niy, xs, p.pmi, p.nCooc);
           double pd = p.getFrequencyDiscountedPmi(pmiFreqDiscount);
-          w.write(StringUtils.join("\t", Arrays.asList(ys, xs, p.pmi, pd, p.nCooc, niy)));
+          int nixPos = c.x2posI.get(p.featureIdx).size();
+          int nixNeg = c.x2negICounts.getWithDefault(p.featureIdx, 0);
+          w.write(StringUtils.join("\t", Arrays.asList(ys, xs, p.pmi, pd, p.nCooc, niy, nixPos, nixNeg)));
           w.newLine();
         }
         w.flush();
@@ -467,9 +488,12 @@ public class PmiCorrect {
 
       double pmiFreqDiscount = config.getDouble("pmiFreqDiscount", 1d);
       Log.info("pmiFreqDiscount=" + pmiFreqDiscount);
+      
+      int minCx = config.getInt("minCx", 4);
+      Log.info("minCx=" + minCx);
 
-      int topFeats = config.getInt("topFeats", 300);
-      Log.info("topFeats=" + topFeats);
+      int topFeatsPerNs = config.getInt("topFeatsPerNs", 100);
+      Log.info("topFeatsPerNs=" + topFeatsPerNs);
       
       // DEBUG
 //      ibs = ReservoirSample.sample(ibs, 10, new Random(9001));
@@ -486,7 +510,7 @@ public class PmiCorrect {
         bi.update(c, addPos, addNeg);
         bis.add(bi);
       }
-      writeoutPmi(new File(output.getPath() + ".afterPos"), c, topFeats, pmiFreqDiscount);
+      writeoutPmi(new File(output.getPath() + ".afterPos"), c, topFeatsPerNs, pmiFreqDiscount, minCx);
 
       // Add neg with only feats from pos
       int nneg = 0;
@@ -497,12 +521,12 @@ public class PmiCorrect {
         nneg++;
         if (nneg >= 16 && PmiUpgrades.isPosPowerOfTwo(nneg)) {
           String suf = String.format(".afterPosAndNeg%05d", nneg);
-          writeoutPmi(new File(output.getPath() + suf), c, topFeats, pmiFreqDiscount);
+          writeoutPmi(new File(output.getPath() + suf), c, topFeatsPerNs, pmiFreqDiscount, minCx);
         }
       }
 
       // Compute PMI
-      writeoutPmi(output, c, topFeats, pmiFreqDiscount);
+      writeoutPmi(output, c, topFeatsPerNs, pmiFreqDiscount, minCx);
     }
     
 //    /** run this after all ByInstances have had update called on them */
