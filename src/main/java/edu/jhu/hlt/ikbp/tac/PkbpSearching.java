@@ -592,13 +592,16 @@ public class PkbpSearching implements Serializable {
       
       Log.info("loading queries...");
       List<KbpQuery> queries = new ArrayList<>();
-//      queries.add(DarmstadtExample.getQuery());
-      queries.addAll(TacKbp.getKbp2013SfQueries());
-//      queries.addAll(TacKbp.getKbp2014SfQueries());
+      
+      File qf = config.getFile("queries", null);
+      if (qf != null) {
+        queries.addAll(TacKbp.getKbpSfQueries(qf));
+      } else {
+        queries.addAll(TacKbp.getKbp2013SfQueries());
+//        queries.add(DarmstadtExample.getQuery());
+//        queries.addAll(TacKbp.getKbp2014SfQueries());
+      }
       int seed = 9001 + 3;
-//      int seed = -239956474;
-//      int seed = -223362562;
-//      int seed = (int) System.currentTimeMillis();
       Log.info("seed=" + seed);
       Collections.shuffle(queries, new Random(seed));
       

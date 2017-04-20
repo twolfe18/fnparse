@@ -226,6 +226,12 @@ print 'coref&related ORG acc', n_org/z_org
 
 
 
+for r in coref:
+  if not r.correct_coref():
+    print 'coref mistake:', r.Input_mentionHtml
+for r in related:
+  if not r.correct_related():
+    print 'related mistake:', r.Input_mentionHtml
 
 
 
